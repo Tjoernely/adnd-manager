@@ -46,7 +46,7 @@ export function ClassesTab(props) {
               const spSub = cls.spStat ? _ALL_SUBS.find(s=>s.id===cls.spStat) : null;
               const spStat2 = cls.spStat;
               const spVal = spStat2 ? _getSpellPointBonus(effSub(spStat2)) : 0;
-              const spPoolLabel = spStat2 === "reason" ? "Mage SP" : spStat2 === "willpower" ? "Cleric SP" : "SP";
+              const spPoolLabel = spStat2 === "knowledge" ? "Mage SP" : spStat2 === "willpower" ? "Cleric SP" : "SP";
               const isWarrior = _WARRIOR_CLASS_IDS.has(cls.id);
 
               return (

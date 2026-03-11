@@ -35,6 +35,7 @@ export const TRAITS = [
   { id:"tr_compass",    name:"Internal Compass",          cp:5, source:"S&P",
     desc:"Always knows which direction is which when out of doors. Reduces chance of becoming lost in wilderness by 5%. Grants +1 to navigation proficiency checks when on land." },
   { id:"tr_keeneye",    name:"Keen Eyesight",             cp:5, source:"S&P",
+    conflicts:["dv_colorblind"],
     desc:"Perceive details at twice the range of normal vision. When companions can tell the race of a distant party, this character can discern armament and clothing. +1 to hit with missile weapons at long range. Elves pay 1 CP less." },
   { id:"tr_keenear",    name:"Keen Hearing",              cp:5, source:"S&P",
     desc:"Exceptional hearing. +1 to avoid surprise in situations where hearing is a factor (not drowned out by waterfalls, windstorms, etc.). Thieves with this trait gain +10% to detect noise checks. Halflings pay 1 CP less." },
@@ -45,8 +46,10 @@ export const TRAITS = [
   { id:"tr_keentouch",  name:"Keen Touch Sense",          cp:4, source:"S&P",
     desc:"Unusually sensitive tactile senses — can feel the difference between a silver and gold piece by touch. Thieves gain +5% to pick pockets and open locks checks. Gnomes pay 1 CP less." },
   { id:"tr_lightsleep", name:"Light Sleeper",             cp:5, source:"S&P",
+    conflicts:["dv_deepsleep"],
     desc:"Awakens at the slightest disturbance — footsteps, approaching armor, distant voices. Party benefits since less watch rotation is needed. Wis/Intuition check when someone in leather approaches; no check vs. a successful thief move silently." },
   { id:"tr_lucky",      name:"Lucky",                     cp:6, source:"S&P",
+    conflicts:["dv_unlucky"],
     desc:"A knack for being in the right place at the right time. DM may require a Wis/Intuition check. On success, the DM introduces a fortuitous circumstance — a boat in the reeds, a door left ajar, a helpful stranger nearby." },
   { id:"tr_mus_sing",   name:"Music/Singing",             cp:5, source:"S&P",
     desc:"Naturally fine singing voice — well-modulated, widely appealing. Grants +2 to singing proficiency checks. When combined with singing proficiency, the character can achieve genuine renown as a performer or minstrel." },
@@ -102,12 +105,14 @@ export const DISADVANTAGES = [
   { id:"dv_clumsy",     name:"Clumsy",                 cp:4,  cpSevere:8,  source:"S&P",
     desc:"Occasionally drops items, trips, or knocks things over at inopportune times. DM calls for Dexterity check 2–3 times per session; failure means dropping, stumbling, or alerting enemies with an inadvertent noise." },
   { id:"dv_colorblind", name:"Colorblind",             cp:3,  cpSevere:null, source:"S&P",
+    conflicts:["tr_keeneye"],
     desc:"Cannot distinguish colors — sees only black, white, and shades of gray. Heraldry, colored map annotations, color-coded traps, and identifying potions by hue become serious obstacles." },
   { id:"dv_comphon",    name:"Compulsive Honesty",     cp:8,  cpSevere:null, source:"S&P",
     desc:"Cannot lie or behave deceitfully. Bluntly tells uncomfortable truths even to dangerous people. May participate in a deception only in a life-or-death situation, and must pass a Wis/Willpower check every time required to speak a falsehood." },
   { id:"dv_coward",     name:"Cowardice",              cp:7,  cpSevere:15, source:"S&P",
     desc:"Must pass Wis/Willpower check when combat begins or seek to flee/hide. Allowed a new check each round until passing; then functions normally for the rest of the encounter. Halflings gain 1 extra CP for this disadvantage." },
   { id:"dv_deepsleep",  name:"Deep Sleeper",           cp:7,  cpSevere:null, source:"S&P",
+    conflicts:["tr_lightsleep"],
     desc:"Only awakened by very loud noise or physical prodding. After waking, requires 1d6 rounds before capable of any action beyond sitting up groggily. A significant liability on night watches and during surprise attacks." },
   { id:"dv_fanatic",    name:"Fanaticism",             cp:8,  cpSevere:null, source:"S&P",
     desc:"Overwhelming loyalty to a religion, cult, state, or leader. Must conform to the fanatic's code even when it conflicts with the party's goals. Not necessarily evil, but frequently tiresome to non-believers." },
@@ -142,6 +147,7 @@ export const DISADVANTAGES = [
   { id:"dv_tonguetied", name:"Tongue-tied",            cp:6,  cpSevere:null, source:"S&P",
     desc:"Incorrectly states facts, forgets names, and says the wrong thing when discussing important topics. DM modifies NPC reaction rolls by –2 in key conversations. Primarily a role-playing burden, but the mechanical penalty compounds over time." },
   { id:"dv_unlucky",    name:"Unlucky",                cp:8,  cpSevere:null, source:"S&P",
+    conflicts:["tr_lucky"],
     desc:"A knack for being in the wrong place at the right time. If one member of the party loses their gear, it is this character. If one wrong person is in the city, they cross paths. No die roll penalties — it is narrative misfortune of the most reliable kind." },
 
   // ── Custom Lore-Friendly Disadvantages ──────────────────────────
@@ -169,6 +175,9 @@ export const DISADVANTAGES = [
 
 // CP threshold before DM approval required
 export const DISADV_POOL_WARN = 10;
+
+// Hard cap on CP gained from disadvantages (S&P rules)
+export const DISADV_MAX_CP = 15;
 
 // Alias used in some parts of the codebase
 export const DISADVS = DISADVANTAGES;

@@ -28,8 +28,8 @@ export const SUB_ABILITIES = {
     { id: "fitness",   label: "Fitness",   desc: "Vitality and recovery rate. Governs HP bonus per level and system shock." },
   ],
   INT: [
-    { id: "knowledge", label: "Knowledge", desc: "Learning and memory. Grants bonus CP via Table 10 (p.12). Spell learning and lore." },
-    { id: "knowledge", label: "Knowledge", desc: "Breadth of learned information. Max languages known. Lore rolls." },
+    { id: "reason",    label: "Reason",    desc: "Logical deduction and problem-solving. Used for reasoning checks and complex problem proficiency checks." },
+    { id: "knowledge", label: "Knowledge", desc: "Learning and memory. Grants bonus CP via Table 10 (p.12). Spell learning, max languages, and lore." },
   ],
   WIS: [
     { id: "intuition", label: "Intuition", desc: "Awareness and spiritual insight. Magical attack/defense bonus." },

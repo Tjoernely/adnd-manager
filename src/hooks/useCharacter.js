@@ -14,7 +14,7 @@ import {
 
 import { SP_KITS, CLASS_KITS } from "../data/kits.js";
 
-import { TRAITS, DISADVANTAGES, DISADV_POOL_WARN } from "../data/traits.js";
+import { TRAITS, DISADVANTAGES, DISADV_POOL_WARN, DISADV_MAX_CP } from "../data/traits.js";
 
 import {
   CLASS_GROUP_MAP, NWP_CP_POOL, WEAP_CP_POOL,
@@ -591,10 +591,24 @@ export function useCharacter() {
 
   const handleClassSelect = id => { setSelectedClass(id === selectedClass ? null : id); setClassAbilPicked({}); setSelectedKit(null); };
 
-  // ── Toggle trait
+  // ── Toggle trait (with conflict detection)
   const toggleTrait = tr => {
     const already = !!traitsPicked[tr.id];
     if (already) { setTraitsPicked(p => ({ ...p, [tr.id]: false })); return; }
+
+    // Conflict check: trait conflicts with a currently-active disadvantage
+    const conflictId = (tr.conflicts ?? []).find(cid =>
+      disadvPicked[cid] && disadvPicked[cid] !== false
+    );
+    if (conflictId && !ruleBreaker) {
+      const conflictEntry = DISADVANTAGES.find(x => x.id === conflictId);
+      setConfirmBox({
+        msg: `"${tr.name}" conflicts with disadvantage "${conflictEntry?.name ?? conflictId}". They cannot logically coexist.\n\nEnable Rule-Breaker to allow both?`,
+        onConfirm: () => { setRuleBreaker(true); setTraitsPicked(p => ({ ...p, [tr.id]: true })); },
+      });
+      return;
+    }
+
     const doIt = () => setTraitsPicked(p => ({ ...p, [tr.id]: true }));
     if (remainCP < tr.cp && !ruleBreaker) {
       setConfirmBox({
@@ -602,6 +616,46 @@ export function useCharacter() {
         onConfirm: () => { setRuleBreaker(true); doIt(); },
       });
     } else doIt();
+  };
+
+  // ── Toggle disadvantage (with conflict detection + 15 CP cap)
+  const toggleDisadv = (dv, targetLevel) => {
+    const current = disadvPicked[dv.id];
+
+    // Deselect: same level clicked, or explicit false
+    if (!targetLevel || current === targetLevel) {
+      setDisadvPicked(p => ({ ...p, [dv.id]: false }));
+      return;
+    }
+
+    // Conflict check: disadvantage conflicts with a currently-active trait
+    const conflictId = (dv.conflicts ?? []).find(cid => !!traitsPicked[cid]);
+    if (conflictId && !ruleBreaker) {
+      const conflictEntry = TRAITS.find(x => x.id === conflictId);
+      setConfirmBox({
+        msg: `"${dv.name}" conflicts with trait "${conflictEntry?.name ?? conflictId}". They cannot logically coexist.\n\nEnable Rule-Breaker to allow both?`,
+        onConfirm: () => { setRuleBreaker(true); setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel })); },
+      });
+      return;
+    }
+
+    // CP cap check (max DISADV_MAX_CP from disadvantages)
+    const currentContrib = (() => {
+      if (!current) return 0;
+      if (current === "severe" && dv.cpSevere != null) return dv.cpSevere;
+      return dv.cp;
+    })();
+    const newContrib = (targetLevel === "severe" && dv.cpSevere != null) ? dv.cpSevere : dv.cp;
+    const projectedPool = disadvPool - currentContrib + newContrib;
+    if (projectedPool > DISADV_MAX_CP && !ruleBreaker) {
+      setConfirmBox({
+        msg: `Taking "${dv.name}" (${targetLevel}) would give you ${projectedPool} CP from disadvantages, exceeding the ${DISADV_MAX_CP} CP maximum.\n\nEnable Rule-Breaker to override?`,
+        onConfirm: () => { setRuleBreaker(true); setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel })); },
+      });
+      return;
+    }
+
+    setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel }));
   };
 
   // ── Toggle proficiency
@@ -766,12 +820,12 @@ export function useCharacter() {
     toggleClassAbil, rollStat, rollAll, setBase, adjustSplit,
     handleRaceSelect, handleSubRaceSelect, toggleRacialAbil,
     handleMonstrousRaceSelect, toggleMonstrousFeat,
-    handleClassSelect, toggleTrait, toggleProf, toggleWeap, profSuccess,
+    handleClassSelect, toggleTrait, toggleDisadv, toggleProf, toggleWeap, profSuccess,
     // Save / Load
     serializeCharacter, loadCharacterState,
     // Data refs needed by JSX (exported for tab components)
     MAGE_SP_CLASSES, CLERIC_SP_CLASSES,
-    DISADVANTAGES, DISADV_POOL_WARN,
+    DISADVANTAGES, DISADV_POOL_WARN, DISADV_MAX_CP,
     TRAITS, ALL_NWP, ALL_PROFS, CLASS_ABILITIES,
     SP_KITS, CLASS_KITS, ALL_CLASSES,
     RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP,

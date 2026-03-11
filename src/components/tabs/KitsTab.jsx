@@ -38,17 +38,25 @@ export function KitsTab(props) {
   const activeKitStatsMet  = activeKit ? kitStatsMet(activeKit) : true;
   const activeKitNWPMet    = activeKit ? kitReqNWPMet(activeKit) : true;
   const isClassKit = id => classKits.some(k => k.id === id);
+  // Kit class-restriction check (barredClasses)
+  const kitClassOk = kit => {
+    if (!kit.barredClasses?.length || !selectedClass) return true;
+    return !kit.barredClasses.some(b => selectedClass.toLowerCase().includes(b.toLowerCase()));
+  };
 
   // Render a single kit card
   const KitCard = ({ kit, compact }) => {
     const picked     = selectedKit === kit.id;
     const statOk     = kitStatsMet(kit);
+    const classOk    = kitClassOk(kit);
+    const eligible   = (statOk && classOk) || ruleBreaker;
     const isClass    = isClassKit(kit.id);
     const borderCol  = picked ? (isClass ? "#6090d8" : C.gold)
                      : !statOk ? C.red
+                     : !classOk ? "#e08040"
                      : C.border;
     return (
-      <div onClick={() => setSelectedKit(picked ? null : kit.id)}
+      <div onClick={() => eligible ? setSelectedKit(picked ? null : kit.id) : undefined}
         style={{
           background: picked
             ? (isClass ? "linear-gradient(145deg,#08101c,#060c14)"
@@ -56,21 +64,30 @@ export function KitsTab(props) {
             : C.card,
           border: `1px solid ${borderCol}`,
           borderRadius: 9, padding: compact ? "9px 12px" : "11px 14px",
-          cursor: "pointer", transition: "all .15s",
+          cursor: eligible ? "pointer" : "not-allowed",
+          transition: "all .15s",
           boxShadow: picked ? `0 0 12px ${isClass ? "rgba(80,130,220,.25)" : C.gold+"22"}` : "none",
-          opacity: !statOk && !ruleBreaker ? 0.55 : 1,
+          opacity: !eligible ? 0.5 : 1,
         }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: compact ? 3 : 5 }}>
           <span style={{ fontSize:12, fontWeight:"bold",
-            color: picked ? (isClass ? "#90b8f0" : C.gold) : (!statOk ? C.red : C.textBri) }}>
+            color: picked ? (isClass ? "#90b8f0" : C.gold) : (!statOk ? C.red : !classOk ? "#e08040" : C.textBri) }}>
             {picked ? "✓ " : ""}{kit.name}
           </span>
-          {!statOk && (
-            <span style={{ fontSize:9, color:C.red, border:`1px solid ${C.red}`,
-              borderRadius:3, padding:"1px 4px", flexShrink:0, marginLeft:6 }}>
-              {ruleBreaker ? "⚠ REQ" : "✗ REQ"}
-            </span>
-          )}
+          <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+            {!statOk && (
+              <span style={{ fontSize:9, color:C.red, border:`1px solid ${C.red}`,
+                borderRadius:3, padding:"1px 4px", flexShrink:0 }}>
+                {ruleBreaker ? "⚠ STAT" : "✗ STAT"}
+              </span>
+            )}
+            {!classOk && (
+              <span style={{ fontSize:9, color:"#e08040", border:`1px solid #c06020`,
+                borderRadius:3, padding:"1px 4px", flexShrink:0 }}>
+                {ruleBreaker ? "⚠ CLASS" : "✗ CLASS"}
+              </span>
+            )}
+          </div>
         </div>
         <div style={{ fontSize:11, color:C.textDim, lineHeight:1.5 }}>
           {(kit.desc||"").length > (compact?130:160) ? (kit.desc||"").slice(0,compact?130:160)+"…" : (kit.desc||kit.benefits?.slice(0,compact?130:160)||"No description available.")}
@@ -164,6 +181,16 @@ export function KitsTab(props) {
               </div>
             )}
 
+            {/* Requirements text */}
+            {activeKit.reqText && (
+              <div style={{ marginBottom:10, padding:"7px 12px",
+                background:"rgba(0,0,0,.25)", border:`1px solid ${C.border}`,
+                borderRadius:6, fontSize:11, color:C.textDim, lineHeight:1.65 }}>
+                <span style={{ color:C.textBri, marginRight:5 }}>📜 Requirements:</span>
+                {activeKit.reqText}
+              </div>
+            )}
+
             {/* Alignment & barred classes */}
             {(activeKit.reqAlign || (activeKit.barredClasses||[]).length > 0) && (
               <div style={{ marginBottom:10, fontSize:11, color:C.textDim }}>
@@ -189,9 +216,7 @@ export function KitsTab(props) {
                   <div style={{ fontSize:10, color:"#60c060", letterSpacing:2,
                     textTransform:"uppercase", marginBottom:5 }}>✦ Benefits</div>
                   <div style={{ fontSize:11, color:C.textMid, lineHeight:1.6 }}>
-                    {(activeKit.benefits||"").length > 280
-                      ? (activeKit.benefits||"").slice(0,280)+"…"
-                      : (activeKit.benefits||"")}
+                    {activeKit.benefits||""}
                   </div>
                 </div>
               )}
@@ -201,9 +226,7 @@ export function KitsTab(props) {
                   <div style={{ fontSize:10, color:"#e06040", letterSpacing:2,
                     textTransform:"uppercase", marginBottom:5 }}>⚠ Hindrances</div>
                   <div style={{ fontSize:11, color:C.textMid, lineHeight:1.6 }}>
-                    {(activeKit.hindrances||"").length > 280
-                      ? (activeKit.hindrances||"").slice(0,280)+"…"
-                      : (activeKit.hindrances||"")}
+                    {activeKit.hindrances||""}
                   </div>
                 </div>
               )}
