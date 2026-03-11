@@ -15,7 +15,7 @@ export default defineConfig({
   },
   build: {
     // Build output goes to server/public so Express can serve it
-    outDir: '../../server/public',
+    outDir: './server/public',
     emptyOutDir: true,
   },
 })
