@@ -32,8 +32,8 @@ export function MasteryTab(props) {
       if (weapPicked[w.id]) { if (!profWeapons.find(x=>x.id===w.id)) profWeapons.push(w); }
     });
   });
-  // Remove shield/armor special profs
-  const combatWeapons = profWeapons.filter(w => !w.id.startsWith("wsp_"));
+  // Remove shield/armor special profs and dupe entries (same weapon in multiple tight groups)
+  const combatWeapons = profWeapons.filter(w => !w.id.startsWith("wsp_") && !w.dupe);
 
   const tierLabel = (tier) => MASTERY_TIERS.find(t=>t.id===tier)?.name ?? tier;
 

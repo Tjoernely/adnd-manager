@@ -23,6 +23,8 @@ export const WEAPON_GROUPS_49 = [
         {id:"wa_hand_axe",     name:"Hand/Throwing Axe"},
         {id:"wa_hatchet",      name:"Hatchet"},
         {id:"wa_2h_axe",       name:"Two-Handed Axe"},
+        {id:"wa_sword_axe",    name:"Sword-Axe"},
+        {id:"wa_mace_axe",     name:"Mace-Axe"},
       ]},
       { id:"tg_picks",   name:"Picks",   weapons:[
         {id:"wa_horse_pick",   name:"Horseman's Pick"},
@@ -55,13 +57,14 @@ export const WEAPON_GROUPS_49 = [
       { id:"tg_maces",  name:"Maces",  weapons:[
         {id:"wc_foot_mace",    name:"Footman's Mace"},
         {id:"wc_horse_mace",   name:"Horseman's Mace"},
-        {id:"wc_morning_star", name:"Morning Star"},
+        {id:"wc_mace_axe",     name:"Mace-Axe", dupe:true},
       ]},
       { id:"tg_clubs",  name:"Clubs",  weapons:[
         {id:"wc_club",         name:"Club"},
         {id:"wc_great_club",   name:"Great Club"},
         {id:"wc_war_club",     name:"War Club"},
         {id:"wc_ankus",        name:"Ankus"},
+        {id:"wc_morning_star", name:"Morning Star"},
       ]},
       { id:"tg_flails", name:"Flails", weapons:[
         {id:"wc_horse_flail",  name:"Horseman's Flail"},
@@ -129,12 +132,14 @@ export const WEAPON_GROUPS_49 = [
         {id:"wg_bill_guis",    name:"Bill-Guisarme"},
         {id:"wg_glaive_guis",  name:"Glaive-Guisarme"},
         {id:"wg_hook_fauchard",name:"Hook Fauchard"},
+        {id:"wg_guis_voulge",  name:"Guisarme-Voulge"},
       ]},
       { id:"tg_glaives",      name:"Glaives", weapons:[
         {id:"wg_glaive",       name:"Glaive"},
         {id:"wg_fauchard",     name:"Fauchard"},
         {id:"wg_naginata",     name:"Naginata"},
         {id:"wg_nagimaki",     name:"Nagimaki"},
+        {id:"wg_fauchard_fork",name:"Fauchard-Fork"},
       ]},
       { id:"tg_beaked",       name:"Beaked Polearms", weapons:[
         {id:"wg_bec_de_corbin",name:"Bec de Corbin"},
@@ -170,33 +175,60 @@ export const WEAPON_GROUPS_49 = [
   {
     id:"wg_swords", broad:"Swords",
     tightGroups:[
-      { id:"tg_sw_ancient", name:"Ancient Swords",      weapons:[
-        {id:"ws_broadsword",   name:"Broadsword"},
-        {id:"ws_sapara",       name:"Sapara"},
-        {id:"ws_khopesh",      name:"Khopesh"},
-        {id:"ws_short_sword",  name:"Short Sword"},
+      { id:"tg_sw_ancient",  name:"Ancient Swords",      weapons:[
+        {id:"ws_broadsword",      name:"Broadsword"},
+        {id:"ws_sapara",          name:"Sapara"},
+        {id:"ws_khopesh",         name:"Khopesh"},
+        {id:"ws_sword_axe",       name:"Sword-Axe"},
+        {id:"ws_short_sword",     name:"Short Sword"},
       ]},
-      { id:"tg_sw_oriental",name:"Oriental Swords",     weapons:[
-        {id:"ws_katana",       name:"Katana"},
-        {id:"ws_wakizashi",    name:"Wakizashi"},
-        {id:"ws_no_dachi",     name:"No-Dachi"},
-        {id:"ws_ninja_to",     name:"Ninja-to"},
-        {id:"ws_cutlass",      name:"Cutlass"},
+      { id:"tg_sw_roman",    name:"Roman Swords",         weapons:[
+        {id:"ws_broadsword_r",    name:"Broadsword",        dupe:true},
+        {id:"ws_drusus",          name:"Drusus"},
+        {id:"ws_gladius",         name:"Gladius"},
+        {id:"ws_spatha",          name:"Spatha"},
       ]},
-      { id:"tg_sw_medium",  name:"Medium Swords",       weapons:[
-        {id:"ws_long_sword",   name:"Long Sword"},
-        {id:"ws_sabre",        name:"Sabre"},
-        {id:"ws_falchion",     name:"Falchion"},
-        {id:"ws_estoc",        name:"Estoc"},
+      { id:"tg_sw_mideast",  name:"Middle Eastern Swords", weapons:[
+        {id:"ws_short_sword_me",  name:"Short Sword",       dupe:true},
+        {id:"ws_scimitar",        name:"Scimitar"},
+        {id:"ws_great_scimitar_me",name:"Great Scimitar",   dupe:true},
+        {id:"ws_tulwar",          name:"Tulwar"},
       ]},
-      { id:"tg_sw_large",   name:"Large Swords",        weapons:[
-        {id:"ws_bastard_sword",name:"Bastard Sword"},
-        {id:"ws_claymore",     name:"Claymore"},
-        {id:"ws_2h_sword",     name:"Two-Handed Sword"},
-        {id:"ws_great_scimitar",name:"Great Scimitar"},
+      { id:"tg_sw_oriental", name:"Oriental Swords",      weapons:[
+        {id:"ws_cutlass",         name:"Cutlass"},
+        {id:"ws_katana",          name:"Katana"},
+        {id:"ws_wakizashi",       name:"Wakizashi"},
+        {id:"ws_no_dachi",        name:"No-Dachi"},
+        {id:"ws_ninja_to",        name:"Ninja-to"},
       ]},
-      { id:"tg_sw_fencing", name:"Fencing Weapons",     weapons:[
-        {id:"ws_rapier",       name:"Rapier"},
+      { id:"tg_sw_short",    name:"Short Swords",          weapons:[
+        {id:"ws_short_sword_s",   name:"Short Sword",       dupe:true},
+        {id:"ws_gladius_s",       name:"Gladius",           dupe:true},
+        {id:"ws_drusus_s",        name:"Drusus",            dupe:true},
+        {id:"ws_sapara_s",        name:"Sapara",            dupe:true},
+        {id:"ws_dagger_sw",       name:"Dagger",            dupe:true},
+        {id:"ws_tulwar_s",        name:"Tulwar",            dupe:true},
+      ]},
+      { id:"tg_sw_medium",   name:"Medium Swords",         weapons:[
+        {id:"ws_broadsword_m",    name:"Broadsword",        dupe:true},
+        {id:"ws_long_sword",      name:"Long Sword"},
+        {id:"ws_cutlass_m",       name:"Cutlass",           dupe:true},
+        {id:"ws_sabre",           name:"Sabre"},
+        {id:"ws_falchion",        name:"Falchion"},
+        {id:"ws_estoc",           name:"Estoc"},
+      ]},
+      { id:"tg_sw_large",    name:"Large Swords",          weapons:[
+        {id:"ws_bastard_sword",   name:"Bastard Sword"},
+        {id:"ws_claymore",        name:"Claymore"},
+        {id:"ws_2h_sword",        name:"Two-Handed Sword"},
+        {id:"ws_great_scimitar",  name:"Great Scimitar"},
+        {id:"ws_no_dachi_l",      name:"No-Dachi",          dupe:true},
+      ]},
+      { id:"tg_sw_fencing",  name:"Fencing Weapons",       weapons:[
+        {id:"ws_rapier",          name:"Rapier"},
+        {id:"ws_sabre_f",         name:"Sabre",             dupe:true},
+        {id:"ws_main_gauche_f",   name:"Main-Gauche",       dupe:true},
+        {id:"ws_parry_dag_f",     name:"Parrying Dagger",   dupe:true},
       ]},
     ],
     unrelated:[],
@@ -249,10 +281,12 @@ export const WEAPON_GROUPS_49 = [
           {id:"wf_arquebus_h",  name:"Arquebus"}, {id:"wf_hand_gunne",   name:"Hand Gunne"},
         ]},
       { id:"tg_firearms_match", name:"Matchlocks", weapons:[
-          {id:"wf_caliver",     name:"Caliver (matchlock)"},
-          {id:"wf_musket_m",    name:"Musket (matchlock)"},
+          {id:"wf_arquebus_m",     name:"Arquebus",              dupe:true},
+          {id:"wf_caliver",        name:"Caliver (matchlock)"},
+          {id:"wf_musket_m",       name:"Musket (matchlock)"},
         ]},
       { id:"tg_firearms_wheel", name:"Wheellocks", weapons:[
+          {id:"wf_arquebus_w",     name:"Arquebus",              dupe:true},
           {id:"wf_belt_pistol_w",  name:"Belt Pistol (wheellock)"},
           {id:"wf_horse_pistol_w", name:"Horse Pistol (wheellock)"},
         ]},
