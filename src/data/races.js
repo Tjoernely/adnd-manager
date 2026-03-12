@@ -231,6 +231,7 @@ export const RACES = [
   {
     id: "dwarf", label: "Dwarf", icon: "⛏️", pool: 45,
     baseStatMods: { CON: 1, CHA: -1 },
+    statLimits: { STR:[8,18], DEX:[3,17], CON:[11,18], INT:[3,18], WIS:[3,18], CHA:[3,17] },
     desc: "Stout and resilient demi-humans of the mountain halls. Renowned warriors and craftsmen with deep ties to stone and metal.",
     abilities: [
       { id:"dw01", cp: 5,  statLink: null,                           name:"Axe bonus",                   desc:"+1 to hit with all axe-type weapons (battle axe, hand axe, etc.)." },
@@ -270,6 +271,7 @@ export const RACES = [
   {
     id: "elf", label: "Elf", icon: "🌿", pool: 45,
     baseStatMods: { DEX: 1, CON: -1 },
+    statLimits: { STR:[3,18], DEX:[6,18], CON:[7,18], INT:[8,18], WIS:[3,18], CHA:[8,18] },
     desc: "Ancient and graceful fey-blooded people, touched by magic and bound to the natural world. Unmatched archers and enchanters.",
     abilities: [
       { id:"el01", cp:10,  statLink:{ sub:"aim",     delta:1 },    name:"Aim bonus",                desc:"+1 to Aim sub-ability. Negates the requirement that Dexterity sub-abilities must be within 4 points — they can now be within 5." },
@@ -302,6 +304,7 @@ export const RACES = [
   {
     id: "gnome", label: "Gnome", icon: "🔮", pool: 45,
     baseStatMods: { INT: 1, WIS: -1 },
+    statLimits: { STR:[6,18], DEX:[3,18], CON:[8,18], INT:[6,18], WIS:[3,18], CHA:[3,18] },
     desc: "Quick-witted illusionists and tinkerers, friends to burrowing beasts. The most intellectually curious of the demi-human races.",
     abilities: [
       { id:"gn13", cp:10,  statLink: null,                           name:"Animal friendship",  desc:"Once per day, cast animal friendship as the priest spell, with respect to burrowing animals." },
@@ -330,6 +333,7 @@ export const RACES = [
   {
     id: "halfling", label: "Halfling", icon: "🍀", pool: 35,
     baseStatMods: { DEX: 1, STR: -1 },
+    statLimits: { STR:[7,18], DEX:[7,18], CON:[10,18], INT:[6,18], WIS:[3,17], CHA:[3,18] },
     desc: "Small, cheerful folk of remarkable luck and surprising toughness. Masters of silence and the sling.",
     abilities: [
       { id:"hf02", cp: 5,  statLink: null,                           name:"Infravision 30'",    desc:"Infravision with a 30' range, which indicates some Stout halfling blood in the character's lineage." },
@@ -354,6 +358,7 @@ export const RACES = [
   {
     id: "halfelf", label: "Half-Elf", icon: "🌙", pool: 25,
     baseStatMods: {},
+    statLimits: { STR:[3,18], DEX:[6,18], CON:[6,18], INT:[4,18], WIS:[3,18], CHA:[3,18] },
     desc: "Born of two worlds, Half-Elves carry elven grace and human ambition. Adaptable and charismatic bridge-builders.",
     abilities: [
       { id:"he01", cp: 5,  statLink: null,                           name:"Bow bonus",          desc:"+1 to attack rolls with any bows other than crossbows." },
@@ -373,6 +378,7 @@ export const RACES = [
   {
     id: "human", label: "Human", icon: "👤", pool: 10,
     baseStatMods: {},
+    statLimits: { STR:[3,18], DEX:[3,18], CON:[3,18], INT:[3,18], WIS:[3,18], CHA:[3,18] },
     desc: "Diverse and adaptable, humans dominate through ambition, versatility, and sheer numbers. No racial restrictions on class or stat maxima.",
     abilities: [
       { id:"hu01", cp: 5,  statLink: null,                           name:"Attack bonus",       desc:"+1 to attack with any one weapon of the human's choice." },
@@ -389,6 +395,7 @@ export const RACES = [
   {
     id: "halforc", label: "Half-Orc", icon: "🪓", pool: 15,
     baseStatMods: { STR: 1, CON: 1, CHA: -2 },
+    statLimits: { STR:[6,18], DEX:[3,17], CON:[8,18], INT:[3,17], WIS:[3,14], CHA:[3,12] },
     desc: "Products of human and orcish blood, Half-Orcs combine brutal strength with cunning survival instincts. Feared and underestimated.",
     abilities: [
       { id:"ho01", cp: 5,  statLink: null,                           name:"Active sense of smell", desc:"Sense of smell is sensitive enough to give a +1 bonus to surprise rolls." },
@@ -406,6 +413,7 @@ export const RACES = [
   {
     id: "halfogre", label: "Half-Ogre", icon: "🗿", pool: 15,
     baseStatMods: { STR: 1, CON: 1, INT: -1, CHA: -1 },
+    statLimits: { STR:[14,18], DEX:[3,12], CON:[14,18], INT:[3,12], WIS:[3,12], CHA:[3,8] },
     desc: "Massively built beings of ogre and human blood. Extraordinary physical power offset by social stigma and intellectual limitations.",
     abilities: [
       { id:"og01", cp: 5,  statLink: null,                           name:"Attack bonus",       desc:"+1 attack bonus with one melee weapon of the player's choice." },

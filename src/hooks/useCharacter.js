@@ -10,6 +10,7 @@ import { RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP } from "../data/r
 import {
   ALL_CLASSES, CLASS_ABILITIES,
   MAGE_SP_CLASSES, CLERIC_SP_CLASSES,
+  WIZARD_SCHOOLS, RACE_CLASS_CAPS,
 } from "../data/classes.js";
 
 import { SP_KITS, CLASS_KITS } from "../data/kits.js";
@@ -29,9 +30,10 @@ import {
 export function useCharacter() {
 
   // ── Identity
-  const [charName,  setCharName]  = useState("Adventurer");
-  const [charLevel, setCharLevel] = useState(1);
-  const [activeTab, setActiveTab] = useState("scores");
+  const [charName,   setCharName]   = useState("Adventurer");
+  const [charGender, setCharGender] = useState("");       // "" | "Male" | "Female" | custom string
+  const [charLevel,  setCharLevel]  = useState(1);
+  const [activeTab,  setActiveTab]  = useState("scores");
   const [ruleBreaker, setRuleBreaker] = useState(false);
 
   // ── CP per level override (S&P default: use class value; custom: 3–5, or any with RB)
@@ -95,11 +97,27 @@ export function useCharacter() {
   const [selectedClass, setSelectedClass] = useState(null);
 
   // ─────────────────────────────────────────
+  //  CH.3b: WIZARD SCHOOLS / SPECIALIST
+  // ─────────────────────────────────────────
+
+  // Specialist school id (null = none chosen)
+  const [specialistSchool, setSpecialistSchool] = useState(null);
+  // Mage school flavor picks { schoolId: true }
+  const [mageSchoolsPicked, setMageSchoolsPicked] = useState({});
+  // Extra opposition schools chosen via sw_r3 restriction (array of school ids)
+  const [extraOpposition, setExtraOpposition]   = useState([]);
+
+  // ─────────────────────────────────────────
   //  CH.4: TRAITS & DISADVANTAGES
   // ─────────────────────────────────────────
 
   const [traitsPicked, setTraitsPicked] = useState({});
   const [disadvPicked, setDisadvPicked] = useState({});
+  // Sub-option selections for disadvantages that have subOptions (e.g. Fanaticism)
+  const [disadvSubChoice, setDisadvSubChoice] = useState({}); // { dvId: subOptionId }
+
+  // Social status: { rolled: number|null, override: string|null }
+  const [socialStatus, setSocialStatus] = useState({ rolled: null, override: null });
 
   // ─────────────────────────────────────────
   //  CH.5: PROFICIENCIES
@@ -241,10 +259,20 @@ export function useCharacter() {
     DISADVANTAGES.reduce((s, d) => {
       const level = disadvPicked[d.id];
       if (!level) return s;
+      // Fanaticism: use sub-option CP if a sub-choice is made
+      if (d.subOptions?.length) {
+        const subId  = disadvSubChoice[d.id];
+        const subOpt = d.subOptions.find(o => o.id === subId);
+        if (subOpt) {
+          if (level === "severe" && subOpt.cpSevere != null) return s + subOpt.cpSevere;
+          return s + subOpt.cp;
+        }
+        // no sub chosen yet — fall back to base cp
+      }
       if (level === "severe" && d.cpSevere != null) return s + d.cpSevere;
-      return s + d.cp; // "moderate" or no severe option
+      return s + d.cp;
     }, 0),
-  [disadvPicked]);
+  [disadvPicked, disadvSubChoice]);
   // Cross-class NWP cost: General = listed; own class group = listed; other = listed+2
   const classGroup  = useMemo(() => CLASS_GROUP_MAP[selectedClass] ?? null, [selectedClass]);
   // Chapter 6 NWP CP pool + Chapter 7 Weapon CP pool per class group (S&P p.125, p.162)
@@ -658,6 +686,36 @@ export function useCharacter() {
     setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel }));
   };
 
+  // ── Wizard / Specialist school handlers
+  const handleSpecialistSchool = useCallback((schoolId) => {
+    setSpecialistSchool(prev => prev === schoolId ? null : schoolId);
+  }, []);
+
+  const toggleMageSchool = useCallback((schoolId) => {
+    setMageSchoolsPicked(prev => ({ ...prev, [schoolId]: !prev[schoolId] }));
+  }, []);
+
+  const toggleExtraOpposition = useCallback((schoolId) => {
+    setExtraOpposition(prev =>
+      prev.includes(schoolId) ? prev.filter(s => s !== schoolId) : [...prev, schoolId]
+    );
+  }, []);
+
+  // ── Disadvantage sub-option choice
+  const handleDisadvSubChoice = useCallback((dvId, subOptionId) => {
+    setDisadvSubChoice(prev => ({ ...prev, [dvId]: subOptionId }));
+  }, []);
+
+  // ── Social status roll (2d6)
+  const rollSocialStatus = useCallback(() => {
+    const roll = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
+    setSocialStatus(prev => ({ ...prev, rolled: roll }));
+  }, []);
+
+  const setSocialStatusOverride = useCallback((val) => {
+    setSocialStatus(prev => ({ ...prev, override: val || null }));
+  }, []);
+
   // ── Toggle proficiency
   const toggleProf = prof => {
     const already = !!profsPicked[prof.id];
@@ -703,31 +761,37 @@ export function useCharacter() {
 
   // ── Serialize all saveable character state to a plain object ──────
   const serializeCharacter = useCallback(() => ({
-    charName, charLevel, ruleBreaker, cpPerLevelOverride,
+    charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards,
     baseScores, exPcts, splitMods,
     classAbilPicked, selectedKit,
     selectedRace, selectedSubRace, racialPicked, abilChosenSub,
     monstrousRaceId, monstrousSelFeats, monstrousCustomize, mongrelChoice,
     selectedClass,
-    traitsPicked, disadvPicked,
+    specialistSchool, mageSchoolsPicked, extraOpposition,
+    traitsPicked, disadvPicked, disadvSubChoice,
     profsPicked, weapPicked, profT44Override,
     masteryPicked, wocPicked, stylePicked,
+    socialStatus,
   }), [
-    charName, charLevel, ruleBreaker, cpPerLevelOverride,
+    charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards, baseScores, exPcts, splitMods,
     classAbilPicked, selectedKit,
     selectedRace, selectedSubRace, racialPicked, abilChosenSub,
     monstrousRaceId, monstrousSelFeats, monstrousCustomize, mongrelChoice,
-    selectedClass, traitsPicked, disadvPicked,
+    selectedClass,
+    specialistSchool, mageSchoolsPicked, extraOpposition,
+    traitsPicked, disadvPicked, disadvSubChoice,
     profsPicked, weapPicked, profT44Override,
     masteryPicked, wocPicked, stylePicked,
+    socialStatus,
   ]);
 
   // ── Restore character state from a previously serialized object ───
   const loadCharacterState = useCallback((d) => {
     if (!d) return;
     setCharName(d.charName ?? "Adventurer");
+    setCharGender(d.charGender ?? "");
     setCharLevel(d.charLevel ?? 1);
     setRuleBreaker(d.ruleBreaker ?? false);
     setCpPerLevelOverride(d.cpPerLevelOverride ?? 3);
@@ -746,20 +810,26 @@ export function useCharacter() {
     setMonstrousCustomize(d.monstrousCustomize ?? false);
     setMongrelChoice(d.mongrelChoice ?? null);
     setSelectedClass(d.selectedClass ?? null);
+    setSpecialistSchool(d.specialistSchool ?? null);
+    setMageSchoolsPicked(d.mageSchoolsPicked ?? {});
+    setExtraOpposition(d.extraOpposition ?? []);
     setTraitsPicked(d.traitsPicked ?? {});
     setDisadvPicked(d.disadvPicked ?? {});
+    setDisadvSubChoice(d.disadvSubChoice ?? {});
     setProfsPicked(d.profsPicked ?? {});
     setWeapPicked(d.weapPicked ?? {});
     setProfT44Override(d.profT44Override ?? {});
     setMasteryPicked(d.masteryPicked ?? {});
     setWocPicked(d.wocPicked ?? null);
     setStylePicked(d.stylePicked ?? {});
+    setSocialStatus(d.socialStatus ?? { rolled: null, override: null });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Return all state, derived values, and handlers
   return {
     // Identity
-    charName, setCharName, charLevel, setCharLevel,
+    charName, setCharName, charGender, setCharGender,
+    charLevel, setCharLevel,
     activeTab, setActiveTab, ruleBreaker, setRuleBreaker,
     // CP override + DM awards
     cpPerLevelOverride, setCpPerLevelOverride,
@@ -782,8 +852,12 @@ export function useCharacter() {
     mongrelChoice, setMongrelChoice,
     // Class
     selectedClass,
+    // Wizard schools
+    specialistSchool, mageSchoolsPicked, extraOpposition,
+    handleSpecialistSchool, toggleMageSchool, toggleExtraOpposition,
     // Traits
-    traitsPicked, disadvPicked,
+    traitsPicked, disadvPicked, disadvSubChoice,
+    handleDisadvSubChoice,
     // Profs + weapons
     profsPicked, weapPicked, setWeapPicked,
     profT44Override, setProfT44Override,
@@ -791,6 +865,8 @@ export function useCharacter() {
     masteryPicked, setMasteryPicked,
     wocPicked, setWocPicked,
     stylePicked, setStylePicked,
+    // Social status
+    socialStatus, rollSocialStatus, setSocialStatusOverride,
     // Derived — race
     raceData, classData, currentAbils,
     classAbilCPSpent, abilGrantsExStr,
@@ -825,6 +901,7 @@ export function useCharacter() {
     serializeCharacter, loadCharacterState,
     // Data refs needed by JSX (exported for tab components)
     MAGE_SP_CLASSES, CLERIC_SP_CLASSES,
+    WIZARD_SCHOOLS, RACE_CLASS_CAPS,
     DISADVANTAGES, DISADV_POOL_WARN, DISADV_MAX_CP,
     TRAITS, ALL_NWP, ALL_PROFS, CLASS_ABILITIES,
     SP_KITS, CLASS_KITS, ALL_CLASSES,

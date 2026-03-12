@@ -1,8 +1,24 @@
-import { C, fmt, statColor, numInputStyle } from "../../data/constants.js";
+import { useState } from "react";
+import { C, numInputStyle } from "../../data/constants.js";
 import { SP_KITS, CLASS_KITS } from "../../data/kits.js";
 import { ALL_CLASSES } from "../../data/classes.js";
 
 import { ChHead } from "../ui/index.js";
+
+// ── Social status rank table (2d6 → tier + label)
+const SOCIAL_RANKS = [
+  { min: 2,  max: 2,  tier: "Lower",        label: "Slave / Destitute",         color: "#805050" },
+  { min: 3,  max: 4,  tier: "Lower",        label: "Serf / Peasant",            color: "#886040" },
+  { min: 5,  max: 6,  tier: "Lower Middle", label: "Freeman / Laborer",         color: "#8a7840" },
+  { min: 7,  max: 8,  tier: "Lower Middle", label: "Artisan / Tradesman",       color: "#909050" },
+  { min: 9,  max: 10, tier: "Upper Middle", label: "Merchant / Minor Landowner",color: "#60a080" },
+  { min: 11, max: 11, tier: "Upper Middle", label: "Gentry / Wealthy Merchant", color: "#60b090" },
+  { min: 12, max: 12, tier: "Upper",        label: "Nobility / Minor Lord",     color: C.gold },
+];
+
+function getSocialRank(roll) {
+  return SOCIAL_RANKS.find(r => roll >= r.min && roll <= r.max) ?? null;
+}
 
 export function KitsTab(props) {
   const {
@@ -10,7 +26,10 @@ export function KitsTab(props) {
     profsPicked, effSub, ruleBreaker,
     kitAlignOk, kitBarredOk,
     ALL_PROFS,
+    socialStatus, rollSocialStatus, setSocialStatusOverride,
   } = props;
+
+  const [overrideInput, setOverrideInput] = useState(socialStatus?.override ?? "");
 
   const _ALL_PROFS = props.ALL_PROFS ?? [];
 
@@ -333,6 +352,122 @@ export function KitsTab(props) {
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:8 }}>
           {SP_KITS.map(kit => <KitCard key={kit.id} kit={kit} compact />)}
+        </div>
+      </div>
+
+      {/* ── Social Status ── */}
+      <div style={{ marginTop:32 }}>
+        <div style={{ fontSize:10, color:C.gold, letterSpacing:3,
+          textTransform:"uppercase", marginBottom:14 }}>
+          ⚜ Social Status (2d6)
+        </div>
+
+        {/* Result display */}
+        {(() => {
+          const roll    = socialStatus?.rolled;
+          const override = socialStatus?.override;
+          const displayRoll = override ? parseInt(override) : roll;
+          const rank    = displayRoll ? getSocialRank(displayRoll) : null;
+          return (
+            <div style={{ marginBottom:16 }}>
+              {rank ? (
+                <div style={{ padding:"14px 20px",
+                  background:"rgba(0,0,0,.35)",
+                  border:`2px solid ${rank.color}`, borderRadius:10,
+                  display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
+                  <div>
+                    <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                      textTransform:"uppercase", marginBottom:3 }}>Roll</div>
+                    <div style={{ fontSize:32, fontWeight:"bold", color:rank.color, lineHeight:1 }}>
+                      {displayRoll}
+                    </div>
+                  </div>
+                  <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
+                    <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                      textTransform:"uppercase", marginBottom:3 }}>Tier</div>
+                    <div style={{ fontSize:14, fontWeight:"bold", color:rank.color }}>
+                      {rank.tier}
+                    </div>
+                  </div>
+                  <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20, flex:1 }}>
+                    <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                      textTransform:"uppercase", marginBottom:3 }}>Status</div>
+                    <div style={{ fontSize:16, fontWeight:"bold", color:C.textBri }}>
+                      {rank.label}
+                    </div>
+                  </div>
+                  {override && (
+                    <span style={{ fontSize:9, padding:"2px 7px",
+                      background:"rgba(212,160,53,.1)",
+                      border:`1px solid ${C.gold}44`,
+                      borderRadius:4, color:C.gold }}>
+                      OVERRIDDEN
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ padding:"14px 20px",
+                  background:"rgba(0,0,0,.25)",
+                  border:`1px solid ${C.border}`, borderRadius:10,
+                  fontSize:12, color:C.textDim, fontStyle:"italic" }}>
+                  Roll or enter a value to determine social status.
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Rank table */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:9, color:C.textDim, letterSpacing:2,
+            textTransform:"uppercase", marginBottom:6 }}>Rank Table (2d6)</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+            {SOCIAL_RANKS.map(r => {
+              const roll = socialStatus?.override ? parseInt(socialStatus.override) : socialStatus?.rolled;
+              const isCur = roll && roll >= r.min && roll <= r.max;
+              return (
+                <div key={r.min} style={{
+                  padding:"4px 10px", borderRadius:5, fontSize:10,
+                  background: isCur ? `${r.color}22` : "rgba(0,0,0,.2)",
+                  border:`1px solid ${isCur ? r.color : C.border}`,
+                  color: isCur ? r.color : C.textDim,
+                }}>
+                  <strong>{r.min}{r.min !== r.max ? `–${r.max}` : ""}</strong>
+                  {" "}{r.label}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          <button onClick={rollSocialStatus} style={{
+            padding:"8px 18px", borderRadius:7, border:`1px solid ${C.gold}`,
+            background:"rgba(212,160,53,.12)",
+            color:C.gold, cursor:"pointer", fontFamily:"inherit", fontSize:12,
+            fontWeight:"bold", letterSpacing:.5,
+          }}>
+            🎲 Roll 2d6
+          </button>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:11, color:C.textDim }}>Override (2–12):</span>
+            <input
+              type="number" min={2} max={12} value={overrideInput}
+              onChange={e => setOverrideInput(e.target.value)}
+              onBlur={e => setSocialStatusOverride(e.target.value)}
+              style={{ ...numInputStyle, width:50, textAlign:"center" }}
+              placeholder="—"
+            />
+            {overrideInput && (
+              <button onClick={() => { setOverrideInput(""); setSocialStatusOverride(""); }}
+                style={{ padding:"2px 8px", borderRadius:4, fontSize:10,
+                  background:"none", border:`1px solid ${C.border}`,
+                  color:C.textDim, cursor:"pointer", fontFamily:"inherit" }}>
+                ✕ Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

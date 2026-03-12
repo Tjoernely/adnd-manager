@@ -84,6 +84,20 @@ export default function App() {
     setShowCharMenu(false);
   }, [loadCharacterState]);
 
+  // Delete current character from DB
+  const deleteCharacter = useCallback(async () => {
+    if (!dbCharId) return;
+    try {
+      await api.deleteCharacter(dbCharId);
+      setCharacters(prev => prev.filter(c => c.id !== dbCharId));
+      loadCharacterState(null);
+      setDbCharId(null);
+      setShowCharMenu(false);
+    } catch (e) {
+      console.error('Delete error:', e);
+    }
+  }, [dbCharId, loadCharacterState]);
+
   // ── Auth gate ───────────────────────────────────────────────────
   if (!user) {
     return <LoginScreen onLogin={login} onRegister={register} loading={authLoading} error={authError} />;
@@ -102,7 +116,7 @@ export default function App() {
 
   const {
     activeTab, setActiveTab,
-    charName, setCharName, charLevel, setCharLevel,
+    charName, setCharName, charGender, setCharGender, charLevel, setCharLevel,
     ruleBreaker, setRuleBreaker,
     cpPerLevelOverride, setCpPerLevelOverride,
     dmAwards, setDmAwards, dmAwardInput, setDmAwardInput,
@@ -162,6 +176,16 @@ export default function App() {
                 style={{ background:"transparent", border:"none", outline:"none",
                   color:C.gold, fontSize:26, fontWeight:"bold", fontFamily:"inherit",
                   borderBottom:`1px solid ${C.borderHi}`, paddingBottom:2, minWidth:180 }} />
+              {/* Gender */}
+              <QL label="Gender">
+                <select value={charGender} onChange={e=>setCharGender(e.target.value)}
+                  style={{ ...numInputStyle, minWidth:80, cursor:"pointer" }}>
+                  <option value="">—</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </QL>
               <QL label="Level">
                 <input type="number" min={1} max={20} value={charLevel}
                   onChange={e=>setCharLevel(Math.max(1,Math.min(20,+e.target.value)))}
@@ -191,10 +215,42 @@ export default function App() {
                         width:"100%", textAlign:"left", padding:"7px 10px",
                         background:"rgba(212,160,53,.08)", border:`1px solid ${C.border}`,
                         borderRadius:5, color:C.gold, cursor:"pointer",
-                        fontFamily:"inherit", fontSize:11, marginBottom:6,
+                        fontFamily:"inherit", fontSize:11, marginBottom:4,
                       }}>
                         + New Character
                       </button>
+                      <button onClick={()=>{
+                        setShowCharMenu(false);
+                        setConfirmBox({
+                          msg:`Reset "${charName}" to a blank character?\n\nAll unsaved changes will be lost.`,
+                          onConfirm: () => { loadCharacterState(null); setDbCharId(null); },
+                          label:"Reset", color:"#c07030",
+                        });
+                      }} style={{
+                        width:"100%", textAlign:"left", padding:"7px 10px",
+                        background:"rgba(180,80,30,.08)", border:`1px solid rgba(140,60,20,.3)`,
+                        borderRadius:5, color:"#c07030", cursor:"pointer",
+                        fontFamily:"inherit", fontSize:11, marginBottom:4,
+                      }}>
+                        ↺ Reset Character
+                      </button>
+                      {dbCharId && (
+                        <button onClick={()=>{
+                          setShowCharMenu(false);
+                          setConfirmBox({
+                            msg:`Delete "${charName}" permanently?\n\nThis cannot be undone.`,
+                            onConfirm: deleteCharacter,
+                            label:"Delete", color:C.red,
+                          });
+                        }} style={{
+                          width:"100%", textAlign:"left", padding:"7px 10px",
+                          background:"rgba(180,30,30,.08)", border:`1px solid rgba(140,20,20,.3)`,
+                          borderRadius:5, color:C.red, cursor:"pointer",
+                          fontFamily:"inherit", fontSize:11, marginBottom:6,
+                        }}>
+                          🗑 Delete Character
+                        </button>
+                      )}
                       {characters.map(c=>(
                         <div key={c.id} onClick={()=>loadCharacter(c)}
                           style={{
@@ -497,16 +553,20 @@ export default function App() {
 
       {confirmBox && (
         <Overlay onClick={()=>setConfirmBox(null)}>
-          <Modal onClick={e=>e.stopPropagation()} borderColor={C.red}>
-            <div style={{ fontSize:17, color:C.red, marginBottom:10 }}>⚠ Rule Violation</div>
+          <Modal onClick={e=>e.stopPropagation()} borderColor={confirmBox.color ?? C.red}>
+            <div style={{ fontSize:17, color:confirmBox.color ?? C.red, marginBottom:10 }}>
+              ⚠ {confirmBox.label ? "Confirm Action" : "Rule Violation"}
+            </div>
             <div style={{ fontSize:13, color:"#c0a87a", lineHeight:1.7,
               whiteSpace:"pre-line", marginBottom:20 }}>{confirmBox.msg}</div>
             <div style={{ display:"flex", gap:12 }}>
               <button onClick={()=>{ confirmBox.onConfirm(); setConfirmBox(null); }}
-                style={{ background:"#7a1a1a", border:"none", borderRadius:6,
-                  padding:"8px 20px", color:"#fff", cursor:"pointer",
-                  fontFamily:"inherit", fontSize:13 }}>
-                Enable Rule-Breaker &amp; Proceed
+                style={{ background: confirmBox.color ? `${confirmBox.color}33` : "#7a1a1a",
+                  border:`1px solid ${confirmBox.color ?? C.red}`,
+                  borderRadius:6, padding:"8px 20px",
+                  color: confirmBox.color ?? "#fff",
+                  cursor:"pointer", fontFamily:"inherit", fontSize:13 }}>
+                {confirmBox.label ? `${confirmBox.label} — Confirm` : "Enable Rule-Breaker & Proceed"}
               </button>
               <CloseBtn onClick={()=>setConfirmBox(null)} label="Cancel" />
             </div>

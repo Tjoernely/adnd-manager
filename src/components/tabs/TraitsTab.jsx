@@ -5,10 +5,10 @@ import { ChHead, IBtn, Checkbox, CpBadge, GroupLabel } from "../ui/index.js";
 
 export function TraitsTab(props) {
   const {
-    traitsPicked, disadvPicked,
+    traitsPicked, disadvPicked, disadvSubChoice,
     disadvPool, traitCPSp,
     ruleBreaker, setInfoModal,
-    toggleTrait, toggleDisadv,
+    toggleTrait, toggleDisadv, handleDisadvSubChoice,
   } = props;
 
   return (
@@ -89,11 +89,21 @@ export function TraitsTab(props) {
           <GroupLabel>Disadvantages — award CP (Table 47)</GroupLabel>
           <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
             {DISADVANTAGES.map(dv => {
-              const level = disadvPicked[dv.id]; // false | "moderate" | "severe"
-              const picked = !!level;
+              const level     = disadvPicked[dv.id]; // false | "moderate" | "severe"
+              const picked    = !!level;
               const hasSevere = dv.cpSevere != null;
-              const isCustom = dv.source === "Custom";
-              const cpGain = level === "severe" ? dv.cpSevere : dv.cp;
+              const isCustom  = dv.source === "Custom";
+              const hasSubOpts = dv.subOptions?.length > 0;
+
+              // Effective CP values (use sub-option when chosen)
+              const chosenSubId  = disadvSubChoice?.[dv.id];
+              const chosenSubOpt = hasSubOpts ? dv.subOptions.find(o => o.id === chosenSubId) : null;
+              const effCp        = chosenSubOpt ? chosenSubOpt.cp : dv.cp;
+              const effCpSevere  = chosenSubOpt ? chosenSubOpt.cpSevere : dv.cpSevere;
+              const effHasSevere = chosenSubOpt ? chosenSubOpt.cpSevere != null : hasSevere;
+
+              const cpGain = level === "severe" ? (effCpSevere ?? effCp) : effCp;
+
               return (
                 <div key={dv.id} style={{
                   background: picked ? "linear-gradient(145deg,#1e0a0a,#180808)" : C.card,
@@ -114,25 +124,35 @@ export function TraitsTab(props) {
                             ✦ CUSTOM
                           </span>
                         )}
+                        {hasSubOpts && !chosenSubOpt && picked && (
+                          <span style={{ fontSize:9, marginLeft:6, color:C.amber }}>
+                            ← choose type
+                          </span>
+                        )}
+                        {chosenSubOpt && (
+                          <span style={{ fontSize:9, marginLeft:6, color:"#d08080" }}>
+                            [{chosenSubOpt.label}]
+                          </span>
+                        )}
                       </span>
                     </div>
 
-                    {/* Moderate / Severe toggle */}
-                    {hasSevere && (
+                    {/* Moderate / Severe toggle — uses effective CP values */}
+                    {effHasSevere && (
                       <div style={{ display:"flex", gap:3, flexShrink:0 }}>
                         <button onClick={e => { e.stopPropagation(); toggleDisadv(dv, level === "moderate" ? false : "moderate"); }}
                           style={{ fontSize:9, padding:"2px 6px", borderRadius:3, cursor:"pointer",
                             fontFamily:"inherit", border:"none",
                             background: level === "moderate" ? "rgba(180,120,40,.3)" : "rgba(60,50,40,.4)",
                             color: level === "moderate" ? C.amber : "#605040" }}>
-                          Mod +{dv.cp}
+                          Mod +{effCp}
                         </button>
                         <button onClick={e => { e.stopPropagation(); toggleDisadv(dv, level === "severe" ? false : "severe"); }}
                           style={{ fontSize:9, padding:"2px 6px", borderRadius:3, cursor:"pointer",
                             fontFamily:"inherit", border:"none",
                             background: level === "severe" ? "rgba(180,40,40,.35)" : "rgba(60,40,40,.4)",
                             color: level === "severe" ? "#e08080" : "#604040" }}>
-                          Sev +{dv.cpSevere}
+                          Sev +{effCpSevere}
                         </button>
                       </div>
                     )}
@@ -152,6 +172,44 @@ export function TraitsTab(props) {
                     )}
                     <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:dv.name,body:dv.desc});}} />
                   </div>
+
+                  {/* Sub-option selector for disadvantages like Fanaticism */}
+                  {hasSubOpts && picked && (
+                    <div style={{ marginTop:8, paddingTop:8,
+                      borderTop:`1px solid rgba(180,50,50,.2)` }}>
+                      <div style={{ fontSize:9, color:"#a06060", letterSpacing:2,
+                        textTransform:"uppercase", marginBottom:6 }}>
+                        Choose type:
+                      </div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                        {dv.subOptions.map(opt => {
+                          const isCh = chosenSubId === opt.id;
+                          return (
+                            <button key={opt.id}
+                              onClick={e => { e.stopPropagation(); handleDisadvSubChoice(dv.id, opt.id); }}
+                              style={{
+                                padding:"3px 8px", borderRadius:4, fontSize:10,
+                                cursor:"pointer", fontFamily:"inherit",
+                                background: isCh ? "rgba(200,50,50,.3)" : "rgba(80,30,30,.3)",
+                                color: isCh ? "#f08080" : "#a06060",
+                                border:`1px solid ${isCh ? "#a03030" : "#5a2020"}`,
+                                transition:"all .1s",
+                              }}>
+                              {isCh ? "✓ " : ""}{opt.label}
+                              <span style={{ opacity:.7, marginLeft:4 }}>
+                                (+{opt.cp}{opt.cpSevere != null ? `/+${opt.cpSevere}` : ""})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {chosenSubOpt && (
+                        <div style={{ marginTop:5, fontSize:10, color:"#a06060", lineHeight:1.4 }}>
+                          {chosenSubOpt.desc}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
