@@ -134,6 +134,16 @@ export function useCharacter() {
   const [thiefArmorType, setThiefArmorType] = useState("padded_studded");
 
   // ─────────────────────────────────────────
+  //  PORTRAIT & APPEARANCE FIELDS
+  // ─────────────────────────────────────────
+  const [charAge,                setCharAge]                = useState("");
+  const [charHairColor,          setCharHairColor]          = useState("");
+  const [charEyeColor,           setCharEyeColor]           = useState("");
+  const [charDistinctiveFeatures,setCharDistinctiveFeatures]= useState("");
+  const [charAppearanceNotes,    setCharAppearanceNotes]    = useState("");
+  const [portraitUrl,            setPortraitUrl]            = useState(null);
+
+  // ─────────────────────────────────────────
   //  CH.5: PROFICIENCIES
   // ─────────────────────────────────────────
 
@@ -802,6 +812,8 @@ export function useCharacter() {
     masteryPicked, wocPicked, stylePicked,
     socialStatus,
     thiefDiscPoints, thiefArmorType,
+    charAge, charHairColor, charEyeColor, charDistinctiveFeatures, charAppearanceNotes,
+    portraitUrl,
   }), [
     charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards, baseScores, exPcts, splitMods,
@@ -815,6 +827,8 @@ export function useCharacter() {
     masteryPicked, wocPicked, stylePicked,
     socialStatus,
     thiefDiscPoints, thiefArmorType,
+    charAge, charHairColor, charEyeColor, charDistinctiveFeatures, charAppearanceNotes,
+    portraitUrl,
   ]);
 
   // ── Restore character state from a previously serialized object ───
@@ -855,6 +869,12 @@ export function useCharacter() {
     setSocialStatus(d.socialStatus ?? { rolled: null, override: null });
     setThiefDiscPoints(d.thiefDiscPoints ?? Object.fromEntries(THIEF_SKILLS.map(s => [s.id, 0])));
     setThiefArmorType(d.thiefArmorType ?? "padded_studded");
+    setCharAge(d.charAge ?? "");
+    setCharHairColor(d.charHairColor ?? "");
+    setCharEyeColor(d.charEyeColor ?? "");
+    setCharDistinctiveFeatures(d.charDistinctiveFeatures ?? "");
+    setCharAppearanceNotes(d.charAppearanceNotes ?? "");
+    setPortraitUrl(d.portraitUrl ?? null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Return all state, derived values, and handlers
@@ -903,6 +923,13 @@ export function useCharacter() {
     thiefDiscPoints, setThiefDiscPoints,
     thiefArmorType, setThiefArmorType,
     adjustThiefDisc,
+    // Portrait & appearance
+    charAge, setCharAge,
+    charHairColor, setCharHairColor,
+    charEyeColor, setCharEyeColor,
+    charDistinctiveFeatures, setCharDistinctiveFeatures,
+    charAppearanceNotes, setCharAppearanceNotes,
+    portraitUrl, setPortraitUrl,
     // Derived — race
     raceData, classData, currentAbils,
     classAbilCPSpent, abilGrantsExStr,
