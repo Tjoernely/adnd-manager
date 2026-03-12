@@ -40,10 +40,11 @@ export function ClassesTab(props) {
   const {
     selectedClass, selectedRace, charLevel,
     classData, classAbilPicked,  classAbilCPSpent,
-    currentAbils, effSub, toggleClassAbil,
+    currentAbils, effSub, modParent, PARENT_STAT_LABELS,
+    toggleClassAbil,
     specialistSchool, mageSchoolsPicked, extraOpposition,
     handleSpecialistSchool, toggleMageSchool, toggleExtraOpposition,
-    ruleBreaker,
+    ruleBreaker, setConfirmBox,
   } = props;
 
   const _getSpellPointBonus = props.getSpellPointBonus ?? (score => {
@@ -440,90 +441,243 @@ export function ClassesTab(props) {
               </div>
             )}
 
-            {/* ── Specialist School selector */}
-            {selectedClass === "specialist" && (
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 10, color: C.purple, letterSpacing: 3,
-                  textTransform: "uppercase", marginBottom: 10 }}>Specialist School</div>
-                <div style={{ display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 6 }}>
-                  {WIZARD_SCHOOLS.map(s => {
-                    const isSel      = specialistSchool === s.id;
-                    const isOpp      = oppositionSet.has(s.id);
-                    const minScore   = effSub(s.minSub);
-                    const meetsMin   = minScore >= s.minScore;
-                    const raceOk     = !selectedRace || s.allowedRaces.includes(selectedRace);
+            {/* ── Specialist School selector — 3-section layout */}
+            {selectedClass === "specialist" && (() => {
+              // Helper: check if a school is accessible to current char
+              const schoolAccessible = (s) => {
+                const statVal = modParent ? modParent(s.minStat) : (effSub?.(s.minStat) ?? 10);
+                const meetsMin = statVal >= s.minScore;
+                const raceOk   = !selectedRace || s.allowedRaces.includes(selectedRace);
+                return meetsMin && raceOk;
+              };
 
-                    return (
-                      <div key={s.id}
-                        onClick={() => handleSpecialistSchool(s.id)}
-                        style={{
-                          background: isSel ? "linear-gradient(145deg,#110820,#0c0618)" : C.card,
-                          border: `1px solid ${isSel ? C.purple : isOpp ? "#553322" : C.border}`,
-                          borderRadius: 8, padding: "9px 12px", cursor: "pointer",
-                          opacity: isOpp ? 0.5 : 1,
-                          transition: "all .15s",
-                        }}>
-                        <div style={{ display: "flex", justifyContent: "space-between",
-                          alignItems: "flex-start", gap: 6 }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 11, fontWeight: "bold",
-                              color: isSel ? C.purple : isOpp ? "#884444" : C.textBri, marginBottom: 3 }}>
-                              {isSel ? "✓ " : isOpp ? "✗ " : ""}{s.name}
-                            </div>
-                            <div style={{ fontSize: 10, color: C.textDim }}>
-                              Min {s.minSub}: {s.minScore}
-                              {" · "}
-                              <span style={{ color: meetsMin ? C.green : C.red }}>
-                                {meetsMin ? `✓ (${minScore})` : `✗ have ${minScore}`}
-                              </span>
-                            </div>
-                            {!raceOk && (
-                              <div style={{ fontSize: 9, color: C.red, marginTop: 2 }}>
-                                Not available to {selectedRace}
-                              </div>
-                            )}
-                          </div>
-                          {isOpp && (
-                            <span style={{ fontSize: 9, color: "#884444", flexShrink: 0 }}>OPPOSED</span>
-                          )}
-                        </div>
-                        {isSel && s.opposition.length > 0 && (
-                          <div style={{ marginTop: 5, fontSize: 9, color: "#8060c0" }}>
-                            Forbidden: {s.opposition.join(", ")}
-                          </div>
-                        )}
+              const specSel = WIZARD_SCHOOLS.find(s => s.id === specialistSchool);
+              // Opposition = school's own list + extra opposition
+              const fullOpposition = new Set([
+                ...(specSel?.opposition ?? []),
+                ...extraOpposition,
+              ]);
+
+              // School card for picker
+              const SchoolCard = ({ s, onPick, section }) => {
+                const statVal  = modParent ? modParent(s.minStat) : 10;
+                const meetsMin = statVal >= s.minScore;
+                const raceOk   = !selectedRace || s.allowedRaces.includes(selectedRace);
+                const avail    = meetsMin && raceOk;
+                const statName = (PARENT_STAT_LABELS?.[s.minStat] ?? s.minStat);
+
+                if (section === "yours") {
+                  return (
+                    <div style={{
+                      background:"linear-gradient(145deg,#1e1808,#18140a)",
+                      border:`2px solid ${C.gold}`,
+                      borderRadius:10, padding:"12px 16px",
+                      boxShadow:`0 0 20px ${C.gold}22`,
+                    }}>
+                      <div style={{ fontSize:13, fontWeight:"bold", color:C.gold, marginBottom:4 }}>
+                        ★ {s.name}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                      <div style={{ fontSize:11, color:C.textDim, marginBottom:6 }}>
+                        Min {statName} {s.minScore} ·{" "}
+                        <span style={{ color: meetsMin ? C.green : C.amber }}>
+                          {meetsMin ? `✓ ${statVal}` : `⚠ ${statVal} (rulebreaker active)`}
+                        </span>
+                        {" · Races: "}{s.allowedRaces.join(", ")}
+                      </div>
+                      <div style={{ fontSize:11, color:"#8060c0" }}>
+                        Opposition: {s.opposition.length > 0 ? s.opposition.join(", ") : "none"}
+                      </div>
+                      <button onClick={() => handleSpecialistSchool(s.id)}
+                        style={{ marginTop:8, padding:"3px 10px", borderRadius:4, fontSize:10,
+                          cursor:"pointer", fontFamily:"inherit",
+                          background:"rgba(0,0,0,.4)", border:`1px solid ${C.border}`,
+                          color:C.textDim }}>
+                        Change School
+                      </button>
+                    </div>
+                  );
+                }
+                if (section === "accessible") {
+                  return (
+                    <div style={{
+                      background:"linear-gradient(145deg,#091208,#070e06)",
+                      border:`1px solid #3a6a30`,
+                      borderRadius:7, padding:"7px 11px",
+                    }}>
+                      <div style={{ fontSize:11, color:"#80c070", fontWeight:"bold" }}>
+                        ✓ {s.name}
+                      </div>
+                      <div style={{ fontSize:9, color:"#507050" }}>
+                        Min {statName} {s.minScore} · {statVal}
+                      </div>
+                    </div>
+                  );
+                }
+                if (section === "opposition") {
+                  return (
+                    <div style={{
+                      background:"linear-gradient(145deg,#140808,#0e0606)",
+                      border:`1px solid #6a2a2a`,
+                      borderRadius:7, padding:"7px 11px",
+                      opacity:0.7,
+                    }}>
+                      <div style={{ fontSize:11, color:"#c07070", fontWeight:"bold" }}>
+                        ❌ {s.name}
+                      </div>
+                      <div style={{ fontSize:9, color:"#704040" }}>Forbidden</div>
+                    </div>
+                  );
+                }
+                // Picker card
+                const blocked = !avail && !ruleBreaker;
+                return (
+                  <div onClick={() => {
+                    if (avail) {
+                      handleSpecialistSchool(s.id);
+                    } else if (ruleBreaker) {
+                      handleSpecialistSchool(s.id);
+                    } else {
+                      setConfirmBox?.({
+                        msg: `"${s.name}" requires ${statName} ${s.minScore}${!raceOk ? ` and is not available to ${selectedRace}` : ""}.`
+                          + `\n\nYou have ${statName} ${statVal}. Enable Rule-Breaker to allow this?`,
+                        onConfirm: () => handleSpecialistSchool(s.id),
+                      });
+                    }
+                  }}
+                  style={{
+                    background: C.card,
+                    border:`1px solid ${avail ? C.border : "#553322"}`,
+                    borderRadius:7, padding:"8px 11px",
+                    cursor: "pointer", opacity: blocked ? 0.5 : 1,
+                    transition:"all .13s",
+                  }}>
+                    <div style={{ fontSize:11, fontWeight:"bold",
+                      color: avail ? C.textBri : "#c08060", marginBottom:3 }}>
+                      {!avail && "⚠ "}{s.name}
+                    </div>
+                    <div style={{ fontSize:9, color: meetsMin ? C.textDim : C.amber }}>
+                      {statName} {s.minScore} · have {statVal}{!meetsMin ? " ✗" : " ✓"}
+                    </div>
+                    {!raceOk && (
+                      <div style={{ fontSize:9, color:C.red }}>
+                        Not available to {selectedRace}
+                      </div>
+                    )}
+                  </div>
+                );
+              };
 
-            {/* ── Mage school flavor selection */}
+              return (
+                <div style={{ marginBottom:18 }}>
+                  <div style={{ fontSize:10, color:C.purple, letterSpacing:3,
+                    textTransform:"uppercase", marginBottom:10 }}>Specialist School</div>
+
+                  {/* ── No school chosen: show picker */}
+                  {!specialistSchool && (
+                    <>
+                      <div style={{ fontSize:11, color:C.textDim, marginBottom:10 }}>
+                        Select your school of specialization:
+                      </div>
+                      <div style={{ display:"grid",
+                        gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:6 }}>
+                        {WIZARD_SCHOOLS.map(s => (
+                          <SchoolCard key={s.id} s={s} section="picker" />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── School chosen: 3-section layout */}
+                  {specSel && (
+                    <>
+                      {/* Section 1: YOUR SCHOOL */}
+                      <div style={{ marginBottom:16 }}>
+                        <SchoolCard s={specSel} section="yours" />
+                      </div>
+
+                      {/* Section 2: ACCESSIBLE SCHOOLS */}
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontSize:9, color:"#507050", letterSpacing:2,
+                          textTransform:"uppercase", marginBottom:6 }}>
+                          ✓ Accessible Schools (auto-granted)
+                        </div>
+                        <div style={{ display:"grid",
+                          gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:5 }}>
+                          {WIZARD_SCHOOLS
+                            .filter(s => s.id !== specSel.id && !fullOpposition.has(s.id))
+                            .map(s => <SchoolCard key={s.id} s={s} section="accessible" />)
+                          }
+                        </div>
+                      </div>
+
+                      {/* Section 3: OPPOSITION SCHOOLS */}
+                      {fullOpposition.size > 0 && (
+                        <div>
+                          <div style={{ fontSize:9, color:"#704040", letterSpacing:2,
+                            textTransform:"uppercase", marginBottom:6 }}>
+                            ❌ Opposition Schools (forbidden)
+                          </div>
+                          <div style={{ display:"grid",
+                            gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:5 }}>
+                            {WIZARD_SCHOOLS
+                              .filter(s => fullOpposition.has(s.id))
+                              .map(s => <SchoolCard key={s.id} s={s} section="opposition" />)
+                            }
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Mage school flavor checkboxes (Feature 1C) */}
             {selectedClass === "mage" && (
               <div style={{ marginBottom: 18 }}>
                 <div style={{ fontSize: 10, color: C.purple, letterSpacing: 3,
-                  textTransform: "uppercase", marginBottom: 6 }}>Favored Schools (optional flavor)</div>
-                <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>
-                  Mages have access to all schools. Mark your favorites for reference.
+                  textTransform: "uppercase", marginBottom: 4 }}>Favored Schools (flavor tracking)</div>
+                <div style={{ fontSize: 11, color: C.textDim, marginBottom: 10 }}>
+                  Mages have access to all schools — no opposition. Mark schools you study for reference.
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div style={{ display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 6 }}>
                   {WIZARD_SCHOOLS.map(s => {
-                    const picked = !!mageSchoolsPicked[s.id];
+                    const picked   = !!mageSchoolsPicked[s.id];
+                    const statVal  = modParent ? modParent(s.minStat) : 10;
+                    const statName = (PARENT_STAT_LABELS?.[s.minStat] ?? s.minStat);
                     return (
-                      <button key={s.id}
+                      <div key={s.id}
                         onClick={() => toggleMageSchool(s.id)}
                         style={{
-                          padding: "4px 10px", borderRadius: 5, fontSize: 11,
-                          cursor: "pointer", fontFamily: "inherit",
-                          background: picked ? "rgba(160,112,200,.25)" : "transparent",
-                          color: picked ? C.purple : C.textDim,
-                          border: `1px solid ${picked ? C.purple : "#333"}`,
-                          transition: "all .12s",
+                          background: picked
+                            ? "linear-gradient(145deg,#110820,#0c0618)"
+                            : C.card,
+                          border: `1px solid ${picked ? "#7050a8" : C.border}`,
+                          borderRadius: 7, padding: "8px 11px",
+                          cursor: "pointer", transition: "all .13s",
+                          boxShadow: picked ? `0 0 8px rgba(160,112,200,.12)` : "none",
                         }}>
-                        {picked ? "✓ " : ""}{s.name}
-                      </button>
+                        <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:3 }}>
+                          <div style={{
+                            width:13, height:13, borderRadius:3, flexShrink:0,
+                            border:`2px solid ${picked ? C.purple : "#5a4070"}`,
+                            background: picked ? C.purple : "transparent",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            fontSize:8, color:"#fff", fontWeight:"bold",
+                          }}>{picked ? "✓" : ""}</div>
+                          <span style={{ fontSize:11, fontWeight:"bold",
+                            color: picked ? "#c0a0f0" : C.textBri }}>
+                            {s.name}
+                          </span>
+                        </div>
+                        <div style={{ fontSize:9, color: C.textDim, paddingLeft:20 }}>
+                          Min {statName} {s.minScore} · have{" "}
+                          <span style={{ color: statVal >= s.minScore ? C.green : C.amber }}>
+                            {statVal}
+                          </span>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

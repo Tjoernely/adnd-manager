@@ -2,23 +2,9 @@ import { useState } from "react";
 import { C, numInputStyle } from "../../data/constants.js";
 import { SP_KITS, CLASS_KITS } from "../../data/kits.js";
 import { ALL_CLASSES } from "../../data/classes.js";
+import { getRankTable, getSocialRank, SOCIAL_RANKS_DEFAULT } from "../../data/socialStatus.js";
 
 import { ChHead } from "../ui/index.js";
-
-// ── Social status rank table (2d6 → tier + label)
-const SOCIAL_RANKS = [
-  { min: 2,  max: 2,  tier: "Lower",        label: "Slave / Destitute",         color: "#805050" },
-  { min: 3,  max: 4,  tier: "Lower",        label: "Serf / Peasant",            color: "#886040" },
-  { min: 5,  max: 6,  tier: "Lower Middle", label: "Freeman / Laborer",         color: "#8a7840" },
-  { min: 7,  max: 8,  tier: "Lower Middle", label: "Artisan / Tradesman",       color: "#909050" },
-  { min: 9,  max: 10, tier: "Upper Middle", label: "Merchant / Minor Landowner",color: "#60a080" },
-  { min: 11, max: 11, tier: "Upper Middle", label: "Gentry / Wealthy Merchant", color: "#60b090" },
-  { min: 12, max: 12, tier: "Upper",        label: "Nobility / Minor Lord",     color: C.gold },
-];
-
-function getSocialRank(roll) {
-  return SOCIAL_RANKS.find(r => roll >= r.min && roll <= r.max) ?? null;
-}
 
 export function KitsTab(props) {
   const {
@@ -357,88 +343,132 @@ export function KitsTab(props) {
 
       {/* ── Social Status ── */}
       <div style={{ marginTop:32 }}>
-        <div style={{ fontSize:10, color:C.gold, letterSpacing:3,
-          textTransform:"uppercase", marginBottom:14 }}>
-          ⚜ Social Status (2d6)
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+          marginBottom:14, flexWrap:"wrap", gap:8 }}>
+          <div style={{ fontSize:10, color:C.gold, letterSpacing:3, textTransform:"uppercase" }}>
+            ⚜ Social Status (2d6)
+          </div>
+          {activeKit && (
+            <div style={{ fontSize:10, color:C.amber }}>
+              {activeKit.name} rank table active
+            </div>
+          )}
         </div>
 
-        {/* Result display */}
+        {/* Per-kit rank table + result display */}
         {(() => {
-          const roll    = socialStatus?.rolled;
-          const override = socialStatus?.override;
-          const displayRoll = override ? parseInt(override) : roll;
-          const rank    = displayRoll ? getSocialRank(displayRoll) : null;
+          const roll         = socialStatus?.rolled;
+          const override     = socialStatus?.override;
+          const displayRoll  = override ? parseInt(override) : roll;
+          // Get rank table: per-kit if a kit is selected, otherwise default
+          const rankTable    = getRankTable(activeKit?.name ?? "");
+          const rank         = displayRoll ? getSocialRank(displayRoll, rankTable) : null;
+          const isKitTable   = !!activeKit;
+
           return (
-            <div style={{ marginBottom:16 }}>
-              {rank ? (
-                <div style={{ padding:"14px 20px",
-                  background:"rgba(0,0,0,.35)",
-                  border:`2px solid ${rank.color}`, borderRadius:10,
-                  display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
-                  <div>
-                    <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-                      textTransform:"uppercase", marginBottom:3 }}>Roll</div>
-                    <div style={{ fontSize:32, fontWeight:"bold", color:rank.color, lineHeight:1 }}>
-                      {displayRoll}
+            <>
+              {/* Result display */}
+              <div style={{ marginBottom:14 }}>
+                {rank ? (
+                  <div style={{ padding:"14px 20px",
+                    background:"rgba(0,0,0,.35)",
+                    border:`2px solid ${rank.color}`, borderRadius:10,
+                    display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                        textTransform:"uppercase", marginBottom:3 }}>Roll</div>
+                      <div style={{ fontSize:32, fontWeight:"bold", color:rank.color, lineHeight:1 }}>
+                        {displayRoll}
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
-                    <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-                      textTransform:"uppercase", marginBottom:3 }}>Tier</div>
-                    <div style={{ fontSize:14, fontWeight:"bold", color:rank.color }}>
-                      {rank.tier}
+                    <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
+                      <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                        textTransform:"uppercase", marginBottom:3 }}>Tier</div>
+                      <div style={{ fontSize:14, fontWeight:"bold", color:rank.color }}>
+                        {rank.tier}
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20, flex:1 }}>
-                    <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-                      textTransform:"uppercase", marginBottom:3 }}>Status</div>
-                    <div style={{ fontSize:16, fontWeight:"bold", color:C.textBri }}>
-                      {rank.label}
+                    <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20, flex:1 }}>
+                      <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                        textTransform:"uppercase", marginBottom:3 }}>Status</div>
+                      <div style={{ fontSize:16, fontWeight:"bold", color:C.textBri }}>
+                        {rank.label}
+                      </div>
                     </div>
+                    {override && (
+                      <span style={{ fontSize:9, padding:"2px 7px",
+                        background:"rgba(212,160,53,.1)",
+                        border:`1px solid ${C.gold}44`,
+                        borderRadius:4, color:C.gold }}>
+                        MANUAL
+                      </span>
+                    )}
                   </div>
-                  {override && (
-                    <span style={{ fontSize:9, padding:"2px 7px",
-                      background:"rgba(212,160,53,.1)",
-                      border:`1px solid ${C.gold}44`,
-                      borderRadius:4, color:C.gold }}>
-                      OVERRIDDEN
-                    </span>
-                  )}
+                ) : (
+                  <div style={{ padding:"14px 20px",
+                    background:"rgba(0,0,0,.25)",
+                    border:`1px solid ${C.border}`, borderRadius:10,
+                    fontSize:12, color:C.textDim, fontStyle:"italic" }}>
+                    Click a rank, roll 2d6, or enter a value below.
+                  </div>
+                )}
+              </div>
+
+              {/* Clickable rank table */}
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:9, color:C.textDim, letterSpacing:2,
+                  textTransform:"uppercase", marginBottom:6 }}>
+                  {isKitTable
+                    ? `${activeKit.name} Rank Table — click any rank to set`
+                    : "Rank Table (2d6) — click any rank to set"}
                 </div>
-              ) : (
-                <div style={{ padding:"14px 20px",
-                  background:"rgba(0,0,0,.25)",
-                  border:`1px solid ${C.border}`, borderRadius:10,
-                  fontSize:12, color:C.textDim, fontStyle:"italic" }}>
-                  Roll or enter a value to determine social status.
+                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                  {rankTable.map(r => {
+                    const isCur = displayRoll && displayRoll >= r.min && displayRoll <= r.max;
+                    // Clicking picks the midpoint of the range (or min if single value)
+                    const pickVal = r.min === r.max ? r.min : Math.round((r.min + r.max) / 2);
+                    return (
+                      <div key={r.min}
+                        onClick={() => {
+                          setOverrideInput(String(pickVal));
+                          setSocialStatusOverride(String(pickVal));
+                        }}
+                        style={{
+                          padding:"7px 14px", borderRadius:6, cursor:"pointer",
+                          background: isCur ? `${r.color}22` : "rgba(0,0,0,.2)",
+                          border:`1px solid ${isCur ? r.color : C.border}`,
+                          color: isCur ? r.color : C.textDim,
+                          display:"flex", alignItems:"center", gap:12,
+                          transition:"all .12s",
+                        }}
+                        onMouseEnter={e => !isCur && (e.currentTarget.style.borderColor = r.color + "66")}
+                        onMouseLeave={e => !isCur && (e.currentTarget.style.borderColor = C.border)}>
+                        <span style={{ fontSize:11, fontWeight:"bold", minWidth:28,
+                          color: isCur ? r.color : C.textDim }}>
+                          {r.min}{r.min !== r.max ? `–${r.max}` : ""}
+                        </span>
+                        <span style={{ fontSize:11, fontWeight: isCur ? "bold" : "normal",
+                          color: isCur ? r.color : C.textDim }}>
+                          {r.tier}
+                        </span>
+                        <span style={{ fontSize:11, flex:1, color: isCur ? r.color+"cc" : "#504030" }}>
+                          {r.label}
+                        </span>
+                        {isCur && (
+                          <span style={{ fontSize:9, padding:"1px 5px",
+                            background:`${r.color}22`, border:`1px solid ${r.color}66`,
+                            borderRadius:3 }}>
+                            ✓ CURRENT
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
+            </>
           );
         })()}
-
-        {/* Rank table */}
-        <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:9, color:C.textDim, letterSpacing:2,
-            textTransform:"uppercase", marginBottom:6 }}>Rank Table (2d6)</div>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-            {SOCIAL_RANKS.map(r => {
-              const roll = socialStatus?.override ? parseInt(socialStatus.override) : socialStatus?.rolled;
-              const isCur = roll && roll >= r.min && roll <= r.max;
-              return (
-                <div key={r.min} style={{
-                  padding:"4px 10px", borderRadius:5, fontSize:10,
-                  background: isCur ? `${r.color}22` : "rgba(0,0,0,.2)",
-                  border:`1px solid ${isCur ? r.color : C.border}`,
-                  color: isCur ? r.color : C.textDim,
-                }}>
-                  <strong>{r.min}{r.min !== r.max ? `–${r.max}` : ""}</strong>
-                  {" "}{r.label}
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Controls */}
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
@@ -451,7 +481,7 @@ export function KitsTab(props) {
             🎲 Roll 2d6
           </button>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:11, color:C.textDim }}>Override (2–12):</span>
+            <span style={{ fontSize:11, color:C.textDim }}>Manual value (2–12):</span>
             <input
               type="number" min={2} max={12} value={overrideInput}
               onChange={e => setOverrideInput(e.target.value)}
@@ -468,6 +498,11 @@ export function KitsTab(props) {
               </button>
             )}
           </div>
+          {!activeKit && (
+            <span style={{ fontSize:10, color:C.textDim, fontStyle:"italic" }}>
+              Select a kit for kit-specific status ranks
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -7,8 +7,9 @@ export const TABS = [
   { id:"kits",    label:"IV. Kits",                       icon:"🎭" },
   { id:"traits",  label:"V. Traits & Disadvantages",      icon:"💀" },
   { id:"profs",   label:"VI. Nonweapon Proficiencies",    icon:"📖" },
-  { id:"weapons",  label:"VII. Weapon Proficiencies",      icon:"🗡️" },
-  { id:"mastery",  label:"VIII. Specialization & Mastery",  icon:"⭐" },
+  { id:"weapons",  label:"VII. Weapon Proficiencies",     icon:"🗡️" },
+  { id:"mastery",  label:"VIII. Specialization & Mastery", icon:"⭐" },
+  { id:"thieving", label:"IX. Thieving Abilities",         icon:"🗝️" },
 ];
 
 export const C = {

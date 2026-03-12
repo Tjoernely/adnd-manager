@@ -27,6 +27,10 @@ import {
   MASTERY_TIERS, STYLE_SPECS, WOC_CP,
 } from "../data/weapons.js";
 
+import {
+  THIEF_SKILLS, THIEF_CP_ABILS, THIEF_DISC_POINTS,
+} from "../data/thieving.js";
+
 export function useCharacter() {
 
   // ── Identity
@@ -118,6 +122,20 @@ export function useCharacter() {
 
   // Social status: { rolled: number|null, override: string|null }
   const [socialStatus, setSocialStatus] = useState({ rolled: null, override: null });
+
+  // ─────────────────────────────────────────
+  //  CH.9: THIEVING ABILITIES
+  // ─────────────────────────────────────────
+  // Discretionary points allocated per skill { skillId: number (multiples of 5) }
+  const [thiefDiscPoints, setThiefDiscPoints] = useState(
+    Object.fromEntries(THIEF_SKILLS.map(s => [s.id, 0]))
+  );
+  // Armor type selector for thieving adjustments
+  const [thiefArmorType, setThiefArmorType] = useState("padded_studded");
+  // CP-purchased thief abilities { abilId: boolean }
+  const [thiefCpAbils, setThiefCpAbils] = useState(
+    Object.fromEntries(THIEF_CP_ABILS.map(a => [a.id, false]))
+  );
 
   // ─────────────────────────────────────────
   //  CH.5: PROFICIENCIES
@@ -380,7 +398,12 @@ export function useCharacter() {
         (p.name.toLowerCase().includes(n.split(' ')[0]) || n.includes(p.name.toLowerCase().split(' ')[0])));
     });
   }, [kitNWPRequired, profsPicked]);
-  const spentCP     = traitCPSp + profCPSp + weapCPSp + classAbilCPSpent + mastCPSp;
+  // CP spent on thieving CP abilities
+  const thiefCpAbilCost = useMemo(() =>
+    THIEF_CP_ABILS.reduce((s, a) => s + (thiefCpAbils[a.id] ? a.cp : 0), 0),
+  [thiefCpAbils]);
+
+  const spentCP     = traitCPSp + profCPSp + weapCPSp + classAbilCPSpent + mastCPSp + thiefCpAbilCost;
   const remainCP    = totalCP - spentCP;
 
   // Racial pool accounting: package cost + individually picked extra abilities
@@ -716,6 +739,38 @@ export function useCharacter() {
     setSocialStatus(prev => ({ ...prev, override: val || null }));
   }, []);
 
+  // ── Thieving skill discretionary point adjustment (+5 / -5)
+  const adjustThiefDisc = useCallback((skillId, delta) => {
+    setThiefDiscPoints(prev => {
+      const current = prev[skillId] ?? 0;
+      const newVal  = current + delta;
+      if (newVal < 0) return prev;
+      // Check total disc points used
+      const totalUsed = Object.entries(prev).reduce((s, [k, v]) =>
+        s + (k === skillId ? newVal : v), 0);
+      if (totalUsed > THIEF_DISC_POINTS && !ruleBreaker) return prev; // enforce cap silently
+      return { ...prev, [skillId]: newVal };
+    });
+  }, [ruleBreaker]);
+
+  // ── Toggle thieving CP ability (with CP check)
+  const toggleThiefCpAbil = useCallback((abilId) => {
+    const already = !!thiefCpAbils[abilId];
+    if (already) {
+      setThiefCpAbils(prev => ({ ...prev, [abilId]: false }));
+      return;
+    }
+    const abil   = THIEF_CP_ABILS.find(a => a.id === abilId);
+    if (!abil) return;
+    const doIt = () => setThiefCpAbils(prev => ({ ...prev, [abilId]: true }));
+    if (remainCP < abil.cp && !ruleBreaker) {
+      setConfirmBox({
+        msg: `"${abil.label}" costs ${abil.cp} CP but only ${remainCP} available.\n\nEnable Rule-Breaker?`,
+        onConfirm: () => { setRuleBreaker(true); doIt(); },
+      });
+    } else doIt();
+  }, [thiefCpAbils, remainCP, ruleBreaker, setConfirmBox]);
+
   // ── Toggle proficiency
   const toggleProf = prof => {
     const already = !!profsPicked[prof.id];
@@ -773,6 +828,7 @@ export function useCharacter() {
     profsPicked, weapPicked, profT44Override,
     masteryPicked, wocPicked, stylePicked,
     socialStatus,
+    thiefDiscPoints, thiefArmorType, thiefCpAbils,
   }), [
     charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards, baseScores, exPcts, splitMods,
@@ -785,6 +841,7 @@ export function useCharacter() {
     profsPicked, weapPicked, profT44Override,
     masteryPicked, wocPicked, stylePicked,
     socialStatus,
+    thiefDiscPoints, thiefArmorType, thiefCpAbils,
   ]);
 
   // ── Restore character state from a previously serialized object ───
@@ -823,6 +880,9 @@ export function useCharacter() {
     setWocPicked(d.wocPicked ?? null);
     setStylePicked(d.stylePicked ?? {});
     setSocialStatus(d.socialStatus ?? { rolled: null, override: null });
+    setThiefDiscPoints(d.thiefDiscPoints ?? Object.fromEntries(THIEF_SKILLS.map(s => [s.id, 0])));
+    setThiefArmorType(d.thiefArmorType ?? "padded_studded");
+    setThiefCpAbils(d.thiefCpAbils ?? Object.fromEntries(THIEF_CP_ABILS.map(a => [a.id, false])));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Return all state, derived values, and handlers
@@ -867,6 +927,12 @@ export function useCharacter() {
     stylePicked, setStylePicked,
     // Social status
     socialStatus, rollSocialStatus, setSocialStatusOverride,
+    // Thieving abilities
+    thiefDiscPoints, setThiefDiscPoints,
+    thiefArmorType, setThiefArmorType,
+    thiefCpAbils, setThiefCpAbils,
+    adjustThiefDisc, toggleThiefCpAbil,
+    thiefCpAbilCost,
     // Derived — race
     raceData, classData, currentAbils,
     classAbilCPSpent, abilGrantsExStr,
@@ -907,5 +973,6 @@ export function useCharacter() {
     SP_KITS, CLASS_KITS, ALL_CLASSES,
     RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP,
     PARENT_STATS, SUB_ABILITIES, PARENT_STAT_LABELS, getSubStats, getT44Mod,
+    THIEF_SKILLS, THIEF_CP_ABILS, THIEF_DISC_POINTS,
   };
 }

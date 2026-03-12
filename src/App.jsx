@@ -17,6 +17,7 @@ import { TraitsTab }  from "./components/tabs/TraitsTab.jsx";
 import { ProfsTab }   from "./components/tabs/ProfsTab.jsx";
 import { WeaponsTab } from "./components/tabs/WeaponsTab.jsx";
 import { MasteryTab } from "./components/tabs/MasteryTab.jsx";
+import { ThiefTab }   from "./components/tabs/ThiefTab.jsx";
 
 export default function App() {
   // ── Auth ────────────────────────────────────────────────────────
@@ -536,6 +537,8 @@ export default function App() {
         {activeTab === "weapons" && <WeaponsTab {...char} />}
 
         {activeTab === "mastery" && <MasteryTab {...char} />}
+
+        {activeTab === "thieving" && <ThiefTab {...char} />}
 
       </main>
 

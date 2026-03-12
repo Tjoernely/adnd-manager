@@ -4,34 +4,44 @@ export const MAGE_SP_CLASSES  = new Set(["mage","illusionist","specialist","bard
 export const CLERIC_SP_CLASSES = new Set(["cleric","druid","shaman"]);
 
 // ── Wizard Schools (S&P Table 39) ────────────────────────────────────────────
-// H=human, E=elf, Half-E=halfelf, G=gnome
+// minStat uses parent stat IDs: STR, DEX, INT, WIS, CON, CHA
+// allowedRaces: which races may specialize in this school
 export const WIZARD_SCHOOLS = [
-  { id:"abjuration",   name:"Abjuration",           minSub:"willpower",  minScore:15, opposition:["alteration","illusion"],                   allowedRaces:["human"] },
-  { id:"alchemy",      name:"Alchemy",               minSub:"knowledge",  minScore:15, opposition:["illusion","necromancy"],                   allowedRaces:["human","halfelf","gnome"] },
-  { id:"alteration",   name:"Alteration",            minSub:"balance",    minScore:15, opposition:["abjuration","necromancy"],                 allowedRaces:["human","halfelf"] },
-  { id:"conjuration",  name:"Conjuration/Summ.",     minSub:"fitness",    minScore:15, opposition:["divination","invocation"],                 allowedRaces:["human","halfelf"] },
-  { id:"divination",   name:"Divination",            minSub:"willpower",  minScore:16, opposition:["conjuration"],                             allowedRaces:["human","halfelf","elf"] },
-  { id:"enchantment",  name:"Ench./Charm",           minSub:"leadership", minScore:16, opposition:["invocation","necromancy"],                 allowedRaces:["human","halfelf","elf"] },
-  { id:"geometry",     name:"Geometry",              minSub:"knowledge",  minScore:15, opposition:["enchantment","illusion"],                  allowedRaces:["human","elf","halfelf"] },
-  { id:"illusion",     name:"Illusion",              minSub:"aim",        minScore:16, opposition:["necromancy","invocation","abjuration"],     allowedRaces:["human","gnome"] },
-  { id:"invocation",   name:"Invoc./Evoc.",          minSub:"fitness",    minScore:16, opposition:["enchantment","conjuration"],               allowedRaces:["human"] },
-  { id:"necromancy",   name:"Necromancy",            minSub:"willpower",  minScore:16, opposition:["illusion","enchantment"],                  allowedRaces:["human"] },
-  { id:"shadow",       name:"Shadow",                minSub:"knowledge",  minScore:15, opposition:["abjuration","invocation"],                 allowedRaces:["human"] },
-  { id:"song",         name:"Song",                  minSub:"knowledge",  minScore:14, opposition:["divination","invocation","necromancy"],    allowedRaces:["human","elf","halfelf"] },
+  { id:"abjuration",  name:"Abjuration",         minStat:"WIS", minScore:15, opposition:["alteration","illusion"],               allowedRaces:["human"] },
+  { id:"alchemy",     name:"Alchemy",             minStat:"INT", minScore:15, opposition:["illusion","necromancy"],               allowedRaces:["human","halfelf","gnome"] },
+  { id:"alteration",  name:"Alteration",          minStat:"DEX", minScore:15, opposition:["abjuration","necromancy"],            allowedRaces:["human","halfelf"] },
+  { id:"conjuration", name:"Conjuration/Summ.",   minStat:"CON", minScore:15, opposition:["divination","invocation"],            allowedRaces:["human","halfelf"] },
+  { id:"divination",  name:"Divination",          minStat:"WIS", minScore:16, opposition:["conjuration"],                       allowedRaces:["human","halfelf","elf"] },
+  { id:"enchantment", name:"Ench./Charm",         minStat:"CHA", minScore:16, opposition:["invocation","necromancy"],            allowedRaces:["human","halfelf","elf"] },
+  { id:"geometry",    name:"Geometry",            minStat:"INT", minScore:15, opposition:["enchantment","illusion"],             allowedRaces:["human","elf","halfelf"] },
+  { id:"illusion",    name:"Illusion",            minStat:"DEX", minScore:16, opposition:["necromancy","invocation","abjuration"], allowedRaces:["human","gnome"] },
+  { id:"invocation",  name:"Invoc./Evoc.",        minStat:"CON", minScore:16, opposition:["enchantment","conjuration"],          allowedRaces:["human"] },
+  { id:"necromancy",  name:"Necromancy",          minStat:"WIS", minScore:16, opposition:["illusion","enchantment"],             allowedRaces:["human"] },
+  { id:"shadow",      name:"Shadow",              minStat:"INT", minScore:15, opposition:["abjuration","invocation"],            allowedRaces:["human"] },
+  { id:"song",        name:"Song",                minStat:"INT", minScore:14, opposition:["divination","invocation","necromancy"], allowedRaces:["human","elf","halfelf"] },
 ];
 
 // ── Race → Class level caps from S&P Table 16 ────────────────────────────────
 // null = unlimited (U), missing key = race cannot take that class
+// Per user spec:
+//   Dwarf: Fighter/Cleric/Thief
+//   Elf: Fighter/Wizard(Mage+Specialist)/Cleric/Ranger/Thief
+//   Gnome: Fighter/Illusionist/Cleric/Thief
+//   Half-Elf: Fighter/Wizard/Cleric/Druid/Ranger/Thief/Bard
+//   Half-Orc: Fighter/Cleric/Thief
+//   Half-Ogre: Fighter/Cleric
+//   Halfling: Fighter/Cleric/Thief
+//   Human: All classes
 export const RACE_CLASS_CAPS = {
-  fighter:     { dwarf:15, elf:12, gnome:11, halfelf:14, halforc:10, halfogre:12, halfling:9,  human:null },
+  fighter:     { dwarf:15, elf:12, gnome:11, halfelf:14, halforc:10, halfogre:12, halfling:9, human:null },
   paladin:     { human:null },
-  ranger:      { elf:15,   halfelf:16, human:null },
-  mage:        { elf:15,   halfelf:12, human:null },
+  ranger:      { elf:15, halfelf:16, human:null },
+  mage:        { elf:15, halfelf:12, human:null },
   illusionist: { gnome:15, human:null },
   specialist:  { elf:null, halfelf:null, human:null },
   cleric:      { dwarf:10, elf:12, gnome:9, halfelf:14, halforc:4, halfogre:4, halfling:8, human:null },
   druid:       { halfelf:9, human:null },
-  shaman:      { human:null, halfelf:null, halforc:null },
+  shaman:      { human:null },
   thief:       { dwarf:12, elf:12, gnome:13, halfelf:12, halforc:8, halfling:15, human:null },
   bard:        { halfelf:null, human:null },
 };
