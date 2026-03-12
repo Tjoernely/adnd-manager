@@ -24,18 +24,23 @@ export const THIEF_SKILLS = [
 ];
 
 // ── Class ability gating ───────────────────────────────────────────────────────
-// Maps skill ID → { classId: { abilId, base? } }
-//   abilId: the CLASS_ABILITIES[classId] entry that must be picked to unlock this skill
-//   base:   overrides the skill's default base% for that class (optional)
+// Maps skill ID → { classId: { abilId, base?, subStat? } }
+//   abilId:  CLASS_ABILITIES[classId] entry that must be picked to unlock this skill
+//   base:    overrides the skill's default base% for that class (optional)
+//   subStat: overrides the skill's subStat for that class (use null to suppress sub-stat adj)
+//
+// Ranger base values from S&P Table 22 (level 1), before racial/DEX adjustments:
+//   MS=15%, HS=10%, F/RT=15%, DN=15%, CW=70%
+//
 // Classes whose entry is absent or undefined cannot use that skill at all.
 export const SKILL_CLASS_ABILS = {
   pp:   { thief: { abilId:"th15" },                  bard:  { abilId:"ba09", base:10 } },
   ol:   { thief: { abilId:"th14" } },
-  frt:  { thief: { abilId:"th09" },                  ranger:{ abilId:"rn05" } },
-  ms:   { thief: { abilId:"th13" },                  ranger:{ abilId:"rn08" } },
-  hs:   { thief: { abilId:"th12" },                  ranger:{ abilId:"rn07" } },
-  dn:   { thief: { abilId:"th07" }, bard: { abilId:"ba07", base:20 }, ranger:{ abilId:"rn03" } },
-  cw:   { thief: { abilId:"th03" }, bard: { abilId:"ba04", base:50 }, ranger:{ abilId:"rn02" } },
+  frt:  { thief: { abilId:"th09" },                  ranger:{ abilId:"rn05", base:15, subStat:null } },
+  ms:   { thief: { abilId:"th13" },                  ranger:{ abilId:"rn08", base:15 } },
+  hs:   { thief: { abilId:"th12" },                  ranger:{ abilId:"rn07", base:10 } },
+  dn:   { thief: { abilId:"th07" }, bard: { abilId:"ba07", base:20 }, ranger:{ abilId:"rn03", base:15, subStat:null } },
+  cw:   { thief: { abilId:"th03" }, bard: { abilId:"ba04", base:50 }, ranger:{ abilId:"rn02", base:70, subStat:null } },
   rl:   { thief: { abilId:"th16" }, bard: { abilId:"ba11", base:5  } },
   dm:   { thief: { abilId:"th06" }, bard: { abilId:"ba06", base:10 } },
   di:   { thief: { abilId:"th05" } },

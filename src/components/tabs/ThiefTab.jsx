@@ -63,6 +63,14 @@ export function ThiefTab(props) {
   const aimAdj   = getThiefDexAdj(aimScore);
   const balAdj   = getThiefDexAdj(balScore);
 
+  // Class entry can override a skill's subStat (e.g. ranger F/RT, DN, CW have no DEX adj)
+  // "subStat" in entry = explicit override (even null = suppress adj)
+  const getEffSubStat = (sk) => {
+    const entry = getClassEntry(sk);
+    if (entry && Object.prototype.hasOwnProperty.call(entry, "subStat")) return entry.subStat;
+    return sk.subStat;
+  };
+
   // ── Racial and armor adjustments ─────────────────────────────────────────────
   const racialAdj = getThiefRacialAdj(selectedRace);
   const armorData = THIEF_ARMOR_ADJ[thiefArmorType] ?? THIEF_ARMOR_ADJ.padded_studded;
@@ -166,12 +174,12 @@ export function ThiefTab(props) {
         </div>
         <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
           <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-            textTransform:"uppercase", marginBottom:2 }}>Aim (PP/OL/F·RT)</div>
+            textTransform:"uppercase", marginBottom:2 }}>Aim</div>
           <span style={{ fontSize:13, color:C.blue }}>{aimScore}</span>
         </div>
         <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
           <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-            textTransform:"uppercase", marginBottom:2 }}>Balance (MS/HS)</div>
+            textTransform:"uppercase", marginBottom:2 }}>Balance</div>
           <span style={{ fontSize:13, color:C.blue }}>{balScore}</span>
         </div>
         {discLeft < 0 && !ruleBreaker && (
@@ -203,10 +211,11 @@ export function ThiefTab(props) {
               const unlocked = isUnlocked(sk);
               const base     = effectiveBase(sk);
               const racial   = racialAdj?.[sk.id] ?? 0;
-              // Per-skill sub-stat DEX adjustment
-              const subAdj   = sk.subStat === "aim"
+              // Per-skill sub-stat DEX adjustment (uses class-entry override if present)
+              const effSS    = getEffSubStat(sk);
+              const subAdj   = effSS === "aim"
                 ? (aimAdj[sk.id] ?? 0)
-                : sk.subStat === "balance"
+                : effSS === "balance"
                   ? (balAdj[sk.id] ?? 0)
                   : 0;
               const armA     = armorData?.[sk.id] ?? 0;
@@ -223,8 +232,8 @@ export function ThiefTab(props) {
               const locked = !unlocked;
 
               // Sub-stat label for tooltip
-              const subLabel = sk.subStat === "aim"     ? `Aim ${aimScore}`
-                             : sk.subStat === "balance" ? `Bal ${balScore}`
+              const subLabel = effSS === "aim"     ? `Aim ${aimScore}`
+                             : effSS === "balance" ? `Bal ${balScore}`
                              : null;
 
               return (
@@ -260,7 +269,7 @@ export function ThiefTab(props) {
                   {/* Sub-Stat */}
                   <td style={{ padding:"7px 10px", textAlign:"center",
                     color: subAdj > 0 ? C.green : subAdj < 0 ? C.red : C.textDim }}>
-                    {sk.subStat
+                    {effSS
                       ? <span title={subLabel ?? undefined}>{sgn(subAdj)}</span>
                       : <span style={{ color:C.textDim, fontSize:10 }}>—</span>
                     }
@@ -330,9 +339,9 @@ export function ThiefTab(props) {
         background:"rgba(0,0,0,.2)", border:`1px solid ${C.border}`,
         borderRadius:7, fontSize:11, color:C.textDim, display:"flex", gap:20, flexWrap:"wrap" }}>
         <span>Sub-Stat key:</span>
-        <span><strong style={{ color:C.blue }}>Aim</strong> → PP, OL, F/RT</span>
+        <span><strong style={{ color:C.blue }}>Aim</strong> → PP, OL {selectedClass !== "ranger" ? ", F/RT" : ""}</span>
         <span><strong style={{ color:C.blue }}>Balance</strong> → MS, HS</span>
-        <span style={{ fontStyle:"italic" }}>— = no sub-stat adjustment</span>
+        <span style={{ fontStyle:"italic" }}>— = no sub-stat adj (S&P Table 22/29)</span>
       </div>
 
       {/* ── Color Legend ── */}

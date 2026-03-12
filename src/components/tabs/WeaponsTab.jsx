@@ -1,6 +1,5 @@
-import { C, fmt, statColor, numInputStyle } from "../../data/constants.js";
-import { WEAPON_GROUPS_49, ALL_WEAPON_IDS, WEAPON_GROUPS, getWeaponSiblings, getWeapCost, weapSlotCost, WEAP_COSTS } from "../../data/weapons.js";
-
+import { C } from "../../data/constants.js";
+import { WEAPON_GROUPS_49, getWeaponSiblings, getWeapCost, weapSlotCost, WEAP_COSTS } from "../../data/weapons.js";
 import { ChHead, GroupLabel } from "../ui/index.js";
 
 export function WeaponsTab(props) {
@@ -14,7 +13,7 @@ export function WeaponsTab(props) {
   return (
     <div>
       <ChHead icon="🗡️" num="Chapter 7" title="Weapon Proficiencies"
-        sub="Warrior: 2 CP/slot. All others: 3 CP/slot. Warriors only may buy Tight Group (2 slots) or Broad Group (3 slots). A weapon appearing in multiple groups is highlighted everywhere but costs CP only once." />
+        sub="Single weapon, Tight Group (2 slots), or Broad Group (3 slots). Cost varies by class. Familiarity (half non-prof penalty) is automatic for related weapons in the same group." />
 
       {/* CP + rules summary */}
       <div style={{ marginBottom:18, padding:"12px 18px",
@@ -45,12 +44,10 @@ export function WeaponsTab(props) {
       </div>
 
       {(() => {
-        // Build a set of all weapon IDs that are "covered" by current picks
-        // (either directly selected, or part of a picked tight/broad group)
+        // ── Covered weapons (fully proficient) ───────────────────────────────
         const coveredWeapIds = new Set();
         WEAPON_GROUPS_49.forEach(bg => {
           if (weapPicked[bg.id] === "broad") {
-            // Broad group: all weapons covered
             bg.tightGroups.forEach(tg => tg.weapons.forEach(w => coveredWeapIds.add(w.id)));
             bg.unrelated.forEach(w => coveredWeapIds.add(w.id));
           }
@@ -60,19 +57,54 @@ export function WeaponsTab(props) {
             }
           });
         });
-        // Also add directly-picked singles
         Object.entries(weapPicked).forEach(([id, level]) => {
           if (level === "single") coveredWeapIds.add(id);
         });
-        // Expand: for each covered weapon, also mark all siblings (same name, other groups)
+        // Expand cross-group siblings (same-named weapon in another group)
         const coveredWithSiblings = new Set(coveredWeapIds);
         coveredWeapIds.forEach(id => {
           getWeaponSiblings(id).forEach(sid => coveredWithSiblings.add(sid));
         });
 
+        // ── Familiar weapons (half non-prof penalty) ──────────────────────────
+        // Rule 1: single weapon in tight group → other weapons in that tight group = familiar
+        // Rule 2: tight group prof → weapons in OTHER tight groups of same broad group = familiar
+        const familiarWeapIds = new Set();
+        WEAPON_GROUPS_49.forEach(bg => {
+          const broadPicked = weapPicked[bg.id] === "broad";
+          if (broadPicked) return; // broad group fully covers — no familiarity needed
+
+          bg.tightGroups.forEach(tg => {
+            const tightPicked = weapPicked[tg.id] === "tight";
+
+            // Rule 1: single weapon → siblings in same tight group become familiar
+            tg.weapons.forEach(w => {
+              if (weapPicked[w.id] === "single") {
+                tg.weapons.forEach(sib => {
+                  if (sib.id !== w.id && !coveredWithSiblings.has(sib.id)) {
+                    familiarWeapIds.add(sib.id);
+                  }
+                });
+              }
+            });
+
+            // Rule 2: tight group → other tight groups in same broad become familiar
+            if (tightPicked) {
+              bg.tightGroups.forEach(otherTg => {
+                if (otherTg.id !== tg.id) {
+                  otherTg.weapons.forEach(w => {
+                    if (!coveredWithSiblings.has(w.id)) {
+                      familiarWeapIds.add(w.id);
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+
         return WEAPON_GROUPS_49.map(bg => {
           const broadPicked = weapPicked[bg.id] === "broad";
-          const isWarrior   = classGroup === "warrior";
 
           return (
             <div key={bg.id} style={{ marginBottom:24,
@@ -132,29 +164,38 @@ export function WeaponsTab(props) {
                     </div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, paddingLeft:8 }}>
                       {tg.weapons.map(w => {
-                        const directPicked  = weapPicked[w.id]==="single";
-                        const groupCovered  = tightPicked;
-                        const siblingCovered= !directPicked && !groupCovered && coveredWithSiblings.has(w.id);
-                        const anyPicked     = directPicked || groupCovered || siblingCovered;
+                        const directPicked   = weapPicked[w.id]==="single";
+                        const groupCovered   = tightPicked;
+                        const siblingCovered = !directPicked && !groupCovered && coveredWithSiblings.has(w.id);
+                        const familiar       = !directPicked && !groupCovered && !siblingCovered && familiarWeapIds.has(w.id);
+                        const anyPicked      = directPicked || groupCovered || siblingCovered;
                         return (
                           <div key={w.id}
-                            title={siblingCovered ? "Covered via same weapon in another group" : ""}
-                            onClick={()=>{ if(!groupCovered && !siblingCovered) toggleWeap(w.id, w.name, "single"); }}
+                            title={
+                              siblingCovered ? "Covered via same weapon in another group" :
+                              familiar ? "Familiar — half non-proficiency penalty" : ""
+                            }
+                            onClick={()=>{ if(!groupCovered && !siblingCovered && !familiar) toggleWeap(w.id, w.name, "single"); }}
                             style={{
                               background: groupCovered?"rgba(60,160,60,.18)":
                                           siblingCovered?"rgba(100,160,220,.12)":
+                                          familiar?"rgba(200,140,40,.14)":
                                           directPicked?"rgba(212,160,53,.18)":"rgba(0,0,0,.3)",
-                              border:`1px solid ${groupCovered?"rgba(60,180,60,.4)":
-                                                   siblingCovered?"rgba(80,130,200,.4)":
-                                                   directPicked?C.borderHi:C.border}`,
+                              border:`1px solid ${
+                                groupCovered?"rgba(60,180,60,.4)":
+                                siblingCovered?"rgba(80,130,200,.4)":
+                                familiar?"rgba(200,140,40,.45)":
+                                directPicked?C.borderHi:C.border}`,
                               borderRadius:6, padding:"5px 11px", fontSize:11,
-                              color: anyPicked ? (siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri) : C.textDim,
-                              cursor: (groupCovered||siblingCovered)?"default":"pointer",
+                              color: anyPicked ? (siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri) :
+                                     familiar ? "#d4a040" : C.textDim,
+                              cursor: (groupCovered||siblingCovered||familiar)?"default":"pointer",
                               transition:"all .12s",
                             }}>
                             {directPicked && "✓ "}{w.name}
                             {siblingCovered && <span style={{ fontSize:9, color:"#6090c0", marginLeft:4 }}>↔</span>}
-                            {!anyPicked && <span style={{ fontSize:9, color:C.textDim, marginLeft:4 }}>{getWeapCost(classGroup, "single")}cp</span>}
+                            {familiar && <span style={{ fontSize:9, color:"#b08030", marginLeft:4 }}>~</span>}
+                            {!anyPicked && !familiar && <span style={{ fontSize:9, color:C.textDim, marginLeft:4 }}>{getWeapCost(classGroup, "single")}cp</span>}
                           </div>
                         );
                       })}
@@ -177,6 +218,7 @@ export function WeaponsTab(props) {
                       const directPicked   = !!weapPicked[w.id];
                       const groupCovered   = broadPicked;
                       const siblingCovered = !directPicked && !groupCovered && coveredWithSiblings.has(w.id);
+                      // Ungrouped weapons don't gain familiarity (no tight group)
                       const anyPicked      = directPicked || groupCovered || siblingCovered;
                       return (
                         <div key={w.id}
@@ -209,13 +251,15 @@ export function WeaponsTab(props) {
       })()}
 
       {/* Legend */}
-      <div style={{ marginTop:8, display:"flex", gap:12, flexWrap:"wrap", fontSize:10, color:C.textDim }}>
+      <div style={{ marginTop:8, display:"flex", gap:10, flexWrap:"wrap", fontSize:10, color:C.textDim }}>
         <span style={{ background:"rgba(212,160,53,.18)", border:`1px solid ${C.borderHi}`,
           borderRadius:4, padding:"2px 8px", color:C.textBri }}>✓ Directly selected</span>
         <span style={{ background:"rgba(60,160,60,.18)", border:"1px solid rgba(60,180,60,.4)",
           borderRadius:4, padding:"2px 8px", color:"#90d080" }}>Group covered</span>
+        <span style={{ background:"rgba(200,140,40,.14)", border:"1px solid rgba(200,140,40,.45)",
+          borderRadius:4, padding:"2px 8px", color:"#d4a040" }}>~ Familiar (half penalty)</span>
         <span style={{ background:"rgba(100,160,220,.12)", border:"1px solid rgba(80,130,200,.4)",
-          borderRadius:4, padding:"2px 8px", color:"#90b8e0" }}>↔ Same weapon, other group (no extra cost)</span>
+          borderRadius:4, padding:"2px 8px", color:"#90b8e0" }}>↔ Same weapon, other group</span>
       </div>
     </div>
   );
