@@ -3,22 +3,46 @@
 export const THIEF_DISC_POINTS = 60; // discretionary skill points per level-up (base)
 
 // ── Skill definitions ─────────────────────────────────────────────────────────
+// subStat: which sub-ability score drives the DEX-adjustment column
+//   "aim"     → PP, OL, F/RT  (dexterity / fine motor)
+//   "balance" → MS, HS        (balance / stealth motor)
+//   null      → not affected by DEX sub-stat adjustments
 export const THIEF_SKILLS = [
-  { id:"pp",   label:"Pick Pockets",       shortLabel:"PP",   base:15 },
-  { id:"ol",   label:"Open Locks",         shortLabel:"OL",   base:10 },
-  { id:"frt",  label:"Find/Remove Traps",  shortLabel:"F/RT", base:5  },
-  { id:"ms",   label:"Move Silently",      shortLabel:"MS",   base:10 },
-  { id:"hs",   label:"Hide in Shadows",    shortLabel:"HS",   base:5  },
-  { id:"dn",   label:"Detect Noise",       shortLabel:"DN",   base:15 },
-  { id:"cw",   label:"Climb Walls",        shortLabel:"CW",   base:60 },
-  // Gated skills — need CP purchase to allocate points
-  { id:"rl",   label:"Read Languages",     shortLabel:"RL",   base:0,  needsCp:"readLang"  },
-  { id:"dm",   label:"Detect Magic",       shortLabel:"DM",   base:5,  needsCp:"scrollUse" },
-  { id:"di",   label:"Detect Illusion",    shortLabel:"DI",   base:10, needsCp:"scrollUse" },
-  { id:"brib", label:"Bribery",            shortLabel:"Brib", base:5  },
-  { id:"tunn", label:"Tunneling",          shortLabel:"Tunn", base:15 },
-  { id:"eb",   label:"Escape Bonds",       shortLabel:"EB",   base:10 },
+  { id:"pp",   label:"Pick Pockets",       shortLabel:"PP",   base:15, subStat:"aim"     },
+  { id:"ol",   label:"Open Locks",         shortLabel:"OL",   base:10, subStat:"aim"     },
+  { id:"frt",  label:"Find/Remove Traps",  shortLabel:"F/RT", base:5,  subStat:"aim"     },
+  { id:"ms",   label:"Move Silently",      shortLabel:"MS",   base:10, subStat:"balance" },
+  { id:"hs",   label:"Hide in Shadows",    shortLabel:"HS",   base:5,  subStat:"balance" },
+  { id:"dn",   label:"Detect Noise",       shortLabel:"DN",   base:15, subStat:null      },
+  { id:"cw",   label:"Climb Walls",        shortLabel:"CW",   base:60, subStat:null      },
+  { id:"rl",   label:"Read Languages",     shortLabel:"RL",   base:0,  subStat:null      },
+  { id:"dm",   label:"Detect Magic",       shortLabel:"DM",   base:5,  subStat:null      },
+  { id:"di",   label:"Detect Illusion",    shortLabel:"DI",   base:10, subStat:null      },
+  { id:"brib", label:"Bribery",            shortLabel:"Brib", base:5,  subStat:null      },
+  { id:"tunn", label:"Tunneling",          shortLabel:"Tunn", base:15, subStat:null      },
+  { id:"eb",   label:"Escape Bonds",       shortLabel:"EB",   base:10, subStat:null      },
 ];
+
+// ── Class ability gating ───────────────────────────────────────────────────────
+// Maps skill ID → { classId: { abilId, base? } }
+//   abilId: the CLASS_ABILITIES[classId] entry that must be picked to unlock this skill
+//   base:   overrides the skill's default base% for that class (optional)
+// Classes whose entry is absent or undefined cannot use that skill at all.
+export const SKILL_CLASS_ABILS = {
+  pp:   { thief: { abilId:"th15" },                  bard:  { abilId:"ba09", base:10 } },
+  ol:   { thief: { abilId:"th14" } },
+  frt:  { thief: { abilId:"th09" },                  ranger:{ abilId:"rn05" } },
+  ms:   { thief: { abilId:"th13" },                  ranger:{ abilId:"rn08" } },
+  hs:   { thief: { abilId:"th12" },                  ranger:{ abilId:"rn07" } },
+  dn:   { thief: { abilId:"th07" }, bard: { abilId:"ba07", base:20 }, ranger:{ abilId:"rn03" } },
+  cw:   { thief: { abilId:"th03" }, bard: { abilId:"ba04", base:50 }, ranger:{ abilId:"rn02" } },
+  rl:   { thief: { abilId:"th16" }, bard: { abilId:"ba11", base:5  } },
+  dm:   { thief: { abilId:"th06" }, bard: { abilId:"ba06", base:10 } },
+  di:   { thief: { abilId:"th05" } },
+  brib: { thief: { abilId:"th02" } },
+  tunn: { thief: { abilId:"th20" } },
+  eb:   { thief: { abilId:"th08" } },
+};
 
 // ── Table 28 — Racial adjustments to thief skills ─────────────────────────────
 // Keys match selectedRace values in useCharacter.js
@@ -34,9 +58,11 @@ export const THIEF_RACIAL_ADJ = {
   halfling: { pp:+15, ol:+5,  frt:+5,  ms:+15, hs:+15, dn:+5,  cw:-15, rl:0, dm:0, di:0, brib:0, tunn:0,  eb:0 },
 };
 
-// ── Table 29 — DEX (aim) adjustments to thief skills ─────────────────────────
-// Keyed by aim/DEX score. Use Math.max(9, Math.min(20, score)) to clamp.
-// Only PP, OL, MS, HS are affected.
+// ── Table 29 — Sub-stat adjustments to thief skills ──────────────────────────
+// Keyed by sub-ability score (aim or balance, clamped 9–20).
+// aim     affects: PP (+/−), OL (+/−), and F/RT column (all 0 — not in PHB table)
+// balance affects: MS (+/−), HS (+/−)
+// Skills not listed in an entry have an implied adjustment of 0.
 export const THIEF_DEX_ADJ = {
    9: { pp:-15, ol:-10, ms:-20, hs:-15 },
   10: { pp:-10, ol:-5,  ms:-15, hs:-10 },
@@ -61,56 +87,27 @@ export const THIEF_ARMOR_ADJ = {
   no_armor:       { label:"No Armor",                 pp:+5,  ol:+10, frt:+5, ms:+10, hs:+5, dn:0, cw:+10 },
 };
 
-// ── CP-Purchased Thieving Abilities ──────────────────────────────────────────
-// These cost CP from the main pool. Some unlock gated skills.
-export const THIEF_CP_ABILS = [
-  {
-    id:"backstab",
-    label:"Backstab",
-    cp:10,
-    desc:"May backstab a target who is unaware of attacker: +4 to hit, ×2 damage (×3 at 5th, ×4 at 9th, ×5 at 13th level).",
-  },
-  {
-    id:"defBonus",
-    label:"Defense Bonus",
-    cp:10,
-    desc:"+2 bonus to Armor Class when unarmored and unencumbered.",
-  },
-  {
-    id:"scrollUse",
-    label:"Scroll Use",
-    cp:10,
-    desc:"Read and use magical scrolls (wizard and priest). Unlocks Detect Magic and Detect Illusion thieving skills.",
-    unlocks:["dm","di"],
-  },
-  {
-    id:"thiefCant",
-    label:"Thieves' Cant",
-    cp:5,
-    desc:"Knows the secret argot of the thieves' guild. Communicate covertly with other thieves.",
-  },
-  {
-    id:"readLang",
-    label:"Read Languages",
-    cp:5,
-    desc:"Can attempt to read foreign languages with the Read Languages skill (RL). Unlocks RL discretionary allocation.",
-    unlocks:["rl"],
-  },
-];
-
 // Helper: get racial adj for a race (default all-0 if unknown)
 export function getThiefRacialAdj(raceId) {
   return THIEF_RACIAL_ADJ[raceId] ?? THIEF_RACIAL_ADJ.human;
 }
 
-// Helper: get DEX adj for a dex score (clamp 9-20)
-export function getThiefDexAdj(dexScore) {
-  const clamped = Math.max(9, Math.min(20, Math.floor(dexScore)));
+// Helper: get sub-stat adj for a score (clamp 9-20)
+export function getThiefDexAdj(score) {
+  const clamped = Math.max(9, Math.min(20, Math.floor(score)));
   return THIEF_DEX_ADJ[clamped] ?? {};
 }
 
+// Helper: compute per-skill sub-stat adjustment
+// aimScore: effSub("aim"), balScore: effSub("balance")
+export function getSkillSubAdj(sk, aimScore, balScore) {
+  if (sk.subStat === "aim")     return getThiefDexAdj(aimScore)[sk.id] ?? 0;
+  if (sk.subStat === "balance") return getThiefDexAdj(balScore)[sk.id] ?? 0;
+  return 0;
+}
+
 // Helper: compute final skill score
-// base + racial + dex + armor + disc (min 1, max 95 for most skills)
+// base + racial + subAdj + armor + disc (min 1)
 export function calcThiefSkill(skillId, { base, racial, dex, armor, disc }) {
   const racAdj  = racial?.[skillId]  ?? 0;
   const dexAdj  = dex?.[skillId]    ?? 0;

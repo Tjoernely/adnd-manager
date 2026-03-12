@@ -1,11 +1,11 @@
 // ThiefTab.jsx — AD&D 2E S&P Chapter 9: Thieving Abilities
 import { C } from "../../data/constants.js";
 import {
-  THIEF_SKILLS, THIEF_CP_ABILS, THIEF_DISC_POINTS,
-  THIEF_RACIAL_ADJ, THIEF_DEX_ADJ, THIEF_ARMOR_ADJ, THIEF_ARMOR_OPTIONS,
+  THIEF_SKILLS, THIEF_DISC_POINTS, SKILL_CLASS_ABILS,
+  THIEF_ARMOR_ADJ, THIEF_ARMOR_OPTIONS,
   getThiefRacialAdj, getThiefDexAdj, calcThiefSkill,
 } from "../../data/thieving.js";
-import { ChHead, IBtn, Checkbox } from "../ui/index.js";
+import { ChHead } from "../ui/index.js";
 
 // Color-code final skill %
 function skillColor(pct) {
@@ -21,60 +21,102 @@ function sgn(n) {
   return "—";
 }
 
+// Classes that show this tab
+const THIEF_CLASSES = new Set(["thief", "bard", "ranger"]);
+
 export function ThiefTab(props) {
   const {
     selectedClass,
     selectedRace,
-    modParent,
+    effSub,
     thiefDiscPoints,
     thiefArmorType, setThiefArmorType,
-    thiefCpAbils,
-    adjustThiefDisc, toggleThiefCpAbil,
+    classAbilPicked,
+    adjustThiefDisc,
     THIEF_SKILLS: skillsDef,
-    THIEF_CP_ABILS: cpAbilsDef,
     THIEF_DISC_POINTS: discPool,
-    remainCP,
+    SKILL_CLASS_ABILS: classAbilMap,
+    CLASS_ABILITIES,
     setInfoModal,
     ruleBreaker,
   } = props;
 
-  // Only show for thief / bard
-  const isThief = selectedClass === "thief" || selectedClass === "bard";
+  const isThiefClass = THIEF_CLASSES.has(selectedClass);
 
-  if (!isThief) {
+  if (!isThiefClass) {
     return (
       <div>
         <ChHead icon="🗝️" num="Chapter 9" title="Thieving Abilities"
-          sub="Thieving skills are available to Thieves and Bards. Select one of those classes to access this section." />
+          sub="Thieving skills are available to Thieves, Bards, and Rangers. Select one of those classes to access this section." />
         <div style={{ padding:"40px 0", textAlign:"center", color:C.textDim, fontStyle:"italic" }}>
-          Select <strong style={{ color:C.gold }}>Thief</strong> or <strong style={{ color:C.gold }}>Bard</strong> in the Classes tab to unlock thieving abilities.
+          Select <strong style={{ color:C.gold }}>Thief</strong>,{" "}
+          <strong style={{ color:C.gold }}>Bard</strong>, or{" "}
+          <strong style={{ color:C.gold }}>Ranger</strong> in the Classes tab to unlock thieving abilities.
         </div>
       </div>
     );
   }
 
-  // Derived adjustments
+  // ── Sub-stat scores for DEX adjustments ──────────────────────────────────────
+  const aimScore = effSub("aim");
+  const balScore = effSub("balance");
+  const aimAdj   = getThiefDexAdj(aimScore);
+  const balAdj   = getThiefDexAdj(balScore);
+
+  // ── Racial and armor adjustments ─────────────────────────────────────────────
   const racialAdj = getThiefRacialAdj(selectedRace);
-  const dexScore  = modParent("DEX");
-  const dexAdj    = getThiefDexAdj(dexScore);
   const armorData = THIEF_ARMOR_ADJ[thiefArmorType] ?? THIEF_ARMOR_ADJ.padded_studded;
-  const armorAdj  = armorData;
 
-  // Total discretionary points used
-  const discUsed = Object.values(thiefDiscPoints).reduce((s, v) => s + (v || 0), 0);
-  const discLeft = discPool - discUsed;
+  // ── Filter skills to only those with a class entry for this class ─────────────
+  const classAbils = CLASS_ABILITIES?.[selectedClass] ?? [];
 
-  // Compute unlocked skill IDs based on purchased CP abilities
-  const unlockedSkills = new Set(
-    cpAbilsDef.flatMap(a => (thiefCpAbils[a.id] && a.unlocks) ? a.unlocks : [])
+  const availableSkills = (skillsDef ?? THIEF_SKILLS).filter(sk =>
+    !!(classAbilMap ?? SKILL_CLASS_ABILS)[sk.id]?.[selectedClass]
   );
-  // Skills without gating are always unlocked
-  const isUnlocked = (sk) => !sk.needsCp || unlockedSkills.has(sk.id);
+
+  // ── Unlock check ─────────────────────────────────────────────────────────────
+  const getClassEntry = (sk) => (classAbilMap ?? SKILL_CLASS_ABILS)[sk.id]?.[selectedClass] ?? null;
+  const isUnlocked    = (sk) => {
+    const entry = getClassEntry(sk);
+    if (!entry) return false;
+    return !!classAbilPicked[entry.abilId];
+  };
+  const getLockMsg = (sk) => {
+    const entry = getClassEntry(sk);
+    if (!entry) return "Not available for this class";
+    const abil = classAbils.find(a => a.id === entry.abilId);
+    const name = abil ? abil.name.replace(" ✦", "") : entry.abilId;
+    return `Requires "${name}" in Classes tab`;
+  };
+
+  // ── Effective base (class can override default base %) ───────────────────────
+  const effectiveBase = (sk) => {
+    const entry = getClassEntry(sk);
+    return entry?.base ?? sk.base;
+  };
+
+  // ── Total discretionary points used ──────────────────────────────────────────
+  const discUsed = Object.values(thiefDiscPoints).reduce((s, v) => s + (v || 0), 0);
+  const discLeft = (discPool ?? THIEF_DISC_POINTS) - discUsed;
+
+  // ── How many skills are still locked (needs purchase) ────────────────────────
+  const lockedCount = availableSkills.filter(sk => !isUnlocked(sk)).length;
 
   return (
     <div>
       <ChHead icon="🗝️" num="Chapter 9" title="Thieving Abilities"
-        sub="60 discretionary points distributed in multiples of 5. Base + Racial (Table 28) + DEX (Table 29) + Armor (Table 30) + Discretionary = Final %." />
+        sub="60 discretionary points in multiples of 5. Base + Racial (Table 28) + Sub-Stat (Table 29) + Armor (Table 30) + Discretionary = Final %. Purchase class abilities in the Classes tab to unlock each skill." />
+
+      {/* ── Class ability reminder (if any skills still locked) ── */}
+      {lockedCount > 0 && (
+        <div style={{ marginBottom:14, padding:"8px 14px",
+          background:"rgba(180,120,20,.1)", border:`1px solid rgba(180,120,20,.35)`,
+          borderRadius:8, fontSize:12, color:C.amber }}>
+          ⚠ {lockedCount} skill{lockedCount > 1 ? "s" : ""} locked — purchase the corresponding class{" "}
+          {selectedClass === "ranger" ? "ability" : "ability (✦)"} in the{" "}
+          <strong>Classes tab</strong> to unlock them.
+        </div>
+      )}
 
       {/* ── Armor Type Selector ── */}
       <div style={{ marginBottom:20, padding:"12px 18px",
@@ -83,8 +125,8 @@ export function ThiefTab(props) {
           textTransform:"uppercase", marginBottom:8 }}>Armor Type (Table 30)</div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
           {THIEF_ARMOR_OPTIONS.map(key => {
-            const arm  = THIEF_ARMOR_ADJ[key];
-            const sel  = thiefArmorType === key;
+            const arm = THIEF_ARMOR_ADJ[key];
+            const sel = thiefArmorType === key;
             return (
               <button key={key} onClick={() => setThiefArmorType(key)}
                 style={{
@@ -104,14 +146,14 @@ export function ThiefTab(props) {
       {/* ── Discretionary Pool Summary ── */}
       <div style={{ marginBottom:20, padding:"12px 20px",
         background: discLeft < 0 ? "rgba(180,30,30,.12)" : "rgba(0,0,0,.3)",
-        border:`2px solid ${discLeft < 0 ? C.redBri : discLeft === 0 ? C.border : C.border}`,
+        border:`2px solid ${discLeft < 0 ? C.redBri : C.border}`,
         borderRadius:10, display:"flex", alignItems:"center", gap:24, flexWrap:"wrap" }}>
         <div>
           <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-            textTransform:"uppercase", marginBottom:2 }}>Discretionary Points</div>
+            textTransform:"uppercase", marginBottom:2 }}>Disc. Points</div>
           <span style={{ fontSize:28, fontWeight:"bold",
             color: discLeft < 0 ? C.redBri : discLeft < 10 ? C.amber : C.gold }}>
-            {discUsed} / {discPool}
+            {discUsed} / {discPool ?? THIEF_DISC_POINTS}
           </span>
         </div>
         <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
@@ -124,10 +166,13 @@ export function ThiefTab(props) {
         </div>
         <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
           <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-            textTransform:"uppercase", marginBottom:2 }}>DEX ({dexScore})</div>
-          <span style={{ fontSize:14, color:C.blue }}>
-            Aim {dexScore}
-          </span>
+            textTransform:"uppercase", marginBottom:2 }}>Aim (PP/OL/F·RT)</div>
+          <span style={{ fontSize:13, color:C.blue }}>{aimScore}</span>
+        </div>
+        <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:20 }}>
+          <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+            textTransform:"uppercase", marginBottom:2 }}>Balance (MS/HS)</div>
+          <span style={{ fontSize:13, color:C.blue }}>{balScore}</span>
         </div>
         {discLeft < 0 && !ruleBreaker && (
           <div style={{ padding:"5px 12px", background:"rgba(200,40,40,.2)",
@@ -143,7 +188,7 @@ export function ThiefTab(props) {
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
             <tr style={{ borderBottom:`2px solid ${C.borderHi}` }}>
-              {["Skill","Base","Racial","DEX","Armor","Disc","Total"].map(h => (
+              {["Skill","Base","Racial","Sub-Stat","Armor","Disc","Total"].map(h => (
                 <th key={h} style={{ padding:"7px 10px",
                   textAlign: h === "Skill" ? "left" : "center",
                   fontSize:10, letterSpacing:1.5, color:C.textDim,
@@ -154,23 +199,38 @@ export function ThiefTab(props) {
             </tr>
           </thead>
           <tbody>
-            {skillsDef.map((sk, idx) => {
-              const unlocked  = isUnlocked(sk);
-              const racial    = racialAdj?.[sk.id] ?? 0;
-              const dexA      = dexAdj?.[sk.id]   ?? 0;
-              const armA      = armorAdj?.[sk.id] ?? 0;
-              const disc      = thiefDiscPoints[sk.id] ?? 0;
-              const total     = unlocked
-                ? calcThiefSkill(sk.id, { base:sk.base, racial:racialAdj, dex:dexAdj, armor:armorAdj, disc:thiefDiscPoints })
-                : sk.base + racial + dexA + armA; // show base total even locked
+            {availableSkills.map((sk, idx) => {
+              const unlocked = isUnlocked(sk);
+              const base     = effectiveBase(sk);
+              const racial   = racialAdj?.[sk.id] ?? 0;
+              // Per-skill sub-stat DEX adjustment
+              const subAdj   = sk.subStat === "aim"
+                ? (aimAdj[sk.id] ?? 0)
+                : sk.subStat === "balance"
+                  ? (balAdj[sk.id] ?? 0)
+                  : 0;
+              const armA     = armorData?.[sk.id] ?? 0;
+              const disc     = thiefDiscPoints[sk.id] ?? 0;
+
+              // Build a synthetic dex-adj object with just this skill for calcThiefSkill
+              const dexAdjSingle = { [sk.id]: subAdj };
+
+              const total = unlocked
+                ? calcThiefSkill(sk.id, { base, racial:racialAdj, dex:dexAdjSingle, armor:armorData, disc:thiefDiscPoints })
+                : base + racial + subAdj + armA; // preview even if locked
 
               const rowBg = idx % 2 === 0 ? "rgba(0,0,0,.15)" : "transparent";
               const locked = !unlocked;
 
+              // Sub-stat label for tooltip
+              const subLabel = sk.subStat === "aim"     ? `Aim ${aimScore}`
+                             : sk.subStat === "balance" ? `Bal ${balScore}`
+                             : null;
+
               return (
                 <tr key={sk.id} style={{
                   background: rowBg,
-                  opacity: locked ? 0.55 : 1,
+                  opacity: locked ? 0.5 : 1,
                   transition:"opacity .13s",
                 }}>
                   {/* Name */}
@@ -180,15 +240,15 @@ export function ThiefTab(props) {
                     {locked && (
                       <span style={{ marginLeft:6, fontSize:9, padding:"1px 5px",
                         background:"rgba(0,0,0,.4)", border:`1px solid ${C.border}`,
-                        borderRadius:3, color:C.textDim }}>
-                        🔒 needs {THIEF_CP_ABILS.find(a => a.id === sk.needsCp)?.label ?? sk.needsCp}
+                        borderRadius:3, color:C.amber }}>
+                        🔒 {getLockMsg(sk)}
                       </span>
                     )}
                   </td>
 
                   {/* Base */}
                   <td style={{ padding:"7px 10px", textAlign:"center", color:C.textDim }}>
-                    {sk.base}%
+                    {base}%
                   </td>
 
                   {/* Racial */}
@@ -197,10 +257,13 @@ export function ThiefTab(props) {
                     {sgn(racial)}
                   </td>
 
-                  {/* DEX */}
+                  {/* Sub-Stat */}
                   <td style={{ padding:"7px 10px", textAlign:"center",
-                    color: dexA > 0 ? C.green : dexA < 0 ? C.red : C.textDim }}>
-                    {sgn(dexA)}
+                    color: subAdj > 0 ? C.green : subAdj < 0 ? C.red : C.textDim }}>
+                    {sk.subStat
+                      ? <span title={subLabel ?? undefined}>{sgn(subAdj)}</span>
+                      : <span style={{ color:C.textDim, fontSize:10 }}>—</span>
+                    }
                   </td>
 
                   {/* Armor */}
@@ -262,57 +325,18 @@ export function ThiefTab(props) {
         </table>
       </div>
 
-      {/* ── CP-Purchased Abilities ── */}
-      <div>
-        <div style={{ fontSize:10, color:C.textDim, letterSpacing:3,
-          textTransform:"uppercase", marginBottom:12 }}>
-          ⚙ CP-Purchased Thieving Abilities
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          {cpAbilsDef.map(ab => {
-            const picked = !!thiefCpAbils[ab.id];
-            const canAff = remainCP >= ab.cp || picked || ruleBreaker;
-            return (
-              <div key={ab.id}
-                onClick={() => toggleThiefCpAbil(ab.id)}
-                style={{
-                  background: picked
-                    ? "linear-gradient(145deg,#141a08,#0f1406)"
-                    : "linear-gradient(145deg,#1a1408,#130f06)",
-                  border:`1px solid ${picked ? "#5a7020" : C.border}`,
-                  borderRadius:7, padding:"9px 14px", cursor:"pointer",
-                  display:"flex", alignItems:"center", gap:10,
-                  opacity: !canAff ? 0.6 : 1, transition:"all .13s",
-                  boxShadow: picked ? "0 0 8px rgba(120,180,30,.08)" : "none",
-                }}>
-                <Checkbox checked={picked} color="#8ab040" />
-                <span style={{ flex:1, fontSize:12,
-                  color: picked ? C.textBri : C.textDim }}>
-                  {ab.label}
-                  {ab.unlocks && (
-                    <span style={{ fontSize:9, marginLeft:6, color:C.blue,
-                      border:`1px solid rgba(60,100,160,.4)`, borderRadius:3,
-                      padding:"1px 4px" }}>
-                      unlocks {ab.unlocks.join(", ").toUpperCase()}
-                    </span>
-                  )}
-                </span>
-                <span style={{ fontSize:12, fontWeight:"bold", padding:"2px 8px",
-                  background: picked ? "rgba(80,160,40,.15)" : "rgba(0,0,0,.3)",
-                  border:`1px solid ${picked ? "#4a6a20" : C.border}`,
-                  borderRadius:4, color: picked ? C.green : C.textDim,
-                  whiteSpace:"nowrap" }}>
-                  {ab.cp} CP
-                </span>
-                <IBtn onClick={e => { e.stopPropagation(); setInfoModal({ title:ab.label, body:ab.desc }); }} />
-              </div>
-            );
-          })}
-        </div>
+      {/* ── Sub-Stat Key ── */}
+      <div style={{ marginBottom:16, padding:"8px 14px",
+        background:"rgba(0,0,0,.2)", border:`1px solid ${C.border}`,
+        borderRadius:7, fontSize:11, color:C.textDim, display:"flex", gap:20, flexWrap:"wrap" }}>
+        <span>Sub-Stat key:</span>
+        <span><strong style={{ color:C.blue }}>Aim</strong> → PP, OL, F/RT</span>
+        <span><strong style={{ color:C.blue }}>Balance</strong> → MS, HS</span>
+        <span style={{ fontStyle:"italic" }}>— = no sub-stat adjustment</span>
       </div>
 
       {/* ── Color Legend ── */}
-      <div style={{ marginTop:22, display:"flex", gap:16, flexWrap:"wrap",
+      <div style={{ display:"flex", gap:16, flexWrap:"wrap",
         fontSize:11, color:C.textDim }}>
         <span>Score legend:</span>
         <span style={{ color:C.red }}>● &lt;20% Untrained</span>
