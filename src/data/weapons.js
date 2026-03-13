@@ -15,6 +15,110 @@ export const getWeapCost = (classGroup, level) => (WEAP_COSTS[classGroup] ?? WEA
 // Legacy: single-weapon slot cost (used in a few display spots)
 export const weapSlotCost = (classGroup) => classGroup === "warrior" ? 2 : 3;
 
+// ── S&P p.163 weapon tier system ─────────────────────────────────────────────
+// Tier 1 — Wizard weapons (no surcharge for any class)
+export const WEAP_TIER_1 = new Set([
+  // Daggers & Knives
+  "we_dagger", "we_stiletto", "we_jambiya", "we_main_gauche", "we_parry_dagger", "we_knife", "we_katar",
+  // Dagger/knife dupes in other sword groups
+  "ws_dagger_sw",       // Dagger in Short Swords
+  "ws_main_gauche_f",   // Main-Gauche in Fencing
+  "ws_parry_dag_f",     // Parrying Dagger in Fencing
+  // Quarterstaff, Sling
+  "wm_staff", "wm_sling",
+  // Dart (in Spears & Javelins group)
+  "wh_dart",
+]);
+
+// Tier 2 — Rogue/Priest weapons (wizard pays +2 surcharge)
+export const WEAP_TIER_2 = new Set([
+  // Clubs tight group
+  "wc_club", "wc_war_club", "wc_great_club", "wc_ankus", "wc_morning_star",
+  // Maces tight group
+  "wc_foot_mace", "wc_horse_mace",
+  // Flails tight group
+  "wc_horse_flail", "wc_foot_flail",
+  // Mace-Axe (in both Axes and Maces groups)
+  "wa_mace_axe", "wc_mace_axe",
+  // Hammers tight group
+  "wa_war_hammer", "wa_maul", "wa_sledge",
+  // Hand Crossbow only
+  "wd_hand_xbow",
+  // Short Bow (not Long Bow or Composite Long Bow)
+  "wb_short_bow", "wb_comp_short",
+  // Broadsword (all dupe instances)
+  "ws_broadsword", "ws_broadsword_r", "ws_broadsword_m",
+  // Short Sword (all dupe instances)
+  "ws_short_sword", "ws_short_sword_me", "ws_short_sword_s",
+  // Bo Stick
+  "wj_bo_stick",
+]);
+// Tier 3 — Warrior weapons (rogue/priest pay +1, wizard pays +3): everything not in T1 or T2
+
+// Return tier (1, 2, or 3) for a weapon ID
+export function getWeapTier(weapId) {
+  if (WEAP_TIER_1.has(weapId)) return 1;
+  if (WEAP_TIER_2.has(weapId)) return 2;
+  return 3;
+}
+
+// Single-weapon CP cost based on class and tier (S&P p.163 restriction rules)
+// Warrior: always 2. Rogue/Priest: T1/T2=3, T3=4. Wizard: T1=3, T2=5, T3=6.
+export function getWeapSingleCostByTier(classGroup, tier) {
+  if (classGroup === "warrior") return 2;
+  if (classGroup === "rogue" || classGroup === "priest") return tier <= 2 ? 3 : 4;
+  if (classGroup === "wizard") {
+    if (tier === 1) return 3;
+    if (tier === 2) return 5;
+    return 6;
+  }
+  return 3; // fallback (e.g. null classGroup)
+}
+
+// Returns the highest tier of any weapon in a tight or broad group
+export function getGroupMaxTier(groupId) {
+  for (const bg of WEAPON_GROUPS_49) {
+    if (bg.id === groupId) {
+      const allWeaps = [...bg.tightGroups.flatMap(tg => tg.weapons), ...bg.unrelated];
+      return allWeaps.reduce((max, w) => Math.max(max, getWeapTier(w.id)), 1);
+    }
+    for (const tg of bg.tightGroups) {
+      if (tg.id === groupId) {
+        return tg.weapons.reduce((max, w) => Math.max(max, getWeapTier(w.id)), 1);
+      }
+    }
+  }
+  return 3; // default if not found
+}
+
+// Badge color for a weapon given its tier and the class group
+// "green" = no surcharge, "yellow" = small surcharge (+1/+2), "red" = large surcharge (+3)
+export function getWeapBadgeColor(classGroup, tier) {
+  if (classGroup === "warrior") return "green";
+  if (classGroup === "rogue" || classGroup === "priest") {
+    return tier <= 2 ? "green" : "yellow";
+  }
+  if (classGroup === "wizard") {
+    if (tier === 1) return "green";
+    if (tier === 2) return "yellow";
+    return "red";
+  }
+  return "green";
+}
+
+// Human-readable tier name
+const TIER_CLASS_NAME = { 1: "Wizard", 2: "Rogue/Priest", 3: "Warrior" };
+
+// Hover tooltip explaining the surcharge for a weapon
+export function getWeapCostTooltip(classGroup, tier, weapName) {
+  const base = classGroup === "warrior" ? 2 : 3;
+  const cost = getWeapSingleCostByTier(classGroup, tier);
+  const surcharge = cost - base;
+  const tierLabel = TIER_CLASS_NAME[tier];
+  if (surcharge === 0) return `${weapName} is a ${tierLabel} weapon. No surcharge for this class. Cost: ${cost} CP.`;
+  return `${weapName} is a ${tierLabel} weapon. This class pays +${surcharge} CP surcharge. Total: ${cost} CP.`;
+}
+
 // ── Table 49: Weapon Groups (S&P p.168) ─────────────────────────────
 export const WEAPON_GROUPS_49 = [
   {

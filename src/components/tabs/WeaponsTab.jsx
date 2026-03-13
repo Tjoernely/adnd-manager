@@ -1,6 +1,28 @@
 import { C } from "../../data/constants.js";
-import { WEAPON_GROUPS_49, getWeaponSiblings, getWeapCost, weapSlotCost, WEAP_COSTS } from "../../data/weapons.js";
+import {
+  WEAPON_GROUPS_49, getWeaponSiblings, getWeapCost, weapSlotCost, WEAP_COSTS,
+  getWeapTier, getWeapSingleCostByTier, getGroupMaxTier,
+  getWeapBadgeColor, getWeapCostTooltip,
+} from "../../data/weapons.js";
 import { ChHead, GroupLabel } from "../ui/index.js";
+
+// Color constants for tier badge
+const BADGE_COLORS = {
+  green:  { bg:"rgba(60,160,60,.18)",  border:"rgba(60,180,60,.45)",  text:"#80d080" },
+  yellow: { bg:"rgba(200,160,40,.18)", border:"rgba(200,160,40,.5)",  text:"#d4c040" },
+  red:    { bg:"rgba(200,50,50,.2)",   border:"rgba(200,50,50,.5)",   text:"#e87070" },
+};
+
+function CpBadge({ cost, color }) {
+  const c = BADGE_COLORS[color] ?? BADGE_COLORS.green;
+  return (
+    <span style={{
+      fontSize:9, padding:"1px 5px", borderRadius:3,
+      background:c.bg, border:`1px solid ${c.border}`, color:c.text,
+      fontWeight:"bold", flexShrink:0,
+    }}>{cost}cp</span>
+  );
+}
 
 export function WeaponsTab(props) {
   const {
@@ -13,7 +35,7 @@ export function WeaponsTab(props) {
   return (
     <div>
       <ChHead icon="🗡️" num="Chapter 7" title="Weapon Proficiencies"
-        sub="Single weapon, Tight Group (2 slots), or Broad Group (3 slots). Cost varies by class. Familiarity (half non-prof penalty) is automatic for related weapons in the same group." />
+        sub="Single weapon, Tight Group (2 slots), or Broad Group (3 slots). Cost varies by class and weapon tier. Familiarity (half non-prof penalty) is automatic for related weapons in the same group." />
 
       {/* CP + rules summary */}
       <div style={{ marginBottom:18, padding:"12px 18px",
@@ -23,13 +45,21 @@ export function WeaponsTab(props) {
           CP Available: <strong style={{ color:C.gold, fontSize:15 }}>{remainCP}</strong>
         </span>
         <span style={{ color:C.textDim }}>
-          Single: <strong style={{ color:classGroup==="warrior"?"#90d060":C.amber }}>{getWeapCost(classGroup,"single")} CP</strong>
-          {" · "}Tight: <strong style={{ color:C.blue }}>{getWeapCost(classGroup,"tight")} CP</strong>
-          {" · "}Broad: <strong style={{ color:"#80d080" }}>{getWeapCost(classGroup,"broad")} CP</strong>
-        </span>
-        <span style={{ color:C.textDim }}>
           Weapon CP spent: <strong style={{ color:C.amber }}>{weapCPSp}</strong>
         </span>
+        {/* Tier legend */}
+        <span style={{ fontSize:11, color:C.textDim }}>Tiers:</span>
+        {[
+          { label:"Wizard weapons", color:"green",  desc:"No surcharge for any class" },
+          { label:"Rogue/Priest weapons", color:"yellow", desc:"Wizard +2 CP" },
+          { label:"Warrior weapons", color:"red",   desc:"Priest/Rogue +1, Wizard +3 CP" },
+        ].map(t => (
+          <span key={t.color} title={t.desc} style={{
+            background:BADGE_COLORS[t.color].bg, border:`1px solid ${BADGE_COLORS[t.color].border}`,
+            borderRadius:4, padding:"2px 8px", color:BADGE_COLORS[t.color].text, fontSize:10,
+            cursor:"help",
+          }}>{t.label}</span>
+        ))}
         {[
           {cls:"Warrior",np:"–2",fam:"–1"},
           {cls:"Priest", np:"–3",fam:"–2"},
@@ -67,17 +97,14 @@ export function WeaponsTab(props) {
         });
 
         // ── Familiar weapons (half non-prof penalty) ──────────────────────────
-        // Rule 1: single weapon in tight group → other weapons in that tight group = familiar
-        // Rule 2: tight group prof → weapons in OTHER tight groups of same broad group = familiar
         const familiarWeapIds = new Set();
         WEAPON_GROUPS_49.forEach(bg => {
           const broadPicked = weapPicked[bg.id] === "broad";
-          if (broadPicked) return; // broad group fully covers — no familiarity needed
+          if (broadPicked) return;
 
           bg.tightGroups.forEach(tg => {
             const tightPicked = weapPicked[tg.id] === "tight";
 
-            // Rule 1: single weapon → siblings in same tight group become familiar
             tg.weapons.forEach(w => {
               if (weapPicked[w.id] === "single") {
                 tg.weapons.forEach(sib => {
@@ -88,7 +115,6 @@ export function WeaponsTab(props) {
               }
             });
 
-            // Rule 2: tight group → other tight groups in same broad become familiar
             if (tightPicked) {
               bg.tightGroups.forEach(otherTg => {
                 if (otherTg.id !== tg.id) {
@@ -105,6 +131,9 @@ export function WeaponsTab(props) {
 
         return WEAPON_GROUPS_49.map(bg => {
           const broadPicked = weapPicked[bg.id] === "broad";
+          const broadTier   = getGroupMaxTier(bg.id);
+          const broadCost   = getWeapSingleCostByTier(classGroup, broadTier) * 3;
+          const broadColor  = getWeapBadgeColor(classGroup, broadTier);
 
           return (
             <div key={bg.id} style={{ marginBottom:24,
@@ -115,15 +144,24 @@ export function WeaponsTab(props) {
               {/* Broad group header */}
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                 <GroupLabel>{bg.broad}</GroupLabel>
-                <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
-                  {!bg.noBroad && !broadPicked && (
-                    <button onClick={()=>toggleWeap(bg.id, bg.broad, "broad")}
-                      style={{ fontSize:10, padding:"3px 10px", borderRadius:5, cursor:"pointer",
-                        background:"rgba(60,140,60,.1)", border:"1px solid rgba(60,180,60,.3)",
-                        color:"#80d080", fontFamily:"inherit" }}>
-                      ⊕ Broad Group ({getWeapCost(classGroup,"broad")} CP)
-                    </button>
-                  )}
+                <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+                  {!bg.noBroad && !broadPicked && (() => {
+                    const canAfford = remainCP >= broadCost;
+                    const disabled  = !canAfford && !ruleBreaker;
+                    return (
+                      <button
+                        onClick={()=>{ if(!disabled) toggleWeap(bg.id, bg.broad, "broad"); }}
+                        title={getWeapCostTooltip(classGroup, broadTier, bg.broad + " (broad)")}
+                        style={{ fontSize:10, padding:"3px 10px", borderRadius:5, cursor: disabled?"not-allowed":"pointer",
+                          background: disabled?"rgba(60,60,60,.1)":"rgba(60,140,60,.1)",
+                          border:`1px solid ${disabled?"rgba(100,100,100,.3)":"rgba(60,180,60,.3)"}`,
+                          color: disabled?"#666":"#80d080", fontFamily:"inherit",
+                          display:"flex", alignItems:"center", gap:5 }}>
+                        ⊕ Broad Group
+                        <CpBadge cost={broadCost} color={disabled?"green":broadColor} />
+                      </button>
+                    );
+                  })()}
                   {broadPicked && (
                     <button onClick={()=>toggleWeap(bg.id, bg.broad, "broad")}
                       style={{ fontSize:10, padding:"3px 10px", borderRadius:5, cursor:"pointer",
@@ -138,6 +176,9 @@ export function WeaponsTab(props) {
               {/* Tight groups */}
               {bg.tightGroups.map(tg => {
                 const tightPicked = weapPicked[tg.id]==="tight" || broadPicked;
+                const tightTier   = getGroupMaxTier(tg.id);
+                const tightCost   = getWeapSingleCostByTier(classGroup, tightTier) * 2;
+                const tightColor  = getWeapBadgeColor(classGroup, tightTier);
                 return (
                   <div key={tg.id} style={{ marginBottom:10 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
@@ -145,14 +186,23 @@ export function WeaponsTab(props) {
                         {tg.name}
                         {tightPicked && <span style={{ color:"#70d070", marginLeft:6 }}>✓</span>}
                       </span>
-                      {!tightPicked && !broadPicked && (
-                        <button onClick={()=>toggleWeap(tg.id, tg.name, "tight")}
-                          style={{ fontSize:9, padding:"2px 8px", borderRadius:4, cursor:"pointer",
-                            background:"rgba(60,100,200,.1)", border:"1px solid rgba(60,100,200,.3)",
-                            color:C.blue, fontFamily:"inherit" }}>
-                          ⊕ Tight Group ({getWeapCost(classGroup,"tight")} CP)
-                        </button>
-                      )}
+                      {!tightPicked && !broadPicked && (() => {
+                        const canAfford = remainCP >= tightCost;
+                        const disabled  = !canAfford && !ruleBreaker;
+                        return (
+                          <button
+                            onClick={()=>{ if(!disabled) toggleWeap(tg.id, tg.name, "tight"); }}
+                            title={getWeapCostTooltip(classGroup, tightTier, tg.name + " (tight)")}
+                            style={{ fontSize:9, padding:"2px 8px", borderRadius:4, cursor: disabled?"not-allowed":"pointer",
+                              background: disabled?"rgba(40,40,40,.1)":"rgba(60,100,200,.1)",
+                              border:`1px solid ${disabled?"rgba(80,80,80,.3)":"rgba(60,100,200,.3)"}`,
+                              color: disabled?"#555":C.blue, fontFamily:"inherit",
+                              display:"flex", alignItems:"center", gap:4 }}>
+                            ⊕ Tight Group
+                            <CpBadge cost={tightCost} color={disabled?"green":tightColor} />
+                          </button>
+                        );
+                      })()}
                       {weapPicked[tg.id]==="tight" && (
                         <button onClick={()=>toggleWeap(tg.id, tg.name, "tight")}
                           style={{ fontSize:9, padding:"2px 8px", borderRadius:4, cursor:"pointer",
@@ -169,13 +219,22 @@ export function WeaponsTab(props) {
                         const siblingCovered = !directPicked && !groupCovered && coveredWithSiblings.has(w.id);
                         const familiar       = !directPicked && !groupCovered && !siblingCovered && familiarWeapIds.has(w.id);
                         const anyPicked      = directPicked || groupCovered || siblingCovered;
+                        const tier           = getWeapTier(w.id);
+                        const singleCost     = getWeapSingleCostByTier(classGroup, tier);
+                        const badgeColor     = getWeapBadgeColor(classGroup, tier);
+                        const tooltip        = getWeapCostTooltip(classGroup, tier, w.name);
+                        const canAfford      = remainCP >= singleCost;
+                        const unaffordable   = !anyPicked && !familiar && !groupCovered && !siblingCovered && !canAfford && !ruleBreaker;
+                        const clickable      = !groupCovered && !siblingCovered && !familiar && !unaffordable;
                         return (
                           <div key={w.id}
                             title={
                               siblingCovered ? "Covered via same weapon in another group" :
-                              familiar ? "Familiar — half non-proficiency penalty" : ""
+                              familiar ? "Familiar — half non-proficiency penalty" :
+                              unaffordable ? `Not enough CP (need ${singleCost}, have ${remainCP})` :
+                              !anyPicked ? tooltip : ""
                             }
-                            onClick={()=>{ if(!groupCovered && !siblingCovered && !familiar) toggleWeap(w.id, w.name, "single"); }}
+                            onClick={()=>{ if(clickable) toggleWeap(w.id, w.name, "single"); }}
                             style={{
                               background: groupCovered?"rgba(60,160,60,.18)":
                                           siblingCovered?"rgba(100,160,220,.12)":
@@ -188,14 +247,18 @@ export function WeaponsTab(props) {
                                 directPicked?C.borderHi:C.border}`,
                               borderRadius:6, padding:"5px 11px", fontSize:11,
                               color: anyPicked ? (siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri) :
-                                     familiar ? "#d4a040" : C.textDim,
-                              cursor: (groupCovered||siblingCovered||familiar)?"default":"pointer",
+                                     familiar ? "#d4a040" : unaffordable ? "#444" : C.textDim,
+                              cursor: clickable ? "pointer" : "default",
+                              opacity: unaffordable ? 0.45 : 1,
                               transition:"all .12s",
+                              display:"flex", alignItems:"center", gap:5,
                             }}>
                             {directPicked && "✓ "}{w.name}
-                            {siblingCovered && <span style={{ fontSize:9, color:"#6090c0", marginLeft:4 }}>↔</span>}
-                            {familiar && <span style={{ fontSize:9, color:"#b08030", marginLeft:4 }}>~</span>}
-                            {!anyPicked && !familiar && <span style={{ fontSize:9, color:C.textDim, marginLeft:4 }}>{getWeapCost(classGroup, "single")}cp</span>}
+                            {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
+                            {familiar && <span style={{ fontSize:9, color:"#b08030" }}>~</span>}
+                            {!anyPicked && !familiar && (
+                              <CpBadge cost={singleCost} color={unaffordable ? "green" : badgeColor} />
+                            )}
                           </div>
                         );
                       })}
@@ -218,12 +281,25 @@ export function WeaponsTab(props) {
                       const directPicked   = !!weapPicked[w.id];
                       const groupCovered   = broadPicked;
                       const siblingCovered = !directPicked && !groupCovered && coveredWithSiblings.has(w.id);
-                      // Ungrouped weapons don't gain familiarity (no tight group)
                       const anyPicked      = directPicked || groupCovered || siblingCovered;
+                      // Special profs (shield/armor) use flat costs
+                      const isSpecial      = wLevel === "shield" || wLevel === "armor";
+                      const singleCost     = isSpecial ? getWeapCost(classGroup, wLevel)
+                                           : getWeapSingleCostByTier(classGroup, getWeapTier(w.id));
+                      const tier           = isSpecial ? null : getWeapTier(w.id);
+                      const badgeColor     = isSpecial ? "green" : getWeapBadgeColor(classGroup, tier);
+                      const tooltip        = isSpecial ? w.name : getWeapCostTooltip(classGroup, tier, w.name);
+                      const canAfford      = remainCP >= singleCost;
+                      const unaffordable   = !anyPicked && !groupCovered && !siblingCovered && !canAfford && !ruleBreaker;
+                      const clickable      = !groupCovered && !siblingCovered && !unaffordable;
                       return (
                         <div key={w.id}
-                          title={siblingCovered ? "Covered via same weapon in another group" : ""}
-                          onClick={()=>{ if(!groupCovered && !siblingCovered) toggleWeap(w.id, w.name, wLevel); }}
+                          title={
+                            siblingCovered ? "Covered via same weapon in another group" :
+                            unaffordable ? `Not enough CP (need ${singleCost}, have ${remainCP})` :
+                            !anyPicked ? tooltip : ""
+                          }
+                          onClick={()=>{ if(clickable) toggleWeap(w.id, w.name, wLevel); }}
                           style={{
                             background: groupCovered?"rgba(60,160,60,.18)":
                                         siblingCovered?"rgba(100,160,220,.12)":
@@ -232,13 +308,18 @@ export function WeaponsTab(props) {
                                                  siblingCovered?"rgba(80,130,200,.4)":
                                                  directPicked?C.borderHi:C.border}`,
                             borderRadius:6, padding:"5px 11px", fontSize:11,
-                            color: anyPicked?(siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri):C.textDim,
-                            cursor:(groupCovered||siblingCovered)?"default":"pointer",
+                            color: anyPicked?(siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri):
+                                   unaffordable?"#444":C.textDim,
+                            cursor: clickable?"pointer":"default",
+                            opacity: unaffordable ? 0.45 : 1,
                             transition:"all .12s",
+                            display:"flex", alignItems:"center", gap:5,
                           }}>
                           {directPicked && "✓ "}{w.name}
-                          {siblingCovered && <span style={{ fontSize:9, color:"#6090c0", marginLeft:4 }}>↔</span>}
-                          {!anyPicked && <span style={{ fontSize:9, color:C.textDim, marginLeft:4 }}>{wSlotCost}cp</span>}
+                          {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
+                          {!anyPicked && (
+                            <CpBadge cost={singleCost} color={unaffordable ? "green" : badgeColor} />
+                          )}
                         </div>
                       );
                     })}
@@ -260,6 +341,8 @@ export function WeaponsTab(props) {
           borderRadius:4, padding:"2px 8px", color:"#d4a040" }}>~ Familiar (half penalty)</span>
         <span style={{ background:"rgba(100,160,220,.12)", border:"1px solid rgba(80,130,200,.4)",
           borderRadius:4, padding:"2px 8px", color:"#90b8e0" }}>↔ Same weapon, other group</span>
+        <span style={{ opacity:0.45, background:"rgba(0,0,0,.3)", border:`1px solid ${C.border}`,
+          borderRadius:4, padding:"2px 8px" }}>Faded = unaffordable (Rule-Breaker off)</span>
       </div>
     </div>
   );

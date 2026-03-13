@@ -25,6 +25,7 @@ import {
 import {
   getWeapCost, weapSlotCost, specCol,
   MASTERY_TIERS, STYLE_SPECS, WOC_CP,
+  getWeapTier, getWeapSingleCostByTier, getGroupMaxTier,
 } from "../data/weapons.js";
 
 import {
@@ -329,14 +330,13 @@ export function useCharacter() {
     let total = 0;
     Object.entries(weapPicked).forEach(([id, level]) => {
       if (!level) return;
-      if (level === "single")   total += getWeapCost(classGroup, "single");
-      else if (level === "tight")  total += getWeapCost(classGroup, "tight");
-      else if (level === "broad")  total += getWeapCost(classGroup, "broad");
-      else if (level === "shield") total += getWeapCost(classGroup, "shield");
-      else if (level === "armor")  total += getWeapCost(classGroup, "armor");
-      // "style" and legacy "special" still fallback
-      else if (level === "style")   total += 2;
-      else if (level === "special") total += getWeapCost(classGroup, "shield"); // compat
+      if (level === "single")        total += getWeapSingleCostByTier(classGroup, getWeapTier(id));
+      else if (level === "tight")    total += getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 2;
+      else if (level === "broad")    total += getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 3;
+      else if (level === "shield")   total += getWeapCost(classGroup, "shield");
+      else if (level === "armor")    total += getWeapCost(classGroup, "armor");
+      else if (level === "style")    total += 2;
+      else if (level === "special")  total += getWeapCost(classGroup, "shield"); // compat
     });
     return total;
   }, [weapPicked, classGroup]);
@@ -780,11 +780,14 @@ export function useCharacter() {
   const toggleWeap = (id, name, level) => {
     const already = !!weapPicked[id];
     if (already) { setWeapPicked(p => { const n={...p}; delete n[id]; return n; }); return; }
-    const cost = (level === "style") ? 2
-                : (level === "shield") ? getWeapCost(classGroup, "shield")
-                : (level === "armor")  ? getWeapCost(classGroup, "armor")
-                : (level === "special") ? getWeapCost(classGroup, "shield") // compat
-                : getWeapCost(classGroup, level); // single / tight / broad
+    const cost = (level === "style")   ? 2
+                : (level === "shield")  ? getWeapCost(classGroup, "shield")
+                : (level === "armor")   ? getWeapCost(classGroup, "armor")
+                : (level === "special") ? getWeapCost(classGroup, "shield")
+                : (level === "single")  ? getWeapSingleCostByTier(classGroup, getWeapTier(id))
+                : (level === "tight")   ? getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 2
+                : (level === "broad")   ? getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 3
+                : getWeapCost(classGroup, level);
     const doIt = () => setWeapPicked(p => ({ ...p, [id]: level }));
     if (remainCP < cost && !ruleBreaker) {
       setConfirmBox({
