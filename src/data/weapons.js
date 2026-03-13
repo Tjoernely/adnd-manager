@@ -2,11 +2,13 @@
 
 // Weapon CP costs per class group (from combined S&P + Combat & Tactics rules, Excel Tab 1)
 // single = one weapon prof; tight = tight group; broad = broad group; shield/armor = special profs
+// S&P p.163: single = 1 slot; tight group = 2 slots; broad group = 3 slots
+// Warrior: 2 CP/slot. Priest/Rogue/Wizard: 3 CP/slot.
 export const WEAP_COSTS = {
-  warrior: { single:2, tight:4,  broad:6,  shield:2, armor:2 },
-  rogue:   { single:3, tight:8,  broad:12, shield:6, armor:3 },
-  priest:  { single:3, tight:8,  broad:12, shield:6, armor:3 },
-  wizard:  { single:3, tight:12, broad:16, shield:6, armor:3 },
+  warrior: { single:2, tight:4, broad:6, shield:2, armor:2 },
+  rogue:   { single:3, tight:6, broad:9, shield:6, armor:3 },
+  priest:  { single:3, tight:6, broad:9, shield:6, armor:3 },
+  wizard:  { single:3, tight:6, broad:9, shield:6, armor:3 },
 };
 export const getWeapCost = (classGroup, level) => (WEAP_COSTS[classGroup] ?? WEAP_COSTS.rogue)[level] ?? 3;
 

@@ -80,7 +80,11 @@ export function ProfsTab(props) {
         </span>
       </div>
 
-      {NWP_GROUPS.map(grp => {
+      {/* Set of all prof names currently picked (any group) — for cross-group dedup */}
+      {(() => {
+        const pickedNames = new Set(ALL_NWP.filter(p => profsPicked[p.id]).map(p => p.name));
+
+        return NWP_GROUPS.map(grp => {
         const isSameGroup = grp.groupTag === classGroup || grp.groupTag === "general";
         return (
           <div key={grp.group} style={{ marginBottom:28 }}>
@@ -98,7 +102,9 @@ export function ProfsTab(props) {
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))", gap:9 }}>
               {grp.profs.map(prof => {
-                const picked     = !!profsPicked[prof.id];
+                const pickedById   = !!profsPicked[prof.id];
+                const pickedElsew  = !pickedById && pickedNames.has(prof.name);
+                const picked       = pickedById || pickedElsew;
                 const baseCp     = nwpEffCp(prof);
                 const kitRec     = isKitRecommended(prof) && !!activeKitObj;
                 const kitReq     = isKitRequired(prof);
@@ -111,12 +117,17 @@ export function ProfsTab(props) {
                 const success    = Math.min(20, Math.max(1, prof.rank + skillMod));
                 const subLabel   = _ALL_SUBS.find(s=>s.id===subId)?.label ?? subId;
                 return (
-                  <div key={prof.id} onClick={() => toggleProf(prof)} style={{
+                  <div key={prof.id}
+                    onClick={() => { if (!pickedElsew) toggleProf(prof); }}
+                    title={pickedElsew ? `Already selected via another group` : undefined}
+                    style={{
                     background: picked ? "linear-gradient(145deg,#1a1808,#141408)" : C.card,
                     border:`1px solid ${kitReq && !picked ? C.red : kitRec && !picked ? "rgba(212,160,53,.5)" : picked ? C.borderHi : C.border}`,
-                    borderRadius:8, padding:"10px 13px", cursor:"pointer", transition:"all .13s",
+                    borderRadius:8, padding:"10px 13px",
+                    cursor: pickedElsew ? "default" : "pointer",
+                    transition:"all .13s",
                     boxShadow: picked ? "0 0 10px rgba(212,160,53,.09)" : kitReq ? "0 0 6px rgba(200,50,50,.15)" : "none",
-                    opacity: picked ? 1 : 1,
+                    opacity: pickedElsew ? 0.75 : 1,
                   }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                       <Checkbox checked={picked} />
@@ -126,6 +137,8 @@ export function ProfsTab(props) {
                           border:`1px solid ${C.red}`, borderRadius:3, padding:"1px 4px" }}>KIT REQ</span>}
                         {kitRec && !kitReq && <span style={{ fontSize:9, marginLeft:5, color:C.gold,
                           border:"1px solid rgba(212,160,53,.5)", borderRadius:3, padding:"1px 4px" }}>★ KIT</span>}
+                        {pickedElsew && <span style={{ fontSize:9, marginLeft:5, color:C.textDim,
+                          border:`1px solid ${C.border}`, borderRadius:3, padding:"1px 4px" }}>↔ other group</span>}
                       </span>
                       {/* CP display */}
                       <div style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -163,7 +176,8 @@ export function ProfsTab(props) {
             </div>
           </div>
         );
-      })}
+      });
+      })()}
     </div>
   );
 }

@@ -171,11 +171,17 @@ export function useCharacter() {
 
   // CP spent on class abilities (restrictions give CP back)
   const classAbilCPSpent = useMemo(() => {
-    return currentAbils.reduce((sum, a) => {
+    const abilCost = currentAbils.reduce((sum, a) => {
       if (!classAbilPicked[a.id]) return sum;
       return a.restriction ? sum - a.cp : sum + a.cp;
     }, 0);
-  }, [currentAbils, classAbilPicked]);
+    // Mage school access: 5 CP per school picked individually (S&P p.163)
+    // Suppressed if "All 8 Schools (bundle)" (mg00) is already purchased.
+    const hasMg00 = !!classAbilPicked["mg00"];
+    const schoolCost = hasMg00 ? 0
+      : Object.values(mageSchoolsPicked).filter(Boolean).length * 5;
+    return abilCost + schoolCost;
+  }, [currentAbils, classAbilPicked, mageSchoolsPicked]);
 
   // Whether any picked ability grants exStr (warrior-priests etc)
   const abilGrantsExStr = useMemo(() =>
@@ -758,6 +764,9 @@ export function useCharacter() {
   const toggleProf = prof => {
     const already = !!profsPicked[prof.id];
     if (already) { setProfsPicked(p => ({ ...p, [prof.id]: false })); return; }
+    // Prevent buying same-named prof from a different group
+    const sameNamePicked = ALL_NWP.find(p => p.id !== prof.id && p.name === prof.name && profsPicked[p.id]);
+    if (sameNamePicked) return;
     const effCp = Math.max(0, nwpEffCp(prof) - (isKitRecommended(prof) && activeKitObj ? 1 : 0));
     const doIt  = () => setProfsPicked(p => ({ ...p, [prof.id]: true }));
     if (remainCP < effCp && !ruleBreaker) {

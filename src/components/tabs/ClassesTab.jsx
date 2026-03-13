@@ -632,13 +632,30 @@ export function ClassesTab(props) {
               );
             })()}
 
-            {/* ── Mage school flavor checkboxes (Feature 1C) */}
+            {/* ── Mage school access (5 CP per school, S&P p.163) */}
             {selectedClass === "mage" && (
               <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 10, color: C.purple, letterSpacing: 3,
-                  textTransform: "uppercase", marginBottom: 4 }}>Favored Schools (flavor tracking)</div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                  <div style={{ fontSize: 10, color: C.purple, letterSpacing: 3,
+                    textTransform: "uppercase" }}>School Access</div>
+                  {!classAbilPicked["mg00"] && (
+                    <div style={{ fontSize:10, color:C.textDim }}>
+                      5 CP per school ·{" "}
+                      <span style={{ color:C.gold }}>
+                        {Object.values(mageSchoolsPicked).filter(Boolean).length} selected
+                        = {Object.values(mageSchoolsPicked).filter(Boolean).length * 5} CP
+                      </span>
+                    </div>
+                  )}
+                  {classAbilPicked["mg00"] && (
+                    <div style={{ fontSize:10, color:C.green }}>
+                      ✓ All 8 Schools bundle purchased (40 CP) — individual picks free
+                    </div>
+                  )}
+                </div>
                 <div style={{ fontSize: 11, color: C.textDim, marginBottom: 10 }}>
-                  Mages have access to all schools — no opposition. Mark schools you study for reference.
+                  Each school costs 5 CP (S&P p.163). Or buy the "All 8 Schools (bundle)" ability above for 40 CP.
+                  Mages have no opposition schools.
                 </div>
                 <div style={{ display: "grid",
                   gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 6 }}>
@@ -666,10 +683,17 @@ export function ClassesTab(props) {
                             display:"flex", alignItems:"center", justifyContent:"center",
                             fontSize:8, color:"#fff", fontWeight:"bold",
                           }}>{picked ? "✓" : ""}</div>
-                          <span style={{ fontSize:11, fontWeight:"bold",
+                          <span style={{ flex:1, fontSize:11, fontWeight:"bold",
                             color: picked ? "#c0a0f0" : C.textBri }}>
                             {s.name}
                           </span>
+                          {!classAbilPicked["mg00"] && (
+                            <span style={{ fontSize:9, color: picked ? C.purple : C.textDim,
+                              border:`1px solid ${picked ? C.purple : C.border}`,
+                              borderRadius:3, padding:"1px 5px" }}>
+                              {picked ? "−5 CP" : "5 CP"}
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize:9, color: C.textDim, paddingLeft:20 }}>
                           Min {statName} {s.minScore} · have{" "}

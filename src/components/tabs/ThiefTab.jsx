@@ -72,8 +72,10 @@ export function ThiefTab(props) {
   };
 
   // ── Racial and armor adjustments ─────────────────────────────────────────────
-  const racialAdj = getThiefRacialAdj(selectedRace);
-  const armorData = THIEF_ARMOR_ADJ[thiefArmorType] ?? THIEF_ARMOR_ADJ.padded_studded;
+  // Rangers do not receive racial or armor bonuses to their thieving abilities (S&P p.70)
+  const isRanger  = selectedClass === "ranger";
+  const racialAdj = isRanger ? {} : getThiefRacialAdj(selectedRace);
+  const armorData = isRanger ? {} : (THIEF_ARMOR_ADJ[thiefArmorType] ?? THIEF_ARMOR_ADJ.padded_studded);
 
   // ── Filter skills to only those with a class entry for this class ─────────────
   const classAbils = CLASS_ABILITIES?.[selectedClass] ?? [];
@@ -126,8 +128,8 @@ export function ThiefTab(props) {
         </div>
       )}
 
-      {/* ── Armor Type Selector ── */}
-      <div style={{ marginBottom:20, padding:"12px 18px",
+      {/* ── Armor Type Selector (thieves/bards only — rangers have no armor modifier) ── */}
+      {!isRanger && <div style={{ marginBottom:20, padding:"12px 18px",
         background:"rgba(0,0,0,.3)", border:`1px solid ${C.border}`, borderRadius:10 }}>
         <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
           textTransform:"uppercase", marginBottom:8 }}>Armor Type (Table 30)</div>
@@ -149,7 +151,7 @@ export function ThiefTab(props) {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {/* ── Discretionary Pool Summary ── */}
       <div style={{ marginBottom:20, padding:"12px 20px",

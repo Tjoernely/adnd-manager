@@ -258,8 +258,7 @@ export const CLASS_ABILITIES = {
   ],
 
   mage: [
-    { id:"mg00", cp:40, name:"All 8 Schools (standard)", desc:"Access all 8 standard schools: Abjuration, Alteration, Conjuration/Summoning, Enchantment/Charm, Divination, Illusion/Phantasm, Invocation/Evocation, Necromancy. Standard purchase (40 CP)." },
-    { id:"mg01", cp:5,  name:"School Access (per school)", desc:"Access to one school of magic (5 CP per school). Multiple purchases allowed." },
+    { id:"mg00", cp:40, name:"All 8 Schools (bundle)", desc:"Access all 8 standard schools at once: Abjuration, Alteration, Conjuration/Summoning, Enchantment/Charm, Divination, Illusion/Phantasm, Invocation/Evocation, Necromancy. Equivalent to buying all 8 individually (8×5=40 CP)." },
     { id:"mg02", cp:15, name:"Armored Wizard",          desc:"Cast spells while wearing armor of any type." },
     { id:"mg03", cp:5,  name:"Automatic Spells",        desc:"When gaining access to a new spell level, automatically receive one spell of that level in the spellbook." },
     { id:"mg04", cp:5,  name:"Casting Reduction",       desc:"Casting time of all spells reduced by 1 (minimum 1). Spells with casting time of 1 are not reduced." },
