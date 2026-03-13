@@ -8,12 +8,13 @@ import { ChHead } from "../ui/index.js";
 
 export function KitsTab(props) {
   const {
-    selectedClass, selectedKit, setSelectedKit,
+    selectedClass, selectedKit, setSelectedKit, handleKitSelect,
     profsPicked, effSub, ruleBreaker,
     kitAlignOk, kitBarredOk,
     ALL_PROFS,
     socialStatus, rollSocialStatus, setSocialStatusOverride,
   } = props;
+  const _handleKitSelect = handleKitSelect ?? setSelectedKit;
 
   const [overrideInput, setOverrideInput] = useState(socialStatus?.override ?? "");
 
@@ -61,7 +62,7 @@ export function KitsTab(props) {
                      : !classOk ? "#e08040"
                      : C.border;
     return (
-      <div onClick={() => eligible ? setSelectedKit(picked ? null : kit.id) : undefined}
+      <div onClick={() => eligible ? _handleKitSelect(picked ? null : kit.id) : undefined}
         style={{
           background: picked
             ? (isClass ? "linear-gradient(145deg,#08101c,#060c14)"

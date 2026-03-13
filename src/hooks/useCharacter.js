@@ -66,6 +66,7 @@ export function useCharacter() {
   const [rollAnim,    setRollAnim]    = useState({}); // { STR: true } when animating
   const [classAbilPicked, setClassAbilPicked] = useState({}); // { abilId: true }
   const [selectedKit,     setSelectedKit]     = useState(null); // kit id string
+  const [kitAutoNWPs,     setKitAutoNWPs]     = useState({}); // { profId: true } auto-added by kit
 
   // Sub-ability split modifiers per sub-id. Within each pair, mods sum to 0.
   // |mod| ≤ MAX_SPLIT unless ruleBreaker.
@@ -819,6 +820,39 @@ export function useCharacter() {
     } else doIt();
   };
 
+  // ── Select / deselect a kit — auto-adds/removes required NWPs
+  const handleKitSelect = useCallback((newKitId) => {
+    const classKitsNow = selectedClass ? (CLASS_KITS[selectedClass] ?? []) : [];
+    const nextKit      = newKitId
+      ? [...SP_KITS, ...classKitsNow].find(k => k.id === newKitId)
+      : null;
+
+    // Start from current profs, strip any previously auto-added NWPs
+    const base = { ...profsPicked };
+    Object.keys(kitAutoNWPs).forEach(id => { delete base[id]; });
+
+    // Auto-add required NWPs for the incoming kit
+    const newAuto = {};
+    if (nextKit?.nwpRequired?.length) {
+      nextKit.nwpRequired.forEach(reqName => {
+        const rn   = reqName.toLowerCase();
+        const prof = ALL_PROFS.find(pr =>
+          pr.name.toLowerCase() === rn ||
+          pr.name.toLowerCase().includes(rn) ||
+          rn.includes(pr.name.toLowerCase())
+        );
+        if (prof && !base[prof.id]) {
+          base[prof.id] = true;
+          newAuto[prof.id] = true;
+        }
+      });
+    }
+
+    setProfsPicked(base);
+    setKitAutoNWPs(newAuto);
+    setSelectedKit(newKitId ?? null);
+  }, [selectedClass, kitAutoNWPs, profsPicked, ALL_PROFS]);
+
   const toggleWeap = (id, name, level) => {
     const already = !!weapPicked[id];
     if (already) { setWeapPicked(p => { const n={...p}; delete n[id]; return n; }); return; }
@@ -856,7 +890,7 @@ export function useCharacter() {
     charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards,
     baseScores, exPcts, splitMods,
-    classAbilPicked, selectedKit,
+    classAbilPicked, selectedKit, kitAutoNWPs,
     selectedRace, selectedSubRace, racialPicked, abilChosenSub,
     monstrousRaceId, monstrousSelFeats, monstrousCustomize, mongrelChoice,
     selectedClass,
@@ -871,7 +905,7 @@ export function useCharacter() {
   }), [
     charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards, baseScores, exPcts, splitMods,
-    classAbilPicked, selectedKit,
+    classAbilPicked, selectedKit, kitAutoNWPs,
     selectedRace, selectedSubRace, racialPicked, abilChosenSub,
     monstrousRaceId, monstrousSelFeats, monstrousCustomize, mongrelChoice,
     selectedClass,
@@ -899,6 +933,7 @@ export function useCharacter() {
     setSplitMods(d.splitMods ?? Object.fromEntries(ALL_SUBS.map(s => [s.id, 0])));
     setClassAbilPicked(d.classAbilPicked ?? {});
     setSelectedKit(d.selectedKit ?? null);
+    setKitAutoNWPs(d.kitAutoNWPs ?? {});
     setSelectedRace(d.selectedRace ?? null);
     setSelectedSubRace(d.selectedSubRace ?? null);
     setRacialPicked(d.racialPicked ?? {});
@@ -947,7 +982,8 @@ export function useCharacter() {
     // Ability scores
     baseScores, setBaseScores, rollResults, rollAnim,
     classAbilPicked, setClassAbilPicked,
-    selectedKit, setSelectedKit,
+    selectedKit, setSelectedKit, handleKitSelect,
+    kitAutoNWPs,
     splitMods, setSplitMods, exPcts, setExPcts,
     rollD100,
     // Race

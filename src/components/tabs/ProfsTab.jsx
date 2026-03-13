@@ -10,7 +10,9 @@ export function ProfsTab(props) {
     ruleBreaker, setInfoModal,
     nwpEffCp, isKitRecommended, isKitRequired, toggleProf,
     getT44Mod, ALL_SUBS,
+    kitAutoNWPs,
   } = props;
+  const _kitAutoNWPs = kitAutoNWPs ?? {};
 
   const _ALL_SUBS = props.ALL_SUBS ?? [];
   const _getT44Mod = props.getT44Mod ?? (score => {
@@ -108,6 +110,7 @@ export function ProfsTab(props) {
                 const baseCp     = nwpEffCp(prof);
                 const kitRec     = isKitRecommended(prof) && !!activeKitObj;
                 const kitReq     = isKitRequired(prof);
+                const kitAuto    = !!_kitAutoNWPs[prof.id];  // auto-added by kit selection
                 const effCp      = Math.max(0, baseCp - (kitRec ? 1 : 0));
                 const crossClass = !isSameGroup;
                 // ability mod calc
@@ -118,24 +121,26 @@ export function ProfsTab(props) {
                 const subLabel   = _ALL_SUBS.find(s=>s.id===subId)?.label ?? subId;
                 return (
                   <div key={prof.id}
-                    onClick={() => { if (!pickedElsew) toggleProf(prof); }}
-                    title={pickedElsew ? `Already selected via another group` : undefined}
+                    onClick={() => { if (!pickedElsew && !kitAuto) toggleProf(prof); }}
+                    title={pickedElsew ? `Already selected via another group` : kitAuto ? `Required by kit — deselect kit to remove` : undefined}
                     style={{
-                    background: picked ? "linear-gradient(145deg,#1a1808,#141408)" : C.card,
-                    border:`1px solid ${kitReq && !picked ? C.red : kitRec && !picked ? "rgba(212,160,53,.5)" : picked ? C.borderHi : C.border}`,
+                    background: picked ? (kitAuto ? "linear-gradient(145deg,#0e1820,#0a1018)" : "linear-gradient(145deg,#1a1808,#141408)") : C.card,
+                    border:`1px solid ${kitAuto ? "#3060a0" : kitReq && !picked ? C.red : kitRec && !picked ? "rgba(212,160,53,.5)" : picked ? C.borderHi : C.border}`,
                     borderRadius:8, padding:"10px 13px",
-                    cursor: pickedElsew ? "default" : "pointer",
+                    cursor: pickedElsew || kitAuto ? "default" : "pointer",
                     transition:"all .13s",
-                    boxShadow: picked ? "0 0 10px rgba(212,160,53,.09)" : kitReq ? "0 0 6px rgba(200,50,50,.15)" : "none",
+                    boxShadow: kitAuto ? "0 0 8px rgba(40,90,180,.15)" : picked ? "0 0 10px rgba(212,160,53,.09)" : kitReq ? "0 0 6px rgba(200,50,50,.15)" : "none",
                     opacity: pickedElsew ? 0.75 : 1,
                   }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                       <Checkbox checked={picked} />
                       <span style={{ flex:1, fontSize:13, color: picked ? C.textBri : C.textDim }}>
                         {prof.name}
-                        {kitReq && <span style={{ fontSize:9, marginLeft:5, color:C.red,
+                        {kitAuto && <span style={{ fontSize:9, marginLeft:5, color:"#6090d0",
+                          border:"1px solid #3060a0", borderRadius:3, padding:"1px 4px" }}>🔒 KIT AUTO</span>}
+                        {kitReq && !kitAuto && <span style={{ fontSize:9, marginLeft:5, color:C.red,
                           border:`1px solid ${C.red}`, borderRadius:3, padding:"1px 4px" }}>KIT REQ</span>}
-                        {kitRec && !kitReq && <span style={{ fontSize:9, marginLeft:5, color:C.gold,
+                        {kitRec && !kitReq && !kitAuto && <span style={{ fontSize:9, marginLeft:5, color:C.gold,
                           border:"1px solid rgba(212,160,53,.5)", borderRadius:3, padding:"1px 4px" }}>★ KIT</span>}
                         {pickedElsew && <span style={{ fontSize:9, marginLeft:5, color:C.textDim,
                           border:`1px solid ${C.border}`, borderRadius:3, padding:"1px 4px" }}>↔ other group</span>}
