@@ -10,7 +10,7 @@ import { RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP } from "../data/r
 import {
   ALL_CLASSES, CLASS_ABILITIES,
   MAGE_SP_CLASSES, CLERIC_SP_CLASSES,
-  WIZARD_SCHOOLS, RACE_CLASS_CAPS,
+  WIZARD_SCHOOLS, RACE_CLASS_CAPS, CLASS_STAT_REQS,
 } from "../data/classes.js";
 
 import { SP_KITS, CLASS_KITS } from "../data/kits.js";
@@ -413,6 +413,46 @@ export function useCharacter() {
   const spentCP     = traitCPSp + profCPSp + weapCPSp + classAbilCPSpent + mastCPSp;
   const remainCP    = totalCP - spentCP;
 
+  // ── Validation cascade: re-evaluate class/race requirements whenever scores, race, or class change.
+  // Produces an array of { tab, type, label, detail } warning objects for display in App.jsx.
+  const validationWarnings = useMemo(() => {
+    const warnings = [];
+    if (!selectedClass) return warnings;
+
+    // 1. Class stat requirements
+    const reqs = CLASS_STAT_REQS[selectedClass] ?? [];
+    const statFails = reqs
+      .map(req => ({ ...req, have: modParent(req.id) }))
+      .filter(r => r.have < r.min);
+    if (statFails.length > 0) {
+      const failStr = statFails
+        .map(f => `${PARENT_STAT_LABELS[f.id] ?? f.id} ${f.min} (you have ${f.have})`)
+        .join(", ");
+      warnings.push({
+        tab: "classes",
+        type: "class_stats",
+        label: classData?.label ?? selectedClass,
+        detail: `${classData?.label ?? selectedClass} requires: ${failStr}`,
+      });
+    }
+
+    // 2. Race/class incompatibility (retroactive — e.g. changed race after picking class)
+    if (selectedRace) {
+      const caps = RACE_CLASS_CAPS[selectedClass];
+      const raceForbidden = !caps || !(selectedRace in caps);
+      if (raceForbidden) {
+        warnings.push({
+          tab: "classes",
+          type: "race_class",
+          label: classData?.label ?? selectedClass,
+          detail: `${raceData?.label ?? selectedRace} cannot be a ${classData?.label ?? selectedClass} — race restriction`,
+        });
+      }
+    }
+
+    return warnings;
+  }, [selectedClass, selectedRace, modParent, classData, raceData]);
+
   // Racial pool accounting: package cost + individually picked extra abilities
   const racialPoolSpent = useMemo(() => {
     if (!raceData) return 0;
@@ -697,7 +737,7 @@ export function useCharacter() {
       return;
     }
 
-    // CP cap check (max DISADV_MAX_CP from disadvantages)
+    // CP cap check — ALWAYS requires DM approval; ruleBreaker has NO effect on this limit (S&P)
     const currentContrib = (() => {
       if (!current) return 0;
       if (current === "severe" && dv.cpSevere != null) return dv.cpSevere;
@@ -705,10 +745,12 @@ export function useCharacter() {
     })();
     const newContrib = (targetLevel === "severe" && dv.cpSevere != null) ? dv.cpSevere : dv.cp;
     const projectedPool = disadvPool - currentContrib + newContrib;
-    if (projectedPool > DISADV_MAX_CP && !ruleBreaker) {
+    if (projectedPool > DISADV_MAX_CP) {
       setConfirmBox({
-        msg: `Taking "${dv.name}" (${targetLevel}) would give you ${projectedPool} CP from disadvantages, exceeding the ${DISADV_MAX_CP} CP maximum.\n\nEnable Rule-Breaker to override?`,
-        onConfirm: () => { setRuleBreaker(true); setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel })); },
+        msg: `Taking "${dv.name}" (${targetLevel}) would give you ${projectedPool} CP from disadvantages, exceeding the ${DISADV_MAX_CP} CP maximum from S&P rules.\n\n⚠️ DM Approval Required: The maximum character points from disadvantages is ${DISADV_MAX_CP} (S&P rules). Exceeding this limit requires explicit DM approval for your campaign.`,
+        label: "DM Approved — Proceed",
+        color: "#a070c8",
+        onConfirm: () => { setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel })); },
       });
       return;
     }
@@ -965,6 +1007,8 @@ export function useCharacter() {
     profMatchesKitList, isKitRequired, isKitRecommended, kitRequiredNWPUnmet,
     // Derived — totals
     spentCP, remainCP, racialPoolSpent, racialPoolLeft,
+    // Derived — validation
+    validationWarnings,
     // Derived — monstrous
     monstrousRaceData, monstrousAdjMods, monstrousBudget,
     // Handlers

@@ -133,6 +133,7 @@ export default function App() {
     activeKitObj, kitAllReqsMet, kitRequiredNWPUnmet,
     effectiveCpPerLevel,
     effSub,
+    validationWarnings,
   } = char;
 
   return (
@@ -489,24 +490,56 @@ export default function App() {
         )}
         {/* Tabs */}
         <nav style={{ display:"flex" }}>
-          {TABS.map(tab=>(
-            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{
-              background:"none", border:"none", cursor:"pointer",
-              padding:"12px 20px", fontSize:12, fontFamily:"inherit",
-              color:activeTab===tab.id?C.gold:C.textDim,
-              borderBottom:activeTab===tab.id?`3px solid ${C.gold}`:"3px solid transparent",
-              marginBottom:-2, letterSpacing:.4, transition:"color .15s",
-              display:"flex", alignItems:"center", gap:5,
-            }}>
-              <span>{tab.icon}</span><span>{tab.label}</span>
-            </button>
-          ))}
+          {TABS.map(tab=>{
+            const tabHasWarn = validationWarnings?.some(w => w.tab === tab.id);
+            return (
+              <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{
+                background:"none", border:"none", cursor:"pointer",
+                padding:"12px 20px", fontSize:12, fontFamily:"inherit",
+                color:activeTab===tab.id?C.gold:tabHasWarn?C.red:C.textDim,
+                borderBottom:activeTab===tab.id?`3px solid ${C.gold}`:tabHasWarn?`3px solid ${C.red}`:"3px solid transparent",
+                marginBottom:-2, letterSpacing:.4, transition:"color .15s",
+                display:"flex", alignItems:"center", gap:5,
+              }}>
+                <span>{tab.icon}</span><span>{tab.label}</span>
+                {tabHasWarn && <span style={{ fontSize:8, color:C.red, lineHeight:1 }}>●</span>}
+              </button>
+            );
+          })}
         </nav>
       </header>
 
       {/* ══════════ MAIN ══════════ */}
       <main style={{ position:"relative", zIndex:1, maxWidth:1160,
         margin:"0 auto", padding:"30px 22px 80px" }}>
+
+        {/* ── Validation warning banner ─────────────────────────────────────── */}
+        {validationWarnings?.length > 0 && (
+          <div style={{ marginBottom:20, borderRadius:8, overflow:"hidden",
+            border:`2px solid ${C.red}`, background:"rgba(180,30,30,.1)" }}>
+            <div style={{ padding:"8px 16px", background:"rgba(180,30,30,.2)",
+              display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:14, color:C.redBri, fontWeight:"bold" }}>
+                ⚠ Character Validation Issues
+              </span>
+              <span style={{ fontSize:11, color:"#c08080" }}>
+                Earlier choices are no longer valid. Please review and correct before play.
+              </span>
+            </div>
+            {validationWarnings.map((w, i) => (
+              <div key={i} style={{ padding:"8px 16px", display:"flex", alignItems:"center", gap:12,
+                borderTop: i > 0 ? "1px solid rgba(180,50,50,.2)" : "none" }}>
+                <span style={{ fontSize:12, color:C.red, flex:1 }}>{w.detail}</span>
+                <button onClick={() => setActiveTab(w.tab)}
+                  style={{ fontSize:10, padding:"3px 10px", borderRadius:4, cursor:"pointer",
+                    fontFamily:"inherit", border:`1px solid ${C.red}`,
+                    background:"rgba(180,30,30,.15)", color:C.red }}>
+                  Go to {w.tab.charAt(0).toUpperCase() + w.tab.slice(1)} tab →
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ╔══════════════════════════════╗
             ║   CH.1: ABILITY SCORES       ║

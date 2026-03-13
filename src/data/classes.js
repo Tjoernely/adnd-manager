@@ -46,6 +46,28 @@ export const RACE_CLASS_CAPS = {
   bard:        { halfelf:null, human:null },
 };
 
+// ── Minimum ability score requirements per class (S&P rules) ─────────────────
+// Each entry: { id: "STR"|"DEX"|"INT"|"WIS"|"CON"|"CHA", min: number }
+export const CLASS_STAT_REQS = {
+  fighter:    [{ id:"STR", min:9 }],
+  paladin:    [{ id:"STR", min:12 }, { id:"CON", min:9 }, { id:"WIS", min:13 }, { id:"CHA", min:17 }],
+  ranger:     [{ id:"STR", min:13 }, { id:"DEX", min:13 }, { id:"CON", min:14 }, { id:"WIS", min:14 }],
+  cleric:     [{ id:"WIS", min:9 }],
+  druid:      [{ id:"WIS", min:12 }, { id:"CHA", min:15 }],
+  thief:      [{ id:"DEX", min:9 }],
+  bard:       [{ id:"DEX", min:12 }, { id:"INT", min:13 }, { id:"CHA", min:15 }],
+  mage:       [{ id:"INT", min:9 }],
+  specialist: [{ id:"INT", min:9 }],
+  illusionist:[{ id:"INT", min:9 }],
+};
+
+// ── The 8 standard PHB/S&P schools for generalist Mages ──────────────────────
+// Alchemy, Geometry, Shadow, Song are S&P specialist-only schools; NOT for generalist Mage
+export const MAGE_SCHOOLS_8 = new Set([
+  "abjuration", "alteration", "conjuration", "divination",
+  "enchantment", "illusion",  "invocation",  "necromancy",
+]);
+
 export const CLASS_ABILITIES = {
 
   fighter: [

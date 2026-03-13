@@ -1,5 +1,5 @@
 import { C, statColor } from "../../data/constants.js";
-import { ALL_CLASSES, CLASS_GROUPS, CLASS_ABILITIES, WIZARD_SCHOOLS, RACE_CLASS_CAPS } from "../../data/classes.js";
+import { ALL_CLASSES, CLASS_GROUPS, CLASS_ABILITIES, WIZARD_SCHOOLS, RACE_CLASS_CAPS, CLASS_STAT_REQS, MAGE_SCHOOLS_8 } from "../../data/classes.js";
 
 import { ChHead, TagBadge, StatPill, GroupLabel } from "../ui/index.js";
 
@@ -10,6 +10,15 @@ function getRaceCap(classId, raceId) {
   if (!raceCaps) return undefined; // class not in table → forbidden
   if (!(raceId in raceCaps)) return undefined; // race not allowed
   return raceCaps[raceId]; // null = unlimited, number = cap
+}
+
+// ── Helper: get unmet stat requirements for a class
+// Returns array of { id, min, have } for each failing requirement
+function getClassStatFailures(classId, modParentFn) {
+  const reqs = CLASS_STAT_REQS[classId] ?? [];
+  return reqs
+    .map(req => ({ ...req, have: modParentFn ? modParentFn(req.id) : 0 }))
+    .filter(r => r.have < r.min);
 }
 
 // ── Build sphere groups from sphere abilities
@@ -87,30 +96,57 @@ export function ClassesTab(props) {
 
               // Race/class restriction
               const cap      = getRaceCap(cls.id, selectedRace);
-              const forbidden = cap === undefined && !!selectedRace;
+              const raceForbidden = cap === undefined && !!selectedRace;
               const capLabel  = cap !== null && cap !== undefined ? `Max Lv ${cap}` : null;
+              const forbidden = raceForbidden; // kept for compat
+
+              // Stat requirement check
+              const statFails = getClassStatFailures(cls.id, modParent);
+              const statBlocked = statFails.length > 0 && !props.ruleBreaker; // blocked by unmet reqs
+              const statWarn    = statFails.length > 0 && !!props.ruleBreaker; // warned (rulebreaker on)
+              const statTooltip = statFails.length > 0
+                ? "Requires: " + statFails.map(f => `${PARENT_STAT_LABELS?.[f.id] ?? f.id} ${f.min} (you have ${f.have})`).join(", ")
+                : "";
+
+              const effectivelyBlocked = raceForbidden || statBlocked;
+              const cardBorderColor = sel ? C.gold
+                : raceForbidden ? "#552222"
+                : statBlocked   ? "#553322"
+                : statWarn      ? "#7a5510"
+                : C.border;
 
               return (
                 <div key={cls.id}
-                  onClick={() => !forbidden && props.handleClassSelect(cls.id)}
+                  onClick={() => !effectivelyBlocked && props.handleClassSelect(cls.id)}
+                  title={statBlocked ? statTooltip : statWarn ? statTooltip : ""}
                   style={{
                     background: sel ? C.cardSel : C.card,
-                    border: `2px solid ${sel ? C.gold : forbidden ? "#552222" : C.border}`,
+                    border: `2px solid ${cardBorderColor}`,
                     borderRadius: 10, padding: "15px 17px",
-                    cursor: forbidden ? "not-allowed" : "pointer",
+                    cursor: effectivelyBlocked ? "not-allowed" : "pointer",
                     transition: "all .18s",
-                    opacity: forbidden ? 0.45 : 1,
-                    boxShadow: sel ? "0 0 20px rgba(212,160,53,.18)" : "none",
+                    opacity: effectivelyBlocked ? 0.45 : 1,
+                    boxShadow: sel ? "0 0 20px rgba(212,160,53,.18)" : statWarn ? "0 0 8px rgba(200,120,20,.12)" : "none",
                   }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
                     <span style={{ fontSize: 22 }}>{cls.icon}</span>
                     <span style={{ fontSize: 16, fontWeight: "bold",
-                      color: sel ? C.gold : forbidden ? "#884444" : C.textBri }}>
+                      color: sel ? C.gold : raceForbidden ? "#884444" : statBlocked ? "#8a5533" : C.textBri }}>
                       {cls.label}
                     </span>
-                    {sel && <span style={{ fontSize: 10, color: C.green, marginLeft: "auto" }}>✓ SELECTED</span>}
-                    {forbidden && <span style={{ fontSize: 10, color: "#cc4444", marginLeft: "auto" }}>✗ FORBIDDEN</span>}
-                    {!forbidden && capLabel && !sel && (
+                    {sel && !statWarn && <span style={{ fontSize: 10, color: C.green, marginLeft: "auto" }}>✓ SELECTED</span>}
+                    {sel && statWarn && (
+                      <span title={statTooltip} style={{ fontSize: 10, color: C.amber, marginLeft: "auto", cursor:"help" }}>
+                        ⚠ REQ NOT MET
+                      </span>
+                    )}
+                    {raceForbidden && <span style={{ fontSize: 10, color: "#cc4444", marginLeft: "auto" }}>✗ FORBIDDEN</span>}
+                    {statBlocked && !raceForbidden && (
+                      <span title={statTooltip} style={{ fontSize: 10, color: "#cc7744", marginLeft: "auto", cursor:"help" }}>
+                        ✗ REQ NOT MET
+                      </span>
+                    )}
+                    {!effectivelyBlocked && !statWarn && capLabel && !sel && (
                       <span style={{ fontSize: 10, color: C.amber, marginLeft: "auto" }}>{capLabel}</span>
                     )}
                   </div>
@@ -135,8 +171,32 @@ export function ClassesTab(props) {
                       </div>
                     )}
                     {isWarrior && <TagBadge color={C.amber}>18/xx eligible</TagBadge>}
-                    {!forbidden && capLabel && sel && <TagBadge color={C.amber}>{capLabel}</TagBadge>}
+                    {!raceForbidden && capLabel && sel && <TagBadge color={C.amber}>{capLabel}</TagBadge>}
                   </div>
+
+                  {/* Stat requirement failures — shown inline in the card */}
+                  {statFails.length > 0 && (
+                    <div style={{ marginTop: 8, padding: "6px 10px",
+                      background: statBlocked ? "rgba(180,80,40,.1)" : "rgba(200,120,20,.08)",
+                      border: `1px solid ${statBlocked ? "rgba(200,80,40,.3)" : "rgba(200,140,20,.3)"}`,
+                      borderRadius: 5 }}>
+                      <div style={{ fontSize: 9, letterSpacing: 2,
+                        textTransform: "uppercase", marginBottom: 4,
+                        color: statBlocked ? "#cc6644" : C.amber }}>
+                        {statBlocked ? "✗ Requirements not met" : "⚠ Requirements not met (Rule-Breaker active)"}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {statFails.map(f => (
+                          <span key={f.id} style={{ fontSize: 10, padding: "1px 7px",
+                            background: "rgba(0,0,0,.3)", borderRadius: 3,
+                            color: statBlocked ? "#cc7755" : C.amber,
+                            border: `1px solid ${statBlocked ? "rgba(180,80,40,.4)" : "rgba(180,140,20,.4)"}` }}>
+                            {PARENT_STAT_LABELS?.[f.id] ?? f.id} {f.min} (have {f.have})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Spell point breakdown */}
                   {sel && spSub && (
@@ -654,12 +714,12 @@ export function ClassesTab(props) {
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: C.textDim, marginBottom: 10 }}>
-                  Each school costs 5 CP (S&P p.163). Or buy the "All 8 Schools (bundle)" ability above for 40 CP.
-                  Mages have no opposition schools.
+                  Each of the 8 standard schools costs 5 CP (S&P p.163). Or buy the "All 8 Schools (bundle)" ability above for 40 CP.
+                  Generalist Mages access all 8 standard PHB schools — Alchemy, Geometry, Shadow &amp; Song are specialist-only.
                 </div>
                 <div style={{ display: "grid",
                   gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 6 }}>
-                  {WIZARD_SCHOOLS.map(s => {
+                  {WIZARD_SCHOOLS.filter(s => MAGE_SCHOOLS_8.has(s.id)).map(s => {
                     const picked   = !!mageSchoolsPicked[s.id];
                     const statVal  = modParent ? modParent(s.minStat) : 10;
                     const statName = (PARENT_STAT_LABELS?.[s.minStat] ?? s.minStat);
