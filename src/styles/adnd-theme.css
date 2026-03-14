@@ -1,0 +1,201 @@
+/* ═══════════════════════════════════════════════════════════════
+   AD&D 2E  —  Global Visual Theme
+   Applied throughout the app for a rich dark-fantasy aesthetic.
+   All rules use specific class names — nothing overrides globals.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+:root {
+  --adnd-gold:     #c8a84b;
+  --adnd-gold-dim: #7a6020;
+  --adnd-bg:       #0f0b04;
+  --adnd-surface:  #1a1108;
+  --adnd-border:   rgba(200, 168, 75, 0.22);
+  --adnd-border-hi:rgba(200, 168, 75, 0.60);
+  --adnd-text:     #d4c090;
+  --adnd-text-dim: #7a6840;
+}
+
+::-webkit-scrollbar            { width: 8px; height: 8px; }
+::-webkit-scrollbar-track      { background: #0a0804; }
+::-webkit-scrollbar-thumb      { background: #3a2a0c; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover{ background: #5a4218; }
+
+/* ── Typography helpers ──────────────────────────────────────── */
+
+/* Section header glow — add class "adnd-heading" to <h2>, <h3>, etc. */
+.adnd-heading {
+  color: var(--adnd-gold);
+  text-shadow:
+    0 0 14px rgba(200, 168, 75, 0.45),
+    0 0 40px rgba(200, 168, 75, 0.15);
+  letter-spacing: 1.5px;
+}
+
+/* Small caps label — add class "adnd-label" to small UI labels */
+.adnd-label {
+  font-variant: small-caps;
+  letter-spacing: 2px;
+  color: var(--adnd-gold-dim);
+  font-size: 0.78em;
+  text-transform: lowercase; /* combined with small-caps → all small caps */
+}
+
+/* Important numbers — gold, slightly larger */
+.adnd-stat {
+  color: var(--adnd-gold);
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(200, 168, 75, 0.4);
+}
+
+/* ── Ornate panel / card with corner decorations ─────────────── */
+
+/*
+  Usage:  <div class="adnd-panel"> ... </div>
+  Gives the element visible gold corner brackets.
+  Pair with position:relative on the element.
+*/
+.adnd-panel {
+  position: relative;
+  border: 1px solid var(--adnd-border);
+  border-radius: 8px;
+}
+
+/* Single-class approach: use 4 pseudo elements via adjacent selectors + data attrs
+   But since CSS only gives us ::before and ::after, we use a pair of inset spans
+   added by the component (see .adnd-corner classes) */
+
+.adnd-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: var(--adnd-gold-dim);
+  border-style: solid;
+  pointer-events: none;
+}
+.adnd-corner--tl { top: 5px;    left: 5px;    border-width: 2px 0 0 2px; }
+.adnd-corner--tr { top: 5px;    right: 5px;   border-width: 2px 2px 0 0; }
+.adnd-corner--bl { bottom: 5px; left: 5px;    border-width: 0 0 2px 2px; }
+.adnd-corner--br { bottom: 5px; right: 5px;   border-width: 0 2px 2px 0; }
+
+/* Highlighted corners (e.g. on hover) */
+.adnd-panel:hover .adnd-corner,
+.adnd-panel--active .adnd-corner {
+  border-color: var(--adnd-gold);
+}
+
+/* ── Ornate section divider ──────────────────────────────────── */
+
+/*
+  Usage:
+  <div class="adnd-divider" aria-hidden="true">
+    <span></span><span>◆</span><span></span>
+  </div>
+*/
+.adnd-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  color: var(--adnd-gold);
+  font-size: 12px;
+  opacity: 0.6;
+}
+.adnd-divider span:first-child,
+.adnd-divider span:last-child {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--adnd-border-hi), transparent);
+  display: block;
+}
+.adnd-divider span:nth-child(2) {
+  text-shadow: 0 0 8px rgba(200, 168, 75, 0.6);
+  white-space: nowrap;
+  letter-spacing: 4px;
+}
+
+/* ── Watermark backgrounds ───────────────────────────────────── */
+
+/*
+  Usage:  add class "adnd-wm-dragon" (or wizard/dungeon)
+  to a full-screen wrapper div.
+  The watermark appears as a centered ::before pseudo-element.
+*/
+
+/* Shared watermark base */
+.adnd-wm-dragon::before,
+.adnd-wm-wizard::before,
+.adnd-wm-dungeon::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(65vw, 650px);
+  height: min(65vw, 650px);
+  pointer-events: none;
+  z-index: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.045;
+}
+
+/* Dragon — for campaign-level screens */
+.adnd-wm-dragon::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'%3E%3Cg fill='%23c8a84b'%3E%3C!-- Body --%3E%3Cellipse cx='190' cy='240' rx='80' ry='45' transform='rotate(-15,190,240)'/%3E%3C!-- Neck --%3E%3Cpath d='M240,205 Q265,175 285,158'/%3E%3C!-- Head --%3E%3Cpath d='M272,148 Q300,132 318,145 Q325,162 312,172 Q298,180 282,175 Q272,185 260,182 Q250,178 252,165 Z'/%3E%3C!-- Horn --%3E%3Cpolygon points='310,132 328,108 322,136'/%3E%3C!-- Wing left --%3E%3Cpath d='M170,215 Q130,155 90,120 Q120,168 150,200 Z'/%3E%3C!-- Wing right --%3E%3Cpath d='M200,205 Q215,148 250,115 Q232,165 215,200 Z'/%3E%3C!-- Tail --%3E%3Cpath d='M115,248 Q78,265 48,248 Q40,230 58,225 Q80,232 112,240 Z'/%3E%3C!-- Tail tip --%3E%3Cpath d='M48,248 Q28,268 35,285 Q44,272 42,260 Z'/%3E%3C!-- Front leg --%3E%3Cpath d='M175,278 Q162,305 156,325 L164,325 Q170,308 178,285 Z'/%3E%3C!-- Back leg --%3E%3Cpath d='M145,270 Q128,295 124,318 L131,318 Q135,298 148,275 Z'/%3E%3C!-- Jaw --%3E%3Cpath d='M310,170 Q328,178 335,172 L322,168 Z'/%3E%3C!-- Eye --%3E%3Ccircle cx='300' cy='148' r='5' fill='%230f0b04'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Wizard — for character builder */
+.adnd-wm-wizard::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 280'%3E%3Cg fill='%23c8a84b'%3E%3C!-- Pointed hat --%3E%3Cpolygon points='100,8 138,82 62,82'/%3E%3Cellipse cx='100' cy='84' rx='44' ry='10'/%3E%3C!-- Head --%3E%3Ccircle cx='100' cy='108' r='20'/%3E%3C!-- Robe --%3E%3Cpath d='M78,126 Q56,180 40,262 L160,262 Q144,180 122,126 Z'/%3E%3C!-- Left sleeve / arm --%3E%3Cpath d='M78,138 Q54,162 44,180 Q50,182 56,178 Q68,162 82,146 Z'/%3E%3C!-- Right sleeve / arm --%3E%3Cpath d='M122,138 Q146,162 156,180 Q150,182 144,178 Q132,162 118,146 Z'/%3E%3C!-- Staff --%3E%3Crect x='155' y='112' width='7' height='152' rx='3'/%3E%3Ccircle cx='159' cy='108' r='11'/%3E%3Ccircle cx='159' cy='108' r='5' fill='%230f0b04'/%3E%3C!-- Stars on robe --%3E%3Cpolygon points='90,160 93,170 103,170 95,176 98,186 90,180 82,186 85,176 77,170 87,170' fill='%23c8a84b' opacity='0.4'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Dungeon/Castle — for maps & encounters */
+.adnd-wm-dungeon::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 260'%3E%3Cg fill='%23c8a84b'%3E%3C!-- Main keep --%3E%3Crect x='105' y='88' width='110' height='172'/%3E%3C!-- Keep battlements --%3E%3Crect x='100' y='72' width='20' height='24'/%3E%3Crect x='125' y='72' width='20' height='24'/%3E%3Crect x='150' y='72' width='20' height='24'/%3E%3Crect x='175' y='72' width='20' height='24'/%3E%3Crect x='200' y='72' width='20' height='24'/%3E%3C!-- Left tower --%3E%3Crect x='42' y='118' width='66' height='142'/%3E%3Crect x='37' y='102' width='16' height='22'/%3E%3Crect x='58' y='102' width='16' height='22'/%3E%3Crect x='79' y='102' width='16' height='22'/%3E%3C!-- Right tower --%3E%3Crect x='212' y='118' width='66' height='142'/%3E%3Crect x='207' y='102' width='16' height='22'/%3E%3Crect x='228' y='102' width='16' height='22'/%3E%3Crect x='249' y='102' width='16' height='22'/%3E%3C!-- Gate arch --%3E%3Cpath d='M138,260 L138,202 Q160,182 182,202 L182,260 Z' fill='%230f0b04'/%3E%3C!-- Arrow slits (cut outs) --%3E%3Crect x='148' y='118' width='9' height='22' fill='%230f0b04'/%3E%3Crect x='163' y='118' width='9' height='22' fill='%230f0b04'/%3E%3Crect x='60' y='145' width='9' height='22' fill='%230f0b04'/%3E%3Crect x='242' y='145' width='9' height='22' fill='%230f0b04'/%3E%3C!-- Drawbridge chains --%3E%3Cline x1='138' y1='202' x2='120' y2='180' stroke='%230f0b04' stroke-width='3'/%3E%3Cline x1='182' y1='202' x2='200' y2='180' stroke='%230f0b04' stroke-width='3'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ── Tab label small-caps enhancement ───────────────────────── */
+/* Add .adnd-tabs-nav to your <nav> element containing tabs */
+.adnd-tabs-nav button {
+  font-variant: small-caps;
+  letter-spacing: 0.8px;
+}
+
+/* ── Modal dialog enhancement ────────────────────────────────── */
+/* Add .adnd-modal to modal containers */
+.adnd-modal {
+  position: relative;
+  background: linear-gradient(160deg, #1e1608, #141008);
+  border: 1px solid var(--adnd-border-hi);
+  border-radius: 10px;
+  box-shadow:
+    0 0  0 1px rgba(200, 168, 75, 0.08),
+    0 24px 80px rgba(0, 0, 0, 0.9);
+}
+
+/* ── Card / panel with full corner treatment ─────────────────── */
+
+/*
+  Convenience mixin: just add "adnd-card" and the 4 corner spans.
+  <div class="adnd-card">
+    <span class="adnd-corner adnd-corner--tl"/>
+    <span class="adnd-corner adnd-corner--tr"/>
+    <span class="adnd-corner adnd-corner--bl"/>
+    <span class="adnd-corner adnd-corner--br"/>
+    ... content ...
+  </div>
+*/
+.adnd-card {
+  position: relative;
+  background: linear-gradient(160deg, #1c1508, #141008);
+  border: 1px solid var(--adnd-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.adnd-card:hover {
+  border-color: var(--adnd-border-hi);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+}

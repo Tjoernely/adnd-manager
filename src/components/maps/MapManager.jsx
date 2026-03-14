@@ -56,8 +56,8 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [activePinId, setActivePinId] = useState(null);
   const [savingPins,  setSavingPins]  = useState(false);
 
-  const activeMap = maps.find(m => m.id === activeId) ?? null;
-  const pins      = activeMap?.data?.pins ?? [];
+  const activeMap = (Array.isArray(maps) ? maps : []).find(m => m.id === activeId) ?? null;
+  const pins      = Array.isArray(activeMap?.data?.pins) ? activeMap.data.pins : [];
   const activePin = pins.find(p => p.id === activePinId) ?? null;
 
   // ── Load data ──────────────────────────────────────────────────────────────
@@ -71,11 +71,15 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       api.getEncounters(campaignId).catch(() => []),
       api.getQuests(campaignId).catch(() => []),
     ]).then(([ms, ns, es, qs]) => {
-      setMaps(ms);
-      setNpcs(ns);
-      setEncounters(es);
-      setQuests(qs);
-      if (ms.length && !activeId) setActiveId(ms[0].id);
+      const safeMaps   = Array.isArray(ms) ? ms : [];
+      const safeNpcs   = Array.isArray(ns) ? ns : [];
+      const safeEncs   = Array.isArray(es) ? es : [];
+      const safeQuests = Array.isArray(qs) ? qs : [];
+      setMaps(safeMaps);
+      setNpcs(safeNpcs);
+      setEncounters(safeEncs);
+      setQuests(safeQuests);
+      if (safeMaps.length && !activeId) setActiveId(safeMaps[0].id);
     }).catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [isOpen, campaignId]);

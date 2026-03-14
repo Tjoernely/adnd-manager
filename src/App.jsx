@@ -19,8 +19,10 @@ import { WeaponsTab } from "./components/tabs/WeaponsTab.jsx";
 import { MasteryTab } from "./components/tabs/MasteryTab.jsx";
 import { ThiefTab }    from "./components/tabs/ThiefTab.jsx";
 import { PortraitTab } from "./components/tabs/PortraitTab.jsx";
-import { PrintSheet }  from "./components/PrintSheet.jsx";
-import { MapManager }  from "./components/maps/MapManager.jsx";
+import { PrintSheet }        from "./components/PrintSheet.jsx";
+import { MapManager }        from "./components/maps/MapManager.jsx";
+import { CampaignDashboard } from "./components/campaign/CampaignDashboard.jsx";
+import "./styles/adnd-theme.css";
 
 export default function App() {
   // ── Auth ────────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ export default function App() {
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
+  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters'
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
@@ -114,9 +117,33 @@ export default function App() {
     return (
       <CampaignSelector
         user={user}
-        onSelect={camp => { setActiveCampaign(camp); setDbCharId(null); }}
+        onSelect={camp => { setActiveCampaign(camp); setDbCharId(null); setScreen('dashboard'); }}
         onLogout={logout}
       />
+    );
+  }
+
+  // ── Campaign Dashboard gate ─────────────────────────────────
+  if (screen === 'dashboard') {
+    return (
+      <>
+        <CampaignDashboard
+          campaign={activeCampaign}
+          user={user}
+          onNavigate={(modId) => {
+            if (modId === 'characters') setScreen('characters');
+          }}
+          onOpenMaps={() => setShowMaps(true)}
+          onBack={() => { setActiveCampaign(null); setDbCharId(null); setScreen('dashboard'); }}
+          onLogout={logout}
+        />
+        <MapManager
+          campaignId={activeCampaign.id}
+          isDM={activeCampaign.dm_user_id === user.id}
+          isOpen={showMaps}
+          onClose={() => setShowMaps(false)}
+        />
+      </>
     );
   }
 
@@ -141,7 +168,7 @@ export default function App() {
   } = char;
 
   return (
-    <div id="app-screen" style={{ minHeight:"100vh", background:C.bg, color:C.text,
+    <div id="app-screen" className="adnd-wm-wizard" style={{ minHeight:"100vh", background:C.bg, color:C.text,
       fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif" }}>
 
       {/* Noise grain */}
@@ -162,11 +189,22 @@ export default function App() {
               <span style={{ fontSize:10, letterSpacing:6, color:C.goldDim, textTransform:"uppercase" }}>
                 AD&amp;D 2nd Edition ✦ Skills &amp; Powers ✦ Character Creation Engine
               </span>
+              {/* ← Dashboard button */}
+              <button onClick={() => setScreen('dashboard')} style={{
+                fontSize:10, background:"rgba(0,0,0,.35)",
+                border:`1px solid ${C.border}`, borderRadius:6,
+                padding:"3px 10px", color:C.textDim, cursor:"pointer",
+                fontFamily:"inherit", letterSpacing:.3,
+              }}
+                onMouseEnter={e=>{ e.target.style.color=C.gold; e.target.style.borderColor=C.borderHi; }}
+                onMouseLeave={e=>{ e.target.style.color=C.textDim; e.target.style.borderColor=C.border; }}>
+                ‹ Dashboard
+              </button>
               {/* Campaign + user pill */}
               <span style={{ fontSize:10, background:"rgba(0,0,0,.4)",
                 border:`1px solid ${C.border}`, borderRadius:12,
                 padding:"2px 10px", color:C.textDim, cursor:"pointer" }}
-                onClick={()=>{ setActiveCampaign(null); setDbCharId(null); }}>
+                onClick={()=>{ setActiveCampaign(null); setDbCharId(null); setScreen('dashboard'); }}>
                 🗡️ {activeCampaign.name} ▸ {user.email}
               </span>
               <button onClick={logout} style={{
