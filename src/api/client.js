@@ -121,6 +121,31 @@ export const api = {
   updateMap:   (id, data)   => apiFetch(`/maps/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
   deleteMap:   (id)         => apiFetch(`/maps/${id}`,   { method: 'DELETE' }),
 
+  /**
+   * Upload / replace the image for an existing map.
+   * `file` is a File / Blob from an <input type="file">.
+   * Uses multipart/form-data — do NOT set Content-Type manually.
+   */
+  uploadMapImage: (id, file) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    const token = getToken();
+    return fetch(`${BASE}/maps/${id}/image`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then(async res => {
+      if (res.status === 204) return null;
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      if (!res.ok) {
+        const err = new Error(body?.error ?? `HTTP ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return body;
+    });
+  },
+
   // ── AI Generation ─────────────────────────────────────────────────
   // type: "npc" | "quest" | "encounter" | "rumors"
   // context: free-form hints (race, setting, partyLevel, etc.)

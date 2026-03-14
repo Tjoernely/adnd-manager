@@ -1,0 +1,555 @@
+/* ── MapManager — full-screen map viewer + pin editor ───────────────────────── */
+
+:root {
+  --mm-bg:        #0e0c08;
+  --mm-surface:   #16120c;
+  --mm-surface2:  #1e1810;
+  --mm-border:    #2e2416;
+  --mm-border-hi: #4a3820;
+  --mm-text:      #e8dfc8;
+  --mm-text-dim:  #8a7a5a;
+  --mm-gold:      #c9a84c;
+  --mm-gold-dim:  #7a5a10;
+  --mm-green:     #4a8a2a;
+  --mm-green-hi:  #6ab04a;
+  --mm-red:       #8a2020;
+  --mm-red-hi:    #c03030;
+  --mm-blue:      #2a4a8a;
+  --mm-sidebar-w: 230px;
+  --mm-editor-w:  280px;
+  --mm-toolbar-h: 46px;
+}
+
+/* ── Backdrop ─────────────────────────────────────────────────────────────── */
+.mm-backdrop {
+  position: fixed;
+  inset:    0;
+  background: rgba(0, 0, 0, 0.88);
+  z-index:  1500;
+  display:  flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Shell (full window) ─────────────────────────────────────────────────── */
+.mm-shell {
+  width:    min(1400px, 98vw);
+  height:   min(92vh, 900px);
+  background: var(--mm-bg);
+  border:   1px solid var(--mm-border-hi);
+  border-radius: 10px;
+  display:  flex;
+  overflow: hidden;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.8);
+  position: relative;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.mm-sidebar {
+  width:     var(--mm-sidebar-w);
+  flex-shrink: 0;
+  background: var(--mm-surface);
+  border-right: 1px solid var(--mm-border);
+  display:   flex;
+  flex-direction: column;
+  overflow:  hidden;
+}
+
+.mm-sidebar__header {
+  display:        flex;
+  align-items:    center;
+  justify-content: space-between;
+  padding:        12px 14px;
+  background:     #0a0806;
+  border-bottom:  1px solid var(--mm-border);
+  flex-shrink:    0;
+}
+
+.mm-sidebar__title {
+  font-size:      14px;
+  font-weight:    700;
+  color:          var(--mm-gold);
+  letter-spacing: 0.04em;
+}
+
+.mm-map-list {
+  flex:       1 1 auto;
+  overflow-y: auto;
+  padding:    6px;
+}
+
+.mm-map-item {
+  display:       flex;
+  flex-direction: column;
+  align-items:   flex-start;
+  gap:           2px;
+  width:         100%;
+  padding:       8px 10px;
+  text-align:    left;
+  background:    transparent;
+  border:        1px solid transparent;
+  border-radius: 5px;
+  cursor:        pointer;
+  transition:    background 0.12s, border-color 0.12s;
+  margin-bottom: 2px;
+  position:      relative;
+}
+.mm-map-item:hover     { background: rgba(255,255,255,.04); }
+.mm-map-item--active   {
+  background:   rgba(201,168,76,.1);
+  border-color: var(--mm-gold-dim);
+}
+
+.mm-map-item__type {
+  font-size:   9px;
+  color:       var(--mm-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.mm-map-item__name {
+  font-size:   12px;
+  color:       var(--mm-text);
+  font-weight: 600;
+}
+.mm-badge {
+  position: absolute;
+  top: 6px; right: 8px;
+  font-size: 11px;
+}
+.mm-badge--shared { opacity: 0.7; }
+
+/* ── Main viewer ─────────────────────────────────────────────────────────── */
+.mm-main {
+  flex:     1 1 auto;
+  display:  flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Toolbar */
+.mm-toolbar {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  padding:     0 14px;
+  height:      var(--mm-toolbar-h);
+  background:  #0a0806;
+  border-bottom: 1px solid var(--mm-border);
+  flex-shrink: 0;
+  flex-wrap:   wrap;
+  overflow:    hidden;
+}
+.mm-toolbar__name {
+  font-size:   14px;
+  font-weight: 700;
+  color:       var(--mm-gold);
+}
+.mm-toolbar__type {
+  font-size:  11px;
+  color:      var(--mm-text-dim);
+}
+/* push close to the right */
+.mm-btn--close { margin-left: auto; }
+
+/* Viewer */
+.mm-viewer {
+  flex:       1 1 auto;
+  overflow:   auto;
+  background: #0a0806;
+  display:    flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding:    16px;
+}
+.mm-viewer--crosshair { cursor: crosshair; }
+
+.mm-img-wrap {
+  position:     relative;
+  display:      inline-block;
+  cursor:       inherit;
+  user-select:  none;
+}
+.mm-img {
+  display:   block;
+  max-width: 100%;
+  max-height: calc(92vh - var(--mm-toolbar-h) - 50px);
+  border:    1px solid var(--mm-border);
+  border-radius: 4px;
+  pointer-events: none; /* let the wrapper handle clicks */
+}
+
+/* Pin overlay */
+.mm-pins {
+  position:      absolute;
+  inset:         0;
+  pointer-events: none;
+}
+
+/* No image placeholder */
+.mm-no-image {
+  color:       var(--mm-text-dim);
+  font-style:  italic;
+  font-size:   14px;
+  padding:     40px;
+  line-height: 1.6;
+}
+
+/* Empty state */
+.mm-empty {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  height:          100%;
+  color:           var(--mm-text-dim);
+  font-style:      italic;
+  font-size:       15px;
+}
+
+/* ── Pin markers ─────────────────────────────────────────────────────────── */
+.mm-pin {
+  position:      absolute;
+  transform:     translate(-50%, -100%);
+  pointer-events: all;
+  display:       flex;
+  flex-direction: column;
+  align-items:   center;
+  gap:           2px;
+  background:    none;
+  border:        none;
+  cursor:        pointer;
+  padding:       0;
+  z-index:       10;
+  transition:    transform 0.12s;
+}
+.mm-pin:hover { transform: translate(-50%, -100%) scale(1.15); }
+
+.mm-pin__icon {
+  width:         28px;
+  height:        28px;
+  border-radius: 50%;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  font-size:     15px;
+  background:    var(--pin-color, #e04040);
+  border:        2px solid rgba(255,255,255,0.4);
+  box-shadow:    0 2px 8px rgba(0,0,0,0.6);
+  transition:    box-shadow 0.12s;
+}
+.mm-pin:hover .mm-pin__icon,
+.mm-pin--selected .mm-pin__icon {
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.5), 0 2px 12px rgba(0,0,0,0.7);
+}
+
+.mm-pin__label {
+  font-size:    10px;
+  color:        #fff;
+  font-weight:  700;
+  text-shadow:  0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.8);
+  white-space:  nowrap;
+  max-width:    120px;
+  overflow:     hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
+}
+
+.mm-pin--dm .mm-pin__icon { opacity: 0.75; border-style: dashed; }
+.mm-pin__dm-badge {
+  font-size:    8px;
+  color:        var(--mm-gold);
+  background:   rgba(0,0,0,0.6);
+  border-radius: 2px;
+  padding:      1px 3px;
+  letter-spacing: 0.05em;
+}
+
+/* ── Pin Editor / right panel ────────────────────────────────────────────── */
+.mm-editor {
+  width:      var(--mm-editor-w);
+  flex-shrink: 0;
+  background: var(--mm-surface);
+  border-left: 1px solid var(--mm-border);
+  display:    flex;
+  flex-direction: column;
+  overflow:   hidden;
+}
+
+.mm-editor__header {
+  display:        flex;
+  align-items:    center;
+  justify-content: space-between;
+  padding:        12px 14px;
+  background:     #0a0806;
+  border-bottom:  1px solid var(--mm-border);
+  flex-shrink:    0;
+}
+.mm-editor__title {
+  font-size:   13px;
+  font-weight: 700;
+  color:       var(--mm-gold);
+}
+
+.mm-editor__body {
+  flex:       1 1 auto;
+  overflow-y: auto;
+  padding:    14px;
+  display:    flex;
+  flex-direction: column;
+  gap:        12px;
+}
+
+.mm-editor__footer {
+  display:        flex;
+  gap:            8px;
+  justify-content: space-between;
+  padding:        10px 14px;
+  border-top:     1px solid var(--mm-border);
+  background:     #0a0806;
+  flex-shrink:    0;
+}
+
+/* ── Shared form elements ────────────────────────────────────────────────── */
+.mm-field {
+  display:        flex;
+  flex-direction: column;
+  gap:            5px;
+}
+.mm-field__label {
+  font-size:      10px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color:          var(--mm-gold-dim);
+}
+.mm-input {
+  background:    #0a0806;
+  border:        1px solid var(--mm-border);
+  border-radius: 4px;
+  padding:       7px 9px;
+  color:         var(--mm-text);
+  font-size:     12px;
+  font-family:   inherit;
+  outline:       none;
+  width:         100%;
+  box-sizing:    border-box;
+  transition:    border-color 0.12s;
+}
+.mm-input:focus       { border-color: var(--mm-gold-dim); }
+.mm-input--area       { resize: vertical; min-height: 70px; }
+.mm-input option      { background: #16120c; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.mm-btn {
+  padding:       5px 12px;
+  font-size:     12px;
+  font-weight:   600;
+  border-radius: 4px;
+  cursor:        pointer;
+  border:        1px solid var(--mm-border-hi);
+  background:    var(--mm-surface2);
+  color:         var(--mm-text-dim);
+  font-family:   inherit;
+  white-space:   nowrap;
+  transition:    background 0.12s, color 0.12s, border-color 0.12s;
+}
+.mm-btn:hover:not(:disabled) {
+  background:   rgba(255,255,255,.06);
+  color:        var(--mm-text);
+}
+.mm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.mm-btn--primary {
+  background:   var(--mm-green);
+  border-color: var(--mm-green-hi);
+  color:        #d8f0c8;
+}
+.mm-btn--primary:hover:not(:disabled) { background: var(--mm-green-hi); }
+
+.mm-btn--danger {
+  background:   rgba(138,32,32,.2);
+  border-color: var(--mm-red);
+  color:        #e07070;
+}
+.mm-btn--danger:hover:not(:disabled) { background: rgba(180,40,40,.3); }
+
+.mm-btn--active {
+  background:   rgba(201,168,76,.2);
+  border-color: var(--mm-gold);
+  color:        var(--mm-gold);
+}
+.mm-btn--shared {
+  background:   rgba(74,138,42,.2);
+  border-color: var(--mm-green-hi);
+  color:        var(--mm-green-hi);
+}
+
+.mm-icon-btn {
+  background:    transparent;
+  border:        none;
+  color:         var(--mm-text-dim);
+  font-size:     18px;
+  cursor:        pointer;
+  padding:       2px 6px;
+  border-radius: 3px;
+  line-height:   1;
+  transition:    color 0.12s;
+}
+.mm-icon-btn:hover { color: var(--mm-text); }
+
+/* ── Toggle ─────────────────────────────────────────────────────────────── */
+.mm-toggle {
+  padding:       5px 12px;
+  font-size:     12px;
+  border-radius: 20px;
+  cursor:        pointer;
+  border:        1px solid var(--mm-border-hi);
+  background:    var(--mm-surface2);
+  color:         var(--mm-text-dim);
+  font-family:   inherit;
+  transition:    all 0.15s;
+}
+.mm-toggle--on {
+  background:   rgba(74,138,42,.2);
+  border-color: var(--mm-green-hi);
+  color:        var(--mm-green-hi);
+}
+
+/* ── Icon + Color pickers ────────────────────────────────────────────────── */
+.mm-icon-grid {
+  display:  flex;
+  flex-wrap: wrap;
+  gap:      4px;
+}
+.mm-icon-cell {
+  width:         30px;
+  height:        30px;
+  font-size:     16px;
+  border-radius: 4px;
+  border:        1px solid transparent;
+  background:    transparent;
+  cursor:        pointer;
+  transition:    background 0.1s, border-color 0.1s;
+}
+.mm-icon-cell:hover        { background: rgba(255,255,255,.08); }
+.mm-icon-cell--sel         { border-color: var(--mm-gold); background: rgba(201,168,76,.15); }
+
+.mm-color-row  { display: flex; gap: 6px; flex-wrap: wrap; }
+.mm-color-swatch {
+  width:         22px;
+  height:        22px;
+  border-radius: 50%;
+  border:        2px solid transparent;
+  cursor:        pointer;
+  transition:    transform 0.1s, border-color 0.1s;
+}
+.mm-color-swatch:hover  { transform: scale(1.2); }
+.mm-color-swatch--sel   { border-color: #fff; transform: scale(1.25); }
+
+/* ── Link list ───────────────────────────────────────────────────────────── */
+.mm-link-list { display: flex; flex-direction: column; gap: 4px; }
+
+.mm-link-chip {
+  padding:       5px 9px;
+  text-align:    left;
+  font-size:     11px;
+  border-radius: 4px;
+  border:        1px solid var(--mm-border);
+  background:    transparent;
+  color:         var(--mm-text-dim);
+  cursor:        pointer;
+  font-family:   inherit;
+  transition:    background 0.1s, color 0.1s, border-color 0.1s;
+}
+.mm-link-chip:hover    { background: rgba(255,255,255,.05); color: var(--mm-text); }
+.mm-link-chip--on {
+  background:   rgba(74,138,42,.15);
+  border-color: var(--mm-green-hi);
+  color:        var(--mm-green-hi);
+}
+
+.mm-link-item {
+  font-size: 12px;
+  color:     var(--mm-text);
+  padding:   4px 0;
+  border-bottom: 1px solid var(--mm-border);
+}
+
+/* ── Section (player view) ───────────────────────────────────────────────── */
+.mm-section { display: flex; flex-direction: column; gap: 4px; }
+.mm-section__title {
+  font-size:      10px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color:          var(--mm-gold-dim);
+  border-bottom:  1px solid var(--mm-border);
+  padding-bottom: 2px;
+}
+.mm-section__body {
+  font-size:   13px;
+  color:       var(--mm-text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* ── Hints / status ─────────────────────────────────────────────────────── */
+.mm-hint {
+  font-size:  11px;
+  color:      var(--mm-text-dim);
+  font-style: italic;
+  padding:    6px 10px;
+}
+.mm-hint--center { text-align: center; padding: 20px; }
+.mm-hint--err    { color: #e07070; font-style: normal; background: rgba(138,32,32,.15); border-radius: 4px; }
+.mm-hint--saving { color: var(--mm-gold-dim); font-style: italic; font-size: 11px; }
+
+/* ── Create map modal ────────────────────────────────────────────────────── */
+.mm-modal-backdrop {
+  position: fixed;
+  inset:    0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index:  2000;
+  display:  flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mm-modal {
+  background:    var(--mm-surface);
+  border:        1px solid var(--mm-border-hi);
+  border-radius: 8px;
+  width:         min(460px, 92vw);
+  box-shadow:    0 8px 40px rgba(0,0,0,.7);
+  overflow:      hidden;
+  display:       flex;
+  flex-direction: column;
+}
+
+.mm-modal__header {
+  display:        flex;
+  align-items:    center;
+  justify-content: space-between;
+  padding:        13px 18px;
+  background:     #0a0806;
+  border-bottom:  1px solid var(--mm-border);
+  font-size:      14px;
+  font-weight:    700;
+  color:          var(--mm-gold);
+}
+
+.mm-modal__body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mm-modal__footer {
+  display:        flex;
+  gap:            8px;
+  justify-content: flex-end;
+  padding:        12px 18px;
+  border-top:     1px solid var(--mm-border);
+  background:     #0a0806;
+}
