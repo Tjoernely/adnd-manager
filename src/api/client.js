@@ -121,6 +121,15 @@ export const api = {
   updateMap:   (id, data)   => apiFetch(`/maps/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
   deleteMap:   (id)         => apiFetch(`/maps/${id}`,   { method: 'DELETE' }),
 
+  // ── AI Generation ─────────────────────────────────────────────────
+  // type: "npc" | "quest" | "encounter" | "rumors"
+  // context: free-form hints (race, setting, partyLevel, etc.)
+  generateContent: (type, campaignId, context = {}) =>
+    apiFetch('/ai/generate', {
+      method: 'POST',
+      body: JSON.stringify({ type, campaign_id: campaignId, context }),
+    }),
+
   // ── Party Knowledge ───────────────────────────────────────────────
   // visible_to: string[] — user IDs or ["all"]
   getKnowledge:    (campaignId)      => apiFetch(`/party-knowledge?campaign_id=${campaignId}`),

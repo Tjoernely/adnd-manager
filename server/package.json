@@ -10,6 +10,7 @@
     "import-spells": "node scripts/import-spells.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
     "axios": "^1.6.7",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.0.0",

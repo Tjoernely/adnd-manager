@@ -14,6 +14,7 @@ const encounterRouter        = require('./routes/encounters');
 const lootRouter             = require('./routes/loot');
 const mapRouter              = require('./routes/maps');
 const partyKnowledgeRouter   = require('./routes/party-knowledge');
+const aiRouter               = require('./routes/ai');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,7 @@ app.use('/api/encounters',      encounterRouter);
 app.use('/api/loot',            lootRouter);
 app.use('/api/maps',            mapRouter);
 app.use('/api/party-knowledge', partyKnowledgeRouter);
+app.use('/api/ai',             aiRouter);
 
 // ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');

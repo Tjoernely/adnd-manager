@@ -1,0 +1,303 @@
+/* ── GenerateButton — AI generation trigger + preview modal ─────────────────── */
+
+/* ── CSS vars (dark parchment palette) ────────────────────────────────────── */
+.gb-trigger,
+.gb-modal,
+.gb-backdrop {
+  --gb-gold:      #c9a84c;
+  --gb-gold-dim:  #7a5a10;
+  --gb-bg:        #1a1510;
+  --gb-surface:   #221c12;
+  --gb-border:    #3a2e1a;
+  --gb-text:      #e8dfc8;
+  --gb-text-dim:  #9a8a6a;
+  --gb-accent:    #5a7a3a;
+  --gb-accent-hi: #7aaa4a;
+  --gb-red:       #8a2020;
+  --gb-red-hi:    #c03030;
+}
+
+/* ── Trigger button ─────────────────────────────────────────────────────────── */
+.gb-trigger {
+  display:        inline-flex;
+  align-items:    center;
+  gap:            6px;
+  padding:        5px 12px;
+  font-size:      12px;
+  font-weight:    600;
+  letter-spacing: 0.03em;
+  border:         1px solid var(--gb-gold-dim);
+  border-radius:  4px;
+  background:     linear-gradient(160deg, #2a2010 0%, #1a1510 100%);
+  color:          var(--gb-gold);
+  cursor:         pointer;
+  transition:     border-color 0.15s, background 0.15s, color 0.15s;
+  white-space:    nowrap;
+}
+.gb-trigger:hover:not(:disabled) {
+  border-color: var(--gb-gold);
+  background:   linear-gradient(160deg, #3a2e18 0%, #221c12 100%);
+  color:        #f0d87a;
+}
+.gb-trigger:disabled {
+  opacity: 0.45;
+  cursor:  not-allowed;
+}
+.gb-trigger__icon { font-size: 14px; }
+
+/* ── Backdrop ───────────────────────────────────────────────────────────────── */
+.gb-backdrop {
+  position:         fixed;
+  inset:            0;
+  background:       rgba(0, 0, 0, 0.72);
+  display:          flex;
+  align-items:      center;
+  justify-content:  center;
+  z-index:          2000;
+  padding:          20px;
+}
+
+/* ── Modal shell ────────────────────────────────────────────────────────────── */
+.gb-modal {
+  background:    var(--gb-surface);
+  border:        1px solid var(--gb-border);
+  border-radius: 8px;
+  width:         min(700px, 100%);
+  max-height:    88vh;
+  display:       flex;
+  flex-direction: column;
+  box-shadow:    0 8px 40px rgba(0, 0, 0, 0.7);
+  overflow:      hidden;
+}
+
+.gb-modal__header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  padding:         14px 20px;
+  background:      #12100a;
+  border-bottom:   1px solid var(--gb-border);
+  flex-shrink:     0;
+}
+.gb-modal__title {
+  font-size:   15px;
+  font-weight: 700;
+  color:       var(--gb-gold);
+  letter-spacing: 0.04em;
+}
+.gb-modal__close {
+  background: none;
+  border:     none;
+  color:      var(--gb-text-dim);
+  font-size:  16px;
+  cursor:     pointer;
+  padding:    2px 6px;
+  border-radius: 3px;
+  transition: color 0.12s;
+}
+.gb-modal__close:hover { color: var(--gb-text); }
+
+.gb-modal__body {
+  padding:    20px;
+  overflow-y: auto;
+  flex:       1 1 auto;
+  color:      var(--gb-text);
+  font-size:  13px;
+  line-height: 1.55;
+}
+.gb-modal__body--center {
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  min-height:      160px;
+  gap:             16px;
+}
+.gb-modal__body--scroll { overflow-y: auto; }
+
+.gb-modal__footer {
+  display:         flex;
+  gap:             8px;
+  justify-content: flex-end;
+  padding:         12px 20px;
+  border-top:      1px solid var(--gb-border);
+  background:      #12100a;
+  flex-shrink:     0;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+.gb-btn {
+  padding:       6px 16px;
+  font-size:     13px;
+  font-weight:   600;
+  border-radius: 4px;
+  cursor:        pointer;
+  transition:    background 0.15s, border-color 0.15s;
+  white-space:   nowrap;
+}
+.gb-btn--ghost {
+  background: transparent;
+  border:     1px solid var(--gb-border);
+  color:      var(--gb-text-dim);
+}
+.gb-btn--ghost:hover { border-color: var(--gb-gold-dim); color: var(--gb-text); }
+
+.gb-btn--secondary {
+  background: transparent;
+  border:     1px solid var(--gb-gold-dim);
+  color:      var(--gb-gold);
+}
+.gb-btn--secondary:hover { border-color: var(--gb-gold); background: rgba(201,168,76,0.08); }
+
+.gb-btn--primary {
+  background: var(--gb-accent);
+  border:     1px solid var(--gb-accent-hi);
+  color:      #e8f0d8;
+}
+.gb-btn--primary:hover { background: var(--gb-accent-hi); }
+
+/* ── Context form ───────────────────────────────────────────────────────────── */
+.gb-hint {
+  color:       var(--gb-text-dim);
+  font-size:   12px;
+  margin:      0 0 14px;
+  font-style:  italic;
+}
+.gb-field {
+  display:        flex;
+  flex-direction: column;
+  gap:            4px;
+  margin-bottom:  12px;
+}
+.gb-field__label {
+  font-size:   11px;
+  font-weight: 600;
+  color:       var(--gb-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gb-field__input {
+  background:    #12100a;
+  border:        1px solid var(--gb-border);
+  border-radius: 4px;
+  padding:       7px 10px;
+  color:         var(--gb-text);
+  font-size:     13px;
+  outline:       none;
+  transition:    border-color 0.12s;
+}
+.gb-field__input:focus  { border-color: var(--gb-gold-dim); }
+.gb-field__input::placeholder { color: var(--gb-text-dim); }
+
+/* ── Loading spinner ────────────────────────────────────────────────────────── */
+.gb-spinner {
+  width:  40px;
+  height: 40px;
+  border: 3px solid var(--gb-border);
+  border-top-color: var(--gb-gold);
+  border-radius: 50%;
+  animation: gb-spin 0.8s linear infinite;
+}
+@keyframes gb-spin { to { transform: rotate(360deg); } }
+
+/* ── Error ──────────────────────────────────────────────────────────────────── */
+.gb-error {
+  color:       #e07070;
+  font-size:   13px;
+  margin:      0 0 16px;
+  padding:     10px 14px;
+  background:  rgba(138, 32, 32, 0.15);
+  border:      1px solid var(--gb-red);
+  border-radius: 4px;
+}
+
+/* ── Preview layout ─────────────────────────────────────────────────────────── */
+.gb-preview { display: flex; flex-direction: column; gap: 14px; }
+
+.gb-preview__row {
+  display:     flex;
+  align-items: center;
+  flex-wrap:   wrap;
+  gap:         8px;
+}
+.gb-preview__row--big { font-size: 15px; font-weight: 700; color: var(--gb-gold); }
+
+.gb-tag {
+  display:       inline-block;
+  padding:       2px 8px;
+  font-size:     11px;
+  font-weight:   700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 3px;
+  background:    rgba(201,168,76,0.15);
+  color:         var(--gb-gold);
+  border:        1px solid var(--gb-gold-dim);
+}
+.gb-tag--dim { opacity: 0.7; }
+.gb-tag--gold { background: rgba(201,168,76,0.25); }
+
+.gb-section { display: flex; flex-direction: column; gap: 5px; }
+.gb-section__title {
+  font-size:      11px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color:          var(--gb-gold-dim);
+  border-bottom:  1px solid var(--gb-border);
+  padding-bottom: 3px;
+}
+.gb-section__body { font-size: 13px; color: var(--gb-text); line-height: 1.55; }
+
+.gb-list {
+  margin:      0;
+  padding-left: 18px;
+  color:        var(--gb-text);
+  font-size:    13px;
+  line-height:  1.6;
+}
+.gb-list--dim { color: var(--gb-text-dim); font-style: italic; }
+.gb-list li + li { margin-top: 3px; }
+
+.gb-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 520px) { .gb-two-col { grid-template-columns: 1fr; } }
+
+/* ── Table ──────────────────────────────────────────────────────────────────── */
+.gb-table {
+  width:           100%;
+  border-collapse: collapse;
+  font-size:       12px;
+  color:           var(--gb-text);
+}
+.gb-table th {
+  text-align:     left;
+  padding:        5px 8px;
+  font-size:      10px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color:          var(--gb-gold-dim);
+  border-bottom:  1px solid var(--gb-border);
+}
+.gb-table td {
+  padding:       6px 8px;
+  border-bottom: 1px solid rgba(58,46,26,0.5);
+  vertical-align: top;
+}
+.gb-table__notes { color: var(--gb-text-dim); font-style: italic; }
+.gb-table--rumors td:first-child { max-width: 320px; }
+
+/* ── Truth badge ────────────────────────────────────────────────────────────── */
+.gb-badge {
+  display:       inline-block;
+  padding:       1px 7px;
+  border-radius: 3px;
+  font-size:     10px;
+  font-weight:   700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space:   nowrap;
+}
+.gb-badge--true    { background: rgba(60,100,40,0.4); color: #7aaa4a; border: 1px solid #3a6020; }
+.gb-badge--false   { background: rgba(100,30,30,0.4); color: #e07070; border: 1px solid #6a2020; }
+.gb-badge--partial { background: rgba(100,80,20,0.4); color: #c0a020; border: 1px solid #7a6010; }
