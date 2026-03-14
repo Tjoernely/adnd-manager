@@ -26,6 +26,7 @@ import {
   getWeapCost, weapSlotCost, specCol,
   MASTERY_TIERS, STYLE_SPECS, WOC_CP,
   getWeapTier, getWeapSingleCostByTier, getGroupMaxTier,
+  WEAPON_GROUPS_49,
 } from "../data/weapons.js";
 
 import {
@@ -310,7 +311,7 @@ export function useCharacter() {
   // Chapter 6 NWP CP pool + Chapter 7 Weapon CP pool per class group (S&P p.125, p.162)
   const nwpClassPool  = useMemo(() => NWP_CP_POOL[classGroup]  ?? 0, [classGroup]);
   const weapClassPool = useMemo(() => WEAP_CP_POOL[classGroup] ?? 0, [classGroup]);
-  const totalCP     = baseClassCP + nwpClassPool + weapClassPool + knowledgeCP + disadvPool + dmAwardTotal;
+  // totalCP moved below activeKitObj so kitBonusCP can be included (see below)
   const traitCPSp   = useMemo(() => TRAITS.filter(t => traitsPicked[t.id]).reduce((s, t) => s + t.cp, 0), [traitsPicked]);
   // NWP cost: General always in-class. Own class group = in-class. Any other group = listed + 2.
   // NWP effective cost (S&P Ch.6): General group always at listed cost for all classes.
@@ -370,6 +371,9 @@ export function useCharacter() {
     const classKitsForCls = selectedClass ? (CLASS_KITS[selectedClass] ?? []) : [];
     return [...SP_KITS, ...classKitsForCls].find(k => k.id === selectedKit) ?? null;
   }, [selectedKit, selectedClass]);
+
+  // totalCP here (after activeKitObj) so kitBonusCP from the active kit is included
+  const totalCP = baseClassCP + nwpClassPool + weapClassPool + knowledgeCP + disadvPool + dmAwardTotal + (activeKitObj?.kitBonusCP ?? 0);
 
   const kitNWPRequired    = useMemo(() => activeKitObj?.nwpRequired     ?? [], [activeKitObj]);
   const kitStatReqsMet    = useMemo(() => {
@@ -864,10 +868,46 @@ export function useCharacter() {
                 : (level === "tight")   ? getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 2
                 : (level === "broad")   ? getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 3
                 : getWeapCost(classGroup, level);
-    const doIt = () => setWeapPicked(p => ({ ...p, [id]: level }));
-    if (remainCP < cost && !ruleBreaker) {
+
+    // Build set of picks that become redundant (already-spent CP that gets refunded)
+    const superseded = new Set();
+    if (level === "tight") {
+      for (const bg of WEAPON_GROUPS_49) {
+        const tg = bg.tightGroups.find(t => t.id === id);
+        if (tg) { tg.weapons.forEach(w => superseded.add(w.id)); break; }
+      }
+    } else if (level === "broad") {
+      const bg = WEAPON_GROUPS_49.find(b => b.id === id);
+      if (bg) {
+        bg.tightGroups.forEach(tg => {
+          superseded.add(tg.id);
+          tg.weapons.forEach(w => superseded.add(w.id));
+        });
+        bg.unrelated.forEach(w => superseded.add(w.id));
+      }
+    }
+
+    // CP refunded by removing superseded picks (reduces the net cost we need to afford)
+    let supersededRefund = 0;
+    superseded.forEach(k => {
+      const lv = weapPicked[k];
+      if (!lv) return;
+      if (lv === "single")  supersededRefund += getWeapSingleCostByTier(classGroup, getWeapTier(k));
+      else if (lv === "tight")  supersededRefund += getWeapSingleCostByTier(classGroup, getGroupMaxTier(k)) * 2;
+      else if (lv === "broad")  supersededRefund += getWeapSingleCostByTier(classGroup, getGroupMaxTier(k)) * 3;
+    });
+
+    const doIt = () => setWeapPicked(p => {
+      const n = { ...p };
+      superseded.forEach(k => delete n[k]);
+      n[id] = level;
+      return n;
+    });
+    const netCost = cost - supersededRefund;
+    if (remainCP < netCost && !ruleBreaker) {
+      const refundNote = supersededRefund > 0 ? ` (net ${netCost} CP after ${supersededRefund} CP refund)` : "";
       setConfirmBox({
-        msg: `"${name}" costs ${cost} CP but only ${remainCP} available.\n\nEnable Rule-Breaker?`,
+        msg: `"${name}" costs ${cost} CP${refundNote} but only ${remainCP} available.\n\nEnable Rule-Breaker?`,
         onConfirm: () => { setRuleBreaker(true); doIt(); },
       });
     } else doIt();

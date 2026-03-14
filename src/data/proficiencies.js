@@ -51,7 +51,7 @@ export const NWP_GROUPS = [
       { id:"ng32", name:"Stonemasonry",      cp:4, rank:5, stats:["stamina","intuition"],   desc:"Quarry, cut, and lay stone and brick automatically. Walls taller than 10 ft or structures with arches need checks without Engineering. Dwarves gain +2." },
       { id:"ng33", name:"Swimming",          cp:2, rank:9, stats:["stamina"],               desc:"Swim per AD&D water movement rules. Nonproficient characters can barely float. Each additional CP spent increases water movement rate by 1." },
       { id:"ng34", name:"Tailoring",         cp:3, rank:7, stats:["aim","knowledge"],        desc:"Sew garments from any cloth without checks. Checks required for unique spectacular items and field repairs (failure: patch holds only briefly). Halflings gain +1." },
-      { id:"ng35", name:"Weather Knowledge", cp:2, rank:7, stats:["intuition"],             desc:"Predict immediate weather automatically. Check to predict next 12 hours (±6 modifier based on how far ahead)." },
+      { id:"ng35", name:"Weather Sense",      cp:2, rank:7, stats:["intuition"],             desc:"Sense approaching weather changes within 24 hours automatically. Check to predict storms 2d6 hours ahead. Rangers use this to determine travel safety and find shelter before bad weather arrives." },
       { id:"ng36", name:"Weaving",           cp:3, rank:6, stats:["knowledge","aim"],       desc:"Weave yarn into cloth, tapestries, and cloaks with loom. Artistic ability trait enables exceptionally beautiful cloth. Halflings gain +1." },
       { id:"ng37", name:"Foraging",          cp:3, rank:7, stats:["knowledge","intuition"],  desc:"Know edible plants, fungi, and insects in one terrain type. Check to find enough food for 1d6 people in 4 hours. Faster and more reliable than survival for food-only foraging tasks." },
     ],
@@ -109,6 +109,7 @@ export const NWP_GROUPS = [
       { id:"nr26", name:"Artistic Ability",  cp:1, rank:10, stats:["intuition","aim"],        desc:"Natural artistic talent. Grants +2 to all checks involving painting, sculpting, and pottery. Enables masterwork-quality results in any artistic proficiency. Counts as the Artistic Ability trait for kit requirements." },
       { id:"nr27", name:"Poetry",            cp:2, rank:7, stats:["knowledge","leadership"],  desc:"Compose and recite poetry from any literary tradition. Check to craft memorably moving verse; success grants +1 reaction bonus to the audience for one day. Extended compositions of 100+ lines require multiple checks." },
       { id:"nr28", name:"Storytelling",      cp:2, rank:7, stats:["leadership","knowledge"],  desc:"Entertain and inform audiences through oral narrative. Check to hold a crowd's attention for up to one hour. A failed check means the audience loses interest halfway through. Music/Singing trait adds +1." },
+      { id:"nr29", name:"Alertness",         cp:2, rank:7, stats:["intuition","knowledge"],   desc:"Notice danger before it strikes. Reduces chance of being surprised by 1 in 6 (to a minimum of 1). At night or in poor conditions, reduces surprise from 1-3 to 1-2. Does not grant extra initiative segments." },
     ],
   },
   {
@@ -133,6 +134,7 @@ export const NWP_GROUPS = [
       { id:"nw16", name:"Siege Engineering", cp:4, rank:5, stats:["knowledge","muscle"],     desc:"Design, build, and operate siege weapons (catapults, ballistas, rams, siege towers). No check for routine crew operation. Check to build siege equipment in the field or fire at long range. Engineering adds +2." },
       { id:"nw17", name:"Camouflage",        cp:3, rank:6, stats:["intuition","aim"],        desc:"Conceal oneself, allies, or equipment in natural terrain using foliage, mud, and netting. Check to remain undetected; +2 bonus in the character's familiar terrain type. Does not stack with racial invisibility." },
       { id:"nw18", name:"Whistling/Mimicry", cp:2, rank:7, stats:["knowledge","leadership"],  desc:"Imitate bird calls, animal sounds, and environmental noises. Check to fool animals or signal allies; a failure means the sound is clearly unnatural. Each additional CP spent adds one creature type to the repertoire." },
+      { id:"nw19", name:"Direction Sense",  cp:2, rank:8, stats:["intuition"],             desc:"Automatically know which direction is north in most conditions. Check in disorienting conditions (underground, magical confusion, blizzard). Success on check always works; each additional CP spent adds +1 to check." },
     ],
   },
   {

@@ -3,6 +3,13 @@ import { MASTERY_TIERS, STYLE_SPECS, WOC_CP, WOC_BONUS, NUM_ATTACKS, specCol, WE
 
 import { ChHead, GroupLabel } from "../ui/index.js";
 
+// Automatically determine weapon type (melee vs ranged) from weapon ID prefix
+function autoWeapType(weapId) {
+  if (weapId.startsWith("wb_") || weapId.startsWith("wd_") || weapId.startsWith("wh_")) return "ranged";
+  if (weapId === "wm_sling") return "ranged";
+  return "melee";
+}
+
 export function MasteryTab(props) {
   const {
     weapPicked, masteryPicked, setMasteryPicked,
@@ -13,8 +20,8 @@ export function MasteryTab(props) {
     setInfoModal, setConfirmBox,
   } = props;
 
-  // local variables that were inside the IIFE
-  const col  = specCol(selectedClass);
+  const col      = specCol(selectedClass);
+  const isWarrior = col === "fighter" || col === "rp";
 
   // All weapons the character is proficient in (individual picks from Tab VII)
   const profWeapons = [];
@@ -32,21 +39,45 @@ export function MasteryTab(props) {
       if (weapPicked[w.id]) { if (!profWeapons.find(x=>x.id===w.id)) profWeapons.push(w); }
     });
   });
-  // Remove shield/armor special profs and dupe entries (same weapon in multiple tight groups)
+  // Remove shield/armor special profs and dupe entries
   const combatWeapons = profWeapons.filter(w => !w.id.startsWith("wsp_") && !w.dupe);
+
+  // Weapons that have any mastery tier (spec or higher) — shown in Section C
+  const specWeapons = combatWeapons.filter(w => !!masteryPicked[w.id]);
 
   const tierLabel = (tier) => MASTERY_TIERS.find(t=>t.id===tier)?.name ?? tier;
 
+  // Section B: toggle spec on a weapon (simple on/off, auto type)
+  const toggleSpec = (weapId) => {
+    const cur = masteryPicked[weapId];
+    if (cur) {
+      // Any tier → remove specialization entirely
+      setMasteryPicked(p => { const n={...p}; delete n[weapId]; return n; });
+    } else {
+      const t = MASTERY_TIERS.find(x=>x.id==="spec");
+      if (!t) return;
+      const cost = t.cp[col];
+      if (!cost) return; // class can't specialize
+      const type = autoWeapType(weapId);
+      const doIt = () => setMasteryPicked(p => ({ ...p, [weapId]: { tier: "spec", type } }));
+      if (remainCP < cost && !ruleBreaker) {
+        setConfirmBox({ msg: `"Specialization" costs ${cost} CP but only ${remainCP} available.\n\nEnable Rule-Breaker?`,
+          onConfirm: () => { setRuleBreaker(true); doIt(); } });
+      } else doIt();
+    }
+  };
+
+  // Section C: toggle mastery/highmastery/grandmastery tier+type
   const toggleMastery = (weapId, tier, type) => {
     const cur = masteryPicked[weapId];
     if (cur && cur.tier === tier && cur.type === type) {
-      setMasteryPicked(p => { const n={...p}; delete n[weapId]; return n; });
+      // Deactivate → revert to spec
+      setMasteryPicked(p => ({ ...p, [weapId]: { tier: "spec", type: autoWeapType(weapId) } }));
     } else {
-      // Check CP
       const t = MASTERY_TIERS.find(x=>x.id===tier);
       if (!t) return;
       const cost = t.cp[col];
-      if (!cost) return; // e.g. fighter can't take expertise
+      if (!cost) return;
       const doIt = () => setMasteryPicked(p => ({ ...p, [weapId]: { tier, type } }));
       if (remainCP < cost && !ruleBreaker) {
         setConfirmBox({ msg: `"${tierLabel(tier)}" costs ${cost} CP but only ${remainCP} available.\n\nEnable Rule-Breaker?`,
@@ -71,12 +102,13 @@ export function MasteryTab(props) {
     }
   };
 
-  const TIER_ORDER = ["expertise","spec","mastery","highmastery","grandmastery"];
+  const MASTERY_TIER_IDS = ["mastery","highmastery","grandmastery"];
+  const specTierCost = MASTERY_TIERS.find(x=>x.id==="spec")?.cp[col];
 
   return (
     <div>
       <ChHead icon="⭐" num="Chapter 8" title="Specialization & Mastery"
-        sub="Weapon mastery tiers, fighting style specializations, and weapon of choice. CP costs vary by class." />
+        sub="Weapon of choice, specialization, mastery tiers, and fighting style specializations. CP costs vary by class." />
 
       {/* CP Summary bar */}
       <div style={{ marginBottom:18, padding:"12px 18px",
@@ -93,74 +125,9 @@ export function MasteryTab(props) {
         )}
       </div>
 
-      {/* ── SECTION 1: Weapon Mastery ─────────────────────────────── */}
+      {/* ── SECTION A: Weapon of Choice ───────────────────────────────── */}
       <div style={{ marginBottom:28 }}>
-        <GroupLabel>⚔ Weapon Mastery Tiers</GroupLabel>
-        {combatWeapons.length === 0 && (
-          <div style={{ padding:"14px 18px", background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:8, color:C.textDim, fontSize:12, fontStyle:"italic" }}>
-            No weapon proficiencies selected yet. Go to Tab VII to pick weapons first.
-          </div>
-        )}
-        {combatWeapons.map(w => {
-          const pick = masteryPicked[w.id];
-          const curTier = pick?.tier;
-          const curType = pick?.type;
-
-          return (
-            <div key={w.id} style={{ marginBottom:12, padding:"12px 16px",
-              background: curTier ? "linear-gradient(145deg,#1a1208,#141008)" : C.card,
-              border:`1px solid ${curTier ? C.borderHi : C.border}`,
-              borderRadius:9, transition:"all .15s" }}>
-              {/* Weapon name row */}
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                <span style={{ fontSize:13, fontWeight:"bold",
-                  color: curTier ? C.gold : C.textBri }}>
-                  {curTier && "★ "}{w.name}
-                </span>
-                {curTier && (
-                  <span style={{ fontSize:10, color:C.amber, marginLeft:4,
-                    background:"rgba(212,160,53,.1)", border:`1px solid ${C.amber}`,
-                    borderRadius:3, padding:"1px 6px" }}>
-                    {tierLabel(curTier)} · {curType}
-                  </span>
-                )}
-              </div>
-              {/* Tier buttons */}
-              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                {MASTERY_TIERS.map(tier => {
-                  const cost = tier.cp[col];
-                  if (!cost) return null; // fighter can't take expertise
-                  const minLvl = tier.minLvl[col];
-                  const isActive = curTier === tier.id;
-                  return tier.types.map(type => {
-                    const isActiveCurType = isActive && curType === type;
-                    return (
-                      <button key={tier.id+type} onClick={() => toggleMastery(w.id, tier.id, type)}
-                        title={tier.desc}
-                        style={{
-                          fontSize:10, padding:"4px 10px", borderRadius:5, cursor:"pointer",
-                          background: isActiveCurType ? "rgba(212,160,53,.25)" : "rgba(0,0,0,.3)",
-                          border:`1px solid ${isActiveCurType ? C.gold : C.border}`,
-                          color: isActiveCurType ? C.gold : C.textDim,
-                          fontFamily:"inherit", transition:"all .13s",
-                        }}>
-                        {tier.name} {type === "melee" ? "⚔" : "🏹"}
-                        <span style={{ color:"#888", marginLeft:5 }}>{cost}cp</span>
-                        {minLvl && <span style={{ color:"#666", marginLeft:3 }}>lv{minLvl}+</span>}
-                      </button>
-                    );
-                  });
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── SECTION 2: Weapon of Choice ───────────────────────────── */}
-      <div style={{ marginBottom:28 }}>
-        <GroupLabel>🎯 Weapon of Choice</GroupLabel>
+        <GroupLabel>🎯 A. Weapon of Choice</GroupLabel>
         <div style={{ marginBottom:10, padding:"10px 14px",
           background:"rgba(80,130,200,.06)", border:"1px solid rgba(80,130,200,.25)",
           borderRadius:8, fontSize:11, color:C.textDim }}>
@@ -198,9 +165,124 @@ export function MasteryTab(props) {
         </div>
       </div>
 
-      {/* ── SECTION 3: Fighting Style Specializations ─────────────── */}
+      {/* ── SECTION B: Specialization ─────────────────────────────────── */}
       <div style={{ marginBottom:28 }}>
-        <GroupLabel>🛡 Fighting Style Specializations</GroupLabel>
+        <GroupLabel>⭐ B. Specialization</GroupLabel>
+        {!specTierCost && selectedClass && (
+          <div style={{ padding:"10px 14px", background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:8, color:C.textDim, fontSize:12, fontStyle:"italic", marginBottom:8 }}>
+            This class cannot specialize in weapons.
+          </div>
+        )}
+        {combatWeapons.length === 0 && (
+          <div style={{ padding:"14px 18px", background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:8, color:C.textDim, fontSize:12, fontStyle:"italic" }}>
+            No weapon proficiencies selected yet. Go to Tab VII to pick weapons first.
+          </div>
+        )}
+        {specTierCost > 0 && (
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+            {combatWeapons.map(w => {
+              const pick = masteryPicked[w.id];
+              const isAnySpec = !!pick;
+              return (
+                <div key={w.id} onClick={() => toggleSpec(w.id)}
+                  style={{
+                    background: isAnySpec ? "rgba(212,160,53,.2)" : "rgba(0,0,0,.3)",
+                    border:`1px solid ${isAnySpec ? C.gold : C.border}`,
+                    borderRadius:6, padding:"6px 12px", fontSize:11,
+                    color: isAnySpec ? C.gold : C.textDim, cursor:"pointer",
+                    transition:"all .12s", display:"flex", alignItems:"center", gap:6,
+                  }}>
+                  {isAnySpec ? "★ " : "⊕ "}{w.name}
+                  {!isAnySpec && <span style={{ color:"#888", fontSize:10 }}>{specTierCost}cp</span>}
+                  {isAnySpec && (
+                    <span style={{ fontSize:10, color:C.amber }}>
+                      {tierLabel(pick.tier)} · {pick.type}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── SECTION C: Mastery Tiers (warriors & rangers/paladins only) ── */}
+      {isWarrior && (
+        <div style={{ marginBottom:28 }}>
+          <GroupLabel>⚔ C. Mastery Tiers</GroupLabel>
+          {specWeapons.length === 0 && (
+            <div style={{ padding:"14px 18px", background:C.card, border:`1px solid ${C.border}`,
+              borderRadius:8, color:C.textDim, fontSize:12, fontStyle:"italic" }}>
+              Specialize in weapons first (Section B) to unlock Mastery tiers.
+            </div>
+          )}
+          {specWeapons.map(w => {
+            const pick = masteryPicked[w.id];
+            const curTier = pick?.tier;
+            const curType = pick?.type;
+            const hasMastery = curTier && curTier !== "spec";
+
+            return (
+              <div key={w.id} style={{ marginBottom:12, padding:"12px 16px",
+                background: hasMastery ? "linear-gradient(145deg,#1a1208,#141008)" : C.card,
+                border:`1px solid ${hasMastery ? C.borderHi : C.border}`,
+                borderRadius:9, transition:"all .15s" }}>
+                {/* Weapon name row */}
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <span style={{ fontSize:13, fontWeight:"bold",
+                    color: hasMastery ? C.gold : C.textBri }}>
+                    {hasMastery && "★ "}{w.name}
+                  </span>
+                  {hasMastery && (
+                    <span style={{ fontSize:10, color:C.amber, marginLeft:4,
+                      background:"rgba(212,160,53,.1)", border:`1px solid ${C.amber}`,
+                      borderRadius:3, padding:"1px 6px" }}>
+                      {tierLabel(curTier)} · {curType}
+                    </span>
+                  )}
+                  {!hasMastery && (
+                    <span style={{ fontSize:10, color:"#666" }}>
+                      (specialized — pick a mastery tier below)
+                    </span>
+                  )}
+                </div>
+                {/* Mastery tier buttons */}
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {MASTERY_TIERS.filter(t => MASTERY_TIER_IDS.includes(t.id)).map(tier => {
+                    const cost = tier.cp[col];
+                    if (!cost) return null;
+                    const minLvl = tier.minLvl[col];
+                    return tier.types.map(type => {
+                      const isActive = curTier === tier.id && curType === type;
+                      return (
+                        <button key={tier.id+type} onClick={() => toggleMastery(w.id, tier.id, type)}
+                          title={tier.desc}
+                          style={{
+                            fontSize:10, padding:"4px 10px", borderRadius:5, cursor:"pointer",
+                            background: isActive ? "rgba(212,160,53,.25)" : "rgba(0,0,0,.3)",
+                            border:`1px solid ${isActive ? C.gold : C.border}`,
+                            color: isActive ? C.gold : C.textDim,
+                            fontFamily:"inherit", transition:"all .13s",
+                          }}>
+                          {tier.name} {type === "melee" ? "⚔" : "🏹"}
+                          <span style={{ color:"#888", marginLeft:5 }}>{cost}cp</span>
+                          {minLvl && <span style={{ color:"#666", marginLeft:3 }}>lv{minLvl}+</span>}
+                        </button>
+                      );
+                    });
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── SECTION D: Fighting Style Specializations ─────────────────── */}
+      <div style={{ marginBottom:28 }}>
+        <GroupLabel>🛡 D. Fighting Style Specializations</GroupLabel>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(310px,1fr))", gap:10 }}>
           {STYLE_SPECS.map(st => {
             const basicCost = st.cp[col] ?? 3;
@@ -260,7 +342,7 @@ export function MasteryTab(props) {
         </div>
       </div>
 
-      {/* ── SECTION 4: Number of Attacks Reference ─────────────────── */}
+      {/* ── SECTION E: Number of Attacks Reference ─────────────────────── */}
       <div style={{ marginBottom:16 }}>
         <GroupLabel>📊 Number of Attacks Reference (specialized)</GroupLabel>
         <div style={{ overflowX:"auto" }}>
@@ -289,7 +371,7 @@ export function MasteryTab(props) {
         </div>
       </div>
 
-      {/* ── SECTION 5: Nonproficiency Penalties Reference ───────────── */}
+      {/* ── SECTION F: Nonproficiency Penalties Reference ───────────────── */}
       <div style={{ marginBottom:16 }}>
         <GroupLabel>⚠ Nonproficiency Attack Penalties (reference)</GroupLabel>
         <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
