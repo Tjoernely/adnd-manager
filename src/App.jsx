@@ -22,6 +22,7 @@ import { PortraitTab } from "./components/tabs/PortraitTab.jsx";
 import { PrintSheet }        from "./components/PrintSheet.jsx";
 import { MapManager }        from "./components/maps/MapManager.jsx";
 import { CampaignDashboard } from "./components/campaign/CampaignDashboard.jsx";
+import { NPCManager }        from "./components/npcs/NPCManager.jsx";
 import "./styles/adnd-theme.css";
 
 export default function App() {
@@ -38,7 +39,7 @@ export default function App() {
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
-  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters'
+  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters' | 'npcs'
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
@@ -132,10 +133,30 @@ export default function App() {
           user={user}
           onNavigate={(modId) => {
             if (modId === 'characters') setScreen('characters');
+            if (modId === 'npcs')       setScreen('npcs');
           }}
           onOpenMaps={() => setShowMaps(true)}
           onBack={() => { setActiveCampaign(null); setDbCharId(null); setScreen('dashboard'); }}
           onLogout={logout}
+        />
+        <MapManager
+          campaignId={activeCampaign.id}
+          isDM={activeCampaign.dm_user_id === user.id}
+          isOpen={showMaps}
+          onClose={() => setShowMaps(false)}
+        />
+      </>
+    );
+  }
+
+  // ── NPC Manager screen ──────────────────────────────────────
+  if (screen === 'npcs') {
+    return (
+      <>
+        <NPCManager
+          campaign={activeCampaign}
+          user={user}
+          onBack={() => setScreen('dashboard')}
         />
         <MapManager
           campaignId={activeCampaign.id}

@@ -191,6 +191,29 @@ Return a JSON object with exactly these fields:
       };
     }
 
+    case 'npc_create': {
+      const ALIGN_FULL = {
+        LG:'Lawful Good',  LN:'Lawful Neutral',  LE:'Lawful Evil',
+        NG:'Neutral Good', TN:'True Neutral',     NE:'Neutral Evil',
+        CG:'Chaotic Good', CN:'Chaotic Neutral',  CE:'Chaotic Evil',
+      };
+      const { race, charClass, gender, alignment, level, powerLevel, stats } = ctx;
+      const { str, dex, con, int: int_, wis, cha } = stats ?? {};
+      const hints = [
+        `Race: ${race || 'Human'}`,
+        `Class: ${charClass || 'Fighter'}`,
+        `Gender: ${gender || 'Unknown'}`,
+        `Alignment: ${alignment || 'TN'} (${ALIGN_FULL[alignment] || 'True Neutral'})`,
+        `Level: ${level || 1}`,
+        `Power Level: ${powerLevel || 'standard'}`,
+        stats ? `STR ${str}  DEX ${dex}  CON ${con}  INT ${int_}  WIS ${wis}  CHA ${cha}` : null,
+      ].filter(Boolean).join('\n');
+      return {
+        systemPrompt: SYSTEM,
+        userPrompt: `Generate an AD&D 2E NPC with these parameters:\n${hints}\n\nRespond with ONLY valid JSON (no markdown, no explanation):\n{\n  "name": "",\n  "background": "",\n  "personality": ["trait1","trait2"],\n  "equipment": ["item1","item2","item3"],\n  "loot": { "pp": 0, "gp": 0, "sp": 0, "cp": 0, "items": [] }\n}`,
+      };
+    }
+
     default:
       throw new Error(`Unknown generation type: ${type}`);
   }

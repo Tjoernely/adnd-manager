@@ -120,6 +120,8 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
       onOpenMaps();
     } else if (mod.id === 'characters') {
       onNavigate('characters');
+    } else if (mod.id === 'npcs') {
+      onNavigate('npcs');
     } else {
       // Module exists in backend but has no dedicated UI page yet
       setComingSoon(mod);
