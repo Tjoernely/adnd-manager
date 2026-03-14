@@ -1,197 +1,317 @@
 /**
- * MapGenerator — AI-powered map creation modal.
+ * MapGenerator — AI-powered map creation.
+ * Generates map content via Claude (Anthropic) and a visual map image via DALL-E 3.
  *
  * Props:
- *   campaignId  string
- *   onClose     fn()
- *   onCreated   fn(map) — called with the new map record after save
+ *   campaignId      string
+ *   onClose         fn()
+ *   onCreated       fn(map)
+ *   parentMapId?    number    — id of parent map (drill-down)
+ *   parentPoiId?    string    — id of POI in parent that spawned this map
+ *   parentPoiCtx?   object    — the full parent POI data for context
+ *   presetType?     string    — pre-set map type for drill-down
  */
 import { useState } from 'react';
-import { api }            from '../../api/client.js';
-import { callClaude, hasAnthropicKey } from '../../api/aiClient.js';
-import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
-import './MapGenerator.css';
+import { api }             from '../../api/client.js';
+import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
+import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
 
 // ── Option lists ──────────────────────────────────────────────────────────────
-
 const MAP_TYPES = [
-  'Random','Dungeon','Ancient Ruins','Wilderness','Cave System',
-  'Stronghold','City District','Underwater Temple','Planar Rift',
+  'Random','Region','City/Town','Village','Dungeon',
+  'Cave System','Ruins','Castle/Keep','Tavern/Inn','Temple',
 ];
-const MAP_SIZES = [
-  'Random','Small (5–8 areas)','Medium (8–12 areas)','Large (12–16 areas)',
-];
-const TERRAINS = [
-  'Random','Stone & Mortar','Forest','Underground','Aquatic','Urban','Desert','Underdark',
+const MAP_SIZES = ['Random','Small','Medium','Large'];
+const TERRAIN_OPTIONS = [
+  'Plains','Forest','Dense Forest','Jungle','Mountains',
+  'Hills','Desert','Swamp','Tundra','Coastal','Underground',
 ];
 const ATMOSPHERES = [
-  'Random','Foreboding','Mysterious','Ancient','Corrupted','Majestic','Abandoned','Sacred',
+  'Random','Dangerous','Mysterious','Peaceful','Ancient',
+  'Cursed','Enchanted','Abandoned','Occupied','Sacred',
 ];
-const ERAS = [
-  'Random','Ancient Empire','Medieval','Declining Empire','Post-Apocalyptic','Mythic Age',
-];
+const ERAS = ['Random','Ancient','Medieval','Dark Ages','Forgotten Ruins'];
 const INHABITANTS = [
-  'Random','Undead','Humanoid Bandits','Monsters','Aberrations',
-  'Evil Cultists','Neutral Creatures','Empty & Haunted',
+  'Random','None','Monsters','Humanoids','Undead',
+  'Demons','Fey','Dragon Lair','Cult',
 ];
+const POI_COUNTS = ['Random (3-8)','Few (2-4)','Many (6-10)','Dense (10-15)'];
 
-const BACKEND_TYPES = ['dungeon','world','region','city','town','interior','encounter','other'];
+const BACKEND_TYPE_MAP = {
+  'Region':'region','City/Town':'city','Village':'town',
+  'Dungeon':'dungeon','Cave System':'dungeon','Ruins':'dungeon',
+  'Castle/Keep':'interior','Tavern/Inn':'interior','Temple':'interior',
+};
 
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function resolveParams(p) {
+  const resolvedType = p.mapType === 'Random' ? pickRandom(MAP_TYPES.slice(1)) : p.mapType;
   return {
-    mapType:     p.mapType     === 'Random' ? pick(MAP_TYPES.slice(1))     : p.mapType,
-    size:        p.size        === 'Random' ? pick(MAP_SIZES.slice(1))     : p.size,
-    terrain:     p.terrain     === 'Random' ? pick(TERRAINS.slice(1))      : p.terrain,
-    atmosphere:  p.atmosphere  === 'Random' ? pick(ATMOSPHERES.slice(1))   : p.atmosphere,
-    era:         p.era         === 'Random' ? pick(ERAS.slice(1))          : p.era,
-    inhabitants: p.inhabitants === 'Random' ? pick(INHABITANTS.slice(1))   : p.inhabitants,
+    mapType:     resolvedType,
+    size:        p.size        === 'Random' ? pickRandom(MAP_SIZES.slice(1))     : p.size,
+    terrain:     p.terrain.length > 0 ? p.terrain : [pickRandom(TERRAIN_OPTIONS)],
+    atmosphere:  p.atmosphere  === 'Random' ? pickRandom(ATMOSPHERES.slice(1))   : p.atmosphere,
+    era:         p.era         === 'Random' ? pickRandom(ERAS.slice(1))          : p.era,
+    inhabitants: p.inhabitants === 'Random' ? pickRandom(INHABITANTS.slice(1))   : p.inhabitants,
+    poiCount:    p.poiCount,
   };
+}
+
+function resolvePoiCount(poiCountStr) {
+  const map = {
+    'Random (3-8)':  Math.floor(Math.random() * 6) + 3,
+    'Few (2-4)':     Math.floor(Math.random() * 3) + 2,
+    'Many (6-10)':   Math.floor(Math.random() * 5) + 6,
+    'Dense (10-15)': Math.floor(Math.random() * 6) + 10,
+  };
+  return map[poiCountStr] ?? 5;
 }
 
 function toBackendType(mapTypeStr) {
-  const s = mapTypeStr.toLowerCase();
-  if (s.includes('dungeon'))    return 'dungeon';
-  if (s.includes('ruined') || s.includes('ruins')) return 'dungeon';
-  if (s.includes('cave'))       return 'dungeon';
-  if (s.includes('stronghold')) return 'interior';
-  if (s.includes('city'))       return 'city';
-  if (s.includes('urban'))      return 'city';
-  if (s.includes('wilderness') || s.includes('forest') || s.includes('desert')) return 'region';
-  if (s.includes('underwater') || s.includes('planar')) return 'other';
-  return 'dungeon';
+  return BACKEND_TYPE_MAP[mapTypeStr] ?? 'dungeon';
 }
 
-// ── Claude prompts ────────────────────────────────────────────────────────────
+// ── DALL-E prompt builders ────────────────────────────────────────────────────
+function buildDallePrompt(r, dalleAdditions) {
+  const terrain = r.terrain.join(', ');
+  const bases = {
+    'Region':
+      `A top-down fantasy cartography map in the style of classic D&D adventure modules. Hand-drawn ink style on aged parchment. Shows ${terrain} landscape with mountains, forests, rivers. ${r.atmosphere} atmosphere. Includes space for settlements and ruins. No text labels. Bird's eye view. Detailed illustration style.`,
+    'City/Town':
+      `A top-down fantasy city map in classic D&D cartography style on aged parchment. Shows streets, buildings, walls, gates, a marketplace, taverns, temples. ${r.size} settlement. ${r.atmosphere} atmosphere. Hand-drawn ink illustration. No text labels.`,
+    'Village':
+      `A top-down fantasy village map in classic D&D cartography style on aged parchment. Shows cottages, a village square, farms, a well, a small inn. ${r.atmosphere} atmosphere. Hand-drawn ink illustration. No text labels.`,
+    'Dungeon':
+      `A top-down dungeon floor plan in classic D&D graph paper style. Shows rooms, corridors, doors, stairs, secret passages. ${r.atmosphere} atmosphere. Dark stone walls, torchlit rooms. Hand-drawn style. Grid visible. No text labels.`,
+    'Cave System':
+      `A top-down natural cave system map in classic D&D style. Shows caverns, tunnels, underground lakes, stalactites. ${r.atmosphere} atmosphere. Hand-drawn on aged parchment. No text labels.`,
+    'Ruins':
+      `A top-down ancient ruins map in classic D&D cartography style. Shows collapsed walls, overgrown courtyards, intact chambers, rubble. ${r.era} era ruins. ${r.atmosphere} atmosphere. Hand-drawn ink style. No text labels.`,
+    'Castle/Keep':
+      `A top-down castle floor plan in classic D&D style. Shows towers, great hall, dungeons, battlements, courtyards. ${r.atmosphere} atmosphere. Hand-drawn ink illustration. No text labels.`,
+    'Tavern/Inn':
+      `A top-down tavern interior floor plan in classic D&D style on aged parchment. Shows taproom, bar, kitchen, private rooms, cellar stairs. Warm and cozy. Hand-drawn ink. No text labels.`,
+    'Temple':
+      `A top-down temple interior map in classic D&D style. Shows nave, altars, side chapels, catacombs, sacred chambers. ${r.atmosphere} atmosphere. ${r.era} era architecture. Hand-drawn ink. No text labels.`,
+  };
+  let prompt = bases[r.mapType] ?? bases['Region'];
+  if (dalleAdditions) prompt += ` ${dalleAdditions}`;
+  return prompt.slice(0, 3900); // DALL-E 3 prompt limit
+}
 
-const MAP_SYSTEM_PROMPT = `You are an expert AD&D 2nd Edition dungeon designer creating vivid maps for the Forgotten Realms.
-Return ONLY valid JSON with no markdown fences, no commentary, no trailing commas.
-The JSON must exactly match this schema:
+// ── Claude system/user prompts ────────────────────────────────────────────────
+const CLAUDE_SYSTEM = `You are an expert AD&D 2E Dungeon Master generating detailed, atmospheric map content for Forgotten Realms campaigns.
+Return ONLY valid JSON with no markdown, no code fences, no commentary, no trailing commas.`;
+
+function buildClaudePrompt(r, numPois, parentContext) {
+  const parentNote = parentContext
+    ? `This map is located within/below: "${parentContext.name}" — ${parentContext.short_description || parentContext.dm_description || ''}`
+    : 'This is a root-level map.';
+
+  return `Generate a complete AD&D 2E ${r.mapType} map:
+Terrain: ${r.terrain.join(', ')}
+Atmosphere: ${r.atmosphere}
+Era: ${r.era}
+Inhabitants: ${r.inhabitants}
+Size: ${r.size}
+${parentNote}
+
+Generate exactly ${numPois} points of interest spread across the map.
+For region maps: include settlements, ruins, caves, encounter areas, landmarks.
+For dungeon/cave/castle maps: include rooms, traps, treasures, encounters, boss areas.
+
+Respond in JSON matching this exact schema:
 {
-  "title": "string — evocative map name",
-  "description": "string — 1-2 sentence overview",
-  "history": "string — 2-3 sentences of lore and history",
-  "layout_description": "string — 1-2 sentences about the physical layout",
-  "areas": [
-    {
-      "id": "a1",
-      "name": "string",
-      "type": "entrance|room|boss|treasure|trap|puzzle|corridor|secret|outdoor|other",
-      "description": "string — 1-2 sentences",
-      "connections": ["a2"],
-      "is_hidden": false
-    }
-  ],
+  "title": "Evocative location name",
+  "subtitle": "Brief tagline",
+  "description": "2-3 sentence atmospheric overview",
+  "history": "2-3 sentences about this place",
+  "atmosphere_notes": "Sensory details: sounds, smells, lighting",
+  "dalle_prompt_additions": "Specific visual details for image generation (max 200 chars)",
   "pois": [
     {
-      "id": "p1",
-      "area_id": "a1",
-      "name": "string",
-      "type": "monster|npc|trap|treasure|puzzle|lore|hazard",
-      "description": "string — 2-3 sentences with AD&D detail",
-      "is_hidden": true
+      "id": "poi_1",
+      "name": "Location name",
+      "type": "city|village|ruins|cave|dungeon|encounter|treasure|trap|npc|landmark|mystery",
+      "x_percent": 45.2,
+      "y_percent": 32.1,
+      "is_dm_only": false,
+      "short_description": "One sentence players might learn",
+      "dm_description": "Full DM details (2-3 sentences)",
+      "history": "Background of this specific place",
+      "current_situation": "What is happening here right now",
+      "encounters": "Possible monster encounters or challenges",
+      "treasure": "Loot available if any (or null)",
+      "secrets": "Hidden information or plot hooks",
+      "can_drill_down": true,
+      "drill_down_type": "dungeon|cave|city|ruins|null",
+      "quest_hooks": ["Hook 1", "Hook 2"]
     }
   ],
-  "random_encounters": ["string — brief encounter description"],
-  "lore_hooks": ["string — plot hook"],
-  "secrets": ["string — DM-only secret"],
-  "atmosphere_notes": "string — 1 sentence mood/sensory description",
-  "suggested_music": "string — musical mood suggestion"
+  "random_encounter_table": [
+    {"roll": "1-2", "encounter": "Description"},
+    {"roll": "3-4", "encounter": "Description"},
+    {"roll": "5-6", "encounter": "Description"}
+  ],
+  "secrets": ["Map-level secret 1"],
+  "plot_hooks": ["Campaign hook 1"]
 }
+
 Rules:
-- First area MUST have type "entrance"
-- Include 6–12 areas; connections form a connected graph (each area reachable from entrance)
-- Include 4–8 POIs spread across areas
-- IDs: a1, a2, … for areas; p1, p2, … for POIs — all unique
-- connections list area IDs (bidirectional edges, list each direction only once)
-- Secret rooms: is_hidden=true; boss rooms: type="boss"; treasure rooms: type="treasure"
-- Include 2–4 random_encounters, 2–3 lore_hooks, 1–2 secrets`;
-
-function buildMapPrompt(r) {
-  return `Generate a complete AD&D 2E map with these parameters:
-- Type: ${r.mapType}
-- Size: ${r.size}
-- Terrain: ${r.terrain}
-- Atmosphere: ${r.atmosphere}
-- Era: ${r.era}
-- Primary Inhabitants: ${r.inhabitants}
-
-Make it feel authentic to the Forgotten Realms — atmospheric, dangerous, and full of adventure hooks.`;
+- x_percent and y_percent must be between 5 and 95 (spread across the map — do NOT cluster them)
+- can_drill_down: true for caves, dungeons, ruins, cities, villages
+- drill_down_type: set to appropriate type if can_drill_down, otherwise null
+- is_dm_only: true for traps, secrets, and hidden locations
+- Include 3-6 items in random_encounter_table
+- Include 1-3 secrets and 1-3 plot_hooks`;
 }
 
-// ── MapGenerator component ────────────────────────────────────────────────────
+// ── DALL-E generation ─────────────────────────────────────────────────────────
+async function generateAndUploadImage(mapId, prompt) {
+  const apiKey = getOpenAIKey();
+  if (!apiKey) throw new Error('No OpenAI API key — skipping image generation.');
 
-export function MapGenerator({ campaignId, onClose, onCreated }) {
-  const [params, setParams] = useState({
-    mapType:'Random', size:'Random', terrain:'Random',
-    atmosphere:'Random', era:'Random', inhabitants:'Random',
+  const resp = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model:           'dall-e-3',
+      prompt,
+      n:               1,
+      size:            '1024x1024',
+      quality:         'standard',
+      style:           'vivid',
+      response_format: 'b64_json',
+    }),
   });
-  const [loading,      setLoading]      = useState(false);
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err?.error?.message ?? `OpenAI ${resp.status}`);
+  }
+  const data = await resp.json();
+  const b64  = data.data[0].b64_json;
+
+  // Convert base64 → File
+  const bytes = atob(b64);
+  const arr   = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  const file = new File([arr], 'map.png', { type: 'image/png' });
+
+  // Upload to server
+  const updated = await api.uploadMapImage(mapId, file);
+  return updated;
+}
+
+// ── MapGenerator Component ────────────────────────────────────────────────────
+export function MapGenerator({
+  campaignId,
+  onClose,
+  onCreated,
+  parentMapId  = null,
+  parentPoiId  = null,
+  parentPoiCtx = null,
+  presetType   = null,
+}) {
+  const [params, setParams] = useState({
+    mapType:     presetType ?? 'Random',
+    size:        'Random',
+    terrain:     [],
+    atmosphere:  'Random',
+    era:         'Random',
+    inhabitants: 'Random',
+    poiCount:    'Random (3-8)',
+  });
+  const [step,         setStep]         = useState('form'); // 'form'|'generating'|'error'
+  const [contentDone,  setContentDone]  = useState(false);
+  const [imageDone,    setImageDone]    = useState(false);
+  const [imageSkipped, setImageSkipped] = useState(false);
   const [error,        setError]        = useState('');
-  const [result,       setResult]       = useState(null);
-  const [saving,       setSaving]       = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const set = (key, val) => setParams(p => ({ ...p, [key]: val }));
+  const setP = (key, val) => setParams(p => ({ ...p, [key]: val }));
+
+  const toggleTerrain = (t) => setParams(p => ({
+    ...p,
+    terrain: p.terrain.includes(t) ? p.terrain.filter(x => x !== t) : [...p.terrain, t],
+  }));
 
   const handleGenerate = async () => {
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
-    setLoading(true);
+
+    setStep('generating');
+    setContentDone(false);
+    setImageDone(false);
+    setImageSkipped(false);
     setError('');
-    setResult(null);
+
     try {
-      const resolved = resolveParams(params);
-      const data = await callClaude({
-        systemPrompt: MAP_SYSTEM_PROMPT,
-        userPrompt:   buildMapPrompt(resolved),
+      // ── Step 1: Claude content ─────────────────────────────────────────────
+      const resolved  = resolveParams(params);
+      const numPois   = resolvePoiCount(params.poiCount);
+      const mapContent = await callClaude({
+        systemPrompt: CLAUDE_SYSTEM,
+        userPrompt:   buildClaudePrompt(resolved, numPois, parentPoiCtx),
         maxTokens:    4096,
       });
-      if (!data.areas || !Array.isArray(data.areas) || data.areas.length === 0) {
-        throw new Error('AI returned an invalid map structure (no areas). Please try again.');
-      }
-      setResult({ ...data, _resolved: resolved });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      setContentDone(true);
 
-  const handleSave = async () => {
-    if (!result) return;
-    setSaving(true);
-    setError('');
-    try {
-      const backendType = toBackendType(result._resolved.mapType);
-      const map = await api.createMap({
-        campaign_id: campaignId,
-        name:        result.title || 'Generated Map',
-        type:        backendType,
+      if (!mapContent.title) throw new Error('AI returned invalid map data. Please try again.');
+
+      // Normalise POI positions
+      const pois = (mapContent.pois ?? []).map((p, i) => ({
+        ...p,
+        id:           p.id    || `poi_${i + 1}`,
+        x_percent:    Math.max(5, Math.min(95, Number(p.x_percent) || (10 + i * 8))),
+        y_percent:    Math.max(5, Math.min(95, Number(p.y_percent) || (10 + i * 7))),
+        child_map_id: null,
+      }));
+
+      // ── Step 2: Create map record ──────────────────────────────────────────
+      let map = await api.createMap({
+        campaign_id:   campaignId,
+        name:          mapContent.title,
+        type:          toBackendType(resolved.mapType),
+        parent_map_id: parentMapId,
+        parent_poi_id: parentPoiId,
         data: {
-          areas:              result.areas              || [],
-          pois:               result.pois               || [],
-          random_encounters:  result.random_encounters  || [],
-          lore_hooks:         result.lore_hooks          || [],
-          secrets:            result.secrets             || [],
-          atmosphere_notes:   result.atmosphere_notes   || '',
-          suggested_music:    result.suggested_music    || '',
-          description:        result.description        || '',
-          history:            result.history            || '',
-          layout_description: result.layout_description || '',
-          visible_to_players: false,
-          generated_params:   result._resolved,
+          pois,
+          subtitle:               mapContent.subtitle              || '',
+          description:            mapContent.description           || '',
+          history:                mapContent.history               || '',
+          atmosphere_notes:       mapContent.atmosphere_notes      || '',
+          random_encounter_table: mapContent.random_encounter_table || [],
+          secrets:                mapContent.secrets               || [],
+          plot_hooks:             mapContent.plot_hooks            || [],
+          generated_params:       resolved,
+          visible_to_players:     false,
+          pins:                   [],
         },
       });
+
+      // ── Step 3: DALL-E image ───────────────────────────────────────────────
+      if (hasOpenAIKey()) {
+        try {
+          const dallePrompt = buildDallePrompt(resolved, mapContent.dalle_prompt_additions);
+          const updated = await generateAndUploadImage(map.id, dallePrompt);
+          if (updated) map = updated;
+          setImageDone(true);
+        } catch (imgErr) {
+          console.warn('[MapGenerator] Image generation failed:', imgErr.message);
+          setImageSkipped(true);
+        }
+      } else {
+        setImageSkipped(true);
+      }
+
       onCreated(map);
     } catch (e) {
       setError(e.message);
-      setSaving(false);
+      setStep('error');
     }
   };
 
-  const areaCount = result?.areas?.length ?? 0;
-  const poiCount  = result?.pois?.length  ?? 0;
+  const isDrillDown = !!(parentMapId && parentPoiId);
 
   return (
     <>
@@ -200,96 +320,151 @@ export function MapGenerator({ campaignId, onClose, onCreated }) {
 
           {/* Header */}
           <div className="mgn-header">
-            <span className="mgn-title">✦ AI Map Generator</span>
+            <div>
+              <div className="mgn-title">
+                {isDrillDown ? '🔽 Generate Sub-Map' : '✦ AI Map Generator'}
+              </div>
+              {isDrillDown && parentPoiCtx && (
+                <div className="mgn-subtitle">
+                  From: {parentPoiCtx.name} ({parentPoiCtx.type})
+                </div>
+              )}
+            </div>
             <button className="mgn-close-btn" onClick={onClose}>✕</button>
           </div>
 
-          <div className="mgn-body">
-            {/* Options grid */}
-            <div className="mgn-options-grid">
-              {[
-                { label:'Map Type',    key:'mapType',     opts: MAP_TYPES    },
-                { label:'Size',        key:'size',        opts: MAP_SIZES    },
-                { label:'Terrain',     key:'terrain',     opts: TERRAINS     },
-                { label:'Atmosphere',  key:'atmosphere',  opts: ATMOSPHERES  },
-                { label:'Era',         key:'era',         opts: ERAS         },
-                { label:'Inhabitants', key:'inhabitants', opts: INHABITANTS  },
-              ].map(({ label, key, opts }) => (
-                <div key={key} className="mgn-field">
-                  <div className="mgn-field-label">{label}</div>
-                  <select
-                    className="mgn-select"
-                    value={params[key]}
-                    onChange={e => set(key, e.target.value)}
-                    disabled={loading}
-                  >
-                    {opts.map(o => <option key={o} value={o}>{o}</option>)}
+          {/* Form */}
+          {step === 'form' && (
+            <div className="mgn-body">
+              <div className="mgn-options-grid">
+                {/* Map Type */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Map Type</div>
+                  <select className="mgn-select" value={params.mapType} onChange={e => setP('mapType', e.target.value)}>
+                    {MAP_TYPES.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
-              ))}
-            </div>
 
-            {/* Generate button */}
-            {!result && (
-              <button
-                className="mgn-generate-btn"
-                onClick={handleGenerate}
-                disabled={loading}
-              >
-                {loading ? '⏳ Generating map…' : '✦ Generate Map'}
+                {/* Size */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Size</div>
+                  <select className="mgn-select" value={params.size} onChange={e => setP('size', e.target.value)}>
+                    {MAP_SIZES.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                {/* Atmosphere */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Atmosphere</div>
+                  <select className="mgn-select" value={params.atmosphere} onChange={e => setP('atmosphere', e.target.value)}>
+                    {ATMOSPHERES.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                {/* Era */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Era</div>
+                  <select className="mgn-select" value={params.era} onChange={e => setP('era', e.target.value)}>
+                    {ERAS.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                {/* Inhabitants */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Inhabitants</div>
+                  <select className="mgn-select" value={params.inhabitants} onChange={e => setP('inhabitants', e.target.value)}>
+                    {INHABITANTS.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                {/* POI Count */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">POI Count</div>
+                  <select className="mgn-select" value={params.poiCount} onChange={e => setP('poiCount', e.target.value)}>
+                    {POI_COUNTS.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Terrain multi-select */}
+              <div className="mgn-field">
+                <div className="mgn-field-label">Terrain (pick up to 3 — leave empty for Random)</div>
+                <div className="mgn-terrain-grid">
+                  {TERRAIN_OPTIONS.map(t => (
+                    <button
+                      key={t}
+                      className={`mgn-terrain-chip${params.terrain.includes(t) ? ' mgn-terrain-chip--on' : ''}`}
+                      onClick={() => toggleTerrain(t)}
+                      disabled={!params.terrain.includes(t) && params.terrain.length >= 3}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {!hasOpenAIKey() && (
+                <div className="mgn-warn">
+                  ⚠ No OpenAI key — map will be created without a visual image.
+                  You can upload an image later.
+                  <button className="mgn-warn-link" onClick={() => setShowSettings(true)}>Add key →</button>
+                </div>
+              )}
+
+              <button className="mgn-generate-btn" onClick={handleGenerate}>
+                {isDrillDown ? '✦ Generate Sub-Map' : '✦ Generate Map'}
               </button>
-            )}
+            </div>
+          )}
 
-            {/* Loading */}
-            {loading && (
-              <div className="mgn-loading">
-                <div className="mgn-loading-spinner">🗺</div>
-                <div>Claude is crafting your map…</div>
-                <div className="mgn-loading-sub">Forging areas, encounters and secrets</div>
-              </div>
-            )}
+          {/* Generating progress */}
+          {step === 'generating' && (
+            <div className="mgn-body mgn-progress-body">
+              <ProgressRow
+                label="Forging map content…"
+                subLabel="Claude is writing your map, POIs & lore"
+                done={contentDone}
+              />
+              {contentDone && (
+                <ProgressRow
+                  label={imageSkipped ? 'Image skipped (no OpenAI key)' : imageDone ? 'Map painted!' : 'Painting the map…'}
+                  subLabel={imageSkipped ? 'Upload an image later from the map toolbar' : 'DALL·E 3 is illustrating your map'}
+                  done={imageDone || imageSkipped}
+                  skipped={imageSkipped}
+                />
+              )}
+              {contentDone && !imageDone && !imageSkipped && (
+                <div className="mgn-sub-note">This may take up to 30 seconds…</div>
+              )}
+            </div>
+          )}
 
-            {/* Error */}
-            {error && <div className="mgn-error">{error}</div>}
-
-            {/* Result preview */}
-            {result && !loading && (
-              <div className="mgn-result">
-                <div className="mgn-result-title">{result.title}</div>
-                <div className="mgn-result-desc">{result.description}</div>
-                <div className="mgn-result-stats">
-                  <span className="mgn-stat-pill">🏛 {areaCount} Areas</span>
-                  <span className="mgn-stat-pill">📍 {poiCount} POIs</span>
-                  <span className="mgn-stat-pill">⚔ {result.random_encounters?.length ?? 0} Encounters</span>
-                  <span className="mgn-stat-pill">📜 {result.lore_hooks?.length ?? 0} Hooks</span>
-                </div>
-                {result.atmosphere_notes && (
-                  <div className="mgn-atmosphere">"{result.atmosphere_notes}"</div>
-                )}
-                <div className="mgn-result-actions">
-                  <button
-                    className="mgn-save-btn"
-                    onClick={handleSave}
-                    disabled={saving}
-                  >
-                    {saving ? '⏳ Saving…' : '💾 Save Map to Campaign'}
-                  </button>
-                  <button
-                    className="mgn-regen-btn"
-                    onClick={handleGenerate}
-                    disabled={loading}
-                  >
-                    🔄 Regenerate
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Error state */}
+          {step === 'error' && (
+            <div className="mgn-body">
+              <div className="mgn-error">{error}</div>
+              <button className="mgn-generate-btn" onClick={() => setStep('form')}>← Back</button>
+            </div>
+          )}
         </div>
       </div>
 
       {showSettings && <ApiKeySettings onClose={() => setShowSettings(false)} />}
     </>
+  );
+}
+
+function ProgressRow({ label, subLabel, done, skipped }) {
+  return (
+    <div className={`mgn-prog-row${done ? ' mgn-prog-row--done' : ''}${skipped ? ' mgn-prog-row--skipped' : ''}`}>
+      <div className="mgn-prog-icon">
+        {done || skipped ? '✓' : <span className="mgn-prog-spinner">⟳</span>}
+      </div>
+      <div className="mgn-prog-text">
+        <div className="mgn-prog-label">{label}</div>
+        <div className="mgn-prog-sub">{subLabel}</div>
+      </div>
+    </div>
   );
 }
 
