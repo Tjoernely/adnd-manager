@@ -6,8 +6,9 @@
  * See: https://docs.anthropic.com/en/api/direct-browser-access
  */
 
-const CLAUDE_MODEL    = 'claude-sonnet-4-5';
+const CLAUDE_MODEL    = 'claude-sonnet-4-20250514';
 const CLAUDE_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const TIMEOUT_MS      = 30_000; // 30-second hard timeout
 
 export function getAnthropicKey() { return localStorage.getItem('anthropic_api_key') ?? null; }
 export function getOpenAIKey()    { return localStorage.getItem('openai_api_key')    ?? null; }
@@ -31,39 +32,83 @@ export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096, m
     throw new Error('No Anthropic API key configured. Click ⚙ Settings to add your key.');
   }
 
-  const resp = await fetch(CLAUDE_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
+  console.log('[callClaude] Starting request — model:', model, 'maxTokens:', maxTokens);
+  console.log('[callClaude] Prompt length:', userPrompt.length, 'chars');
+
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => {
+    console.error('[callClaude] Request timed out after', TIMEOUT_MS / 1000, 's');
+    controller.abort();
+  }, TIMEOUT_MS);
+
+  let resp;
+  try {
+    resp = await fetch(CLAUDE_ENDPOINT, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type':                             'application/json',
+        'x-api-key':                                apiKey,
+        'anthropic-version':                        '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: userPrompt }],
+      }),
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeoutId);
+    if (fetchErr.name === 'AbortError') {
+      throw new Error(
+        `Request timed out after ${TIMEOUT_MS / 1000} seconds. ` +
+        'Check your API key and network connection, then try again.'
+      );
+    }
+    console.error('[callClaude] fetch threw:', fetchErr);
+    throw new Error(`Network error: ${fetchErr.message}`);
+  }
+  clearTimeout(timeoutId);
+
+  console.log('[callClaude] Response status:', resp.status);
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err?.error?.message ?? `Anthropic API error ${resp.status}`);
+    let errMsg = `Anthropic API error ${resp.status}`;
+    try {
+      const errBody = await resp.json();
+      console.error('[callClaude] Error body:', errBody);
+      errMsg = errBody?.error?.message ?? errMsg;
+    } catch (_) {}
+    throw new Error(errMsg);
   }
 
   const data = await resp.json();
-  const text = data.content
+  console.log('[callClaude] Response received. Stop reason:', data.stop_reason,
+              '| Output tokens:', data.usage?.output_tokens);
+
+  const text = (data.content ?? [])
     .filter(b => b.type === 'text')
     .map(b => b.text)
     .join('');
+
+  console.log('[callClaude] Raw text length:', text.length, 'chars');
 
   return extractJSON(text);
 }
 
 function extractJSON(text) {
+  // Try direct parse first
   try { return JSON.parse(text.trim()); } catch (_) {}
+  // Find first {...} block (handles markdown fences)
   const m = text.match(/\{[\s\S]*\}/);
-  if (m) { try { return JSON.parse(m[0]); } catch (_) {} }
-  throw new Error('AI response did not contain valid JSON.\n\nRaw response: ' + text.slice(0, 400));
+  if (m) {
+    try { return JSON.parse(m[0]); } catch (_) {}
+  }
+  console.error('[callClaude] Could not extract JSON. Raw text (first 600 chars):\n', text.slice(0, 600));
+  throw new Error(
+    'AI response did not contain valid JSON.\n\n' +
+    'Raw response: ' + text.slice(0, 500)
+  );
 }

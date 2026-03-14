@@ -162,18 +162,26 @@ export function NPCGenerator({ campaignId, onClose, onSaved }) {
 
   const handleGenerate = async () => {
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
+    console.log('[NPCGenerator] Starting generation. params:', params);
     setGenerating(true); setError(''); setResult(null); setSaved(false);
     try {
       const res = resolve(params);
       setResolved(res);
+      console.log('[NPCGenerator] Resolved params:', res);
+      console.log('[NPCGenerator] Calling Claude...');
       const npc = await callClaude({ systemPrompt: SYS, userPrompt: buildPrompt(res), maxTokens: 2048 });
+      console.log('[NPCGenerator] Claude returned NPC:', npc?.name);
       setResult(npc);
-    } catch(e) { setError(e.message); }
+    } catch(e) {
+      console.error('[NPCGenerator] Generation failed:', e.message, e);
+      setError(e.message);
+    }
     setGenerating(false);
   };
 
   const handleRegen = async (section) => {
     if (!result || !resolved) return;
+    console.log('[NPCGenerator] Regenerating section:', section);
     setRegenSec(section); setError('');
     try {
       const partial = await callClaude({
@@ -181,8 +189,12 @@ export function NPCGenerator({ campaignId, onClose, onSaved }) {
         userPrompt: buildRegenPrompt(section, result, resolved),
         maxTokens: 512,
       });
+      console.log('[NPCGenerator] Regen complete for:', section);
       setResult(r => ({ ...r, ...partial }));
-    } catch(e) { setError(`Regen ${section}: ${e.message}`); }
+    } catch(e) {
+      console.error('[NPCGenerator] Regen failed for', section, ':', e.message);
+      setError(`Regen ${section}: ${e.message}`);
+    }
     setRegenSec(null);
   };
 
@@ -348,6 +360,7 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
     if (!key) { setPortraitErr('No OpenAI key. Add it in ⚙ Settings.'); return; }
     setPortraitGen(true); setPortraitErr('');
     try {
+      console.log('[NPCGenerator] Requesting DALL-E portrait...');
       const subject = result.appearance || `${resolved.gender} ${resolved.race} ${resolved.charClass}`;
       const prompt = `AD&D 2E dark-fantasy portrait, head and shoulders, dramatic oil painting style, no text, no watermarks. ${subject}. Power: ${resolved.powerLevel}. Alignment: ${ALIGNMENTS.label[resolved.alignment]??resolved.alignment}. Moody lighting, intricate medieval detail.`;
       const resp = await fetch('https://api.openai.com/v1/images/generations', {
@@ -355,9 +368,18 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
         headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},
         body:JSON.stringify({model:'dall-e-3',prompt,n:1,size:'1024x1024',quality:'standard'}),
       });
-      if (!resp.ok) { const e=await resp.json().catch(()=>{}); throw new Error(e?.error?.message||`OpenAI ${resp.status}`); }
-      onPortraitDone((await resp.json()).data[0].url);
-    } catch(e) { setPortraitErr(e.message); }
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        console.error('[NPCGenerator] DALL-E portrait error:', e);
+        throw new Error(e?.error?.message || `OpenAI ${resp.status}`);
+      }
+      const portraitData = await resp.json();
+      console.log('[NPCGenerator] DALL-E portrait received.');
+      onPortraitDone(portraitData.data[0].url);
+    } catch(e) {
+      console.error('[NPCGenerator] Portrait failed:', e.message);
+      setPortraitErr(e.message);
+    }
     setPortraitGen(false);
   };
 

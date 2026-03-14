@@ -239,6 +239,7 @@ export function MapGenerator({
   const handleGenerate = async () => {
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
 
+    console.log('[MapGenerator] Starting generation. params:', params);
     setStep('generating');
     setContentDone(false);
     setImageDone(false);
@@ -247,16 +248,19 @@ export function MapGenerator({
 
     try {
       // ── Step 1: Claude content ─────────────────────────────────────────────
-      const resolved  = resolveParams(params);
-      const numPois   = resolvePoiCount(params.poiCount);
+      const resolved = resolveParams(params);
+      const numPois  = resolvePoiCount(params.poiCount);
+      console.log('[MapGenerator] Step 1 — calling Claude. resolved params:', resolved, '| POI count:', numPois);
+
       const mapContent = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
         userPrompt:   buildClaudePrompt(resolved, numPois, parentPoiCtx),
         maxTokens:    4096,
       });
+      console.log('[MapGenerator] Step 1 — Claude returned. title:', mapContent?.title, '| pois count:', mapContent?.pois?.length);
       setContentDone(true);
 
-      if (!mapContent.title) throw new Error('AI returned invalid map data. Please try again.');
+      if (!mapContent.title) throw new Error('AI returned invalid map data (missing title). Please try again.');
 
       // Normalise POI positions
       const pois = (mapContent.pois ?? []).map((p, i) => ({
@@ -268,6 +272,7 @@ export function MapGenerator({
       }));
 
       // ── Step 2: Create map record ──────────────────────────────────────────
+      console.log('[MapGenerator] Step 2 — creating map record on server...');
       let map = await api.createMap({
         campaign_id:   campaignId,
         name:          mapContent.title,
@@ -288,24 +293,30 @@ export function MapGenerator({
           pins:                   [],
         },
       });
+      console.log('[MapGenerator] Step 2 — map record created. id:', map?.id);
 
-      // ── Step 3: DALL-E image ───────────────────────────────────────────────
+      // ── Step 3: DALL-E image (only after Claude succeeds) ──────────────────
       if (hasOpenAIKey()) {
+        console.log('[MapGenerator] Step 3 — calling DALL-E for image...');
         try {
           const dallePrompt = buildDallePrompt(resolved, mapContent.dalle_prompt_additions);
           const updated = await generateAndUploadImage(map.id, dallePrompt);
           if (updated) map = updated;
+          console.log('[MapGenerator] Step 3 — DALL-E image uploaded. image_url:', map?.image_url);
           setImageDone(true);
         } catch (imgErr) {
-          console.warn('[MapGenerator] Image generation failed:', imgErr.message);
+          console.warn('[MapGenerator] Step 3 — DALL-E failed (non-fatal):', imgErr.message);
           setImageSkipped(true);
         }
       } else {
+        console.log('[MapGenerator] Step 3 — skipped (no OpenAI key).');
         setImageSkipped(true);
       }
 
+      console.log('[MapGenerator] Generation complete!');
       onCreated(map);
     } catch (e) {
+      console.error('[MapGenerator] Generation failed:', e.message, e);
       setError(e.message);
       setStep('error');
     }
@@ -422,19 +433,19 @@ export function MapGenerator({
             <div className="mgn-body mgn-progress-body">
               <ProgressRow
                 label="Forging map content…"
-                subLabel="Claude is writing your map, POIs & lore"
+                subLabel="Claude is writing your map, POIs & lore (up to 30s)"
                 done={contentDone}
               />
               {contentDone && (
                 <ProgressRow
                   label={imageSkipped ? 'Image skipped (no OpenAI key)' : imageDone ? 'Map painted!' : 'Painting the map…'}
-                  subLabel={imageSkipped ? 'Upload an image later from the map toolbar' : 'DALL·E 3 is illustrating your map'}
+                  subLabel={imageSkipped ? 'Upload an image later from the map toolbar' : 'DALL·E 3 is illustrating your map (up to 30s)'}
                   done={imageDone || imageSkipped}
                   skipped={imageSkipped}
                 />
               )}
-              {contentDone && !imageDone && !imageSkipped && (
-                <div className="mgn-sub-note">This may take up to 30 seconds…</div>
+              {!contentDone && (
+                <div className="mgn-sub-note">Check the browser console (F12) if this takes more than 30 seconds.</div>
               )}
             </div>
           )}
@@ -443,7 +454,7 @@ export function MapGenerator({
           {step === 'error' && (
             <div className="mgn-body">
               <div className="mgn-error">{error}</div>
-              <button className="mgn-generate-btn" onClick={() => setStep('form')}>← Back</button>
+              <button className="mgn-generate-btn" style={{marginTop:8}} onClick={() => setStep('form')}>← Back</button>
             </div>
           )}
         </div>
