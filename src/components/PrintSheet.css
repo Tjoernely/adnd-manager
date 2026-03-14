@@ -1,0 +1,698 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PrintSheet.css — AD&D 2E S&P Character Sheet
+   Screen: full-page overlay; Print: A4 page, hides all app chrome
+───────────────────────────────────────────────────────────────────────────── */
+
+/* ── A4 page setup ─────────────────────────────────────────────────────────── */
+@page {
+  size: A4 portrait;
+  margin: 10mm 12mm;
+}
+
+/* ── Variables ─────────────────────────────────────────────────────────────── */
+:root {
+  --ps-gold:    #7a5a10;
+  --ps-gold-hi: #c8a020;
+  --ps-border:  #4a3a1a;
+  --ps-bg:      #fdf8ef;
+  --ps-bg-alt:  #f5ede0;
+  --ps-text:    #1a1008;
+  --ps-dim:     #5a4828;
+  --ps-head-bg: #2a1e08;
+  --ps-head-fg: #d4a035;
+  --ps-font:    'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;
+  --ps-mono:    'Courier New',Courier,monospace;
+  --ps-page-w:  750px;    /* screen preview width */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCREEN OVERLAY
+───────────────────────────────────────────────────────────────────────────── */
+.ps-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  z-index: 900;
+}
+
+.ps-wrapper {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--ps-page-w);
+  max-width: 95vw;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 901;
+  background: var(--ps-bg);
+  color: var(--ps-text);
+  font-family: var(--ps-font);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: 0 0 60px rgba(0,0,0,0.9);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ps-wrapper--hidden {
+  display: none; /* hidden on screen; @media print overrides this */
+}
+
+/* ── Toolbar (screen only) ─────────────────────────────────────────────────── */
+.ps-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--ps-head-bg);
+  border-bottom: 2px solid var(--ps-gold);
+  justify-content: flex-end;
+}
+
+.ps-btn {
+  font-family: var(--ps-font);
+  font-size: 12px;
+  padding: 5px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--ps-border);
+  transition: background 0.12s;
+}
+
+.ps-btn--print {
+  background: linear-gradient(135deg, #5a4010, var(--ps-gold-hi));
+  color: #1a0f00;
+  font-weight: bold;
+  border-color: var(--ps-gold-hi);
+}
+.ps-btn--print:hover { background: var(--ps-gold-hi); }
+
+.ps-btn--close {
+  background: rgba(180,30,30,0.15);
+  color: #c06050;
+  border-color: rgba(180,30,30,0.4);
+}
+.ps-btn--close:hover { background: rgba(180,30,30,0.3); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PAGE LAYOUT
+───────────────────────────────────────────────────────────────────────────── */
+.ps-page {
+  padding: 14px 18px 20px;
+  background: var(--ps-bg);
+  min-height: 200px;
+  border-bottom: 3px double var(--ps-border);
+}
+
+.ps-page--break {
+  margin-top: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SECTION HEADERS
+───────────────────────────────────────────────────────────────────────────── */
+.ps-section-head {
+  background: var(--ps-head-bg);
+  color: var(--ps-head-fg);
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  margin: 10px -18px 6px -18px;
+  border-top: 1px solid var(--ps-gold);
+  border-bottom: 1px solid var(--ps-gold);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TITLE BANNER (identity)
+───────────────────────────────────────────────────────────────────────────── */
+.ps-title-banner {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ps-border);
+}
+
+.ps-title-left {
+  flex: 1;
+}
+
+.ps-char-name {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--ps-text);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.ps-char-sub {
+  font-size: 12px;
+  color: var(--ps-dim);
+  margin-bottom: 3px;
+}
+
+.ps-char-appearance {
+  font-size: 10px;
+  color: #7a6040;
+  font-style: italic;
+}
+
+/* Portrait box */
+.ps-portrait-box {
+  width: 90px;
+  height: 110px;
+  border: 2px solid var(--ps-border);
+  flex-shrink: 0;
+  background: var(--ps-bg-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ps-portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ps-portrait-placeholder {
+  font-size: 10px;
+  color: #9a8060;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   COMBAT ROW
+───────────────────────────────────────────────────────────────────────────── */
+.ps-combat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.ps-stat-box {
+  border: 1px solid var(--ps-border);
+  background: var(--ps-bg-alt);
+  padding: 5px 10px;
+  text-align: center;
+  min-width: 68px;
+  border-radius: 4px;
+}
+
+.ps-stat-box--big .ps-stat-box__value {
+  font-size: 22px;
+}
+
+.ps-stat-box__value {
+  font-size: 17px;
+  font-weight: bold;
+  color: var(--ps-text);
+  line-height: 1;
+}
+
+.ps-stat-box__label {
+  font-size: 8px;
+  color: var(--ps-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.ps-combat-fields {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FILL LINES
+───────────────────────────────────────────────────────────────────────────── */
+.ps-fill-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.ps-fill-line--wide {
+  width: 100%;
+}
+
+.ps-fill-line__label {
+  color: var(--ps-dim);
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.ps-fill-line__value {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--ps-text);
+  min-width: 20px;
+}
+
+.ps-fill-line__rule {
+  flex: 1;
+  border-bottom: 1px solid #c0a060;
+  min-width: 30px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ABILITY SCORES TABLE
+───────────────────────────────────────────────────────────────────────────── */
+.ps-ability-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  margin-bottom: 2px;
+}
+
+.ps-ability-table th {
+  background: var(--ps-head-bg);
+  color: var(--ps-head-fg);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  text-align: left;
+  border: 1px solid var(--ps-border);
+}
+
+.ps-ability-table td {
+  padding: 3px 6px;
+  border: 1px solid #d0c0a0;
+  vertical-align: middle;
+}
+
+.ps-ability-table tr:nth-child(4n+1),
+.ps-ability-table tr:nth-child(4n+2) { background: var(--ps-bg); }
+.ps-ability-table tr:nth-child(4n+3),
+.ps-ability-table tr:nth-child(4n+4) { background: var(--ps-bg-alt); }
+
+.ps-parent-cell {
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--ps-gold);
+  text-align: center;
+  background: var(--ps-bg-alt) !important;
+  border-right: 2px solid var(--ps-border) !important;
+  width: 36px;
+}
+
+.ps-sub-label {
+  font-size: 10px;
+  color: var(--ps-dim);
+  font-style: italic;
+}
+
+.ps-score-col {
+  text-align: center;
+  width: 52px;
+}
+
+.ps-score-val {
+  font-weight: bold;
+  font-size: 14px;
+  color: var(--ps-text);
+}
+
+.ps-bonus-cell {
+  font-size: 9.5px;
+  color: #5a4020;
+}
+
+.ps-row-top td {
+  border-top: 2px solid var(--ps-border);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   WEAPON PROFICIENCIES
+───────────────────────────────────────────────────────────────────────────── */
+.ps-weap-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.ps-weap-item {
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  background: var(--ps-bg-alt);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ps-weap-name {
+  font-size: 10.5px;
+  color: var(--ps-text);
+}
+
+.ps-weap-level {
+  font-size: 8px;
+  color: var(--ps-gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MASTERY / STYLES
+───────────────────────────────────────────────────────────────────────────── */
+.ps-mastery-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.ps-mastery-item {
+  font-size: 10px;
+  border: 1px solid #b09060;
+  border-radius: 3px;
+  padding: 2px 7px;
+  background: #fcf3e0;
+}
+
+.ps-mastery-label {
+  color: var(--ps-dim);
+  margin-right: 4px;
+}
+
+.ps-mastery-val {
+  color: var(--ps-text);
+  font-weight: bold;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   NWP TABLE
+───────────────────────────────────────────────────────────────────────────── */
+.ps-nwp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.ps-nwp-table th {
+  background: var(--ps-head-bg);
+  color: var(--ps-head-fg);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  text-align: left;
+  border: 1px solid var(--ps-border);
+}
+
+.ps-nwp-table td {
+  padding: 3px 6px;
+  border: 1px solid #d0c0a0;
+}
+
+.ps-nwp-table tr:nth-child(even) { background: var(--ps-bg-alt); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THIEVING SKILLS
+───────────────────────────────────────────────────────────────────────────── */
+.ps-thief-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.ps-thief-item {
+  border: 1px solid var(--ps-border);
+  border-radius: 3px;
+  padding: 3px 7px;
+  background: var(--ps-bg-alt);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ps-thief-label {
+  font-size: 10px;
+  color: var(--ps-dim);
+}
+
+.ps-thief-val {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--ps-text);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRAITS / DISADVANTAGES — two column
+───────────────────────────────────────────────────────────────────────────── */
+.ps-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+  margin-bottom: 2px;
+}
+
+.ps-list {
+  margin: 0 0 4px 14px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.ps-list li {
+  color: var(--ps-text);
+}
+
+.ps-cp {
+  color: #8a6830;
+  font-size: 9px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SOCIAL STATUS
+───────────────────────────────────────────────────────────────────────────── */
+.ps-social {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--ps-bg-alt);
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.ps-social-kit {
+  color: var(--ps-dim);
+  font-style: italic;
+}
+
+.ps-social-rank {
+  font-weight: bold;
+  color: var(--ps-text);
+}
+
+.ps-social-roll {
+  font-size: 9px;
+  color: #8a7040;
+}
+
+.ps-social-notes {
+  font-size: 10px;
+  color: var(--ps-dim);
+  font-style: italic;
+  border-left: 2px solid #c0a060;
+  padding-left: 6px;
+  margin-left: 4px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   EQUIPMENT
+───────────────────────────────────────────────────────────────────────────── */
+.ps-equipment-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 20px;
+  margin-bottom: 6px;
+}
+
+.ps-equipment-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+  padding: 1px 0;
+}
+
+.ps-eq-num {
+  color: var(--ps-dim);
+  min-width: 16px;
+}
+
+.ps-eq-rule {
+  flex: 1;
+  border-bottom: 1px solid #c0b090;
+}
+
+.ps-eq-wt {
+  color: #9a8060;
+  font-size: 9px;
+  min-width: 38px;
+  text-align: right;
+}
+
+.ps-equip-totals {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid var(--ps-border);
+  margin-top: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SPELLBOOK
+───────────────────────────────────────────────────────────────────────────── */
+.ps-spells-block {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 14px;
+  margin-bottom: 6px;
+}
+
+.ps-spell-level {
+  border: 1px solid var(--ps-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ps-spell-level-head {
+  background: var(--ps-head-bg);
+  color: var(--ps-head-fg);
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+}
+
+.ps-spell-line {
+  height: 16px;
+  border-top: 1px solid #e0d0b0;
+  margin: 0 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   NOTES
+───────────────────────────────────────────────────────────────────────────── */
+.ps-notes-block {
+  margin-bottom: 8px;
+}
+
+.ps-note-line {
+  height: 22px;
+  border-bottom: 1px solid #c8b888;
+  margin-bottom: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FOOTER
+───────────────────────────────────────────────────────────────────────────── */
+.ps-footer {
+  font-size: 8px;
+  color: #a09070;
+  text-align: center;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding-top: 6px;
+  border-top: 1px solid var(--ps-border);
+  margin-top: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   EMPTY STATE
+───────────────────────────────────────────────────────────────────────────── */
+.ps-empty {
+  font-size: 10px;
+  color: #9a8060;
+  font-style: italic;
+  padding: 3px 0 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   @MEDIA PRINT
+   Hide everything except #print-sheet. Force white bg, black text.
+───────────────────────────────────────────────────────────────────────────── */
+@media print {
+  /* Hide all direct children of the app wrapper except the print sheet */
+  #app-screen > *:not(#print-sheet) {
+    display: none !important;
+  }
+
+  /* Make sure the print sheet is visible (even if it was screen-hidden) */
+  #print-sheet,
+  .ps-wrapper--hidden {
+    display: block !important;
+  }
+
+  /* Reset wrapper to normal document flow */
+  .ps-wrapper {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+  }
+
+  .ps-overlay {
+    display: none !important;
+  }
+
+  /* Hide screen-only elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Page break between the two pages */
+  .ps-page--break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Ensure colors survive print */
+  .ps-parent-cell  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ps-section-head { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ps-ability-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ps-nwp-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ps-spell-level-head { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Don't break tables across pages */
+  .ps-ability-table { page-break-inside: avoid; }
+
+  /* Portrait image */
+  .ps-portrait-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

@@ -19,6 +19,7 @@ import { WeaponsTab } from "./components/tabs/WeaponsTab.jsx";
 import { MasteryTab } from "./components/tabs/MasteryTab.jsx";
 import { ThiefTab }    from "./components/tabs/ThiefTab.jsx";
 import { PortraitTab } from "./components/tabs/PortraitTab.jsx";
+import { PrintSheet }  from "./components/PrintSheet.jsx";
 
 export default function App() {
   // ── Auth ────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ export default function App() {
   const [characters,  setCharacters]  = useState([]);     // list in this campaign
   const [saveStatus,  setSaveStatus]  = useState('idle'); // 'idle'|'saving'|'saved'|'error'
   const [showCharMenu, setShowCharMenu] = useState(false);
+  const [showPrint,    setShowPrint]    = useState(false);
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
@@ -137,7 +139,7 @@ export default function App() {
   } = char;
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, color:C.text,
+    <div id="app-screen" style={{ minHeight:"100vh", background:C.bg, color:C.text,
       fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif" }}>
 
       {/* Noise grain */}
@@ -279,6 +281,16 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                {/* Print button */}
+                <button onClick={()=>setShowPrint(true)} style={{
+                  fontSize:11, padding:"4px 10px", borderRadius:5, cursor:"pointer",
+                  background:"rgba(0,0,0,.35)", border:`1px solid ${C.border}`,
+                  color:C.textDim, fontFamily:"inherit",
+                }}
+                  onMouseEnter={e=>{ e.target.style.background="rgba(100,80,20,.3)"; e.target.style.color=C.gold; }}
+                  onMouseLeave={e=>{ e.target.style.background="rgba(0,0,0,.35)";   e.target.style.color=C.textDim; }}>
+                  🖨 Print
+                </button>
                 {/* Save button */}
                 <button onClick={saveCharacter}
                   disabled={saveStatus==="saving"}
@@ -644,6 +656,10 @@ export default function App() {
           </Modal>
         </Overlay>
       )}
+
+      {/* ══════════ PRINT SHEET ══════════ */}
+      <PrintSheet {...char} isOpen={showPrint} onClose={()=>setShowPrint(false)} />
+
     </div>
   );
 }
