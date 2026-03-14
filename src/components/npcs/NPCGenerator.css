@@ -1,0 +1,297 @@
+/* ─────────────────────────────────────────────────────────────
+   NPCGenerator — AI NPC creation screen
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Full-screen overlay (sits above NPCManager) ─────────── */
+.npg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: #0f0b04;
+  color: #d4c090;
+  font-family: 'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Reuse nm-bg-diamonds from NPCManager */
+
+/* ── Header ──────────────────────────────────────────────── */
+.npg-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px;
+  background: linear-gradient(180deg, #120d02, #1a1208);
+  border-bottom: 2px solid rgba(200,168,75,.6);
+  box-shadow: 0 4px 32px rgba(0,0,0,.8);
+  flex-shrink: 0;
+}
+.npg-title {
+  margin: 0;
+  font-size: clamp(16px,2.5vw,24px);
+  font-weight: bold;
+  color: #c8a84b;
+  text-shadow: 0 0 20px rgba(200,168,75,.5);
+  letter-spacing: 2px;
+}
+.npg-header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.npg-settings-btn {
+  background: rgba(0,0,0,.35); border: 1px solid rgba(200,168,75,.25);
+  border-radius: 6px; color: #7a6840; font-family: inherit;
+  font-size: 11px; padding: 5px 12px; cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.npg-settings-btn:hover { color: #c8a84b; border-color: rgba(200,168,75,.6); }
+.npg-save-btn {
+  background: rgba(60,154,48,.18); border: 1px solid rgba(80,180,60,.5);
+  border-radius: 6px; color: #80d060; font-family: inherit;
+  font-size: 12px; padding: 7px 18px; cursor: pointer; font-weight: bold;
+  transition: background .15s;
+}
+.npg-save-btn:hover:not(:disabled) { background: rgba(60,154,48,.3); }
+.npg-save-btn:disabled { opacity: .6; cursor: default; }
+
+/* ── Two-column layout ───────────────────────────────────── */
+.npg-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Form panel (left) ───────────────────────────────────── */
+.npg-form-panel {
+  width: 300px;
+  min-width: 260px;
+  flex-shrink: 0;
+  background: rgba(0,0,0,.35);
+  border-right: 1px solid rgba(200,168,75,.2);
+  padding: 24px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.npg-form-title {
+  font-size: 12px; letter-spacing: 3px; color: #7a6020;
+  text-transform: uppercase; margin-bottom: -4px;
+}
+.npg-form-hint { font-size: 11px; color: #5a5030; font-style: italic; margin: 0; line-height: 1.5; }
+.npg-form-grid { display: flex; flex-direction: column; gap: 10px; }
+.npg-field { display: flex; flex-direction: column; gap: 4px; }
+.npg-field-label { font-size: 9px; letter-spacing: 2px; color: #7a6020; text-transform: uppercase; }
+.npg-select {
+  background: rgba(0,0,0,.5); border: 1px solid rgba(200,168,75,.22);
+  border-radius: 5px; color: #d4c090; font-family: inherit;
+  font-size: 12px; padding: 6px 8px; cursor: pointer; outline: none;
+  transition: border-color .15s;
+}
+.npg-select:focus { border-color: rgba(200,168,75,.6); }
+
+.npg-generate-btn {
+  width: 100%; padding: 12px; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: bold; letter-spacing: 1px;
+  background: linear-gradient(135deg, #7a5a10, #c8a84b);
+  border: none; color: #1a0f00;
+  box-shadow: 0 4px 20px rgba(200,168,75,.3);
+  transition: opacity .15s, transform .1s;
+}
+.npg-generate-btn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+.npg-generate-btn:disabled { opacity: .5; cursor: default; transform: none; }
+
+.npg-key-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: #5a5030;
+}
+.npg-key-dot { width: 6px; height: 6px; border-radius: 50%; background: #5a4030; }
+.npg-key-dot--ok { background: #5a9a30; }
+
+.npg-error {
+  font-size: 11px; color: #c04030; background: rgba(180,30,30,.1);
+  border: 1px solid rgba(180,30,30,.3); border-radius: 5px; padding: 8px 10px;
+  white-space: pre-wrap; line-height: 1.5;
+}
+
+/* ── Result panel (right) ────────────────────────────────── */
+.npg-result-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+.npg-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; color: #5a5030; text-align: center; gap: 10px;
+}
+.npg-empty-icon { font-size: 64px; opacity: .25; }
+.npg-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; color: #c8a84b; gap: 16px; font-size: 14px; letter-spacing: 2px;
+}
+.npg-loading-spinner { font-size: 40px; animation: npg-spin 1.5s linear infinite; }
+@keyframes npg-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+
+/* ── NPC Card ────────────────────────────────────────────── */
+.npg-card {
+  background: linear-gradient(160deg, #1c1508, #141008);
+  border: 1px solid rgba(200,168,75,.3);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 860px;
+  margin: 0 auto;
+  box-shadow: 0 8px 40px rgba(0,0,0,.7);
+}
+
+/* ── Hero row ────────────────────────────────────────────── */
+.npg-card-hero {
+  display: flex; gap: 20px; padding: 24px;
+  background: rgba(0,0,0,.3);
+  border-bottom: 1px solid rgba(200,168,75,.15);
+}
+.npg-portrait-col {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.npg-portrait-img {
+  width: 140px; height: 140px; object-fit: cover; border-radius: 8px;
+  border: 1px solid rgba(200,168,75,.4);
+}
+.npg-portrait-ph {
+  width: 140px; height: 140px; border-radius: 8px;
+  background: rgba(0,0,0,.4); border: 1px dashed rgba(200,168,75,.2);
+  display: flex; align-items: center; justify-content: center; font-size: 48px; opacity: .3;
+}
+.npg-portrait-btn {
+  font-size: 10px; padding: 4px 10px; border-radius: 10px;
+  background: rgba(160,68,192,.15); border: 1px solid rgba(160,68,192,.4);
+  color: #c880ff; cursor: pointer; font-family: inherit; letter-spacing: .5px;
+  transition: background .14s;
+}
+.npg-portrait-btn:hover:not(:disabled) { background: rgba(160,68,192,.28); }
+.npg-portrait-btn:disabled { opacity: .6; cursor: default; }
+.npg-portrait-err { font-size: 10px; color: #c04030; text-align: center; max-width: 140px; }
+
+.npg-identity { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.npg-npc-name { font-size: 26px; font-weight: bold; color: #c8a84b; letter-spacing: 1px; line-height: 1.1; }
+.npg-npc-name .npg-npc-title { font-size: 15px; color: #7a6020; font-style: italic; font-weight: normal; }
+.npg-badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.npg-badge {
+  font-size: 10px; padding: 3px 10px; border-radius: 12px; letter-spacing: .5px;
+  border: 1px solid rgba(200,168,75,.25); background: rgba(0,0,0,.3); color: #c8a84b;
+}
+.npg-badge--align { color: #a0a0d0; border-color: rgba(100,100,200,.3); }
+.npg-badge--pl {
+  color: var(--plc, #c8a84b);
+  border-color: color-mix(in srgb, var(--plc,#c8a84b) 40%, transparent);
+}
+.npg-badge--role { color: #9aa0c0; border-color: rgba(100,110,180,.3); }
+.npg-badge--class { color: #d4c090; border-color: rgba(200,168,75,.25); }
+
+.npg-appearance {
+  font-size: 12px; color: #9a8860; font-style: italic; line-height: 1.5;
+  border-left: 2px solid rgba(200,168,75,.3); padding-left: 10px;
+}
+
+/* ── Sections ────────────────────────────────────────────── */
+.npg-section {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(200,168,75,.1);
+}
+.npg-section--secrets {
+  background: rgba(180,30,30,.06);
+  border-top: 1px solid rgba(180,30,30,.2);
+  border-bottom-color: rgba(180,30,30,.15);
+}
+.npg-section--hooks {
+  background: rgba(200,168,75,.04);
+  border-top: 1px solid rgba(200,168,75,.15);
+}
+
+.npg-sec-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+.npg-sec-title {
+  font-size: 10px; letter-spacing: 3px; color: #7a6020; text-transform: uppercase;
+}
+.npg-regen-btn {
+  font-size: 10px; padding: 3px 10px; border-radius: 10px;
+  background: rgba(200,168,75,.08); border: 1px solid rgba(200,168,75,.2);
+  color: #7a6840; cursor: pointer; font-family: inherit; letter-spacing: .5px;
+  transition: background .14s, color .14s;
+}
+.npg-regen-btn:hover:not(:disabled) { background: rgba(200,168,75,.18); color: #c8a84b; }
+.npg-regen-btn:disabled { opacity: .5; cursor: default; }
+.npg-expand-btn {
+  font-size: 10px; padding: 3px 10px; border-radius: 10px;
+  background: transparent; border: 1px solid rgba(200,168,75,.15);
+  color: #7a6840; cursor: pointer; font-family: inherit;
+  transition: color .14s;
+}
+.npg-expand-btn:hover { color: #c8a84b; }
+
+/* Stats grid */
+.npg-stats-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; }
+.npg-stat-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: rgba(0,0,0,.3); border: 1px solid rgba(200,168,75,.18); border-radius: 6px; padding: 8px 4px;
+}
+.npg-stat-lbl { font-size: 8px; letter-spacing: 1.5px; color: #7a6840; text-transform: uppercase; }
+.npg-stat-val  { font-size: 22px; font-weight: bold; }
+
+/* Personality */
+.npg-trait-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.npg-trait {
+  font-size: 11px; padding: 3px 12px; border-radius: 12px; border: 1px solid;
+  background: rgba(0,0,0,.3);
+}
+.npg-speech { font-size: 12px; color: #7a7860; font-style: italic; }
+
+/* Prose / background */
+.npg-prose { font-size: 13px; color: #c0a870; line-height: 1.75; font-style: italic; margin: 0; }
+
+/* Dialogue */
+.npg-dialogue { display: flex; flex-direction: column; gap: 8px; }
+.npg-quote {
+  font-size: 12px; color: #d4c090; line-height: 1.6;
+  padding: 8px 14px; border-left: 3px solid rgba(200,168,75,.4);
+  background: rgba(0,0,0,.2); border-radius: 0 5px 5px 0; font-style: italic;
+}
+
+/* Secrets */
+.npg-secret {
+  font-size: 12px; color: #c08080; line-height: 1.6; padding: 6px 0;
+  border-bottom: 1px dotted rgba(180,60,60,.2);
+}
+.npg-secret:last-child { border-bottom: none; }
+
+/* Quest hooks */
+.npg-hook {
+  font-size: 12px; color: #c0b060; line-height: 1.6; padding: 6px 0;
+  border-bottom: 1px dotted rgba(200,168,75,.15);
+}
+.npg-hook:last-child { border-bottom: none; }
+
+/* Equipment / generic list */
+.npg-list { display: flex; flex-direction: column; gap: 4px; }
+.npg-list-item { font-size: 12px; color: #a09060; padding: 4px 0; }
+
+/* Loot */
+.npg-loot-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.npg-coin { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.npg-coin-amt { font-size: 18px; font-weight: bold; color: #c8a84b; }
+.npg-coin-lbl { font-size: 9px; letter-spacing: 2px; color: #7a6020; text-transform: uppercase; }
+.npg-loot-item { font-size: 12px; color: #a09060; }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 800px) {
+  .npg-layout      { flex-direction: column; overflow: auto; }
+  .npg-form-panel  { width: 100%; border-right: none; border-bottom: 1px solid rgba(200,168,75,.2); padding: 16px; }
+  .npg-result-panel { overflow: visible; padding: 16px; }
+  .npg-stats-grid  { grid-template-columns: repeat(3,1fr); }
+  .npg-card-hero   { flex-direction: column; align-items: center; text-align: center; }
+  .npg-appearance  { text-align: left; }
+}

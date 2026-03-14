@@ -137,6 +137,19 @@
   white-space: nowrap;
 }
 
+.cd-settings-btn {
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(200,168,75,.2);
+  border-radius: 5px;
+  color: #7a6840;
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 4px 10px;
+  transition: color .15s, border-color .15s;
+}
+.cd-settings-btn:hover { color: #c8a84b; border-color: rgba(200,168,75,.5); }
+
 .cd-signout-btn {
   background: transparent;
   border: none;

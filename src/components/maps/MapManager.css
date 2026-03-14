@@ -396,6 +396,8 @@
   transition:    color 0.12s;
 }
 .mm-icon-btn:hover { color: var(--mm-text); }
+.mm-icon-btn--ai { color: #b870e0; font-size: 14px; }
+.mm-icon-btn--ai:hover { color: #d0a0ff; }
 
 /* ── Toggle ─────────────────────────────────────────────────────────────── */
 .mm-toggle {

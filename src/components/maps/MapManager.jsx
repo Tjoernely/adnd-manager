@@ -9,6 +9,8 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/client.js';
+import { MapGenerator } from './MapGenerator.jsx';
+import { MapViewer }   from './MapViewer.jsx';
 import './MapManager.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -51,8 +53,9 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [quests,     setQuests]     = useState([]);
 
   // UI state
-  const [showCreate,  setShowCreate]  = useState(false);
-  const [addPinMode,  setAddPinMode]  = useState(false);
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [addPinMode,    setAddPinMode]    = useState(false);
   const [activePinId, setActivePinId] = useState(null);
   const [savingPins,  setSavingPins]  = useState(false);
 
@@ -160,7 +163,10 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           <div className="mm-sidebar__header">
             <span className="mm-sidebar__title">🗺 Maps</span>
             {isDM && (
-              <button className="mm-icon-btn" title="New map" onClick={() => setShowCreate(true)}>＋</button>
+              <div style={{ display:'flex', gap:4 }}>
+                <button className="mm-icon-btn mm-icon-btn--ai" title="Generate with AI" onClick={() => setShowGenerator(true)}>✦</button>
+                <button className="mm-icon-btn" title="New map" onClick={() => setShowCreate(true)}>＋</button>
+              </div>
             )}
           </div>
 
@@ -228,7 +234,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
               <div
                 className={`mm-viewer${addPinMode ? ' mm-viewer--crosshair' : ''}`}
               >
-                {activeMap.image_url ? (
+                {(activeMap.data?.areas?.length ?? 0) > 0 ? (
+                  /* AI-generated SVG map */
+                  <MapViewer
+                    map={activeMap}
+                    isDM={isDM}
+                    onUpdateMap={patchMap}
+                    campaignId={campaignId}
+                  />
+                ) : activeMap.image_url ? (
+                  /* Image-based map with pins */
                   <div
                     className="mm-img-wrap"
                     ref={imgWrapRef}
@@ -259,7 +274,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                 ) : (
                   <div className="mm-no-image">
                     {isDM
-                      ? <>No image yet — use the <strong>Upload Image</strong> button above.</>
+                      ? <>No image yet — use <strong>Upload Image</strong> or <strong>✦</strong> to generate with AI.</>
                       : 'Map image not available.'}
                   </div>
                 )}
@@ -314,6 +329,19 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             setShowCreate(false);
           }}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+
+      {/* AI Map Generator */}
+      {showGenerator && (
+        <MapGenerator
+          campaignId={campaignId}
+          onClose={() => setShowGenerator(false)}
+          onCreated={(m) => {
+            setMaps(prev => [...prev, m]);
+            setActiveId(m.id);
+            setShowGenerator(false);
+          }}
         />
       )}
     </div>

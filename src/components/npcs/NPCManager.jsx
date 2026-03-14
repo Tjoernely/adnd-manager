@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client.js';
+import { NPCGenerator } from './NPCGenerator.jsx';
 import './NPCManager.css';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -242,8 +243,11 @@ export function NPCManager({ campaign, user, onBack }) {
         />
       )}
       {showGenerate && (
-        <GenerateNPCModal campaignId={campaign.id}
-          onClose={() => setShowGenerate(false)} onCreated={handleCreated} />
+        <NPCGenerator
+          campaignId={campaign.id}
+          onClose={() => setShowGenerate(false)}
+          onSaved={handleCreated}
+        />
       )}
       {showCreate && (
         <CreateNPCModal campaignId={campaign.id}

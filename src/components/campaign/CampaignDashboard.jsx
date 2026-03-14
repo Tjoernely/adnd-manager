@@ -12,6 +12,7 @@
  */
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client.js';
+import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import './CampaignDashboard.css';
 
 // ── Module definitions ─────────────────────────────────────────────────────────
@@ -96,8 +97,9 @@ function safeLen(r) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBack, onLogout }) {
-  const [counts,     setCounts]     = useState({});
-  const [comingSoon, setComingSoon] = useState(null); // label of unimplemented module
+  const [counts,      setCounts]      = useState({});
+  const [comingSoon,  setComingSoon]  = useState(null); // label of unimplemented module
+  const [showApiKeys, setShowApiKeys] = useState(false);
   const isDM = campaign.dm_user_id === user.id;
 
   // Load counts for all modules
@@ -153,6 +155,9 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
 
         <div className="cd-header-right">
           <span className="cd-user-chip">{user.email}</span>
+          <button className="cd-settings-btn" onClick={() => setShowApiKeys(true)} title="API Key Settings">
+            ⚙ Settings
+          </button>
           <button className="cd-signout-btn" onClick={onLogout}>sign out</button>
         </div>
       </header>
@@ -196,6 +201,9 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
           })}
         </div>
       </main>
+
+      {/* ── API Key Settings ── */}
+      {showApiKeys && <ApiKeySettings onClose={() => setShowApiKeys(false)} />}
 
       {/* ── "Coming soon" overlay ── */}
       {comingSoon && (
