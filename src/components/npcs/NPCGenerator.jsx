@@ -92,9 +92,7 @@ function resolve(params) {
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
 
-const SYS = `You are a creative AD&D 2nd Edition Dungeon Master assistant.
-Generate vivid, lore-appropriate NPCs for the Forgotten Realms setting.
-Always respond with valid JSON only, no markdown, no explanation.`;
+const SYS = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms. Generate vivid, lore-accurate NPCs that fit the Forgotten Realms setting. Use appropriate FR names for each race (elven names for elves, dwarven clan names for dwarves etc.). Reference FR factions, deities and locations in backgrounds. Respond with valid JSON only, no markdown.`;
 
 function buildPrompt(r) {
   const { race, charClass, gender, alignment, level, powerLevel, role, stats } = r;
@@ -362,7 +360,12 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
     try {
       console.log('[NPCGenerator] Requesting DALL-E portrait...');
       const subject = result.appearance || `${resolved.gender} ${resolved.race} ${resolved.charClass}`;
-      const prompt = `AD&D 2E dark-fantasy portrait, head and shoulders, oil painting style, no text, no watermarks. ${subject}. ${resolved.powerLevel} power level. ${ALIGNMENTS.label[resolved.alignment]??resolved.alignment}. Moody lighting, medieval detail.`.substring(0, 800);
+      const prompt = [
+        'Forgotten Realms fantasy art style portrait, head and shoulders, dramatic oil painting.',
+        `${subject}.`,
+        `${resolved.powerLevel} power level. ${ALIGNMENTS.label[resolved.alignment] ?? resolved.alignment}.`,
+        'No text, no watermarks. Moody lighting, intricate medieval detail.',
+      ].join(' ').substring(0, 800);
       const resp = await fetch('https://api.openai.com/v1/images/generations', {
         method:'POST',
         headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},

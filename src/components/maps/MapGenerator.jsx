@@ -74,13 +74,42 @@ function toBackendType(mapTypeStr) {
 
 // ── DALL-E prompt builders ────────────────────────────────────────────────────
 function buildDallePrompt(r) {
-  const terrain = r.terrain[0] ?? 'varied';
-  return `Top-down fantasy cartography map, hand-drawn ink style on aged parchment. ${r.mapType} map. ${terrain} landscape. ${r.atmosphere} atmosphere. Classic D&D adventure module style. No text labels. Bird's eye view.`.substring(0, 800);
+  const typeDescriptions = {
+    'Region':     'top-down regional fantasy cartography map',
+    'City/Town':  'top-down fantasy city map with streets and buildings',
+    'Village':    'top-down fantasy village map with cottages and farms',
+    'Dungeon':    'top-down dungeon floor plan, rooms and corridors',
+    'Cave System':'top-down natural cave system map',
+    'Ruins':      'top-down ancient ruins map, collapsed walls and rubble',
+    'Castle/Keep':'top-down castle and keep floor plan',
+    'Tavern/Inn': 'top-down tavern interior floor plan',
+    'Temple':     'top-down temple interior map',
+  };
+  const terrainStr = Array.isArray(r.terrain) ? r.terrain.slice(0, 2).join(', ') : (r.terrain ?? '');
+  return [
+    `A ${typeDescriptions[r.mapType] || 'fantasy map'},`,
+    `hand-drawn ink style on aged parchment.`,
+    `Forgotten Realms / Faerûn setting.`,
+    terrainStr   ? `Terrain: ${terrainStr}.`          : '',
+    r.atmosphere ? `${r.atmosphere} atmosphere.`       : '',
+    `Classic D&D adventure module cartography style.`,
+    `No text or labels. Bird's eye view.`,
+    `Highly detailed illustration.`,
+  ].filter(Boolean).join(' ').substring(0, 800);
 }
 
 // ── Claude system/user prompts (split into two smaller calls) ─────────────────
-const CLAUDE_SYSTEM = `You are an expert AD&D 2E Dungeon Master generating detailed, atmospheric map content for Forgotten Realms campaigns.
-Return ONLY valid JSON with no markdown, no code fences, no commentary, no trailing commas.`;
+const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. Respond with valid JSON only, no markdown.`;
+
+const FR_CONTEXT = `Setting: Forgotten Realms / Faerûn.
+Use appropriate FR place names, factions (Zhentarim, Harpers, Lords' Alliance, Emerald Enclave, Order of the Gauntlet), deities (Mystra, Tempus, Bane, Selûne, Tymora etc.), and lore.
+Reference real FR regions when appropriate based on terrain:
+- Mountains → Spine of the World, Thunder Peaks, or Graypeaks
+- Forest → Cormanthor, Neverwinter Wood, or High Forest
+- Coastal → Sword Coast, Sea of Fallen Stars
+- Desert → Anauroch, Calimshan
+- Swamp → Lizard Marsh, Vast Swamp
+- Underground → Underdark, Undermountain`;
 
 function parentNote(ctx) {
   return ctx
@@ -93,15 +122,16 @@ function buildMetadataPrompt(r, parentCtx) {
   return `Generate metadata for an AD&D 2E ${r.mapType} map.
 Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
 ${parentNote(parentCtx)}
+${FR_CONTEXT}
 
 Respond with ONLY this JSON object:
 {
-  "title": "Evocative location name (3-5 words)",
+  "title": "Evocative Forgotten Realms location name (3-5 words)",
   "subtitle": "Atmospheric tagline (5-8 words)",
-  "description": "2 sentence atmospheric overview",
-  "history": "2 sentences of backstory",
+  "description": "2 sentence atmospheric overview referencing FR lore",
+  "history": "2 sentences of FR-appropriate backstory",
   "atmosphere_notes": "One sentence: sounds, smells, lighting",
-  "dalle_prompt_additions": "Key visual details for image, max 120 chars"
+  "dalle_prompt_additions": "Key visual details for image, max 100 chars"
 }`;
 }
 
@@ -110,10 +140,11 @@ function buildPoisPrompt(r, numPois, meta, parentCtx) {
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
     ? 'For this region map include a variety of: settlements, ruins, caves, encounter areas, landmarks.'
     : 'For this interior/dungeon map include: rooms, traps, treasures, encounters, boss area.';
-  return `For the AD&D 2E ${r.mapType} map "${meta.title}":
+  return `For the Forgotten Realms AD&D 2E ${r.mapType} map "${meta.title}":
 Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
 ${parentNote(parentCtx)}
 ${typeHint}
+Use FR-appropriate names, factions and lore for all POIs.
 
 Generate exactly ${numPois} points of interest spread across the map.
 
@@ -122,30 +153,30 @@ Respond with ONLY this JSON object:
   "pois": [
     {
       "id": "poi_1",
-      "name": "Location name",
+      "name": "FR-appropriate location name",
       "type": "city|village|ruins|cave|dungeon|encounter|treasure|trap|npc|landmark|mystery",
       "x_percent": 20,
       "y_percent": 35,
       "is_dm_only": false,
       "short_description": "One sentence players might learn",
-      "dm_description": "1-2 sentence DM detail",
-      "history": "One sentence backstory",
+      "dm_description": "1-2 sentence DM detail with FR lore",
+      "history": "One sentence FR-appropriate backstory",
       "current_situation": "One sentence current state",
       "encounters": "Possible encounter (or null)",
       "treasure": "Loot if any (or null)",
-      "secrets": "Hidden info (or null)",
+      "secrets": "Hidden info or FR plot hook (or null)",
       "can_drill_down": true,
       "drill_down_type": "dungeon|cave|city|ruins|null",
-      "quest_hooks": ["Hook 1"]
+      "quest_hooks": ["FR-themed hook"]
     }
   ],
   "random_encounter_table": [
-    {"roll": "1-2", "encounter": "Brief encounter"},
-    {"roll": "3-4", "encounter": "Brief encounter"},
-    {"roll": "5-6", "encounter": "Brief encounter"}
+    {"roll": "1-2", "encounter": "FR-appropriate encounter"},
+    {"roll": "3-4", "encounter": "FR-appropriate encounter"},
+    {"roll": "5-6", "encounter": "FR-appropriate encounter"}
   ],
-  "secrets": ["One map-level secret"],
-  "plot_hooks": ["One campaign hook"]
+  "secrets": ["One FR-flavoured map-level secret"],
+  "plot_hooks": ["One Forgotten Realms campaign hook"]
 }
 
 Rules:
