@@ -73,31 +73,9 @@ function toBackendType(mapTypeStr) {
 }
 
 // ── DALL-E prompt builders ────────────────────────────────────────────────────
-function buildDallePrompt(r, dalleAdditions) {
-  const terrain = r.terrain.join(', ');
-  const bases = {
-    'Region':
-      `A top-down fantasy cartography map in the style of classic D&D adventure modules. Hand-drawn ink style on aged parchment. Shows ${terrain} landscape with mountains, forests, rivers. ${r.atmosphere} atmosphere. Includes space for settlements and ruins. No text labels. Bird's eye view. Detailed illustration style.`,
-    'City/Town':
-      `A top-down fantasy city map in classic D&D cartography style on aged parchment. Shows streets, buildings, walls, gates, a marketplace, taverns, temples. ${r.size} settlement. ${r.atmosphere} atmosphere. Hand-drawn ink illustration. No text labels.`,
-    'Village':
-      `A top-down fantasy village map in classic D&D cartography style on aged parchment. Shows cottages, a village square, farms, a well, a small inn. ${r.atmosphere} atmosphere. Hand-drawn ink illustration. No text labels.`,
-    'Dungeon':
-      `A top-down dungeon floor plan in classic D&D graph paper style. Shows rooms, corridors, doors, stairs, secret passages. ${r.atmosphere} atmosphere. Dark stone walls, torchlit rooms. Hand-drawn style. Grid visible. No text labels.`,
-    'Cave System':
-      `A top-down natural cave system map in classic D&D style. Shows caverns, tunnels, underground lakes, stalactites. ${r.atmosphere} atmosphere. Hand-drawn on aged parchment. No text labels.`,
-    'Ruins':
-      `A top-down ancient ruins map in classic D&D cartography style. Shows collapsed walls, overgrown courtyards, intact chambers, rubble. ${r.era} era ruins. ${r.atmosphere} atmosphere. Hand-drawn ink style. No text labels.`,
-    'Castle/Keep':
-      `A top-down castle floor plan in classic D&D style. Shows towers, great hall, dungeons, battlements, courtyards. ${r.atmosphere} atmosphere. Hand-drawn ink illustration. No text labels.`,
-    'Tavern/Inn':
-      `A top-down tavern interior floor plan in classic D&D style on aged parchment. Shows taproom, bar, kitchen, private rooms, cellar stairs. Warm and cozy. Hand-drawn ink. No text labels.`,
-    'Temple':
-      `A top-down temple interior map in classic D&D style. Shows nave, altars, side chapels, catacombs, sacred chambers. ${r.atmosphere} atmosphere. ${r.era} era architecture. Hand-drawn ink. No text labels.`,
-  };
-  let prompt = bases[r.mapType] ?? bases['Region'];
-  if (dalleAdditions) prompt += ` ${dalleAdditions}`;
-  return prompt.slice(0, 3900); // DALL-E 3 prompt limit
+function buildDallePrompt(r) {
+  const terrain = r.terrain[0] ?? 'varied';
+  return `Top-down fantasy cartography map, hand-drawn ink style on aged parchment. ${r.mapType} map. ${terrain} landscape. ${r.atmosphere} atmosphere. Classic D&D adventure module style. No text labels. Bird's eye view.`.substring(0, 800);
 }
 
 // ── Claude system/user prompts (split into two smaller calls) ─────────────────
@@ -322,7 +300,7 @@ export function MapGenerator({
       if (hasOpenAIKey()) {
         console.log('[MapGenerator] Step 3/3 — calling DALL-E...');
         try {
-          const dallePrompt = buildDallePrompt(resolved, meta.dalle_prompt_additions);
+          const dallePrompt = buildDallePrompt(resolved);
           const updated = await generateAndUploadImage(map.id, dallePrompt);
           if (updated) map = updated;
           console.log('[MapGenerator] Step 3/3 done — image_url:', map?.image_url);

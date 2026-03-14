@@ -362,7 +362,7 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
     try {
       console.log('[NPCGenerator] Requesting DALL-E portrait...');
       const subject = result.appearance || `${resolved.gender} ${resolved.race} ${resolved.charClass}`;
-      const prompt = `AD&D 2E dark-fantasy portrait, head and shoulders, dramatic oil painting style, no text, no watermarks. ${subject}. Power: ${resolved.powerLevel}. Alignment: ${ALIGNMENTS.label[resolved.alignment]??resolved.alignment}. Moody lighting, intricate medieval detail.`;
+      const prompt = `AD&D 2E dark-fantasy portrait, head and shoulders, oil painting style, no text, no watermarks. ${subject}. ${resolved.powerLevel} power level. ${ALIGNMENTS.label[resolved.alignment]??resolved.alignment}. Moody lighting, medieval detail.`.substring(0, 800);
       const resp = await fetch('https://api.openai.com/v1/images/generations', {
         method:'POST',
         headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},
