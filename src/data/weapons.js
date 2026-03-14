@@ -429,6 +429,56 @@ export const ALL_BROAD_GROUP_IDS = WEAPON_GROUPS_49.map(bg=>bg.id);
 // Compat alias
 export const WEAPON_GROUPS = WEAPON_GROUPS_49;
 
+// ── Canonical weapon lookup: for each weapon name, the preferred (non-dupe) weapon object.
+// Used so spec/mastery/woc always stores the same ID regardless of which group granted proficiency.
+export const WEAPON_CANONICAL_IDS = (() => {
+  const map = {};
+  WEAPON_GROUPS_49.forEach(bg => {
+    const all = [...bg.tightGroups.flatMap(tg => tg.weapons), ...bg.unrelated];
+    all.forEach(w => {
+      const key = w.name.toLowerCase();
+      if (!map[key]) {
+        map[key] = w;
+      } else if (!w.dupe && map[key].dupe) {
+        map[key] = w; // prefer canonical (non-dupe) entry
+      }
+    });
+  });
+  return map; // { "long sword": { id:"ws_long_sword", name:"Long Sword" }, ... }
+})();
+
+// Returns the canonical weapon ID for any weapon (handles dupe entries)
+export function canonicalWeapId(w) {
+  return WEAPON_CANONICAL_IDS[w.name.toLowerCase()]?.id ?? w.id;
+}
+
+// Compute the set of canonical weapon IDs the character is proficient in,
+// given a weapPicked state object. Excludes shield/armor special profs.
+// Used by Tab VIII and auto-cleanup in useCharacter.
+export function computeProfCanonicalIds(weapPicked) {
+  const ids = new Set();
+  const addW = (w) => {
+    if (w.id.startsWith("wsp_")) return;
+    ids.add(canonicalWeapId(w));
+  };
+  WEAPON_GROUPS_49.forEach(bg => {
+    if (weapPicked[bg.id] === "broad") {
+      bg.tightGroups.forEach(tg => tg.weapons.forEach(addW));
+      bg.unrelated.forEach(addW);
+    } else {
+      bg.tightGroups.forEach(tg => {
+        if (weapPicked[tg.id] === "tight") {
+          tg.weapons.forEach(addW);
+        } else {
+          tg.weapons.forEach(w => { if (weapPicked[w.id] === "single") addW(w); });
+        }
+      });
+      bg.unrelated.forEach(w => { if (weapPicked[w.id] === "single") addW(w); });
+    }
+  });
+  return ids;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  CHAPTER 8 — SPECIALIZATION & MASTERY (Combat & Tactics + S&P)
 // ═══════════════════════════════════════════════════════════════════
@@ -494,45 +544,77 @@ export const MASTERY_TIERS = [
 ];
 
 // Fighting Style Specializations. cp keyed fighter/rp/rogue/priest/wizard.
-// "enhanced" versions replace the basic (cumulative additional cost shown).
+// enhCp = TOTAL cumulative cost to reach enhanced tier (= cp + 2 extra CP to upgrade).
+// eligible = which specCol groups may take this style normally.
 export const STYLE_SPECS = [
-  { id:"1h",       name:"One-Handed Weapon",
+  { id:"1h",
+    name:"One-Handed Weapon",
+    eligible:["fighter","rp","rogue","priest","wizard"],
     cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:4 },
-    hit:0, dmg:0, ini:0, ac:1,
-    desc:"+1 AC (shield hand empty). Enhanced gives +2 AC.",
+    hit:0, dmg:0, ini:0, ac:"+1 (empty off-hand)",
+    desc:"+1 AC when fighting with weapon in one hand and NOTHING (no shield, no weapon) in the other. Empty hand may be used as secondary unarmed weapon (punch/grab/throw) at normal two-weapon penalties. Can switch between one-handed and two-handed style at start of each round if weapon permits both.",
     hasEnhanced:true,
     enhCp:{ fighter:4, rp:4, rogue:5, priest:5, wizard:6 },
+    enhDesc:"Upgraded: AC bonus improves to +2 (spend 2 additional CP).",
     enhAC:2,
   },
-  { id:"2h",       name:"Two-Handed Weapon",
+  { id:"2h",
+    name:"Two-Handed Weapon",
+    eligible:["fighter","rp","priest","wizard"],
     cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:4 },
-    hit:"*+1", dmg:0, ini:-3, ac:0,
-    desc:"–3 speed factor bonus. *+1 damage when using a one-handed weapon in two hands.",
+    hit:0, dmg:"+1 (1H wield in 2H)", ini:"-3 speed", ac:0,
+    desc:"Speed factor lowered by 3 when weapon wielded two-handed. If using a one-handed weapon with two hands, gain +1 bonus to ALL damage rolls. Can switch to one-handed style each round if weapon permits.",
     hasEnhanced:false,
   },
-  { id:"2w",       name:"Two-Weapon",
-    cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:4 },
+  { id:"2w",
+    name:"Two Weapon",
+    eligible:["fighter","rp","rogue"],
+    // Cost = normal slot cost + 1 CP extra. Rangers (rp) pay normal (no surcharge).
+    cp:{ fighter:3, rp:2, rogue:4, priest:4, wizard:5 },
     hit:0, dmg:0, ini:0, ac:0,
-    desc:"Reduced attack penalties: 0 / –2. Off-hand weapon must be smaller than main hand. Enhanced: no off-hand size restriction.",
+    desc:"Attack penalties: 0 (primary) / –2 (secondary). Secondary weapon must be one size smaller than primary (unless primary is Size S). Rangers pay normal slot cost (no +1 surcharge). With Ambidexterity trait: no penalty either hand.",
     hasEnhanced:true,
-    enhCp:{ fighter:4, rp:4, rogue:5, priest:5, wizard:6 },
+    enhCp:{ fighter:5, rp:4, rogue:6, priest:6, wizard:7 },
+    enhDesc:"Upgraded: may use two weapons of equal size (each must be wieldable one-handed). Spend 2 additional CP.",
   },
-  { id:"shield",   name:"Weapon & Shield",
+  { id:"shield",
+    name:"Weapon and Shield",
+    eligible:["fighter","rp","priest"],
     cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:6 },
+    hit:0, dmg:0, ini:0, ac:"+1 or +1 hit (choose)",
+    desc:"Each melee round choose: +1 AC (in addition to shield's normal AC bonus) OR +1 on attack roll. Cannot gain both in the same round.",
+    hasEnhanced:false,
+  },
+  { id:"missile",
+    name:"Missile Weapon",
+    eligible:["fighter","rp","rogue"],
+    cp:{ fighter:2, rp:2, rogue:3, priest:4, wizard:5 },
+    hit:0, dmg:0, ini:0, ac:"*+1 (attacking w/missile)",
+    desc:"+1 AC vs. missile fire ONLY when also attacking with a missile weapon that same round. Movement: move at ½ rate and make ALL allowed missile attacks, OR move at full rate and make HALF as many attacks.",
+    hasEnhanced:false,
+  },
+  { id:"horse",
+    name:"Horse Archery",
+    eligible:["fighter","rp","rogue"],
+    cp:{ fighter:2, rp:2, rogue:3, priest:4, wizard:5 },
     hit:0, dmg:0, ini:0, ac:0,
-    desc:"Allows 1 free Shield Punch per round. Standard two-weapon penalty applies (–2/–4).",
+    desc:"Normal saddle penalties for shooting from horseback reduced by 2. No penalty when horse moves at half speed or less. Only –2 to-hit penalty when horse moves faster than half speed.",
     hasEnhanced:false,
   },
-  { id:"missile",  name:"Missile / Thrown / Ranged",
-    cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:6 },
-    hit:0, dmg:0, ini:0, ac:"*+1",
-    desc:"+1 AC vs ranged attacks. ½ move: all attacks. Full move: ½ attacks.",
+  { id:"thrown",
+    name:"Thrown Weapon",
+    eligible:["fighter","rp","rogue","priest","wizard"],
+    cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:4 },
+    hit:0, dmg:0, ini:0, ac:"*+1 (attacking w/thrown)",
+    desc:"Identical to Missile Weapon specialization. +1 AC vs. missile fire ONLY when also attacking with a thrown weapon that round. Same movement/attack rate tradeoffs.",
     hasEnhanced:false,
   },
-  { id:"stylespec",name:"Style Specialization (DM negotiated)",
+  { id:"stylespec",
+    name:"Special Style",
+    eligible:["fighter","rp","rogue","priest","wizard"],
     cp:{ fighter:2, rp:2, rogue:3, priest:3, wizard:4 },
     hit:null, dmg:null, ini:null, ac:null,
-    desc:"One custom benefit negotiated with DM: –1 AC bonus; +1 to hit; free block/trap maneuver; negate two-weapon penalties; or free unarmed punch/kick.",
+    desc:"DM-negotiated benefit. Suggested: –1 AC bonus; +1 to hit or damage; free block/trap maneuver; negate two-weapon penalties; or free unarmed punch/kick in addition to weapon attack.",
     hasEnhanced:false,
   },
 ];

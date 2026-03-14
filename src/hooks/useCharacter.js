@@ -26,7 +26,7 @@ import {
   getWeapCost, weapSlotCost, specCol,
   MASTERY_TIERS, STYLE_SPECS, WOC_CP,
   getWeapTier, getWeapSingleCostByTier, getGroupMaxTier,
-  WEAPON_GROUPS_49,
+  WEAPON_GROUPS_49, computeProfCanonicalIds,
 } from "../data/weapons.js";
 
 import {
@@ -859,7 +859,52 @@ export function useCharacter() {
 
   const toggleWeap = (id, name, level) => {
     const already = !!weapPicked[id];
-    if (already) { setWeapPicked(p => { const n={...p}; delete n[id]; return n; }); return; }
+    if (already) {
+      // Compute which canonical weapon IDs will no longer be proficient after this removal
+      const newWeapPicked = { ...weapPicked };
+      delete newWeapPicked[id];
+      const newProfIds = computeProfCanonicalIds(newWeapPicked);
+
+      // Find mastery/woc entries invalidated by this removal
+      const invalidatedMastery = Object.fromEntries(
+        Object.entries(masteryPicked).filter(([wid]) => !newProfIds.has(wid))
+      );
+      const invalidatedWoc = wocPicked && !newProfIds.has(wocPicked) ? wocPicked : null;
+
+      // Apply removals and show notification if anything was invalidated
+      setWeapPicked(newWeapPicked);
+
+      const removedLabels = [];
+      if (invalidatedWoc) {
+        removedLabels.push("Weapon of Choice");
+        setWocPicked(null);
+      }
+      if (Object.keys(invalidatedMastery).length > 0) {
+        const tierNames = [...new Set(Object.values(invalidatedMastery).map(p => p.tier))];
+        removedLabels.push(...tierNames.map(t => MASTERY_TIERS.find(x => x.id === t)?.name ?? t));
+        setMasteryPicked(p => {
+          const n = { ...p };
+          Object.keys(invalidatedMastery).forEach(k => delete n[k]);
+          return n;
+        });
+      }
+
+      if (removedLabels.length > 0) {
+        // Compute CP refund for the notification
+        let refund = 0;
+        if (invalidatedWoc) refund += WOC_CP[classGroup ? specCol(selectedClass) : "rogue"] ?? 3;
+        Object.values(invalidatedMastery).forEach(pick => {
+          const t = MASTERY_TIERS.find(x => x.id === pick.tier);
+          const c = specCol(selectedClass);
+          if (t?.cp[c]) refund += t.cp[c];
+        });
+        setInfoModal({
+          title: "Proficiency removed",
+          body: `${name} removed — ${removedLabels.join(", ")} also removed.\n${refund > 0 ? `${refund} CP refunded.` : ""}`,
+        });
+      }
+      return;
+    }
     const cost = (level === "style")   ? 2
                 : (level === "shield")  ? getWeapCost(classGroup, "shield")
                 : (level === "armor")   ? getWeapCost(classGroup, "armor")
