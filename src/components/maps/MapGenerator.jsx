@@ -100,71 +100,80 @@ function buildDallePrompt(r, dalleAdditions) {
   return prompt.slice(0, 3900); // DALL-E 3 prompt limit
 }
 
-// ── Claude system/user prompts ────────────────────────────────────────────────
+// ── Claude system/user prompts (split into two smaller calls) ─────────────────
 const CLAUDE_SYSTEM = `You are an expert AD&D 2E Dungeon Master generating detailed, atmospheric map content for Forgotten Realms campaigns.
 Return ONLY valid JSON with no markdown, no code fences, no commentary, no trailing commas.`;
 
-function buildClaudePrompt(r, numPois, parentContext) {
-  const parentNote = parentContext
-    ? `This map is located within/below: "${parentContext.name}" — ${parentContext.short_description || parentContext.dm_description || ''}`
-    : 'This is a root-level map.';
+function parentNote(ctx) {
+  return ctx
+    ? `Context: this map is located within/below "${ctx.name}" — ${ctx.short_description || ctx.dm_description || '(no description)'}`
+    : '';
+}
 
-  return `Generate a complete AD&D 2E ${r.mapType} map:
-Terrain: ${r.terrain.join(', ')}
-Atmosphere: ${r.atmosphere}
-Era: ${r.era}
-Inhabitants: ${r.inhabitants}
-Size: ${r.size}
-${parentNote}
+/** CALL 1 — map metadata only. Fast, ~800-1200 tokens output. */
+function buildMetadataPrompt(r, parentCtx) {
+  return `Generate metadata for an AD&D 2E ${r.mapType} map.
+Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
+${parentNote(parentCtx)}
+
+Respond with ONLY this JSON object:
+{
+  "title": "Evocative location name (3-5 words)",
+  "subtitle": "Atmospheric tagline (5-8 words)",
+  "description": "2 sentence atmospheric overview",
+  "history": "2 sentences of backstory",
+  "atmosphere_notes": "One sentence: sounds, smells, lighting",
+  "dalle_prompt_additions": "Key visual details for image, max 120 chars"
+}`;
+}
+
+/** CALL 2 — POIs + encounter table. Uses title from call 1 for context. */
+function buildPoisPrompt(r, numPois, meta, parentCtx) {
+  const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
+    ? 'For this region map include a variety of: settlements, ruins, caves, encounter areas, landmarks.'
+    : 'For this interior/dungeon map include: rooms, traps, treasures, encounters, boss area.';
+  return `For the AD&D 2E ${r.mapType} map "${meta.title}":
+Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
+${parentNote(parentCtx)}
+${typeHint}
 
 Generate exactly ${numPois} points of interest spread across the map.
-For region maps: include settlements, ruins, caves, encounter areas, landmarks.
-For dungeon/cave/castle maps: include rooms, traps, treasures, encounters, boss areas.
 
-Respond in JSON matching this exact schema:
+Respond with ONLY this JSON object:
 {
-  "title": "Evocative location name",
-  "subtitle": "Brief tagline",
-  "description": "2-3 sentence atmospheric overview",
-  "history": "2-3 sentences about this place",
-  "atmosphere_notes": "Sensory details: sounds, smells, lighting",
-  "dalle_prompt_additions": "Specific visual details for image generation (max 200 chars)",
   "pois": [
     {
       "id": "poi_1",
       "name": "Location name",
       "type": "city|village|ruins|cave|dungeon|encounter|treasure|trap|npc|landmark|mystery",
-      "x_percent": 45.2,
-      "y_percent": 32.1,
+      "x_percent": 20,
+      "y_percent": 35,
       "is_dm_only": false,
       "short_description": "One sentence players might learn",
-      "dm_description": "Full DM details (2-3 sentences)",
-      "history": "Background of this specific place",
-      "current_situation": "What is happening here right now",
-      "encounters": "Possible monster encounters or challenges",
-      "treasure": "Loot available if any (or null)",
-      "secrets": "Hidden information or plot hooks",
+      "dm_description": "1-2 sentence DM detail",
+      "history": "One sentence backstory",
+      "current_situation": "One sentence current state",
+      "encounters": "Possible encounter (or null)",
+      "treasure": "Loot if any (or null)",
+      "secrets": "Hidden info (or null)",
       "can_drill_down": true,
       "drill_down_type": "dungeon|cave|city|ruins|null",
-      "quest_hooks": ["Hook 1", "Hook 2"]
+      "quest_hooks": ["Hook 1"]
     }
   ],
   "random_encounter_table": [
-    {"roll": "1-2", "encounter": "Description"},
-    {"roll": "3-4", "encounter": "Description"},
-    {"roll": "5-6", "encounter": "Description"}
+    {"roll": "1-2", "encounter": "Brief encounter"},
+    {"roll": "3-4", "encounter": "Brief encounter"},
+    {"roll": "5-6", "encounter": "Brief encounter"}
   ],
-  "secrets": ["Map-level secret 1"],
-  "plot_hooks": ["Campaign hook 1"]
+  "secrets": ["One map-level secret"],
+  "plot_hooks": ["One campaign hook"]
 }
 
 Rules:
-- x_percent and y_percent must be between 5 and 95 (spread across the map — do NOT cluster them)
+- x_percent and y_percent: integers between 5 and 95, spread them out — do NOT cluster
 - can_drill_down: true for caves, dungeons, ruins, cities, villages
-- drill_down_type: set to appropriate type if can_drill_down, otherwise null
-- is_dm_only: true for traps, secrets, and hidden locations
-- Include 3-6 items in random_encounter_table
-- Include 1-3 secrets and 1-3 plot_hooks`;
+- is_dm_only: true for traps, secrets, hidden locations`;
 }
 
 // ── DALL-E generation ─────────────────────────────────────────────────────────
@@ -222,11 +231,12 @@ export function MapGenerator({
     inhabitants: 'Random',
     poiCount:    'Random (3-8)',
   });
-  const [step,         setStep]         = useState('form'); // 'form'|'generating'|'error'
-  const [contentDone,  setContentDone]  = useState(false);
-  const [imageDone,    setImageDone]    = useState(false);
-  const [imageSkipped, setImageSkipped] = useState(false);
-  const [error,        setError]        = useState('');
+  const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
+  const [step1Done,   setStep1Done]   = useState(false); // metadata call
+  const [step2Done,   setStep2Done]   = useState(false); // POI call
+  const [step3Done,   setStep3Done]   = useState(false); // DALL-E image
+  const [step3Skip,   setStep3Skip]   = useState(false); // no OpenAI key / failed
+  const [error,       setError]       = useState('');
   const [showSettings, setShowSettings] = useState(false);
 
   const setP = (key, val) => setParams(p => ({ ...p, [key]: val }));
@@ -239,84 +249,97 @@ export function MapGenerator({
   const handleGenerate = async () => {
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
 
-    console.log('[MapGenerator] Starting generation. params:', params);
+    console.log('[MapGenerator] ── Starting generation ──');
+    console.log('[MapGenerator] Params:', params);
     setStep('generating');
-    setContentDone(false);
-    setImageDone(false);
-    setImageSkipped(false);
+    setStep1Done(false);
+    setStep2Done(false);
+    setStep3Done(false);
+    setStep3Skip(false);
     setError('');
 
     try {
-      // ── Step 1: Claude content ─────────────────────────────────────────────
       const resolved = resolveParams(params);
       const numPois  = resolvePoiCount(params.poiCount);
-      console.log('[MapGenerator] Step 1 — calling Claude. resolved params:', resolved, '| POI count:', numPois);
+      console.log('[MapGenerator] Resolved:', resolved, '| POI count:', numPois);
 
-      const mapContent = await callClaude({
+      // ── Step 1/3: Map metadata (Claude) ───────────────────────────────────
+      console.log('[MapGenerator] Step 1/3 — requesting map metadata from Claude...');
+      const meta = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
-        userPrompt:   buildClaudePrompt(resolved, numPois, parentPoiCtx),
-        maxTokens:    4096,
+        userPrompt:   buildMetadataPrompt(resolved, parentPoiCtx),
+        maxTokens:    1200,
       });
-      console.log('[MapGenerator] Step 1 — Claude returned. title:', mapContent?.title, '| pois count:', mapContent?.pois?.length);
-      setContentDone(true);
+      console.log('[MapGenerator] Step 1/3 done — title:', meta?.title);
 
-      if (!mapContent.title) throw new Error('AI returned invalid map data (missing title). Please try again.');
+      if (!meta?.title) throw new Error('AI returned invalid map metadata (missing title). Please try again.');
+      setStep1Done(true);
+
+      // ── Step 2/3: POIs + encounter table (Claude) ─────────────────────────
+      console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude...');
+      const poiData = await callClaude({
+        systemPrompt: CLAUDE_SYSTEM,
+        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx),
+        maxTokens:    2000,
+      });
+      console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
 
       // Normalise POI positions
-      const pois = (mapContent.pois ?? []).map((p, i) => ({
+      const pois = (poiData.pois ?? []).map((p, i) => ({
         ...p,
-        id:           p.id    || `poi_${i + 1}`,
+        id:           p.id || `poi_${i + 1}`,
         x_percent:    Math.max(5, Math.min(95, Number(p.x_percent) || (10 + i * 8))),
         y_percent:    Math.max(5, Math.min(95, Number(p.y_percent) || (10 + i * 7))),
         child_map_id: null,
       }));
+      setStep2Done(true);
 
-      // ── Step 2: Create map record ──────────────────────────────────────────
-      console.log('[MapGenerator] Step 2 — creating map record on server...');
+      // ── Create map record (server) ─────────────────────────────────────────
+      console.log('[MapGenerator] Creating map record on server...');
       let map = await api.createMap({
         campaign_id:   campaignId,
-        name:          mapContent.title,
+        name:          meta.title,
         type:          toBackendType(resolved.mapType),
         parent_map_id: parentMapId,
         parent_poi_id: parentPoiId,
         data: {
           pois,
-          subtitle:               mapContent.subtitle              || '',
-          description:            mapContent.description           || '',
-          history:                mapContent.history               || '',
-          atmosphere_notes:       mapContent.atmosphere_notes      || '',
-          random_encounter_table: mapContent.random_encounter_table || [],
-          secrets:                mapContent.secrets               || [],
-          plot_hooks:             mapContent.plot_hooks            || [],
+          subtitle:               meta.subtitle                   || '',
+          description:            meta.description                || '',
+          history:                meta.history                    || '',
+          atmosphere_notes:       meta.atmosphere_notes           || '',
+          random_encounter_table: poiData.random_encounter_table  || [],
+          secrets:                poiData.secrets                 || [],
+          plot_hooks:             poiData.plot_hooks              || [],
           generated_params:       resolved,
           visible_to_players:     false,
           pins:                   [],
         },
       });
-      console.log('[MapGenerator] Step 2 — map record created. id:', map?.id);
+      console.log('[MapGenerator] Map record created — id:', map?.id);
 
-      // ── Step 3: DALL-E image (only after Claude succeeds) ──────────────────
+      // ── Step 3/3: DALL-E image (only after both Claude calls succeed) ──────
       if (hasOpenAIKey()) {
-        console.log('[MapGenerator] Step 3 — calling DALL-E for image...');
+        console.log('[MapGenerator] Step 3/3 — calling DALL-E...');
         try {
-          const dallePrompt = buildDallePrompt(resolved, mapContent.dalle_prompt_additions);
+          const dallePrompt = buildDallePrompt(resolved, meta.dalle_prompt_additions);
           const updated = await generateAndUploadImage(map.id, dallePrompt);
           if (updated) map = updated;
-          console.log('[MapGenerator] Step 3 — DALL-E image uploaded. image_url:', map?.image_url);
-          setImageDone(true);
+          console.log('[MapGenerator] Step 3/3 done — image_url:', map?.image_url);
+          setStep3Done(true);
         } catch (imgErr) {
-          console.warn('[MapGenerator] Step 3 — DALL-E failed (non-fatal):', imgErr.message);
-          setImageSkipped(true);
+          console.warn('[MapGenerator] Step 3/3 — DALL-E failed (non-fatal):', imgErr.message);
+          setStep3Skip(true);
         }
       } else {
-        console.log('[MapGenerator] Step 3 — skipped (no OpenAI key).');
-        setImageSkipped(true);
+        console.log('[MapGenerator] Step 3/3 — skipped (no OpenAI key).');
+        setStep3Skip(true);
       }
 
-      console.log('[MapGenerator] Generation complete!');
+      console.log('[MapGenerator] ── Generation complete! ──');
       onCreated(map);
     } catch (e) {
-      console.error('[MapGenerator] Generation failed:', e.message, e);
+      console.error('[MapGenerator] ── Generation FAILED:', e.message, e);
       setError(e.message);
       setStep('error');
     }
@@ -432,20 +455,34 @@ export function MapGenerator({
           {step === 'generating' && (
             <div className="mgn-body mgn-progress-body">
               <ProgressRow
-                label="Forging map content…"
-                subLabel="Claude is writing your map, POIs & lore (up to 30s)"
-                done={contentDone}
+                label="Step 1/3: Generating map content…"
+                subLabel="Claude is writing title, description & atmosphere"
+                done={step1Done}
               />
-              {contentDone && (
+              {step1Done && (
                 <ProgressRow
-                  label={imageSkipped ? 'Image skipped (no OpenAI key)' : imageDone ? 'Map painted!' : 'Painting the map…'}
-                  subLabel={imageSkipped ? 'Upload an image later from the map toolbar' : 'DALL·E 3 is illustrating your map (up to 30s)'}
-                  done={imageDone || imageSkipped}
-                  skipped={imageSkipped}
+                  label="Step 2/3: Generating points of interest…"
+                  subLabel="Claude is placing POIs, encounters & lore"
+                  done={step2Done}
                 />
               )}
-              {!contentDone && (
-                <div className="mgn-sub-note">Check the browser console (F12) if this takes more than 30 seconds.</div>
+              {step2Done && (
+                <ProgressRow
+                  label={
+                    step3Skip ? 'Step 3/3: Image skipped (no OpenAI key)' :
+                    step3Done ? 'Step 3/3: Map painted!' :
+                    'Step 3/3: Painting the map image…'
+                  }
+                  subLabel={
+                    step3Skip ? 'You can upload an image manually from the map toolbar' :
+                    'DALL·E 3 is illustrating your map (up to 60s)'
+                  }
+                  done={step3Done || step3Skip}
+                  skipped={step3Skip}
+                />
+              )}
+              {!step1Done && (
+                <div className="mgn-sub-note">Check the browser console (F12 → Console) if stuck beyond 30 s.</div>
               )}
             </div>
           )}

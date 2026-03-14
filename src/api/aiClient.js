@@ -8,7 +8,7 @@
 
 const CLAUDE_MODEL    = 'claude-sonnet-4-20250514';
 const CLAUDE_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const TIMEOUT_MS      = 30_000; // 30-second hard timeout
+const TIMEOUT_MS      = 60_000; // 60-second hard timeout (DALL-E can be slow)
 
 export function getAnthropicKey() { return localStorage.getItem('anthropic_api_key') ?? null; }
 export function getOpenAIKey()    { return localStorage.getItem('openai_api_key')    ?? null; }
@@ -63,8 +63,8 @@ export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096, m
     clearTimeout(timeoutId);
     if (fetchErr.name === 'AbortError') {
       throw new Error(
-        `Request timed out after ${TIMEOUT_MS / 1000} seconds. ` +
-        'Check your API key and network connection, then try again.'
+        `Anthropic API request timed out after ${TIMEOUT_MS / 1000} seconds. ` +
+        'Verify your API key is correct in ⚙ Settings and try again.'
       );
     }
     console.error('[callClaude] fetch threw:', fetchErr);
