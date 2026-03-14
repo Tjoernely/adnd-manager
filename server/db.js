@@ -1,41 +1,41 @@
-const Database = require('better-sqlite3');
-const path     = require('path');
+/**
+ * PostgreSQL connection pool.
+ * Replaces the old better-sqlite3 synchronous DB.
+ */
+const { Pool } = require('pg');
 
-const db = new Database(path.join(__dirname, 'dnd.db'));
+const pool = new Pool({
+  host:     process.env.DB_HOST     || 'localhost',
+  port:     parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DB_NAME     || 'adnd_manager',
+  user:     process.env.DB_USER     || 'adnd',
+  password: process.env.DB_PASSWORD,
+  max:      20,
+  idleTimeoutMillis:       30_000,
+  connectionTimeoutMillis:  5_000,
+});
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+pool.on('error', (err) => {
+  console.error('[db] Unexpected pool error:', err.message);
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    email         TEXT    UNIQUE NOT NULL,
-    password_hash TEXT    NOT NULL,
-    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+const db = {
+  /** Run any SQL, return full QueryResult */
+  query: (text, params) => pool.query(text, params),
 
-  CREATE TABLE IF NOT EXISTS campaigns (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    name        TEXT    NOT NULL,
-    description TEXT    DEFAULT '',
-    data        TEXT    DEFAULT '{}',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
+  /** Return the first row or null */
+  async one(text, params) {
+    const { rows } = await pool.query(text, params);
+    return rows[0] ?? null;
+  },
 
-  CREATE TABLE IF NOT EXISTS characters (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL,
-    campaign_id INTEGER,
-    name        TEXT    NOT NULL,
-    data        TEXT    DEFAULT '{}',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id)     REFERENCES users(id)     ON DELETE CASCADE,
-    FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL
-  );
-`);
+  /** Return all rows */
+  async all(text, params) {
+    const { rows } = await pool.query(text, params);
+    return rows;
+  },
+
+  pool,
+};
 
 module.exports = db;

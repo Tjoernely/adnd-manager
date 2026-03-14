@@ -37,22 +37,95 @@ async function apiFetch(path, options = {}) {
 
 export const api = {
   // ── Auth ──────────────────────────────────────────────────────────
-  login:    (email, password) =>
+  login:    (email, password, username, role) =>
     apiFetch('/auth/login',    { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (email, password) =>
-    apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  register: (email, password, username, role) =>
+    apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, username, role }) }),
   me: () => apiFetch('/auth/me'),
 
+  // Invite flow
+  createInvite:  (campaign_id, email)  =>
+    apiFetch('/auth/invite', { method: 'POST', body: JSON.stringify({ campaign_id, email }) }),
+  previewInvite: (token)               => apiFetch(`/auth/invite/${token}`),
+  acceptInvite:  (token)               =>
+    apiFetch(`/auth/invite/${token}/accept`, { method: 'POST' }),
+
   // ── Campaigns ─────────────────────────────────────────────────────
-  getCampaigns:    ()           => apiFetch('/campaigns'),
-  createCampaign:  (data)       => apiFetch('/campaigns',      { method: 'POST',   body: JSON.stringify(data) }),
-  updateCampaign:  (id, data)   => apiFetch(`/campaigns/${id}`, { method: 'PUT',   body: JSON.stringify(data) }),
-  deleteCampaign:  (id)         => apiFetch(`/campaigns/${id}`, { method: 'DELETE' }),
+  getCampaigns:      ()             => apiFetch('/campaigns'),
+  getCampaign:       (id)           => apiFetch(`/campaigns/${id}`),
+  createCampaign:    (data)         => apiFetch('/campaigns',      { method: 'POST',   body: JSON.stringify(data) }),
+  updateCampaign:    (id, data)     => apiFetch(`/campaigns/${id}`, { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteCampaign:    (id)           => apiFetch(`/campaigns/${id}`, { method: 'DELETE' }),
+  getCampaignMembers:(id)           => apiFetch(`/campaigns/${id}/members`),
+  kickMember:        (id, userId)   => apiFetch(`/campaigns/${id}/members/${userId}`, { method: 'DELETE' }),
+  getCampaignInvites:(id)           => apiFetch(`/campaigns/${id}/invites`),
 
   // ── Characters ────────────────────────────────────────────────────
-  getCharacters:   (campaignId) => apiFetch(`/characters?campaign_id=${campaignId}`),
-  getCharacter:    (id)         => apiFetch(`/characters/${id}`),
-  createCharacter: (data)       => apiFetch('/characters',      { method: 'POST',   body: JSON.stringify(data) }),
-  saveCharacter:   (id, data)   => apiFetch(`/characters/${id}`, { method: 'PUT',   body: JSON.stringify(data) }),
-  deleteCharacter: (id)         => apiFetch(`/characters/${id}`, { method: 'DELETE' }),
+  getCharacters:    (campaignId) => apiFetch(`/characters?campaign_id=${campaignId}`),
+  getPartyView:     (campaignId) => apiFetch(`/characters/party/${campaignId}`),
+  getCharacter:     (id)         => apiFetch(`/characters/${id}`),
+  createCharacter:  (data)       => apiFetch('/characters',       { method: 'POST',   body: JSON.stringify(data) }),
+  saveCharacter:    (id, data)   => apiFetch(`/characters/${id}`,  { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteCharacter:  (id)         => apiFetch(`/characters/${id}`,  { method: 'DELETE' }),
+
+  // ── NPCs ──────────────────────────────────────────────────────────
+  getNpcs:     (campaignId)  => apiFetch(`/npcs?campaign_id=${campaignId}`),
+  getNpc:      (id)          => apiFetch(`/npcs/${id}`),
+  createNpc:   (data)        => apiFetch('/npcs',        { method: 'POST',   body: JSON.stringify(data) }),
+  updateNpc:   (id, data)    => apiFetch(`/npcs/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
+  revealNpc:   (id)          => apiFetch(`/npcs/${id}/reveal`, { method: 'PUT' }),
+  hideNpc:     (id)          => apiFetch(`/npcs/${id}/hide`,   { method: 'PUT' }),
+  deleteNpc:   (id)          => apiFetch(`/npcs/${id}`,   { method: 'DELETE' }),
+
+  // ── Spells ────────────────────────────────────────────────────────
+  // params: { q, group, level, school, sphere, source, limit, offset }
+  searchSpells: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString();
+    return apiFetch(`/spells${qs ? `?${qs}` : ''}`);
+  },
+  randomSpell:  (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString();
+    return apiFetch(`/spells/random${qs ? `?${qs}` : ''}`);
+  },
+  getSpell:     (id)          => apiFetch(`/spells/${id}`),
+
+  // ── Quests ────────────────────────────────────────────────────────
+  getQuests:    (campaignId) => apiFetch(`/quests?campaign_id=${campaignId}`),
+  getQuest:     (id)         => apiFetch(`/quests/${id}`),
+  createQuest:  (data)       => apiFetch('/quests',       { method: 'POST',   body: JSON.stringify(data) }),
+  updateQuest:  (id, data)   => apiFetch(`/quests/${id}`,  { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteQuest:  (id)         => apiFetch(`/quests/${id}`,  { method: 'DELETE' }),
+
+  // ── Encounters ────────────────────────────────────────────────────
+  getEncounters:   (campaignId) => apiFetch(`/encounters?campaign_id=${campaignId}`),
+  getEncounter:    (id)         => apiFetch(`/encounters/${id}`),
+  createEncounter: (data)       => apiFetch('/encounters',        { method: 'POST',   body: JSON.stringify(data) }),
+  updateEncounter: (id, data)   => apiFetch(`/encounters/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteEncounter: (id)         => apiFetch(`/encounters/${id}`,   { method: 'DELETE' }),
+
+  // ── Loot ──────────────────────────────────────────────────────────
+  getLootList:  (campaignId) => apiFetch(`/loot?campaign_id=${campaignId}`),
+  getLoot:      (id)         => apiFetch(`/loot/${id}`),
+  createLoot:   (data)       => apiFetch('/loot',        { method: 'POST',   body: JSON.stringify(data) }),
+  updateLoot:   (id, data)   => apiFetch(`/loot/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteLoot:   (id)         => apiFetch(`/loot/${id}`,   { method: 'DELETE' }),
+
+  // ── Maps ──────────────────────────────────────────────────────────
+  getMaps:     (campaignId) => apiFetch(`/maps?campaign_id=${campaignId}`),
+  getMap:      (id)         => apiFetch(`/maps/${id}`),
+  createMap:   (data)       => apiFetch('/maps',        { method: 'POST',   body: JSON.stringify(data) }),
+  updateMap:   (id, data)   => apiFetch(`/maps/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteMap:   (id)         => apiFetch(`/maps/${id}`,   { method: 'DELETE' }),
+
+  // ── Party Knowledge ───────────────────────────────────────────────
+  // visible_to: string[] — user IDs or ["all"]
+  getKnowledge:    (campaignId)      => apiFetch(`/party-knowledge?campaign_id=${campaignId}`),
+  getKnowledgeEntry:(id)             => apiFetch(`/party-knowledge/${id}`),
+  createKnowledge: (data)            => apiFetch('/party-knowledge',       { method: 'POST',   body: JSON.stringify(data) }),
+  updateKnowledge: (id, data)        => apiFetch(`/party-knowledge/${id}`,  { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteKnowledge: (id)              => apiFetch(`/party-knowledge/${id}`,  { method: 'DELETE' }),
 };
