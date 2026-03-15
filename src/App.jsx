@@ -23,6 +23,7 @@ import { PrintSheet }        from "./components/PrintSheet.jsx";
 import { MapManager }        from "./components/maps/MapManager.jsx";
 import { CampaignDashboard } from "./components/campaign/CampaignDashboard.jsx";
 import { NPCManager }        from "./components/npcs/NPCManager.jsx";
+import SpellLibrary           from "./components/spells/SpellLibrary.jsx";
 import "./styles/adnd-theme.css";
 
 export default function App() {
@@ -39,7 +40,7 @@ export default function App() {
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
-  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters' | 'npcs'
+  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters' | 'npcs' | 'spells'
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
@@ -134,6 +135,7 @@ export default function App() {
           onNavigate={(modId) => {
             if (modId === 'characters') setScreen('characters');
             if (modId === 'npcs')       setScreen('npcs');
+            if (modId === 'spells')     setScreen('spells');
           }}
           onOpenMaps={() => setShowMaps(true)}
           onBack={() => { setActiveCampaign(null); setDbCharId(null); setScreen('dashboard'); }}
@@ -146,6 +148,13 @@ export default function App() {
           onClose={() => setShowMaps(false)}
         />
       </>
+    );
+  }
+
+  // ── Spell Library screen ────────────────────────────────────
+  if (screen === 'spells') {
+    return (
+      <SpellLibrary onBack={() => setScreen('dashboard')} />
     );
   }
 
