@@ -32,7 +32,7 @@ const HOARD_TYPES    = ['dungeon', 'treasure', 'monster'];
 
 export default function RandomTableRoller() {
   const [rolling,      setRolling]      = useState({});     // letter → bool
-  const [results,      setResults]      = useState([]);     // { letter, roll, item }[]
+  const [results,      setResults]      = useState([]);     // { letter, roll, item_name, item }[]
   const [hoardLevel,   setHoardLevel]   = useState(3);
   const [hoardType,    setHoardType]    = useState('dungeon');
   const [hoardLoading, setHoardLoading] = useState(false);
@@ -44,11 +44,15 @@ export default function RandomTableRoller() {
     setRolling(prev => ({ ...prev, [letter]: true }));
     try {
       const res = await api.rollMagicalTable(letter);
-      if (res?.item) {
-        setResults(prev => [{ letter, roll: res.roll, item: res.item }, ...prev].slice(0, 40));
-      }
+      setResults(prev => [
+        { letter, roll: res.roll, item_name: res.item_name, item: res.item ?? null },
+        ...prev,
+      ].slice(0, 40));
     } catch (err) {
-      setResults(prev => [{ letter, roll: null, item: null, error: err.message }, ...prev].slice(0, 40));
+      setResults(prev => [
+        { letter, roll: null, item_name: null, item: null, error: err.message },
+        ...prev,
+      ].slice(0, 40));
     } finally {
       setRolling(prev => ({ ...prev, [letter]: false }));
     }
@@ -130,15 +134,17 @@ export default function RandomTableRoller() {
               <p style={{ color: 'var(--mi-purple-muted)', fontSize: 12, fontStyle: 'italic' }}>No items generated.</p>
             ) : (
               <div className="ir-results-scroll" style={{ maxHeight: 180 }}>
-                {hoardItems.map((item, i) => (
+                {hoardItems.map((hoardItem, i) => (
                   <div key={i} className="ir-result-row">
-                    <span className="ir-result-name">{item.name}</span>
-                    {item.rarity && (
-                      <span className="ir-result-roll">{item.rarity}</span>
+                    <span className="ir-result-name">{hoardItem.item?.name ?? hoardItem.item_name}</span>
+                    {hoardItem.item?.rarity && (
+                      <span className="ir-result-roll">{hoardItem.item.rarity}</span>
                     )}
-                    <button className="ir-result-view-btn" onClick={() => openDetail(item)}>
-                      View
-                    </button>
+                    {hoardItem.item?.id && (
+                      <button className="ir-result-view-btn" onClick={() => openDetail(hoardItem.item)}>
+                        View
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -175,20 +181,26 @@ export default function RandomTableRoller() {
           <div className="ir-results-title">Roll History</div>
           <div className="ir-results-scroll">
             {results.map((r, i) => (
-              <div key={i} className="ir-result-row">
-                <span className="ir-result-table">{r.letter}</span>
-                {r.roll != null && <span className="ir-result-roll">({r.roll})</span>}
-                {r.error ? (
-                  <span className="ir-result-name" style={{ color: 'var(--mi-cursed)' }}>{r.error}</span>
-                ) : r.item ? (
-                  <span className="ir-result-name">{r.item.name}</span>
-                ) : (
-                  <span className="ir-result-name" style={{ fontStyle: 'italic', opacity: 0.5 }}>No result</span>
-                )}
-                {r.item && (
-                  <button className="ir-result-view-btn" onClick={() => openDetail(r.item)}>
-                    View
-                  </button>
+              <div key={i} className="ir-result-row ir-result-row--stacked">
+                <div className="ir-result-row-top">
+                  <span className="ir-result-table">{r.letter}</span>
+                  {r.roll != null && <span className="ir-result-roll">({r.roll})</span>}
+                  {r.error ? (
+                    <span className="ir-result-name" style={{ color: 'var(--mi-cursed)' }}>{r.error}</span>
+                  ) : (
+                    <span className="ir-result-name">{r.item?.name ?? r.item_name ?? 'No result'}</span>
+                  )}
+                  {r.item?.id && (
+                    <button className="ir-result-view-btn" onClick={() => openDetail(r.item)}>
+                      View
+                    </button>
+                  )}
+                </div>
+                {r.item?.description && (
+                  <p className="ir-result-desc">
+                    {r.item.description.replace(/\s+/g, ' ').trim().slice(0, 140)}
+                    {r.item.description.length > 140 ? '…' : ''}
+                  </p>
                 )}
               </div>
             ))}

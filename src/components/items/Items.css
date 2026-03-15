@@ -740,6 +740,105 @@
 .id-add-btn:hover:not(:disabled) { background: rgba(212,168,64,0.18); }
 .id-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ItemDetail — subtable roll section */
+.id-roll-table-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 5px;
+  border: 1px solid rgba(212,168,64,0.4);
+  background: rgba(212,168,64,0.08);
+  color: var(--mi-gold);
+  font-family: var(--mi-font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  margin: 2px 0;
+}
+.id-roll-table-btn:hover { background: rgba(212,168,64,0.18); border-color: rgba(212,168,64,0.6); }
+.id-roll-table-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.id-roll-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: rgba(212,168,64,0.08);
+  border: 1px solid rgba(212,168,64,0.3);
+}
+.id-roll-result--error {
+  background: rgba(200,60,60,0.08);
+  border-color: rgba(200,60,60,0.3);
+  color: var(--mi-cursed);
+  font-size: 11px;
+}
+.id-roll-result-die {
+  font-size: 11px;
+  color: var(--mi-purple-muted);
+  font-family: var(--mi-font);
+}
+.id-roll-result-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mi-gold);
+  font-family: var(--mi-font);
+}
+.id-roll-result-desc {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--mi-text-dim);
+}
+
+.id-table-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 200px;
+  overflow-y: auto;
+  border-radius: 4px;
+  border: 1px solid var(--mi-border);
+  background: rgba(0,0,0,0.15);
+  padding: 4px 0;
+}
+.id-table-entries::-webkit-scrollbar { width: 4px; }
+.id-table-entries::-webkit-scrollbar-track { background: transparent; }
+.id-table-entries::-webkit-scrollbar-thumb { background: var(--mi-border); border-radius: 2px; }
+
+.id-table-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.id-table-entry:hover { background: rgba(176,128,240,0.05); }
+.id-table-entry-roll {
+  flex-shrink: 0;
+  min-width: 34px;
+  text-align: right;
+  color: var(--mi-purple-muted);
+  font-family: var(--mi-font);
+  font-size: 10px;
+}
+.id-table-entry-name {
+  color: var(--mi-text);
+  font-size: 11px;
+}
+.id-table-entries-more {
+  padding: 4px 8px 2px;
+  font-size: 10px;
+  color: var(--mi-text-dim);
+  font-style: italic;
+  margin: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    RandomTableRoller — ir-
    ══════════════════════════════════════════════════════════════════════════════ */
@@ -915,6 +1014,23 @@
   border: 1px solid var(--mi-border-dim);
   background: rgba(176,128,240,0.04);
   animation: ir-fade-in 0.25s ease;
+}
+/* Stacked variant: top row of badges + optional description below */
+.ir-result-row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.ir-result-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ir-result-desc {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--mi-text-dim);
+  padding-left: 36px; /* indent to align with name */
 }
 @keyframes ir-fade-in {
   from { opacity: 0; transform: translateY(-4px); }

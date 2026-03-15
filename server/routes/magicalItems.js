@@ -191,6 +191,37 @@ router.get('/random-hoard', async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
+// ── List all entries for a table (/table-entries before /:id) ────────────────
+router.get('/table-entries', async (req, res) => {
+  try {
+    const letter = (req.query.table ?? '').toUpperCase();
+    if (!TABLE_META[letter]) {
+      return res.status(400).json({ error: 'Invalid table letter. Use A–T.' });
+    }
+    const meta  = TABLE_META[letter];
+    const limit = Math.min(parseInt(req.query.limit ?? 200, 10), 500);
+
+    const rows = await db.all(
+      `SELECT rit.id, rit.roll_min, rit.roll_max, rit.item_name,
+              mi.id AS item_id, mi.description
+       FROM   random_item_tables rit
+       LEFT JOIN magical_items mi ON mi.id = rit.item_id
+       WHERE  rit.table_letter = $1
+       ORDER BY rit.roll_min ASC
+       LIMIT  $2`,
+      [letter, limit],
+    );
+
+    res.json({
+      table_letter: letter,
+      table_name:   meta.name,
+      dice:         meta.dice,
+      total:        rows.length,
+      entries:      rows,
+    });
+  } catch (e) { next500(e, res); }
+});
+
 // ── Search / list items ───────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
