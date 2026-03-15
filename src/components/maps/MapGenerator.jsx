@@ -11,7 +11,7 @@
  *   parentPoiCtx?   object    — the full parent POI data for context
  *   presetType?     string    — pre-set map type for drill-down
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
@@ -255,6 +255,7 @@ export function MapGenerator({
   parentPoiId  = null,
   parentPoiCtx = null,
   presetType   = null,
+  autoGenerate = false,
 }) {
   const [params, setParams] = useState({
     mapType:     presetType ?? 'Random',
@@ -378,6 +379,13 @@ export function MapGenerator({
       setStep('error');
     }
   };
+
+  // Auto-start generation on mount when opened from a POI drill-down
+  useEffect(() => {
+    if (autoGenerate) {
+      handleGenerate();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDrillDown = !!(parentMapId && parentPoiId);
 

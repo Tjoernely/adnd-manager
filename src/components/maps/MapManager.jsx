@@ -16,18 +16,40 @@ import './MapManager.css';
 
 // ── POI type catalogue ────────────────────────────────────────────────────────
 const POI_TYPES = {
-  city:      { icon: '🏰', color: '#c8a84b', pulse: false, label: 'City/Town' },
-  village:   { icon: '🏘', color: '#d4b060', pulse: false, label: 'Village'   },
-  encounter: { icon: '⚔',  color: '#c03030', pulse: true,  label: 'Encounter' },
-  dungeon:   { icon: '💀', color: '#901818', pulse: true,  label: 'Dungeon'   },
-  ruins:     { icon: '🏚', color: '#806030', pulse: false, label: 'Ruins'     },
-  cave:      { icon: '🕳', color: '#405060', pulse: false, label: 'Cave'      },
-  treasure:  { icon: '💰', color: '#e0c000', pulse: true,  label: 'Treasure'  },
-  trap:      { icon: '⚠',  color: '#d07020', pulse: false, label: 'Trap'      },
-  npc:       { icon: '🧙', color: '#9040c0', pulse: false, label: 'NPC'       },
-  landmark:  { icon: '🌿', color: '#406040', pulse: false, label: 'Landmark'  },
-  mystery:   { icon: '❓', color: '#c0c0c0', pulse: false, label: 'Mystery'   },
-  quest:     { icon: '📜', color: '#4060c0', pulse: false, label: 'Quest Hook'},
+  city:         { icon: '🏰', color: '#c8a84b', pulse: false, label: 'City/Town'      },
+  village:      { icon: '🏘', color: '#d4b060', pulse: false, label: 'Village'        },
+  ruins:        { icon: '🏚', color: '#806030', pulse: false, label: 'Ruins'          },
+  cave:         { icon: '🕳', color: '#405060', pulse: false, label: 'Cave'           },
+  dungeon:      { icon: '💀', color: '#901818', pulse: true,  label: 'Dungeon'        },
+  wilderness:   { icon: '🌲', color: '#3a6030', pulse: false, label: 'Wilderness'     },
+  encounter:    { icon: '⚔',  color: '#c03030', pulse: true,  label: 'Encounter'      },
+  trap:         { icon: '🪤', color: '#d07020', pulse: false, label: 'Trap'           },
+  treasure:     { icon: '💰', color: '#e0c000', pulse: true,  label: 'Treasure'       },
+  npc:          { icon: '🧙', color: '#9040c0', pulse: false, label: 'NPC/Person'     },
+  quest:        { icon: '📜', color: '#4060c0', pulse: false, label: 'Quest Hook'     },
+  mystery:      { icon: '🔮', color: '#b0b0c0', pulse: false, label: 'Mystery/Magical'},
+  temple:       { icon: '⛪', color: '#8060c0', pulse: false, label: 'Temple/Shrine'  },
+  bandit_camp:  { icon: '🏴', color: '#802020', pulse: true,  label: 'Bandit Camp'    },
+  monster_lair: { icon: '🐉', color: '#8b0000', pulse: true,  label: 'Monster Lair'   },
+  landmark:     { icon: '🌿', color: '#406040', pulse: false, label: 'Landmark'       },
+};
+
+// Display order in the type picker
+const DISPLAY_POI_TYPES = [
+  'city','village','ruins','cave','dungeon',
+  'wilderness','encounter','trap','treasure','npc',
+  'quest','mystery','temple','bandit_camp','monster_lair',
+];
+
+// Map AI-returned suggested_submap_type (and old drill_down_type) → MapGenerator presetType
+const SUBMAP_TYPE_MAP = {
+  Dungeon:'Dungeon', dungeon:'Dungeon',
+  Cave:'Cave System', cave:'Cave System',
+  City:'City/Town',  city:'City/Town',
+  Ruins:'Ruins',     ruins:'Ruins',
+  Temple:'Temple',   temple:'Temple',
+  Wilderness:'Region',
+  interior:'Interior',
 };
 
 const MAP_TYPE_LABELS = {
@@ -35,6 +57,23 @@ const MAP_TYPE_LABELS = {
   city:'🏙 City', town:'🏘 Town', interior:'🏛 Interior',
   encounter:'⚔ Encounter', other:'📍 Other',
 };
+
+const LOCATION_TYPES  = new Set(['city','village','ruins','cave','dungeon','wilderness','temple','bandit_camp','monster_lair']);
+const ENCOUNTER_TYPES = new Set(['encounter']);
+const TRAP_TYPES      = new Set(['trap']);
+const TREASURE_TYPES  = new Set(['treasure']);
+const MYSTERY_TYPES   = new Set(['mystery']);
+const NPC_TYPES       = new Set(['npc']);
+
+function poiTypeGroup(type) {
+  if (LOCATION_TYPES.has(type))  return 'location';
+  if (ENCOUNTER_TYPES.has(type)) return 'encounter';
+  if (TRAP_TYPES.has(type))      return 'trap';
+  if (TREASURE_TYPES.has(type))  return 'treasure';
+  if (MYSTERY_TYPES.has(type))   return 'mystery';
+  if (NPC_TYPES.has(type))       return 'npc';
+  return 'simple';
+}
 
 function poiInfo(type) { return POI_TYPES[type] ?? { icon:'📍', color:'#888', pulse:false, label: type }; }
 
@@ -57,6 +96,235 @@ function buildTree(maps) {
   return { roots, children };
 }
 
+// ── AI POI system prompt ──────────────────────────────────────────────────────
+const FR_POI_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate POI content. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+
+function mapCtx(map) {
+  return `Parent map: "${map.name}" (type: ${map.type})
+Description: ${map.data?.description ?? 'Unknown region'}
+Atmosphere: ${map.data?.atmosphere_notes ?? ''}`;
+}
+
+function buildLocationPoiPrompt(type, map, dmNote) {
+  return `Generate a Forgotten Realms AD&D 2E ${type} POI for this map.
+${mapCtx(map)}
+Additional context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "Evocative FR-appropriate location name",
+  "type": "${type}",
+  "short_description": "One sentence players might learn (rumors, visible features)",
+  "dm_description": "Full atmospheric DM description (2-3 sentences)",
+  "history": "Brief FR-appropriate backstory",
+  "current_situation": "What is happening here RIGHT NOW",
+  "notable_features": ["Visual feature 1", "Interesting detail 2", "Notable element 3"],
+  "inhabitants": "Who or what lives/lurks here",
+  "secrets": ["Secret only DM knows", "Hidden plot hook"],
+  "quest_hooks": ["FR-flavoured hook 1", "Hook 2"],
+  "loot_hint": "What treasure or reward might be found here",
+  "is_dm_only": false,
+  "can_generate_submap": true,
+  "suggested_submap_type": "Dungeon"
+}`;
+}
+
+function buildEncounterPoiPrompt(map, dmNote) {
+  return `Generate a Forgotten Realms AD&D 2E encounter for this map.
+${mapCtx(map)}
+Additional context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "Encounter name (e.g. Ambush at the Crossroads)",
+  "type": "encounter",
+  "short_description": "What players see as they approach",
+  "encounter_type": "ambush",
+  "setting": "Atmospheric description of WHERE this encounter happens",
+  "dm_description": "Full scene description for the DM",
+  "enemies": [
+    {
+      "name": "Creature or NPC name",
+      "type": "humanoid",
+      "count": "1d6+2",
+      "stat_block": "HD: 1, AC: 7, THAC0: 19, HP: 1d8, ATT: 1, DAM: 1d6",
+      "tactics": "How they fight or behave in combat",
+      "morale": "When do they flee (e.g. below 50% HP)"
+    }
+  ],
+  "terrain_features": ["Feature affecting combat 1", "Feature 2"],
+  "surprise_chance": "2 in 6",
+  "treasure": "Loot on enemies if defeated",
+  "aftermath": "What happens after the encounter resolves",
+  "secrets": ["What enemies know", "Hidden motive or connection"],
+  "quest_hooks": ["Hook that could follow this encounter"],
+  "is_dm_only": true,
+  "can_generate_submap": false
+}`;
+}
+
+function buildTrapPoiPrompt(map, dmNote) {
+  return `Generate a Forgotten Realms AD&D 2E trap or hazard for this map.
+${mapCtx(map)}
+Context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "Trap name",
+  "type": "trap",
+  "short_description": "What a careful observer might vaguely notice",
+  "dm_description": "Full trap description for the DM",
+  "trigger": "How it is triggered",
+  "effect": "What happens when triggered",
+  "damage": "e.g. 2d6 piercing damage, save vs. paralysis at -2 etc.",
+  "detection": "Thief find-traps % chance and description of visible tells",
+  "disarm": "How to disable — Thief open-locks % and physical method",
+  "reset": "Does it reset? How long does it take?",
+  "history": "Who built this and why",
+  "secrets": ["Hidden detail about the trap's creator or purpose"],
+  "quest_hooks": [],
+  "is_dm_only": true,
+  "can_generate_submap": false
+}`;
+}
+
+function buildTreasurePoiPrompt(map, dmNote) {
+  return `Generate a Forgotten Realms AD&D 2E treasure cache for this map.
+${mapCtx(map)}
+Context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "Treasure name (e.g. The Merchant's Hidden Cache)",
+  "type": "treasure",
+  "short_description": "What players see when they discover it",
+  "dm_description": "Full description including how it is hidden or protected",
+  "coins": {"pp": 0, "gp": 120, "sp": 350, "cp": 80},
+  "gems": ["Polished sapphire worth 100gp", "Star ruby worth 500gp"],
+  "magic_items": ["Potion of Healing", "Scroll of Fireball (3rd level)"],
+  "mundane_items": ["Fine silk rope 50ft", "Masterwork thieves tools"],
+  "guardian": "Description of any guardian (trap, monster, curse) or null",
+  "history": "Who left this here and why",
+  "secrets": ["Hidden compartment with additional treasure", "Cursed item warning"],
+  "quest_hooks": [],
+  "is_dm_only": true,
+  "can_generate_submap": false
+}`;
+}
+
+function buildMysteryPoiPrompt(map, dmNote) {
+  return `Generate a Forgotten Realms magical mystery or anomaly for this map.
+${mapCtx(map)}
+Context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "Mystery name",
+  "type": "mystery",
+  "short_description": "What players observe — eerie or magical",
+  "dm_description": "Full description of the phenomenon",
+  "origin": "What caused this (Weave anomaly, ancient spell, planar rift, deity)",
+  "effects": ["Effect on players or environment 1", "Effect 2"],
+  "investigation_clues": ["Discoverable clue 1", "Clue 2", "Clue 3"],
+  "resolution": "How this can be resolved or what happens if ignored",
+  "connection": "Connection to larger FR plot, faction, or lore",
+  "secrets": ["The true nature of the mystery"],
+  "quest_hooks": ["Investigation or resolution hook"],
+  "is_dm_only": false,
+  "can_generate_submap": false
+}`;
+}
+
+function buildNpcPoiPrompt(map, dmNote) {
+  return `Generate a Forgotten Realms AD&D 2E NPC encounter for this map.
+${mapCtx(map)}
+Context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "NPC name (FR-appropriate for their race)",
+  "type": "npc",
+  "short_description": "What players see — appearance and initial impression",
+  "dm_description": "Full DM description of the NPC and the scene",
+  "npc_race": "Race",
+  "npc_class": "Class or profession",
+  "npc_alignment": "Alignment (e.g. Lawful Neutral)",
+  "npc_motivation": "What does this NPC want?",
+  "scene_description": "Where and how they are encountered in detail",
+  "personality": "3 personality traits, comma-separated",
+  "history": "Brief FR-appropriate backstory",
+  "current_situation": "What they are doing right now",
+  "secrets": ["What this NPC is hiding"],
+  "quest_hooks": ["How they can involve the party"],
+  "is_dm_only": false,
+  "can_generate_submap": false
+}`;
+}
+
+function buildSimplePoiPrompt(type, map, dmNote) {
+  return `Generate a Forgotten Realms AD&D 2E point of interest for this map.
+${mapCtx(map)}
+POI Type: ${type}
+Context: ${dmNote || 'none'}
+
+Respond with ONLY this JSON:
+{
+  "name": "FR-appropriate evocative name",
+  "type": "${type}",
+  "short_description": "One sentence players might learn",
+  "dm_description": "Full DM description (2-3 sentences)",
+  "history": "Brief FR-appropriate backstory",
+  "secrets": ["Hidden detail or plot hook"],
+  "quest_hooks": ["One FR-flavoured hook"],
+  "is_dm_only": false,
+  "can_generate_submap": false
+}`;
+}
+
+function buildPoiPromptByType(type, map, dmNote) {
+  const group = poiTypeGroup(type);
+  switch (group) {
+    case 'location':  return buildLocationPoiPrompt(type, map, dmNote);
+    case 'encounter': return buildEncounterPoiPrompt(map, dmNote);
+    case 'trap':      return buildTrapPoiPrompt(map, dmNote);
+    case 'treasure':  return buildTreasurePoiPrompt(map, dmNote);
+    case 'mystery':   return buildMysteryPoiPrompt(map, dmNote);
+    case 'npc':       return buildNpcPoiPrompt(map, dmNote);
+    default:          return buildSimplePoiPrompt(type, map, dmNote);
+  }
+}
+
+// ── Section regen prompts ─────────────────────────────────────────────────────
+function buildRegenEnemiesPrompt(poi, map) {
+  return `For the encounter "${poi.name}" in the Forgotten Realms map "${map.name}":
+${poi.setting || poi.dm_description || ''}
+Generate a fresh set of FR-appropriate enemies with full AD&D 2E stat blocks.
+Respond with ONLY this JSON:
+{"enemies": [{"name":"...","type":"humanoid","count":"...","stat_block":"HD: X, AC: Y, THAC0: Z, HP: Xd8, ATT: X, DAM: Xd6","tactics":"...","morale":"..."}]}`;
+}
+
+function buildRegenTreasurePrompt(poi, map) {
+  return `For the POI "${poi.name}" (${poi.type}) in the Forgotten Realms map "${map.name}", generate fresh AD&D 2E loot appropriate for this location.
+Respond with ONLY this JSON:
+{"treasure": "brief loot description", "coins": {"pp":0,"gp":0,"sp":0,"cp":0}, "gems": [], "magic_items": [], "mundane_items": []}`;
+}
+
+function buildRegenSecretsPrompt(poi, map) {
+  return `For the Forgotten Realms POI "${poi.name}" (${poi.type}) in "${map.name}":
+${poi.dm_description || poi.short_description || ''}
+Generate 2-3 fresh secrets or hidden plot hooks.
+Respond with ONLY this JSON:
+{"secrets": ["Secret 1", "Secret 2"]}`;
+}
+
+function buildRegenQuestHooksPrompt(poi, map) {
+  return `For the Forgotten Realms POI "${poi.name}" (${poi.type}) in "${map.name}":
+${poi.short_description || poi.dm_description || ''}
+Generate 2 fresh Forgotten Realms quest hooks.
+Respond with ONLY this JSON:
+{"quest_hooks": ["Hook 1", "Hook 2"]}`;
+}
+
 // ── MapManager (root) ─────────────────────────────────────────────────────────
 export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [maps,          setMaps]          = useState([]);
@@ -64,8 +332,9 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [selectedPoiId, setSelectedPoiId] = useState(null);
   const [playerView,    setPlayerView]    = useState(false);
   const [addPoiMode,    setAddPoiMode]    = useState(false);
+  const [pendingPoiPos, setPendingPoiPos] = useState(null); // { x, y }
   const [showGenerator, setShowGenerator] = useState(false);
-  const [genContext,    setGenContext]    = useState(null); // { parentMapId, parentPoiId, parentPoiCtx, presetType }
+  const [genContext,    setGenContext]    = useState(null);
   const [showApiKeys,   setShowApiKeys]   = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState('');
@@ -128,33 +397,30 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     savePois(newPois);
   }, [activeMap, savePois]);
 
-  // ── Add POI by clicking map ──────────────────────────────────────────────────
+  // ── Map click — open type-selection modal ────────────────────────────────────
   const handleMapClickForPoi = useCallback((xPct, yPct) => {
     if (!isDM || !addPoiMode || !activeMap) return;
+    setPendingPoiPos({ x: xPct, y: yPct });
+    setAddPoiMode(false);
+  }, [isDM, addPoiMode, activeMap]);
+
+  // ── POI created via the type modal ───────────────────────────────────────────
+  const handlePoiModalCreated = useCallback((poiData) => {
+    if (!activeMap || !pendingPoiPos) return;
     const newPoi = {
-      id:                `poi_${Date.now()}`,
-      name:              'New Location',
-      type:              'mystery',
-      x_percent:         xPct,
-      y_percent:         yPct,
-      is_dm_only:        true,
-      short_description: '',
-      dm_description:    '',
-      history:           '',
-      current_situation: '',
-      encounters:        '',
-      treasure:          null,
-      secrets:           '',
-      can_drill_down:    false,
-      drill_down_type:   null,
-      quest_hooks:       [],
-      child_map_id:      null,
+      id:           `poi_${Date.now()}`,
+      x_percent:    pendingPoiPos.x,
+      y_percent:    pendingPoiPos.y,
+      child_map_id: null,
+      can_drill_down: false,
+      drill_down_type: null,
+      ...poiData,
     };
     const newPois = [...(activeMap.data?.pois ?? []), newPoi];
     savePois(newPois);
     setSelectedPoiId(newPoi.id);
-    setAddPoiMode(false);
-  }, [isDM, addPoiMode, activeMap, savePois]);
+    setPendingPoiPos(null);
+  }, [activeMap, pendingPoiPos, savePois]);
 
   // ── Delete POI ───────────────────────────────────────────────────────────────
   const handleDeletePoi = useCallback((poiId) => {
@@ -164,7 +430,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     if (selectedPoiId === poiId) setSelectedPoiId(null);
   }, [activeMap, savePois, selectedPoiId]);
 
-  // ── Update single POI field(s) ───────────────────────────────────────────────
+  // ── Update single POI ────────────────────────────────────────────────────────
   const handleUpdatePoi = useCallback((poiId, updates) => {
     if (!activeMap) return;
     const newPois = (activeMap.data?.pois ?? []).map(p =>
@@ -216,13 +482,17 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     }
   }, [activeMap]);
 
-  // ── Drill-down sub-map ───────────────────────────────────────────────────────
-  const handleDrillDown = useCallback((poi) => {
+  // ── Drill-down sub-map (auto or manual) ──────────────────────────────────────
+  const handleDrillDown = useCallback((poi, autoGenerate = false) => {
+    const submapPreset = SUBMAP_TYPE_MAP[poi.suggested_submap_type]
+      ?? SUBMAP_TYPE_MAP[poi.drill_down_type]
+      ?? null;
     setGenContext({
       parentMapId:  activeMapId,
       parentPoiId:  poi.id,
       parentPoiCtx: poi,
-      presetType:   poi.drill_down_type ?? null,
+      presetType:   submapPreset,
+      autoGenerate,
     });
     setShowGenerator(true);
   }, [activeMapId]);
@@ -233,7 +503,6 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     setActiveMapId(newMap.id);
     setSelectedPoiId(null);
     setShowGenerator(false);
-    // If this was a drill-down, update the parent POI with child_map_id
     if (genContext?.parentMapId && genContext?.parentPoiId) {
       const parentMap = maps.find(m => m.id === genContext.parentMapId);
       if (parentMap) {
@@ -249,7 +518,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     setGenContext(null);
   }, [genContext, maps, patchMap]);
 
-  // ── Navigate to map (e.g. from POI child_map_id link) ───────────────────────
+  // ── Navigate to map ──────────────────────────────────────────────────────────
   const navigateToMap = useCallback((mapId) => {
     setActiveMapId(mapId);
     setSelectedPoiId(null);
@@ -264,7 +533,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
         {/* ── Left sidebar ── */}
         <aside className="mm-sidebar">
           <div className="mm-sidebar-header">
-            <span className="mm-sidebar-title">🗺 Maps</span>
+            <div className="mm-sidebar-title">🗺 Maps</div>
             <div className="mm-sidebar-actions">
               {isDM && (
                 <>
@@ -289,18 +558,12 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             )}
             {roots.map(m => (
               <MapTreeNode
-                key={m.id}
-                map={m}
-                allMaps={maps}
-                activeMapId={activeMapId}
-                children_fn={children}
-                onSelect={navigateToMap}
-                depth={0}
+                key={m.id} map={m} allMaps={maps} activeMapId={activeMapId}
+                children_fn={children} onSelect={navigateToMap} depth={0}
               />
             ))}
           </div>
 
-          {/* Hidden file input for image upload */}
           <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
             onChange={e => { const f = e.target.files[0]; if (f) handleUploadImage(f); e.target.value=''; }}
           />
@@ -312,9 +575,8 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             <>
               {/* Breadcrumb + Toolbar */}
               <div className="mm-toolbar">
-                {/* Breadcrumb */}
                 <div className="mm-breadcrumb">
-                  {ancestors.map((a, i) => (
+                  {ancestors.map(a => (
                     <span key={a.id} className="mm-breadcrumb-item">
                       <button className="mm-breadcrumb-btn" onClick={() => navigateToMap(a.id)}>
                         {a.name}
@@ -322,7 +584,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                       <span className="mm-breadcrumb-sep">›</span>
                     </span>
                   ))}
-                  <span className="mm-breadcrumb-current">{activeMap.name}</span>
+                  <span className="mm-breadcrumb-cur">{activeMap.name}</span>
                 </div>
 
                 <div className="mm-toolbar-actions">
@@ -335,34 +597,29 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                       {addPoiMode ? '✕ Cancel' : '+ Add POI'}
                     </button>
                   )}
-                  <button className="mm-btn" onClick={handleRandomEncounter} title="Roll random encounter">
-                    🎲 Encounter
-                  </button>
+                  <button className="mm-btn" onClick={handleRandomEncounter}>🎲 Encounter</button>
                   {isDM && (
                     <>
                       <button className="mm-btn mm-btn--ai"
-                        onClick={() => { setGenContext(null); setShowGenerator(true); }}
-                        title="Generate a new map">
+                        onClick={() => { setGenContext(null); setShowGenerator(true); }}>
                         ✦ New Map
                       </button>
                       <button
                         className={`mm-btn${activeMap.data?.visible_to_players ? ' mm-btn--shared' : ''}`}
                         onClick={toggleMapVisibility}
-                        title="Toggle player visibility"
                       >
                         {activeMap.data?.visible_to_players ? '👁 Shared' : '🔒 DM Only'}
                       </button>
-                      <button className="mm-btn" onClick={() => fileRef.current?.click()} disabled={uploadingImg}
-                        title="Upload or replace map image">
+                      <button className="mm-btn" onClick={() => fileRef.current?.click()}
+                        disabled={uploadingImg}>
                         {uploadingImg ? '⏳' : '🖼 Image'}
                       </button>
-                      <button className="mm-btn mm-btn--danger" onClick={handleDeleteMap} title="Delete map">🗑</button>
+                      <button className="mm-btn mm-btn--danger" onClick={handleDeleteMap}>🗑</button>
                     </>
                   )}
                   <button
                     className={`mm-btn${playerView ? ' mm-btn--player' : ''}`}
                     onClick={() => setPlayerView(v => !v)}
-                    title="Toggle player / DM view"
                   >
                     {playerView ? '🔒 DM View' : '👁 Player View'}
                   </button>
@@ -370,12 +627,10 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Map subtitle */}
               {activeMap.data?.subtitle && (
                 <div className="mm-map-subtitle">{activeMap.data.subtitle}</div>
               )}
 
-              {/* Random encounter banner */}
               {randEnc && (
                 <div className="mm-rand-enc" onClick={() => setRandEnc(null)}>
                   <span className="mm-rand-enc-roll">⚔ {randEnc.roll}</span>
@@ -384,7 +639,6 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Map canvas + POI panel */}
               <div className="mm-viewer-area">
                 <MapCanvas
                   map={activeMap}
@@ -398,7 +652,6 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                   onMapClick={handleMapClickForPoi}
                 />
 
-                {/* POI detail panel */}
                 {selectedPoi && (
                   <POIPanel
                     poi={selectedPoi}
@@ -409,7 +662,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                     onClose={() => setSelectedPoiId(null)}
                     onUpdate={(updates) => handleUpdatePoi(selectedPoi.id, updates)}
                     onDelete={() => handleDeletePoi(selectedPoi.id)}
-                    onDrillDown={() => handleDrillDown(selectedPoi)}
+                    onDrillDown={(autoGen) => handleDrillDown(selectedPoi, autoGen)}
                     onNavigate={navigateToMap}
                     onShowApiKeys={() => setShowApiKeys(true)}
                   />
@@ -426,6 +679,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
         </main>
       </div>
 
+      {/* POI Type modal — shown after placing a point on the map */}
+      {pendingPoiPos && isDM && activeMap && (
+        <POITypeModal
+          map={activeMap}
+          onCreated={handlePoiModalCreated}
+          onClose={() => setPendingPoiPos(null)}
+          onShowApiKeys={() => setShowApiKeys(true)}
+        />
+      )}
+
       {showGenerator && (
         <MapGenerator
           campaignId={campaignId}
@@ -435,8 +698,10 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           parentPoiId={genContext?.parentPoiId ?? null}
           parentPoiCtx={genContext?.parentPoiCtx ?? null}
           presetType={genContext?.presetType ?? null}
+          autoGenerate={genContext?.autoGenerate ?? false}
         />
       )}
+
       {showApiKeys && <ApiKeySettings onClose={() => setShowApiKeys(false)} />}
     </div>
   );
@@ -491,18 +756,14 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
   }
 
   return (
-    <div className={`mm-canvas-scroll`}>
+    <div className="mm-canvas-scroll">
       <div
         ref={containerRef}
         className={`mm-map-container${addPoiMode ? ' mm-map-container--place' : ''}`}
         onClick={handleContainerClick}
       >
         <img src={mapImageSrc} alt={map.name} className="mm-map-image" draggable={false} />
-
-        {/* Fantasy border overlay */}
         <div className="mm-map-border" aria-hidden="true" />
-
-        {/* POI layer */}
         <div className="mm-poi-layer">
           {pois.map(poi => (
             <POIMarker
@@ -553,7 +814,7 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
     setLivePos({ x: nx, y: ny });
   };
 
-  const handlePointerUp = (e) => {
+  const handlePointerUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
     if (dragMoved.current && livePos) {
@@ -586,56 +847,236 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
   );
 }
 
-// ── POIPanel ──────────────────────────────────────────────────────────────────
-const POI_GENERATE_SYSTEM = `You are an AD&D 2E dungeon master. Given a map POI, generate comprehensive content.
-Return ONLY valid JSON:
-{
-  "short_description": "string",
-  "dm_description": "string — 2-3 sentences",
-  "history": "string — 2-3 sentences",
-  "current_situation": "string — 1-2 sentences",
-  "encounters": "string — specific monster/challenge details",
-  "treasure": "string or null",
-  "secrets": "string — hidden info/hooks",
-  "quest_hooks": ["string", "string"]
-}`;
-
-function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelete, onDrillDown, onNavigate, onShowApiKeys }) {
-  const [activeTab,    setActiveTab]    = useState(isDM && !playerView ? 'dm' : 'player');
-  const [editing,      setEditing]      = useState(false);
-  const [draft,        setDraft]        = useState(poi);
+// ── POITypeModal ──────────────────────────────────────────────────────────────
+function POITypeModal({ map, onCreated, onClose, onShowApiKeys }) {
+  const [selectedType, setSelectedType] = useState('ruins');
+  const [nameOverride, setNameOverride] = useState('');
+  const [dmNote,       setDmNote]       = useState('');
   const [generating,   setGenerating]   = useState(false);
   const [genError,     setGenError]     = useState('');
-  const [delConfirm,   setDelConfirm]   = useState(false);
 
-  // Sync draft when poi changes (e.g. after drag save)
-  useEffect(() => { setDraft(poi); }, [poi.id]);
-
-  const info = poiInfo(poi.type);
-  const childMap = poi.child_map_id ? maps.find(m => m.id === poi.child_map_id) : null;
-
-  const updateD  = (k, v)    => setDraft(d => ({ ...d, [k]: v }));
-  const handleSave = () => { onUpdate(draft); setEditing(false); };
-
-  const handleGenerateDetails = async () => {
+  const handleGenerate = async () => {
     if (!hasAnthropicKey()) { onShowApiKeys(); return; }
     setGenerating(true);
     setGenError('');
     try {
       const result = await callClaude({
-        systemPrompt: POI_GENERATE_SYSTEM,
-        userPrompt:   `Map: "${map.name}" (${map.data?.description ?? ''})
-POI: "${poi.name}" (type: ${poi.type})
-Context: ${poi.short_description || poi.dm_description || 'Unknown location'}
-Generate detailed AD&D 2E content for this POI.`,
-        maxTokens: 1024,
+        systemPrompt: FR_POI_SYSTEM,
+        userPrompt:   buildPoiPromptByType(selectedType, map, dmNote),
+        maxTokens:    1500,
       });
-      const merged = { ...draft, ...result };
-      setDraft(merged);
-      onUpdate(merged);
-    } catch (e) { setGenError(e.message); }
-    finally { setGenerating(false); }
+      const submapPreset = result.suggested_submap_type
+        ? (SUBMAP_TYPE_MAP[result.suggested_submap_type] ?? null)
+        : null;
+      onCreated({
+        ...result,
+        type:              selectedType,
+        name:              nameOverride.trim() || result.name || poiInfo(selectedType).label,
+        can_drill_down:    !!(result.can_generate_submap || LOCATION_TYPES.has(selectedType)),
+        drill_down_type:   submapPreset,
+        quest_hooks:       result.quest_hooks ?? [],
+        secrets:           result.secrets     ?? [],
+      });
+    } catch (e) {
+      setGenError(e.message);
+    } finally {
+      setGenerating(false);
+    }
   };
+
+  const handleManual = () => {
+    const info = poiInfo(selectedType);
+    onCreated({
+      name:              nameOverride.trim() || `New ${info.label}`,
+      type:              selectedType,
+      short_description: '',
+      dm_description:    dmNote,
+      is_dm_only:        true,
+      can_drill_down:    LOCATION_TYPES.has(selectedType),
+      can_generate_submap: LOCATION_TYPES.has(selectedType),
+      drill_down_type:   null,
+      quest_hooks:       [],
+      secrets:           [],
+    });
+  };
+
+  return (
+    <div className="mm-type-backdrop" onClick={onClose}>
+      <div className="mm-type-modal" onClick={e => e.stopPropagation()}>
+        <div className="mm-type-header">
+          <span className="mm-type-title">📍 Add Point of Interest</span>
+          <button className="mm-icon-btn mm-icon-btn--close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="mm-type-body">
+          <div className="mm-type-section-label">POI Type</div>
+          <div className="mm-type-grid">
+            {DISPLAY_POI_TYPES.map(typeKey => {
+              const info = poiInfo(typeKey);
+              return (
+                <button
+                  key={typeKey}
+                  className={`mm-type-btn${selectedType === typeKey ? ' mm-type-btn--active' : ''}`}
+                  style={{ '--type-color': info.color }}
+                  onClick={() => setSelectedType(typeKey)}
+                >
+                  <span className="mm-type-btn-icon">{info.icon}</span>
+                  <span className="mm-type-btn-label">{info.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mm-type-fields">
+            <div className="mm-type-field">
+              <label className="mm-type-field-label">Name (optional — leave blank to auto-generate)</label>
+              <input className="mm-type-field-input" value={nameOverride}
+                onChange={e => setNameOverride(e.target.value)}
+                placeholder="Auto-generated if blank…" />
+            </div>
+            <div className="mm-type-field">
+              <label className="mm-type-field-label">Context for AI (optional)</label>
+              <input className="mm-type-field-input" value={dmNote}
+                onChange={e => setDmNote(e.target.value)}
+                placeholder="e.g. near the river crossing, abandoned 50 years ago…" />
+            </div>
+          </div>
+
+          {genError && <div className="mm-type-error">{genError}</div>}
+        </div>
+
+        <div className="mm-type-footer">
+          <button className="mm-type-generate-btn" onClick={handleGenerate} disabled={generating}>
+            {generating ? '⏳ Generating…' : '✦ Generate with AI'}
+          </button>
+          <button className="mm-type-manual-btn" onClick={handleManual} disabled={generating}>
+            ✎ Add Manually
+          </button>
+          <button className="mm-type-cancel-btn" onClick={onClose} disabled={generating}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── POIPanel sub-components ───────────────────────────────────────────────────
+function SectionHead({ icon, label, onRegen, regenLabel, regenning }) {
+  return (
+    <div className="mm-sec-head">
+      {icon && <span className="mm-sec-head-icon">{icon}</span>}
+      <span className="mm-sec-head-label">{label}</span>
+      {onRegen && (
+        <button className="mm-regen-btn" onClick={onRegen} disabled={regenning}
+          title={regenLabel ?? 'Regenerate'}>
+          {regenning ? '⏳' : '🔄'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function BulletList({ items }) {
+  const arr = Array.isArray(items) ? items : (items ? [String(items)] : []);
+  if (!arr.length) return null;
+  return (
+    <ul className="mm-bullet-list">
+      {arr.map((item, i) => (
+        <li key={i} className="mm-bullet-item">
+          {typeof item === 'string' ? item : JSON.stringify(item)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function EnemyEntry({ enemy }) {
+  return (
+    <div className="mm-enemy-card">
+      <div className="mm-enemy-header">
+        <span className="mm-enemy-name">{enemy.name}</span>
+        <span className="mm-enemy-count">{enemy.count}</span>
+      </div>
+      {enemy.stat_block && <div className="mm-stat-block">{enemy.stat_block}</div>}
+      {enemy.tactics    && <div className="mm-enemy-detail">⚔ {enemy.tactics}</div>}
+      {enemy.morale     && <div className="mm-enemy-detail">🏃 {enemy.morale}</div>}
+    </div>
+  );
+}
+
+function CoinsRow({ coins }) {
+  if (!coins) return null;
+  const defs = [
+    { k:'pp', label:'PP', color:'#c0d0ff' },
+    { k:'gp', label:'GP', color:'#e0c000' },
+    { k:'sp', label:'SP', color:'#c0c0c0' },
+    { k:'cp', label:'CP', color:'#c07040' },
+  ].filter(c => (coins[c.k] ?? 0) > 0);
+  if (!defs.length) return null;
+  return (
+    <div className="mm-coins-row">
+      {defs.map(c => (
+        <span key={c.k} className="mm-coin-chip" style={{ color: c.color }}>
+          {coins[c.k].toLocaleString()} {c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── POIPanel ──────────────────────────────────────────────────────────────────
+const POI_PANEL_SYSTEM = `You are an expert AD&D 2nd Edition DM in the Forgotten Realms. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences.`;
+
+function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelete, onDrillDown, onNavigate, onShowApiKeys }) {
+  const [activeTab,  setActiveTab]  = useState(isDM && !playerView ? 'dm' : 'player');
+  const [editing,    setEditing]    = useState(false);
+  const [draft,      setDraft]      = useState(poi);
+  const [regenning,  setRegenning]  = useState({});
+  const [genError,   setGenError]   = useState('');
+  const [delConfirm, setDelConfirm] = useState(false);
+
+  useEffect(() => {
+    setDraft(poi);
+    setEditing(false);
+    setGenError('');
+    setDelConfirm(false);
+  }, [poi.id]);
+
+  const info      = poiInfo(poi.type);
+  const typeGroup = poiTypeGroup(poi.type);
+  const childMap  = poi.child_map_id ? maps.find(m => m.id === poi.child_map_id) : null;
+  const hasSubmap = (poi.can_generate_submap || poi.can_drill_down) && !childMap;
+
+  const updateD    = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const handleSave = () => { onUpdate(draft); setEditing(false); };
+
+  // ── Regen helper ────────────────────────────────────────────────────────────
+  const regen = async (key, userPrompt, merge) => {
+    if (!hasAnthropicKey()) { onShowApiKeys(); return; }
+    setRegenning(r => ({ ...r, [key]: true }));
+    setGenError('');
+    try {
+      const result = await callClaude({ systemPrompt: POI_PANEL_SYSTEM, userPrompt, maxTokens: 800 });
+      onUpdate(merge(result));
+    } catch (e) { setGenError(e.message); }
+    finally { setRegenning(r => ({ ...r, [key]: false })); }
+  };
+
+  const regenEnemies  = () => regen('enemies',  buildRegenEnemiesPrompt(poi, map),
+    r => ({ ...poi, enemies: r.enemies ?? poi.enemies }));
+  const regenTreasure = () => regen('treasure', buildRegenTreasurePrompt(poi, map),
+    r => ({ ...poi, treasure: r.treasure ?? poi.treasure, coins: r.coins ?? poi.coins,
+            gems: r.gems ?? poi.gems, magic_items: r.magic_items ?? poi.magic_items,
+            mundane_items: r.mundane_items ?? poi.mundane_items }));
+  const regenSecrets  = () => regen('secrets',  buildRegenSecretsPrompt(poi, map),
+    r => ({ ...poi, secrets: r.secrets ?? poi.secrets }));
+  const regenHooks    = () => regen('hooks',    buildRegenQuestHooksPrompt(poi, map),
+    r => ({ ...poi, quest_hooks: r.quest_hooks ?? poi.quest_hooks }));
+
+  // Normalise secrets/quest_hooks to array for display
+  const secretsArr  = Array.isArray(poi.secrets)     ? poi.secrets     : poi.secrets     ? [String(poi.secrets)]     : [];
+  const hooksArr    = Array.isArray(poi.quest_hooks)  ? poi.quest_hooks : poi.quest_hooks ? [String(poi.quest_hooks)] : [];
 
   return (
     <aside className="mm-poi-panel">
@@ -644,7 +1085,7 @@ Generate detailed AD&D 2E content for this POI.`,
         <span className="mm-poi-panel-icon" style={{ color: info.color }}>{info.icon}</span>
         <div className="mm-poi-panel-title">
           {editing ? (
-            <input className="mm-poi-name-input" value={draft.name}
+            <input className="mm-poi-edit-input" value={draft.name}
               onChange={e => updateD('name', e.target.value)} />
           ) : (
             <span className="mm-poi-panel-name">{poi.name}</span>
@@ -657,175 +1098,518 @@ Generate detailed AD&D 2E content for this POI.`,
       {/* Tabs */}
       {isDM && !playerView && (
         <div className="mm-poi-tabs">
-          <button className={`mm-poi-tab${activeTab==='player'?' mm-poi-tab--active':''}`} onClick={() => setActiveTab('player')}>
-            👁 Players
-          </button>
-          <button className={`mm-poi-tab${activeTab==='dm'?' mm-poi-tab--active':''}`} onClick={() => setActiveTab('dm')}>
-            🔒 DM
-          </button>
+          <button className={`mm-poi-tab${activeTab==='player'?' mm-poi-tab--active':''}`}
+            onClick={() => setActiveTab('player')}>👁 Players</button>
+          <button className={`mm-poi-tab${activeTab==='dm'?' mm-poi-tab--active':''}`}
+            onClick={() => setActiveTab('dm')}>🔒 DM</button>
         </div>
       )}
 
       {/* Body */}
       <div className="mm-poi-panel-body">
 
-        {/* PLAYER TAB */}
+        {/* ── PLAYER TAB ─────────────────────────────────────────────────────── */}
         {activeTab === 'player' && (
-          <div className="mm-poi-section">
-            {editing ? (
-              <textarea className="mm-poi-textarea" rows={3} value={draft.short_description}
-                onChange={e => updateD('short_description', e.target.value)}
-                placeholder="What the players can learn about this place…" />
-            ) : (
-              <p className="mm-poi-text">{poi.short_description || <em className="mm-poi-empty">No public description.</em>}</p>
+          <div>
+            <div className="mm-poi-section">
+              {editing ? (
+                <textarea className="mm-poi-edit-textarea" rows={3} value={draft.short_description ?? ''}
+                  onChange={e => updateD('short_description', e.target.value)}
+                  placeholder="What players can learn…" />
+              ) : poi.short_description ? (
+                <p className="mm-poi-text">{poi.short_description}</p>
+              ) : (
+                <em className="mm-poi-empty">No public description.</em>
+              )}
+            </div>
+            {poi.notable_features?.length > 0 && (
+              <div className="mm-poi-section">
+                <SectionHead icon="👁" label="Notable Features" />
+                <BulletList items={poi.notable_features} />
+              </div>
             )}
-            {(poi.quest_hooks ?? []).length > 0 && (
-              <div className="mm-poi-hooks">
-                <div className="mm-poi-subsection">Quest Hooks</div>
-                {poi.quest_hooks.map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)}
+            {poi.effects?.length > 0 && (
+              <div className="mm-poi-section">
+                <SectionHead icon="✨" label="Observable Effects" />
+                <BulletList items={poi.effects} />
+              </div>
+            )}
+            {hooksArr.length > 0 && !poi.is_dm_only && (
+              <div className="mm-poi-section">
+                <SectionHead icon="📜" label="Rumours" />
+                {hooksArr.map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)}
               </div>
             )}
           </div>
         )}
 
-        {/* DM TAB */}
+        {/* ── DM TAB ─────────────────────────────────────────────────────────── */}
         {activeTab === 'dm' && isDM && (
           <div>
-            <div className="mm-poi-section">
-              <div className="mm-poi-subsection">Overview</div>
-              {editing ? (
-                <textarea className="mm-poi-textarea" rows={3} value={draft.dm_description}
-                  onChange={e => updateD('dm_description', e.target.value)} placeholder="Full DM details…" />
-              ) : (
-                <p className="mm-poi-text">{poi.dm_description || <em className="mm-poi-empty">No DM description.</em>}</p>
-              )}
-            </div>
-            {(poi.history || editing) && (
-              <div className="mm-poi-section">
-                <div className="mm-poi-subsection">History</div>
-                {editing ? (
-                  <textarea className="mm-poi-textarea" rows={2} value={draft.history}
-                    onChange={e => updateD('history', e.target.value)} placeholder="History…" />
-                ) : <p className="mm-poi-text">{poi.history}</p>}
-              </div>
-            )}
-            {(poi.current_situation || editing) && (
-              <div className="mm-poi-section">
-                <div className="mm-poi-subsection">Current Situation</div>
-                {editing ? (
-                  <textarea className="mm-poi-textarea" rows={2} value={draft.current_situation}
-                    onChange={e => updateD('current_situation', e.target.value)} placeholder="What is happening here now…" />
-                ) : <p className="mm-poi-text">{poi.current_situation}</p>}
-              </div>
-            )}
-            {(poi.encounters || editing) && (
-              <div className="mm-poi-section">
-                <div className="mm-poi-subsection">Encounters</div>
-                {editing ? (
-                  <textarea className="mm-poi-textarea" rows={2} value={draft.encounters}
-                    onChange={e => updateD('encounters', e.target.value)} placeholder="Monsters & challenges…" />
-                ) : <p className="mm-poi-text">{poi.encounters}</p>}
-              </div>
-            )}
-            {(poi.treasure || editing) && (
-              <div className="mm-poi-section mm-poi-section--treasure">
-                <div className="mm-poi-subsection">💰 Treasure</div>
-                {editing ? (
-                  <textarea className="mm-poi-textarea" rows={2} value={draft.treasure ?? ''}
-                    onChange={e => updateD('treasure', e.target.value)} placeholder="Loot…" />
-                ) : <p className="mm-poi-text">{poi.treasure}</p>}
-              </div>
-            )}
-            {(poi.secrets || editing) && (
-              <div className="mm-poi-section mm-poi-section--secrets">
-                <div className="mm-poi-subsection">🔒 Secrets</div>
-                {editing ? (
-                  <textarea className="mm-poi-textarea" rows={2} value={draft.secrets ?? ''}
-                    onChange={e => updateD('secrets', e.target.value)} placeholder="Hidden info & plot hooks…" />
-                ) : <p className="mm-poi-text mm-poi-text--secret">{poi.secrets}</p>}
-              </div>
-            )}
-            {(poi.quest_hooks?.length > 0 || editing) && (
-              <div className="mm-poi-section">
-                <div className="mm-poi-subsection">Quest Hooks</div>
-                {(poi.quest_hooks ?? []).map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)}
-              </div>
+
+            {/* ── LOCATION type group ──────────────────────────────────────── */}
+            {typeGroup === 'location' && (
+              <>
+                {/* Sub-map button */}
+                {childMap ? (
+                  <button className="mm-poi-action-btn mm-poi-action-btn--drill"
+                    onClick={() => onNavigate(childMap.id)}>
+                    🗺 Open: {childMap.name}
+                  </button>
+                ) : hasSubmap ? (
+                  <button className="mm-poi-action-btn mm-poi-action-btn--drill"
+                    onClick={() => onDrillDown(true)}>
+                    🗺 Generate {poi.suggested_submap_type ?? poi.drill_down_type ?? 'Sub'}-Map
+                  </button>
+                ) : null}
+
+                {(poi.current_situation || editing) && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="📍" label="Current Situation" />
+                    {editing
+                      ? <textarea className="mm-poi-edit-textarea" rows={2} value={draft.current_situation ?? ''}
+                          onChange={e => updateD('current_situation', e.target.value)} />
+                      : <p className="mm-poi-text">{poi.current_situation}</p>}
+                  </div>
+                )}
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="📖" label="DM Description" />
+                  {editing
+                    ? <textarea className="mm-poi-edit-textarea" rows={3} value={draft.dm_description ?? ''}
+                        onChange={e => updateD('dm_description', e.target.value)} />
+                    : <p className="mm-poi-text">{poi.dm_description || <em className="mm-poi-empty">—</em>}</p>}
+                </div>
+
+                {(poi.history || editing) && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="📜" label="History" />
+                    {editing
+                      ? <textarea className="mm-poi-edit-textarea" rows={2} value={draft.history ?? ''}
+                          onChange={e => updateD('history', e.target.value)} />
+                      : <p className="mm-poi-text">{poi.history}</p>}
+                  </div>
+                )}
+
+                {poi.inhabitants && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="👥" label="Inhabitants" />
+                    <p className="mm-poi-text">{poi.inhabitants}</p>
+                  </div>
+                )}
+
+                {poi.loot_hint && (
+                  <div className="mm-poi-section mm-poi-section--treasure">
+                    <SectionHead icon="💰" label="Loot Hint" />
+                    <p className="mm-poi-text">{poi.loot_hint}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate secrets"
+                    regenning={regenning.secrets} />
+                  {secretsArr.length
+                    ? <BulletList items={secretsArr} />
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="🎯" label="Quest Hooks"
+                    onRegen={regenHooks} regenLabel="Regenerate hooks"
+                    regenning={regenning.hooks} />
+                  {hooksArr.length
+                    ? hooksArr.map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+              </>
             )}
 
-            {/* Edit mode type selector */}
+            {/* ── ENCOUNTER type group ──────────────────────────────────────── */}
+            {typeGroup === 'encounter' && (
+              <>
+                {poi.encounter_type && (
+                  <span className="mm-enc-type-badge">{poi.encounter_type}</span>
+                )}
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="🌍" label="Setting" />
+                  <p className="mm-poi-text">{poi.setting || poi.dm_description || <em className="mm-poi-empty">—</em>}</p>
+                </div>
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="👾" label="Enemies"
+                    onRegen={regenEnemies} regenLabel="Regenerate enemies"
+                    regenning={regenning.enemies} />
+                  {poi.enemies?.length > 0
+                    ? poi.enemies.map((e, i) => <EnemyEntry key={i} enemy={e} />)
+                    : <em className="mm-poi-empty">No stat blocks — click 🔄 to generate</em>}
+                </div>
+
+                {poi.terrain_features?.length > 0 && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🗺" label="Terrain Features" />
+                    <BulletList items={poi.terrain_features} />
+                  </div>
+                )}
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="🎲" label="Surprise Chance" />
+                  <p className="mm-poi-text">{poi.surprise_chance || '1 in 6'}</p>
+                </div>
+
+                <div className="mm-poi-section mm-poi-section--treasure">
+                  <SectionHead icon="💰" label="Treasure"
+                    onRegen={regenTreasure} regenLabel="Regenerate loot"
+                    regenning={regenning.treasure} />
+                  {poi.treasure
+                    ? <p className="mm-poi-text">{poi.treasure}</p>
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+
+                {poi.aftermath && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="📖" label="Aftermath" />
+                    <p className="mm-poi-text">{poi.aftermath}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate secrets"
+                    regenning={regenning.secrets} />
+                  {secretsArr.length
+                    ? <BulletList items={secretsArr} />
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+              </>
+            )}
+
+            {/* ── TRAP type group ───────────────────────────────────────────── */}
+            {typeGroup === 'trap' && (
+              <>
+                <div className="mm-poi-section">
+                  <SectionHead icon="📖" label="Description" />
+                  <p className="mm-poi-text">{poi.dm_description || <em className="mm-poi-empty">—</em>}</p>
+                </div>
+
+                {poi.trigger && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="⚠️" label="Trigger" />
+                    <p className="mm-poi-text">{poi.trigger}</p>
+                  </div>
+                )}
+
+                {(poi.effect || poi.damage) && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="💥" label="Effect" />
+                    {poi.effect  && <p className="mm-poi-text">{poi.effect}</p>}
+                    {poi.damage  && <div className="mm-stat-block">Damage: {poi.damage}</div>}
+                  </div>
+                )}
+
+                {poi.detection && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🔍" label="Detection" />
+                    <p className="mm-poi-text">{poi.detection}</p>
+                  </div>
+                )}
+
+                {poi.disarm && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🔧" label="Disarm" />
+                    <p className="mm-poi-text">{poi.disarm}</p>
+                  </div>
+                )}
+
+                {poi.reset && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🔁" label="Reset" />
+                    <p className="mm-poi-text">{poi.reset}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="History & Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate"
+                    regenning={regenning.secrets} />
+                  {poi.history && <p className="mm-poi-text">{poi.history}</p>}
+                  {secretsArr.length > 0 && <BulletList items={secretsArr} />}
+                </div>
+              </>
+            )}
+
+            {/* ── TREASURE type group ───────────────────────────────────────── */}
+            {typeGroup === 'treasure' && (
+              <>
+                <div className="mm-poi-section">
+                  <SectionHead icon="📖" label="Description" />
+                  <p className="mm-poi-text">{poi.dm_description || <em className="mm-poi-empty">—</em>}</p>
+                </div>
+
+                <div className="mm-poi-section mm-poi-section--treasure">
+                  <SectionHead icon="💰" label="Loot"
+                    onRegen={regenTreasure} regenLabel="Regenerate loot"
+                    regenning={regenning.treasure} />
+                  <CoinsRow coins={poi.coins} />
+                  {poi.gems?.length > 0 && (
+                    <>
+                      <div className="mm-loot-cat">💎 Gems</div>
+                      <BulletList items={poi.gems} />
+                    </>
+                  )}
+                  {poi.magic_items?.length > 0 && (
+                    <>
+                      <div className="mm-loot-cat">✨ Magic Items</div>
+                      <BulletList items={poi.magic_items} />
+                    </>
+                  )}
+                  {poi.mundane_items?.length > 0 && (
+                    <>
+                      <div className="mm-loot-cat">📦 Mundane</div>
+                      <BulletList items={poi.mundane_items} />
+                    </>
+                  )}
+                  {!poi.coins && !poi.gems?.length && !poi.magic_items?.length && (
+                    <em className="mm-poi-empty">No loot — click 🔄 to generate</em>
+                  )}
+                </div>
+
+                {poi.guardian && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🛡" label="Guardian" />
+                    <p className="mm-poi-text">{poi.guardian}</p>
+                  </div>
+                )}
+
+                {poi.history && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="📜" label="History" />
+                    <p className="mm-poi-text">{poi.history}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate"
+                    regenning={regenning.secrets} />
+                  {secretsArr.length
+                    ? <BulletList items={secretsArr} />
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+              </>
+            )}
+
+            {/* ── MYSTERY type group ────────────────────────────────────────── */}
+            {typeGroup === 'mystery' && (
+              <>
+                <div className="mm-poi-section">
+                  <SectionHead icon="🔮" label="Phenomenon" />
+                  <p className="mm-poi-text">{poi.dm_description || <em className="mm-poi-empty">—</em>}</p>
+                </div>
+
+                {poi.origin && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🌀" label="Origin" />
+                    <p className="mm-poi-text">{poi.origin}</p>
+                  </div>
+                )}
+
+                {poi.effects?.length > 0 && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="✨" label="Effects" />
+                    <BulletList items={poi.effects} />
+                  </div>
+                )}
+
+                {poi.investigation_clues?.length > 0 && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🔍" label="Investigation Clues" />
+                    <BulletList items={poi.investigation_clues} />
+                  </div>
+                )}
+
+                {poi.resolution && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🔓" label="Resolution" />
+                    <p className="mm-poi-text">{poi.resolution}</p>
+                  </div>
+                )}
+
+                {poi.connection && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🔗" label="Lore Connection" />
+                    <p className="mm-poi-text">{poi.connection}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate"
+                    regenning={regenning.secrets} />
+                  {secretsArr.length
+                    ? <BulletList items={secretsArr} />
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="🎯" label="Quest Hooks"
+                    onRegen={regenHooks} regenLabel="Regenerate"
+                    regenning={regenning.hooks} />
+                  {hooksArr.length
+                    ? hooksArr.map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+              </>
+            )}
+
+            {/* ── NPC type group ────────────────────────────────────────────── */}
+            {typeGroup === 'npc' && (
+              <>
+                {(poi.npc_race || poi.npc_class || poi.npc_alignment) && (
+                  <div className="mm-npc-badges">
+                    {poi.npc_race      && <span className="mm-npc-badge">{poi.npc_race}</span>}
+                    {poi.npc_class     && <span className="mm-npc-badge">{poi.npc_class}</span>}
+                    {poi.npc_alignment && <span className="mm-npc-badge">{poi.npc_alignment}</span>}
+                  </div>
+                )}
+
+                {poi.scene_description && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🎭" label="Scene" />
+                    <p className="mm-poi-text">{poi.scene_description}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="📖" label="Description" />
+                  <p className="mm-poi-text">{poi.dm_description || poi.short_description || <em className="mm-poi-empty">—</em>}</p>
+                </div>
+
+                {poi.npc_motivation && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🎯" label="Motivation" />
+                    <p className="mm-poi-text">{poi.npc_motivation}</p>
+                  </div>
+                )}
+
+                {poi.personality && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="🧠" label="Personality" />
+                    <p className="mm-poi-text">{poi.personality}</p>
+                  </div>
+                )}
+
+                {poi.history && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="📜" label="History" />
+                    <p className="mm-poi-text">{poi.history}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate"
+                    regenning={regenning.secrets} />
+                  {secretsArr.length
+                    ? <BulletList items={secretsArr} />
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="🎯" label="Quest Hooks"
+                    onRegen={regenHooks} regenLabel="Regenerate"
+                    regenning={regenning.hooks} />
+                  {hooksArr.length
+                    ? hooksArr.map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+              </>
+            )}
+
+            {/* ── SIMPLE type group (quest, landmark) ──────────────────────── */}
+            {typeGroup === 'simple' && (
+              <>
+                <div className="mm-poi-section">
+                  <SectionHead icon="📖" label="Description" />
+                  {editing
+                    ? <textarea className="mm-poi-edit-textarea" rows={3} value={draft.dm_description ?? ''}
+                        onChange={e => updateD('dm_description', e.target.value)} />
+                    : <p className="mm-poi-text">{poi.dm_description || <em className="mm-poi-empty">—</em>}</p>}
+                </div>
+
+                {poi.history && (
+                  <div className="mm-poi-section">
+                    <SectionHead icon="📜" label="History" />
+                    <p className="mm-poi-text">{poi.history}</p>
+                  </div>
+                )}
+
+                <div className="mm-poi-section mm-poi-section--secrets">
+                  <SectionHead icon="🔒" label="Secrets"
+                    onRegen={regenSecrets} regenLabel="Regenerate"
+                    regenning={regenning.secrets} />
+                  {secretsArr.length
+                    ? <BulletList items={secretsArr} />
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+
+                <div className="mm-poi-section">
+                  <SectionHead icon="🎯" label="Quest Hooks"
+                    onRegen={regenHooks} regenLabel="Regenerate"
+                    regenning={regenning.hooks} />
+                  {hooksArr.length
+                    ? hooksArr.map((h, i) => <p key={i} className="mm-poi-hook">• {h}</p>)
+                    : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
+                </div>
+              </>
+            )}
+
+            {/* ── Edit: type + visibility (any type) ───────────────────────── */}
             {editing && (
               <div className="mm-poi-section">
-                <div className="mm-poi-subsection">Type & Visibility</div>
-                <div className="mm-poi-edit-row">
-                  <select className="mm-poi-select" value={draft.type} onChange={e => updateD('type', e.target.value)}>
+                <SectionHead icon="⚙" label="Type & Visibility" />
+                <div style={{ display:'flex', gap:6, marginTop:6 }}>
+                  <select className="mm-poi-edit-select" value={draft.type}
+                    onChange={e => updateD('type', e.target.value)}>
                     {Object.entries(POI_TYPES).map(([k, v]) => (
                       <option key={k} value={k}>{v.icon} {v.label}</option>
                     ))}
                   </select>
                   <button
-                    className={`mm-poi-toggle${draft.is_dm_only ? ' mm-poi-toggle--dm' : ''}`}
+                    className="mm-poi-edit-btn"
+                    style={{ flex:'none', padding:'4px 8px', minWidth:90 }}
                     onClick={() => updateD('is_dm_only', !draft.is_dm_only)}
                   >
                     {draft.is_dm_only ? '🔒 DM Only' : '👁 Public'}
                   </button>
                 </div>
-                <div className="mm-poi-edit-row" style={{ marginTop:6 }}>
-                  <label style={{ fontSize:10, color:'#7a6020', display:'flex', alignItems:'center', gap:6 }}>
-                    <input type="checkbox" checked={draft.can_drill_down}
-                      onChange={e => updateD('can_drill_down', e.target.checked)} />
-                    Can drill down
-                  </label>
-                  {draft.can_drill_down && (
-                    <select className="mm-poi-select" value={draft.drill_down_type ?? 'null'}
-                      onChange={e => updateD('drill_down_type', e.target.value === 'null' ? null : e.target.value)}>
-                      <option value="null">Type…</option>
-                      {['dungeon','cave','city','ruins'].map(t => <option key={t}>{t}</option>)}
-                    </select>
-                  )}
-                </div>
               </div>
             )}
+
+            {genError && <div className="mm-ai-error">{genError}</div>}
+
           </div>
         )}
 
-        {/* ── Action buttons ── */}
+        {/* ── Action buttons (always visible at bottom) ───────────────────── */}
         <div className="mm-poi-actions">
-          {/* Drill-down / navigate to child */}
-          {childMap ? (
-            <button className="mm-poi-action-btn mm-poi-action-btn--drill"
-              onClick={() => onNavigate(childMap.id)}>
-              🗺 Open: {childMap.name}
-            </button>
-          ) : poi.can_drill_down && isDM && !playerView ? (
-            <button className="mm-poi-action-btn mm-poi-action-btn--drill"
-              onClick={onDrillDown}>
-              📍 Generate {poi.drill_down_type ?? 'Sub'}-Map
-            </button>
-          ) : null}
-
-          {/* AI generate details */}
-          {isDM && !playerView && !poi.dm_description && (
-            <button className="mm-poi-action-btn mm-poi-action-btn--ai"
-              onClick={handleGenerateDetails} disabled={generating}>
-              {generating ? '⏳ Generating…' : '✦ Generate Details with AI'}
-            </button>
-          )}
-          {genError && <div className="mm-poi-error">{genError}</div>}
-
           {isDM && !playerView && (
             <div className="mm-poi-dm-btns">
               {editing ? (
                 <>
                   <button className="mm-poi-save-btn" onClick={handleSave}>✓ Save</button>
-                  <button className="mm-poi-cancel-btn" onClick={() => { setDraft(poi); setEditing(false); }}>Cancel</button>
+                  <button className="mm-poi-cancel-btn"
+                    onClick={() => { setDraft(poi); setEditing(false); }}>Cancel</button>
                 </>
               ) : (
                 <button className="mm-poi-edit-btn" onClick={() => setEditing(true)}>✎ Edit</button>
               )}
               {delConfirm ? (
                 <>
-                  <button className="mm-poi-del-yes" onClick={onDelete}>Delete</button>
-                  <button className="mm-poi-cancel-btn" onClick={() => setDelConfirm(false)}>Cancel</button>
+                  <button className="mm-poi-del-btn" onClick={onDelete}>Delete</button>
+                  <button className="mm-poi-cancel-btn"
+                    onClick={() => setDelConfirm(false)}>Cancel</button>
                 </>
               ) : (
                 <button className="mm-poi-del-btn" onClick={() => setDelConfirm(true)}>🗑</button>
@@ -833,6 +1617,7 @@ Generate detailed AD&D 2E content for this POI.`,
             </div>
           )}
         </div>
+
       </div>
     </aside>
   );

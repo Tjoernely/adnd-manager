@@ -1013,3 +1013,441 @@
     min-width: 220px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NEW — Added for smart POI system
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Missing toolbar button variants ────────────────────────────────────────── */
+.mm-btn--ai {
+  background: rgba(100, 60, 160, 0.2);
+  border-color: rgba(160, 100, 220, 0.5);
+  color: #b080f0;
+}
+.mm-btn--ai:hover {
+  background: rgba(100, 60, 160, 0.35);
+  color: #d0b0ff;
+}
+
+.mm-btn--shared {
+  background: rgba(60, 140, 60, 0.18);
+  border-color: rgba(80, 180, 80, 0.45);
+  color: #70c070;
+}
+.mm-btn--shared:hover { background: rgba(60, 140, 60, 0.3); }
+
+.mm-btn--player {
+  background: rgba(60, 100, 160, 0.18);
+  border-color: rgba(80, 140, 210, 0.45);
+  color: #7090d0;
+}
+.mm-btn--player:hover { background: rgba(60, 100, 160, 0.3); }
+
+.mm-icon-btn--ai {
+  color: #b080f0;
+  border-color: rgba(160, 100, 220, 0.4);
+  background: rgba(100, 60, 160, 0.15);
+}
+.mm-icon-btn--ai:hover { background: rgba(100, 60, 160, 0.3); color: #d0b0ff; }
+
+/* ── Canvas empty state hint ─────────────────────────────────────────────────  */
+.mm-canvas-empty-hint {
+  font-size: 11px;
+  color: #5a4828;
+  font-style: italic;
+}
+
+/* ── Random encounter roll / text ────────────────────────────────────────────  */
+.mm-rand-enc-roll {
+  font-weight: bold;
+  color: #e84040;
+  white-space: nowrap;
+}
+.mm-rand-enc-text {
+  flex: 1;
+  color: #e08060;
+}
+
+/* ── Panel title type label ──────────────────────────────────────────────────  */
+.mm-poi-panel-type {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.mm-poi-panel-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* ── Cancel / del-confirm buttons ────────────────────────────────────────────  */
+.mm-poi-cancel-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #8a7850;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: background 0.15s;
+}
+.mm-poi-cancel-btn:hover { background: rgba(255, 255, 255, 0.1); color: #c8a84b; }
+
+/* ── Section head with inline regen button ────────────────────────────────── */
+.mm-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+}
+
+.mm-sec-head-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.mm-sec-head-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7a6438;
+  flex: 1;
+}
+
+.mm-regen-btn {
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(200, 168, 75, 0.2);
+  background: rgba(200, 168, 75, 0.06);
+  color: #7a6438;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.4;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.mm-regen-btn:hover { background: rgba(200, 168, 75, 0.18); color: #c8a84b; }
+.mm-regen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Bullet list ─────────────────────────────────────────────────────────────  */
+.mm-bullet-list {
+  margin: 4px 0 0 0;
+  padding-left: 14px;
+  list-style: disc;
+}
+.mm-bullet-item {
+  font-size: 11px;
+  color: #b09050;
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+/* ── Enemy card ──────────────────────────────────────────────────────────────  */
+.mm-enemy-card {
+  background: rgba(144, 24, 24, 0.1);
+  border: 1px solid rgba(180, 40, 40, 0.25);
+  border-radius: 4px;
+  padding: 7px 9px;
+  margin-bottom: 6px;
+}
+.mm-enemy-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.mm-enemy-name {
+  font-size: 12px;
+  font-weight: bold;
+  color: #e08060;
+}
+.mm-enemy-count {
+  font-size: 11px;
+  color: #a06040;
+  background: rgba(200, 80, 40, 0.15);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.mm-stat-block {
+  font-size: 10px;
+  font-family: 'Courier New', monospace;
+  color: #a08848;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  padding: 3px 6px;
+  margin: 4px 0;
+  letter-spacing: 0.02em;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.mm-enemy-detail {
+  font-size: 10px;
+  color: #907040;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* ── Coins row ───────────────────────────────────────────────────────────────  */
+.mm-coins-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+.mm-coin-chip {
+  font-size: 11px;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+/* ── Loot category label ─────────────────────────────────────────────────────  */
+.mm-loot-cat {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #806030;
+  margin: 6px 0 2px;
+}
+
+/* ── Encounter type badge ────────────────────────────────────────────────────  */
+.mm-enc-type-badge {
+  display: inline-block;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: rgba(192, 48, 48, 0.2);
+  border: 1px solid rgba(200, 60, 60, 0.4);
+  border-radius: 10px;
+  padding: 2px 8px;
+  color: #e08060;
+  margin-bottom: 8px;
+}
+
+/* ── NPC badges ──────────────────────────────────────────────────────────────  */
+.mm-npc-badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.mm-npc-badge {
+  font-size: 10px;
+  background: rgba(144, 64, 192, 0.15);
+  border: 1px solid rgba(160, 80, 200, 0.35);
+  border-radius: 10px;
+  padding: 2px 8px;
+  color: #b080d0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   POI TYPE SELECTION MODAL
+   ══════════════════════════════════════════════════════════════════════════════ */
+.mm-type-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+}
+
+.mm-type-modal {
+  background: #110d04;
+  border: 1px solid #3a2e18;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+  width: min(540px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mm-type-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #3a2e18;
+  flex-shrink: 0;
+}
+
+.mm-type-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #c8a84b;
+  letter-spacing: 0.05em;
+}
+
+.mm-type-body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mm-type-body::-webkit-scrollbar { width: 4px; }
+.mm-type-body::-webkit-scrollbar-thumb { background: #3a2e18; border-radius: 2px; }
+
+.mm-type-section-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7a6438;
+  margin-bottom: 8px;
+}
+
+/* 5-column icon grid */
+.mm-type-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.mm-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  font-family: inherit;
+}
+.mm-type-btn:hover {
+  background: rgba(200, 168, 75, 0.08);
+  border-color: rgba(200, 168, 75, 0.3);
+  transform: translateY(-1px);
+}
+.mm-type-btn--active {
+  background: rgba(200, 168, 75, 0.15) !important;
+  border-color: var(--type-color, #c8a84b) !important;
+  box-shadow: 0 0 0 1px var(--type-color, #c8a84b);
+}
+
+.mm-type-btn-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.mm-type-btn-label {
+  font-size: 8.5px;
+  color: #9a8050;
+  text-align: center;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+.mm-type-btn--active .mm-type-btn-label {
+  color: #c8a84b;
+}
+
+.mm-type-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mm-type-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mm-type-field-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a6438;
+}
+
+.mm-type-field-input {
+  background: #1a1408;
+  border: 1px solid #3a2e18;
+  border-radius: 3px;
+  color: #c8a84b;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.mm-type-field-input:focus { outline: none; border-color: #c8a84b; }
+.mm-type-field-input::placeholder { color: #4a3c20; }
+
+.mm-type-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #e06060;
+  background: rgba(160, 40, 40, 0.15);
+  border: 1px solid rgba(200, 60, 60, 0.3);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.mm-type-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #3a2e18;
+  flex-shrink: 0;
+}
+
+.mm-type-generate-btn {
+  flex: 2;
+  padding: 9px 12px;
+  border-radius: 5px;
+  border: 1px solid rgba(160, 100, 220, 0.5);
+  background: rgba(100, 60, 160, 0.25);
+  color: #c0a0ff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  transition: background 0.15s, color 0.15s;
+}
+.mm-type-generate-btn:hover { background: rgba(100, 60, 160, 0.4); color: #d8c0ff; }
+.mm-type-generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mm-type-manual-btn {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(200, 168, 75, 0.3);
+  background: rgba(200, 168, 75, 0.08);
+  color: #c8a84b;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: background 0.15s;
+}
+.mm-type-manual-btn:hover { background: rgba(200, 168, 75, 0.2); }
+.mm-type-manual-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mm-type-cancel-btn {
+  padding: 9px 12px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #7a6438;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: background 0.15s, color 0.15s;
+}
+.mm-type-cancel-btn:hover { background: rgba(255, 255, 255, 0.1); color: #c8a84b; }
+.mm-type-cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
