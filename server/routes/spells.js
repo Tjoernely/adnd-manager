@@ -145,9 +145,23 @@ router.get('/:id', async (req, res) => {
 /**
  * Build WHERE conditions and params array from common query params.
  * Returns { conditions, params, searchTerm }.
+ *
+ * school / sphere accept comma-separated values for multi-select:
+ *   school=evocation,necromancy → LOWER(TRIM(school)) = ANY($n)
+ * category accepts comma-separated values mapped to description keywords.
  */
+
+const CATEGORY_KEYWORDS = {
+  offensive:   ['%damage%', '%attack%', '%bolt%', '%inflict%', '%slay%', '%smite%'],
+  healing:     ['%heal%', '%cure%', '%restore%', '%regenerat%'],
+  support:     ['%protect%', '%bless%', '%shield%', '%ward%', '%aid%', '%fortif%'],
+  utility:     ['%detect%', '%locate%', '%speak%', '%read magic%', '%scry%', '%teleport%', '%identify%'],
+  enchantment: ['%charm%', '%enchant%', '%dominate%', '%sleep%', '%hold %', '%confus%', '%command%'],
+  summoning:   ['%summon%', '%conjure%', '%gate%', '%call forth%'],
+};
+
 function buildFilters(query) {
-  const { group, level, minLevel, maxLevel, school, sphere, source, reversible } = query;
+  const { group, level, minLevel, maxLevel, school, sphere, source, reversible, category } = query;
   // `search` is an alias for `q`
   const q = query.search ?? query.q;
 
@@ -166,37 +180,59 @@ function buildFilters(query) {
       conditions.push(`level = $${params.length}`);
     }
   } else {
-    // Range-based level filtering
     if (minLevel !== undefined && minLevel !== '') {
       const min = parseInt(minLevel, 10);
-      if (!Number.isNaN(min)) {
-        params.push(min);
-        conditions.push(`level >= $${params.length}`);
-      }
+      if (!Number.isNaN(min)) { params.push(min); conditions.push(`level >= $${params.length}`); }
     }
     if (maxLevel !== undefined && maxLevel !== '') {
       const max = parseInt(maxLevel, 10);
-      if (!Number.isNaN(max)) {
-        params.push(max);
-        conditions.push(`level <= $${params.length}`);
-      }
+      if (!Number.isNaN(max)) { params.push(max); conditions.push(`level <= $${params.length}`); }
     }
   }
+
+  // Multi-select school: comma-separated → exact match (case-insensitive)
   if (school && school !== '') {
-    params.push(`%${school}%`);
-    conditions.push(`school ILIKE $${params.length}`);
+    const schools = school.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (schools.length === 1) {
+      params.push(schools[0]);
+      conditions.push(`LOWER(TRIM(school)) = $${params.length}`);
+    } else if (schools.length > 1) {
+      params.push(schools);
+      conditions.push(`LOWER(TRIM(school)) = ANY($${params.length})`);
+    }
   }
+
+  // Multi-select sphere: comma-separated → exact match (case-insensitive)
   if (sphere && sphere !== '') {
-    params.push(`%${sphere}%`);
-    conditions.push(`sphere ILIKE $${params.length}`);
+    const spheres = sphere.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (spheres.length === 1) {
+      params.push(spheres[0]);
+      conditions.push(`LOWER(TRIM(sphere)) = $${params.length}`);
+    } else if (spheres.length > 1) {
+      params.push(spheres);
+      conditions.push(`LOWER(TRIM(sphere)) = ANY($${params.length})`);
+    }
   }
+
   if (source && source !== '') {
     params.push(`%${source}%`);
     conditions.push(`source ILIKE $${params.length}`);
   }
+
   if (reversible === 'true') {
     conditions.push(`reversible = true`);
   }
+
+  // Category filter: comma-separated categories → keyword match in description
+  if (category && category !== '') {
+    const cats = category.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const allKws = [...new Set(cats.flatMap(cat => CATEGORY_KEYWORDS[cat] || []))];
+    if (allKws.length > 0) {
+      params.push(allKws);
+      conditions.push(`description ILIKE ANY($${params.length}::text[])`);
+    }
+  }
+
   if (q && q.trim()) {
     searchTerm = q.trim();
     params.push(searchTerm);

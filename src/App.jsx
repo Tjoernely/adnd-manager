@@ -154,7 +154,11 @@ export default function App() {
   // ── Spell Library screen ────────────────────────────────────
   if (screen === 'spells') {
     return (
-      <SpellLibrary onBack={() => setScreen('dashboard')} />
+      <SpellLibrary
+        onBack={() => setScreen('dashboard')}
+        campaignId={activeCampaign?.id}
+        characters={characters}
+      />
     );
   }
 

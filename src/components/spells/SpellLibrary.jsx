@@ -1,70 +1,101 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/client';
-import SpellCard     from './SpellCard';
-import SpellDetail   from './SpellDetail';
+import SpellCard      from './SpellCard';
+import SpellDetail    from './SpellDetail';
 import SpellGenerator from './SpellGenerator';
 import './Spells.css';
 
 const PAGE_SIZE = 50;
 
+const WIZARD_SCHOOLS = [
+  'Abjuration', 'Alteration', 'Conjuration', 'Divination', 'Enchantment',
+  'Evocation', 'Illusion', 'Invocation', 'Necromancy', 'Transmutation',
+  'Wild Magic', 'Shadow',
+];
+
+const SPELL_CATEGORIES = [
+  { id: 'offensive',   label: 'Offensive' },
+  { id: 'healing',     label: 'Healing' },
+  { id: 'support',     label: 'Support' },
+  { id: 'utility',     label: 'Utility' },
+  { id: 'enchantment', label: 'Enchantment/Charm' },
+  { id: 'summoning',   label: 'Summoning' },
+];
+
+// Class IDs that map to wizard / priest spell groups
+const WIZARD_CLASS_IDS = new Set(['mage', 'illusionist', 'specialist', 'bard']);
+const PRIEST_CLASS_IDS = new Set(['cleric', 'druid', 'shaman']);
+
 /**
  * SpellLibrary — full-screen spell browser.
  * Props:
- *   onBack — () => void — returns to campaign dashboard
+ *   onBack      — () => void
+ *   campaignId  — number | undefined
+ *   characters  — character[] (list from current campaign)
  */
-export default function SpellLibrary({ onBack }) {
+export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
   // ── Meta ──────────────────────────────────────────────────────────────────
-  const [meta, setMeta]           = useState(null);
+  const [meta, setMeta] = useState(null);
 
   // ── Filters ───────────────────────────────────────────────────────────────
-  const [group,       setGroup]       = useState('');      // '' | 'wizard' | 'priest'
-  const [minLevel,    setMinLevel]    = useState('');
-  const [maxLevel,    setMaxLevel]    = useState('');
-  const [school,      setSchool]      = useState('');
-  const [sphere,      setSphere]      = useState('');
-  const [source,      setSource]      = useState('');
-  const [reversible,  setReversible]  = useState(false);
-  const [search,      setSearch]      = useState('');
-  const [sort,        setSort]        = useState('name');  // 'name' | 'level'
+  const [group,      setGroup]      = useState('');
+  const [minLevel,   setMinLevel]   = useState('');
+  const [maxLevel,   setMaxLevel]   = useState('');
+  const [schools,    setSchools]    = useState([]);      // string[] multi-select
+  const [spheres,    setSpheres]    = useState([]);      // string[] multi-select
+  const [categories, setCategories] = useState([]);      // string[] multi-select
+  const [reversible, setReversible] = useState(false);
+  const [search,     setSearch]     = useState('');
+  const [sort,       setSort]       = useState('name');
 
-  // ── Pagination ────────────────────────────────────────────────────────────
-  const [offset,      setOffset]      = useState(0);
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [filterOpen,   setFilterOpen]   = useState(false);
+  const [charMenuOpen, setCharMenuOpen] = useState(false);
+  const [charFilter,   setCharFilter]   = useState(null);  // selected character obj
+  const [tab,          setTab]          = useState('library');
 
   // ── Results ───────────────────────────────────────────────────────────────
-  const [spells,      setSpells]      = useState([]);
-  const [total,       setTotal]       = useState(0);
-  const [loading,     setLoading]     = useState(false);
-  const [error,       setError]       = useState(null);
+  const [spells,    setSpells]    = useState([]);
+  const [total,     setTotal]     = useState(0);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState(null);
+  const [offset,    setOffset]    = useState(0);
 
   // ── Detail ────────────────────────────────────────────────────────────────
-  const [selected,    setSelected]    = useState(null);    // full spell object
-  const [detailLoad,  setDetailLoad]  = useState(false);
-
-  // ── Tab ───────────────────────────────────────────────────────────────────
-  const [tab, setTab] = useState('library'); // 'library' | 'generator'
-
-  // ── Sidebar collapse (mobile) ─────────────────────────────────────────────
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selected,   setSelected]   = useState(null);
+  const [detailLoad, setDetailLoad] = useState(false);
 
   const searchDebounce = useRef(null);
+  const charMenuRef    = useRef(null);
 
-  // ── Load meta once ────────────────────────────────────────────────────────
+  // Load meta once
   useEffect(() => {
     api.getSpellsMeta().then(setMeta).catch(() => {});
   }, []);
 
-  // ── Build filter params ───────────────────────────────────────────────────
+  // Close character dropdown on outside click
+  useEffect(() => {
+    const handler = e => {
+      if (charMenuRef.current && !charMenuRef.current.contains(e.target)) {
+        setCharMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Build filter params object
   const filterParams = {
     group:      group      || undefined,
     minLevel:   minLevel   || undefined,
     maxLevel:   maxLevel   || undefined,
-    school:     school     || undefined,
-    sphere:     sphere     || undefined,
-    source:     source     || undefined,
+    school:     schools.length    > 0 ? schools.join(',')    : undefined,
+    sphere:     spheres.length    > 0 ? spheres.join(',')    : undefined,
+    category:   categories.length > 0 ? categories.join(',') : undefined,
     reversible: reversible ? 'true' : undefined,
   };
 
-  // ── Fetch spell list ───────────────────────────────────────────────────────
+  // Fetch spell list
   const fetchSpells = useCallback(async (off = 0) => {
     setLoading(true);
     setError(null);
@@ -85,17 +116,17 @@ export default function SpellLibrary({ onBack }) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [group, minLevel, maxLevel, school, sphere, source, reversible, search, sort]);
+  }, [group, minLevel, maxLevel, schools, spheres, categories, reversible, search, sort]);
 
-  // Re-fetch when filters/sort change (debounce search)
+  // Re-fetch when filters change (debounce text search)
   useEffect(() => {
     clearTimeout(searchDebounce.current);
     searchDebounce.current = setTimeout(() => fetchSpells(0), search ? 300 : 0);
     return () => clearTimeout(searchDebounce.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [group, minLevel, maxLevel, school, sphere, source, reversible, search, sort]);
+  }, [group, minLevel, maxLevel, schools, spheres, categories, reversible, search, sort]);
 
-  // ── Select spell ──────────────────────────────────────────────────────────
+  // Select spell → load full detail
   const selectSpell = useCallback(async (spell) => {
     if (selected?.id === spell.id) { setSelected(null); return; }
     setDetailLoad(true);
@@ -103,51 +134,88 @@ export default function SpellLibrary({ onBack }) {
     try {
       const full = await api.getSpell(spell.id);
       setSelected(full);
-    } catch { /* keep preview */ }
+    } catch { /* keep preview data */ }
     finally { setDetailLoad(false); }
   }, [selected]);
+
+  // ── Toggle helpers ────────────────────────────────────────────────────────
+  const toggleSchool   = s => setSchools(p   => p.includes(s) ? p.filter(x => x !== s) : [...p, s]);
+  const toggleSphere   = s => setSpheres(p   => p.includes(s) ? p.filter(x => x !== s) : [...p, s]);
+  const toggleCategory = c => setCategories(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c]);
 
   // ── Reset filters ─────────────────────────────────────────────────────────
   const resetFilters = () => {
     setGroup('');
     setMinLevel('');
     setMaxLevel('');
-    setSchool('');
-    setSphere('');
-    setSource('');
+    setSchools([]);
+    setSpheres([]);
+    setCategories([]);
     setReversible(false);
     setSearch('');
     setSort('name');
+    setCharFilter(null);
   };
 
-  const totalPages    = Math.ceil(total / PAGE_SIZE);
-  const currentPage   = Math.floor(offset / PAGE_SIZE) + 1;
-  const hasFilters    = !!(group || minLevel || maxLevel || school || sphere || source || reversible || search);
+  // ── Apply character filter ────────────────────────────────────────────────
+  const applyCharFilter = char => {
+    setCharFilter(char);
+    setCharMenuOpen(false);
+    const d   = char.data || {};
+    const cls = (d.selectedClass || '').toLowerCase();
+    const lvl = d.charLevel || 1;
 
-  const schoolOptions  = meta?.schools  ?? [];
-  const sphereOptions  = meta?.spheres  ?? [];
+    if (WIZARD_CLASS_IDS.has(cls)) {
+      setGroup('wizard');
+      // Specialist school → pre-select it
+      const school = (d.specialistSchool || '').toLowerCase();
+      setSchools(school ? [school] : []);
+      setSpheres([]);
+    } else if (PRIEST_CLASS_IDS.has(cls)) {
+      setGroup('priest');
+      setSchools([]);
+      setSpheres([]);
+    } else {
+      setGroup('');
+      setSchools([]);
+      setSpheres([]);
+    }
+
+    // Simplified spell level cap: ceil(charLevel / 2), capped at 9
+    const spellLvlMax = Math.max(1, Math.min(9, Math.ceil(lvl / 2)));
+    setMaxLevel(String(spellLvlMax));
+    setMinLevel('');
+  };
+
+  const clearCharFilter = () => {
+    setCharFilter(null);
+    setGroup('');
+    setSchools([]);
+    setSpheres([]);
+    setMaxLevel('');
+  };
+
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const totalPages  = Math.ceil(total / PAGE_SIZE);
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+  const hasFilters  = !!(group || minLevel || maxLevel || schools.length || spheres.length ||
+                         categories.length || reversible || search);
+
+  const sphereOptions = meta?.spheres ?? [];
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="sl-screen">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sl-header">
-        <button className="sl-back-btn" onClick={onBack} aria-label="Back">
-          ← Back
-        </button>
+        <button className="sl-back-btn" onClick={onBack} aria-label="Back">← Back</button>
         <h1 className="sl-title">Spell Library</h1>
 
         {meta && (
           <div className="sl-meta-badges">
-            <span className="sl-meta-badge">
-              {meta.total.toLocaleString()} spells
-            </span>
-            <span className="sl-meta-badge sl-meta-badge--wizard">
-              {meta.wizard.toLocaleString()} wizard
-            </span>
-            <span className="sl-meta-badge sl-meta-badge--priest">
-              {meta.priest.toLocaleString()} priest
-            </span>
+            <span className="sl-meta-badge">{meta.total.toLocaleString()} spells</span>
+            <span className="sl-meta-badge sl-meta-badge--wizard">{meta.wizard.toLocaleString()} wizard</span>
+            <span className="sl-meta-badge sl-meta-badge--priest">{meta.priest.toLocaleString()} priest</span>
           </div>
         )}
 
@@ -163,272 +231,255 @@ export default function SpellLibrary({ onBack }) {
         </div>
       </header>
 
-      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      {/* ── Body ───────────────────────────────────────────────────────────── */}
       <div className="sl-body">
 
-        {/* ── Filter Sidebar ────────────────────────────────────────────── */}
-        <aside className={`sl-sidebar${sidebarOpen ? ' sl-sidebar--open' : ''}`}>
-          <div className="sl-sidebar-header">
-            <span className="sl-sidebar-title">Filters</span>
-            {hasFilters && (
-              <button className="sl-clear-btn" onClick={resetFilters}>Clear all</button>
-            )}
-            <button
-              className="sl-sidebar-close"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close filters"
-            >✕</button>
-          </div>
-
-          {/* Search */}
-          <div className="sl-filter-group">
-            <label className="sl-filter-label">Search</label>
-            <input
-              className="sl-filter-input"
-              type="text"
-              placeholder="Name or description…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Group toggle */}
-          <div className="sl-filter-group">
-            <label className="sl-filter-label">Group</label>
-            <div className="sl-group-btns">
-              <button
-                className={`sl-group-btn sl-group-btn--all${group === '' ? ' sl-group-btn--active' : ''}`}
-                onClick={() => setGroup('')}
-              >All</button>
-              <button
-                className={`sl-group-btn sl-group-btn--wizard${group === 'wizard' ? ' sl-group-btn--active' : ''}`}
-                onClick={() => setGroup(g => g === 'wizard' ? '' : 'wizard')}
-              >Wizard</button>
-              <button
-                className={`sl-group-btn sl-group-btn--priest${group === 'priest' ? ' sl-group-btn--active' : ''}`}
-                onClick={() => setGroup(g => g === 'priest' ? '' : 'priest')}
-              >Priest</button>
-            </div>
-          </div>
-
-          {/* Level range */}
-          <div className="sl-filter-group">
-            <label className="sl-filter-label">Level</label>
-            <div className="sl-level-range">
+        {/* ── Library Tab ──────────────────────────────────────────────────── */}
+        {tab === 'library' && (
+          <>
+            {/* Sticky toolbar */}
+            <div className="sl-toolbar">
               <input
-                className="sl-filter-input sl-filter-input--sm"
-                type="number"
-                min={1} max={9}
-                placeholder="Min"
-                value={minLevel}
-                onChange={e => setMinLevel(e.target.value)}
+                className="sl-search-input"
+                type="text"
+                placeholder="Search spells…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
               />
-              <span className="sl-range-sep">–</span>
-              <input
-                className="sl-filter-input sl-filter-input--sm"
-                type="number"
-                min={1} max={9}
-                placeholder="Max"
-                value={maxLevel}
-                onChange={e => setMaxLevel(e.target.value)}
-              />
-            </div>
-          </div>
 
-          {/* School (wizard) */}
-          {(group === '' || group === 'wizard') && (
-            <div className="sl-filter-group">
-              <label className="sl-filter-label">School</label>
-              {schoolOptions.length > 0 ? (
-                <select
-                  className="sl-filter-select"
-                  value={school}
-                  onChange={e => setSchool(e.target.value)}
-                >
-                  <option value="">Any school</option>
-                  {schoolOptions.map(s => (
-                    <option key={s} value={s}>{capitalize(s)}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="sl-filter-input"
-                  type="text"
-                  placeholder="e.g. Evocation"
-                  value={school}
-                  onChange={e => setSchool(e.target.value)}
-                />
-              )}
-            </div>
-          )}
+              <button
+                className={`sl-toolbar-btn${filterOpen ? ' sl-toolbar-btn--active' : ''}`}
+                onClick={() => setFilterOpen(o => !o)}
+              >
+                ⚙ Filters{hasFilters ? ' •' : ''}
+              </button>
 
-          {/* Sphere (priest) */}
-          {(group === '' || group === 'priest') && (
-            <div className="sl-filter-group">
-              <label className="sl-filter-label">Sphere</label>
-              {sphereOptions.length > 0 ? (
-                <select
-                  className="sl-filter-select"
-                  value={sphere}
-                  onChange={e => setSphere(e.target.value)}
-                >
-                  <option value="">Any sphere</option>
-                  {sphereOptions.map(s => (
-                    <option key={s} value={s}>{capitalize(s)}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="sl-filter-input"
-                  type="text"
-                  placeholder="e.g. Healing"
-                  value={sphere}
-                  onChange={e => setSphere(e.target.value)}
-                />
-              )}
-            </div>
-          )}
+              {campaignId && (
+                <div className="sl-char-wrap" ref={charMenuRef}>
+                  <button
+                    className={`sl-toolbar-btn${charFilter ? ' sl-toolbar-btn--char' : ''}`}
+                    onClick={() => setCharMenuOpen(o => !o)}
+                  >
+                    🧙 {charFilter ? charFilter.name : 'Character'}
+                  </button>
+                  {charFilter && (
+                    <button
+                      className="sl-char-clear"
+                      onClick={clearCharFilter}
+                      title="Clear character filter"
+                    >✕</button>
+                  )}
 
-          {/* Source */}
-          <div className="sl-filter-group">
-            <label className="sl-filter-label">Source</label>
-            <input
-              className="sl-filter-input"
-              type="text"
-              placeholder="e.g. PHB, Tome of Magic"
-              value={source}
-              onChange={e => setSource(e.target.value)}
-            />
-          </div>
-
-          {/* Reversible */}
-          <div className="sl-filter-group sl-filter-group--check">
-            <label className="sl-check-label">
-              <input
-                type="checkbox"
-                checked={reversible}
-                onChange={e => setReversible(e.target.checked)}
-              />
-              Reversible only
-            </label>
-          </div>
-
-          {/* Sort */}
-          <div className="sl-filter-group">
-            <label className="sl-filter-label">Sort by</label>
-            <select
-              className="sl-filter-select"
-              value={sort}
-              onChange={e => setSort(e.target.value)}
-            >
-              <option value="name">Name</option>
-              <option value="level">Level</option>
-            </select>
-          </div>
-        </aside>
-
-        {/* Mobile filter toggle */}
-        <button
-          className="sl-filter-toggle"
-          onClick={() => setSidebarOpen(o => !o)}
-          aria-label="Toggle filters"
-        >
-          ⚙ Filters{hasFilters ? ' •' : ''}
-        </button>
-
-        {/* ── Main content ─────────────────────────────────────────────── */}
-        <main className="sl-main">
-
-          {/* ── Library Tab ──────────────────────────────────────────────── */}
-          {tab === 'library' && (
-            <div className="sl-library">
-              {/* List panel */}
-              <div className="sl-list-panel">
-                <div className="sl-list-header">
-                  <span className="sl-result-count">
-                    {loading ? 'Loading…' : `${total.toLocaleString()} spell${total !== 1 ? 's' : ''}`}
-                  </span>
-                  {totalPages > 1 && (
-                    <div className="sl-pagination">
-                      <button
-                        className="sl-page-btn"
-                        disabled={currentPage <= 1}
-                        onClick={() => fetchSpells(offset - PAGE_SIZE)}
-                      >‹</button>
-                      <span className="sl-page-info">{currentPage} / {totalPages}</span>
-                      <button
-                        className="sl-page-btn"
-                        disabled={currentPage >= totalPages}
-                        onClick={() => fetchSpells(offset + PAGE_SIZE)}
-                      >›</button>
+                  {charMenuOpen && (
+                    <div className="sl-char-dropdown">
+                      <div className="sl-char-dropdown-title">Filter by character</div>
+                      {characters.length === 0 ? (
+                        <div className="sl-char-dropdown-empty">No characters in campaign</div>
+                      ) : characters.map(ch => (
+                        <button
+                          key={ch.id}
+                          className={`sl-char-dropdown-item${charFilter?.id === ch.id ? ' sl-char-dropdown-item--active' : ''}`}
+                          onClick={() => applyCharFilter(ch)}
+                        >
+                          {ch.name}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
+              )}
 
-                {error && <p className="sl-error">{error}</p>}
+              <span className="sl-result-count">
+                {loading ? 'Loading…' : `${total.toLocaleString()} spell${total !== 1 ? 's' : ''}`}
+              </span>
+            </div>
+
+            {/* Content area: filter panel + list + detail */}
+            <div className="sl-content">
+
+              {/* Backdrop (closes filter panel on click) */}
+              {filterOpen && (
+                <div className="sl-backdrop" onClick={() => setFilterOpen(false)} />
+              )}
+
+              {/* ── Filter panel — slides in from LEFT ─────────────────────── */}
+              <div className={`sl-filter-panel${filterOpen ? ' sl-filter-panel--open' : ''}`}>
+                <div className="sl-fp-header">
+                  <span className="sl-fp-title">Filters</span>
+                  <button className="sl-fp-close" onClick={() => setFilterOpen(false)} aria-label="Close filters">✕</button>
+                </div>
+
+                <div className="sl-fp-scroll">
+
+                  {/* Spell Group */}
+                  <div className="sl-fp-section">
+                    <div className="sl-fp-label">Spell Group</div>
+                    <div className="sl-group-btns">
+                      {[['', 'all', 'All'], ['wizard', 'wizard', 'Wizard'], ['priest', 'priest', 'Priest']].map(([val, mod, lbl]) => (
+                        <button
+                          key={val}
+                          className={`sl-group-btn sl-group-btn--${mod}${group === val ? ' sl-group-btn--active' : ''}`}
+                          onClick={() => setGroup(val)}
+                        >{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Level range */}
+                  <div className="sl-fp-section">
+                    <div className="sl-fp-label">Level</div>
+                    <div className="sl-level-row">
+                      <select className="sl-filter-select" value={minLevel} onChange={e => setMinLevel(e.target.value)}>
+                        <option value="">Min</option>
+                        {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                      <span className="sl-level-sep">–</span>
+                      <select className="sl-filter-select" value={maxLevel} onChange={e => setMaxLevel(e.target.value)}>
+                        <option value="">Max</option>
+                        {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* School (wizard) — multi-select checkboxes */}
+                  {(group === '' || group === 'wizard') && (
+                    <div className="sl-fp-section">
+                      <div className="sl-fp-label">School (Wizard)</div>
+                      {WIZARD_SCHOOLS.map(s => {
+                        const key = s.toLowerCase();
+                        return (
+                          <label key={s} className="sl-check-row">
+                            <input type="checkbox" checked={schools.includes(key)} onChange={() => toggleSchool(key)} />
+                            {s}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Sphere (priest) — multi-select checkboxes */}
+                  {(group === '' || group === 'priest') && sphereOptions.length > 0 && (
+                    <div className="sl-fp-section">
+                      <div className="sl-fp-label">Sphere (Priest)</div>
+                      {sphereOptions.slice(0, 12).map(s => (
+                        <label key={s} className="sl-check-row">
+                          <input type="checkbox" checked={spheres.includes(s)} onChange={() => toggleSphere(s)} />
+                          {capitalize(s)}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Category */}
+                  <div className="sl-fp-section">
+                    <div className="sl-fp-label">Category</div>
+                    {SPELL_CATEGORIES.map(cat => (
+                      <label key={cat.id} className="sl-check-row">
+                        <input type="checkbox" checked={categories.includes(cat.id)} onChange={() => toggleCategory(cat.id)} />
+                        {cat.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Options */}
+                  <div className="sl-fp-section">
+                    <div className="sl-fp-label">Options</div>
+                    <label className="sl-check-row">
+                      <input type="checkbox" checked={reversible} onChange={e => setReversible(e.target.checked)} />
+                      Reversible only
+                    </label>
+                    <div className="sl-fp-label" style={{ marginTop: 10 }}>Sort by</div>
+                    <div className="sl-sort-row">
+                      {['name', 'level'].map(s => (
+                        <button
+                          key={s}
+                          className={`sl-sort-btn${sort === s ? ' sl-sort-btn--active' : ''}`}
+                          onClick={() => setSort(s)}
+                        >{capitalize(s)}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Clear all */}
+                  {hasFilters && (
+                    <button className="sl-clear-btn" onClick={resetFilters}>🗑 Clear All Filters</button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Spell list ───────────────────────────────────────────────── */}
+              <div className="sl-list-area">
+                {error && <div className="sl-error-bar">{error}</div>}
 
                 {loading ? (
-                  <div className="sl-loading"><div className="sl-spinner" /></div>
+                  <div className="sl-loading">
+                    <div className="sl-spinner" />
+                    Loading spells…
+                  </div>
                 ) : spells.length === 0 ? (
-                  <div className="sl-no-results">
-                    <p>No spells match your filters.</p>
+                  <div className="sl-empty">
+                    <div className="sl-empty-icon">📜</div>
+                    <p className="sl-empty-msg">No spells match your filters.</p>
                     {hasFilters && (
                       <button className="sl-clear-btn" onClick={resetFilters}>Clear filters</button>
                     )}
                   </div>
                 ) : (
-                  <div className="sl-list">
-                    {spells.map(spell => (
-                      <SpellCard
-                        key={spell.id}
-                        spell={spell}
-                        selected={selected?.id === spell.id}
-                        onClick={() => selectSpell(spell)}
-                      />
-                    ))}
-                  </div>
-                )}
+                  <>
+                    <div className="sl-spell-list">
+                      {spells.map(spell => (
+                        <SpellCard
+                          key={spell.id}
+                          spell={spell}
+                          selected={selected?.id === spell.id}
+                          onClick={() => selectSpell(spell)}
+                        />
+                      ))}
+                    </div>
 
-                {/* Bottom pagination */}
-                {totalPages > 1 && !loading && (
-                  <div className="sl-pagination sl-pagination--bottom">
-                    <button
-                      className="sl-page-btn"
-                      disabled={currentPage <= 1}
-                      onClick={() => fetchSpells(offset - PAGE_SIZE)}
-                    >‹ Prev</button>
-                    <span className="sl-page-info">{currentPage} / {totalPages}</span>
-                    <button
-                      className="sl-page-btn"
-                      disabled={currentPage >= totalPages}
-                      onClick={() => fetchSpells(offset + PAGE_SIZE)}
-                    >Next ›</button>
-                  </div>
+                    {totalPages > 1 && (
+                      <div className="sl-pagination">
+                        <button
+                          className="sl-page-btn"
+                          disabled={currentPage <= 1}
+                          onClick={() => fetchSpells(offset - PAGE_SIZE)}
+                        >← Prev</button>
+                        <span className="sl-page-info">Page {currentPage} of {totalPages}</span>
+                        <button
+                          className="sl-page-btn"
+                          disabled={currentPage >= totalPages}
+                          onClick={() => fetchSpells(offset + PAGE_SIZE)}
+                        >Next →</button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
-              {/* Detail panel */}
-              <div className="sl-detail-panel">
+              {/* ── Detail panel — slides in from RIGHT ──────────────────────── */}
+              <div className={`sl-detail-panel${selected ? ' sl-detail-panel--open' : ''}`}>
                 <SpellDetail
                   spell={selected}
                   loading={detailLoad}
                   onClose={() => setSelected(null)}
                 />
               </div>
-            </div>
-          )}
 
-          {/* ── Generator Tab ────────────────────────────────────────────── */}
-          {tab === 'generator' && (
-            <SpellGenerator filters={filterParams} />
-          )}
-        </main>
+            </div>
+          </>
+        )}
+
+        {/* ── Generator Tab ──────────────────────────────────────────────────── */}
+        {tab === 'generator' && (
+          <SpellGenerator filters={filterParams} />
+        )}
+
       </div>
     </div>
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 function capitalize(str) {
   if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
