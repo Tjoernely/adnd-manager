@@ -177,9 +177,46 @@ async function wikiFetch(params, retry = 0) {
   return res.json();
 }
 
+/** Original parse-API method (used for individual item pages) */
 async function fetchWikitext(pageTitle) {
   const data = await wikiFetch({ action: 'parse', page: pageTitle, prop: 'wikitext', disablelimitreport: '1' });
   return data?.parse?.wikitext?.['*'] ?? null;
+}
+
+/** Fetch raw stored wikitext via revisions API (better for table pages) */
+async function fetchWikitextViaRevisions(pageTitle) {
+  const data = await wikiFetch({
+    action: 'query',
+    titles:  pageTitle,
+    prop:    'revisions',
+    rvprop:  'content',
+    rvslots: 'main',
+  });
+  const pages = data?.query?.pages ?? {};
+  const pageId = Object.keys(pages)[0];
+  if (!pageId || pageId === '-1') return null;
+  const rev = pages[pageId]?.revisions?.[0];
+  // Newer MediaWiki API uses slots.main.*, older uses ['*'] directly
+  return rev?.slots?.main?.['*'] ?? rev?.['*'] ?? null;
+}
+
+/** Fetch the rendered HTML of a wiki page (used as fallback) */
+async function fetchHtmlPage(url, retry = 0) {
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
+      signal:  AbortSignal.timeout(30_000),
+    });
+  } catch (err) {
+    if (retry < MAX_RETRY) {
+      await sleep(1_000 * 2 ** retry);
+      return fetchHtmlPage(url, retry + 1);
+    }
+    throw err;
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
 }
 
 async function fetchCategoryPages(category) {
@@ -284,82 +321,147 @@ function extractClasses(text) {
 
 // ── Parse random determination tables page ────────────────────────────────────
 /**
- * Parses the wiki page "Magical_Item_Random_Determination_Tables_(EM)" (or similar).
+ * Parses the wikitext of the Random Determination Tables page line-by-line.
+ * Handles:
+ *   == Table A: Magical Liquids ==
+ *   {| class="wikitable"
+ *   |-
+ *   | 01-05 || Potion of Healing
+ *   |-
+ *   | 06
+ *   | Potion of Extra-Healing
+ *   |}
+ *
  * Returns array of { table_letter, table_name, dice, roll_min, roll_max, item_name }
  */
 function parseTablePage(wikitext) {
   const rows = [];
-
-  // Split by H2/H3 headings to find table sections
-  const sections = wikitext.split(/(?===)/);
+  const lines = wikitext.split('\n');
 
   let currentLetter = null;
   let currentName   = null;
   let currentDice   = 'd20';
 
-  for (const section of sections) {
-    // Detect heading like "== Table A: Magical Liquids ==" or "=== Table A ==="
-    const headingMatch = section.match(/^=+\s*Table\s+([A-T])(?:\s*[:–-]\s*([^=]+))?\s*=+/i);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // ── Detect table heading: ==Table A: Magical Liquids== (any level, any spacing) ──
+    const headingMatch = line.match(/^={1,4}\s*Table\s+([A-T])(?:\s*[:–\-]\s*(.+?))?\s*={1,4}\s*$/i);
     if (headingMatch) {
       currentLetter = headingMatch[1].toUpperCase();
       currentName   = headingMatch[2]?.trim() || TABLE_META[currentLetter]?.name || `Table ${currentLetter}`;
       currentDice   = TABLE_META[currentLetter]?.dice || 'd20';
+      continue;
     }
 
     if (!currentLetter) continue;
 
-    // Find all wiki table rows: lines starting with |- or |
-    // Pattern: | roll_range | item_name (possibly with wiki links)
-    const lines = section.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+    // Skip non-data lines
+    if (!line.startsWith('|')) continue;
+    if (line === '|-' || line.startsWith('|+') || line.startsWith('|}') || line.startsWith('|{')) continue;
+    if (line.startsWith('!')) continue;
 
-      // Row separator
-      if (line === '|-') continue;
-      // Header row
-      if (line.startsWith('!')) continue;
-
-      // Detect roll range in format: | 1-3 or | 01-05 or | 42 |
-      // Could be inline: | 1-3 || Item Name
-      if (line.startsWith('|') && !line.startsWith('||') && !line.startsWith('|+') && !line.startsWith('|}')) {
-        const cells = line.slice(1).split('||').map(c => c.trim());
-        if (cells.length >= 2) {
-          const [rangeCell, itemCell] = cells;
-          const rollRange = parseRollRange(rangeCell);
-          if (rollRange) {
-            const itemName = stripWikiMarkup(itemCell);
-            if (itemName && itemName.length > 1) {
-              rows.push({
-                table_letter: currentLetter,
-                table_name:   currentName,
-                dice:         currentDice,
-                roll_min:     rollRange.min,
-                roll_max:     rollRange.max,
-                item_name:    itemName,
-              });
-            }
-          }
-        } else if (cells.length === 1) {
-          // Might be a 2-row format: | range\n| item
-          const rollRange = parseRollRange(cells[0]);
-          if (rollRange && i + 1 < lines.length) {
-            const nextLine = lines[i + 1].trim();
-            if (nextLine.startsWith('|') && !nextLine.startsWith('|-') && !nextLine.startsWith('|}')) {
-              const itemName = stripWikiMarkup(nextLine.slice(1).trim());
-              if (itemName && itemName.length > 1) {
-                rows.push({
-                  table_letter: currentLetter,
-                  table_name:   currentName,
-                  dice:         currentDice,
-                  roll_min:     rollRange.min,
-                  roll_max:     rollRange.max,
-                  item_name:    itemName,
-                });
-                i++; // skip next line
-              }
-            }
-          }
+    // ── Case 1: | roll || item  (both cells on one line) ──
+    if (line.includes('||')) {
+      const content = line.startsWith('||') ? line : line.slice(1);
+      const cells   = content.split('||').map(c => c.trim());
+      // cells[0] may be empty if line started with ||
+      const [c0, c1] = cells;
+      const rollRange = parseRollRange(c0);
+      if (rollRange) {
+        const itemName = stripWikiMarkup(c1 ?? '');
+        if (itemName.length > 1) {
+          rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
+                      roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
         }
+        continue;
+      }
+      // Maybe c0 is the item and there's no roll (table with roll already on prev |-); skip
+      continue;
+    }
+
+    // ── Case 2: | roll  (next line is | item) ──
+    const cellContent = line.slice(1).trim();
+    const rollRange   = parseRollRange(cellContent);
+    if (rollRange) {
+      // Look ahead for the item cell (skip blank lines, stop at |- or next heading)
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const nextLine = lines[j].trim();
+        if (!nextLine || nextLine === '|-') { i = j; break; }
+        if (nextLine.startsWith('=') || nextLine.startsWith('{|')) break;
+        if (nextLine.startsWith('|') && !nextLine.startsWith('|-') && !nextLine.startsWith('|}')) {
+          const itemName = stripWikiMarkup(nextLine.slice(1).trim());
+          if (itemName.length > 1) {
+            rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
+                        roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+            i = j;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Fallback: parse the rendered HTML page for <table> / <tr> / <td> elements.
+ * Returns same row format as parseTablePage.
+ */
+function parseHtmlTablePage(html) {
+  const rows = [];
+  let currentLetter = null;
+  let currentName   = null;
+  let currentDice   = 'd20';
+
+  // Strip scripts/styles so we don't false-match in them
+  const clean = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '');
+
+  // Find headings (h2/h3) — e.g. <h2>Table A: Magical Liquids</h2>
+  // Then find tables after them
+  const headingRe  = /<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi;
+  const tableRe    = /<table[\s\S]*?<\/table>/gi;
+
+  // Build positional list of headings
+  const headings = [];
+  let m;
+  while ((m = headingRe.exec(clean)) !== null) {
+    const text = m[1].replace(/<[^>]+>/g, '').trim();
+    const hm   = text.match(/Table\s+([A-T])(?:\s*[:–\-]\s*(.+))?/i);
+    if (hm) headings.push({ pos: m.index, letter: hm[1].toUpperCase(), name: hm[2]?.trim() });
+  }
+
+  // Process each <table>
+  while ((m = tableRe.exec(clean)) !== null) {
+    const tablePos = m.index;
+    // Find the nearest preceding heading
+    const heading  = [...headings].reverse().find(h => h.pos < tablePos);
+    if (!heading) continue;
+
+    currentLetter = heading.letter;
+    currentName   = heading.name || TABLE_META[currentLetter]?.name || `Table ${currentLetter}`;
+    currentDice   = TABLE_META[currentLetter]?.dice || 'd20';
+
+    // Extract rows from this table
+    const tableHtml = m[0];
+    const trRe      = /<tr[\s\S]*?<\/tr>/gi;
+    let tr;
+    while ((tr = trRe.exec(tableHtml)) !== null) {
+      const tdRe  = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells = [];
+      let td;
+      while ((td = tdRe.exec(tr[0])) !== null) {
+        cells.push(td[1].replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim());
+      }
+      if (cells.length < 2) continue;
+      const rollRange = parseRollRange(cells[0]);
+      if (!rollRange) continue;
+      const itemName = cells[1].trim();
+      if (itemName.length > 1) {
+        rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
+                    roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
       }
     }
   }
@@ -511,20 +613,23 @@ function progress(current, total, label = '') {
 async function importTables() {
   process.stdout.write('\n📋 STEP 1 — Fetching Random Determination Tables…\n');
 
-  // Try multiple possible page titles
   const pageCandidates = [
     'Magical_Item_Random_Determination_Tables_(EM)',
+    'Magical Item Random Determination Tables (EM)',
     'Magical Item Random Determination Tables',
     'Random Magic Item Tables',
     'Magic Item Tables',
   ];
 
   let wikitext = null;
+  let usedTitle = null;
+
+  // ── Try revisions API first (returns raw stored wikitext) ──
   for (const title of pageCandidates) {
-    process.stdout.write(`   Trying: ${title}…`);
+    process.stdout.write(`   [revisions] Trying: ${title}…`);
     try {
-      wikitext = await fetchWikitext(title);
-      if (wikitext) { process.stdout.write(' ✓\n'); break; }
+      const wt = await fetchWikitextViaRevisions(title);
+      if (wt) { wikitext = wt; usedTitle = title; process.stdout.write(` ✓ (${wt.length} chars)\n`); break; }
       process.stdout.write(' not found\n');
     } catch (e) {
       process.stdout.write(` error (${e.message})\n`);
@@ -532,21 +637,59 @@ async function importTables() {
     await sleep(DELAY_MS);
   }
 
+  // ── Fallback: parse API ──
   if (!wikitext) {
-    process.stdout.write('  ⚠ Could not find tables page — skipping table import.\n');
+    for (const title of pageCandidates) {
+      process.stdout.write(`   [parse]     Trying: ${title}…`);
+      try {
+        const wt = await fetchWikitext(title);
+        if (wt) { wikitext = wt; usedTitle = title; process.stdout.write(` ✓ (${wt.length} chars)\n`); break; }
+        process.stdout.write(' not found\n');
+      } catch (e) {
+        process.stdout.write(` error (${e.message})\n`);
+      }
+      await sleep(DELAY_MS);
+    }
+  }
+
+  // ── Debug: print first 500 chars so we can see the actual format ──
+  if (wikitext) {
+    process.stdout.write('\n   ── Wikitext preview (first 500 chars) ──\n');
+    process.stdout.write(wikitext.slice(0, 500).replace(/\n/g, '\n   ') + '\n');
+    process.stdout.write('   ─────────────────────────────────────────\n\n');
+  }
+
+  let rows = wikitext ? parseTablePage(wikitext) : [];
+  process.stdout.write(`   Wikitext parse: ${rows.length} rows across ${new Set(rows.map(r => r.table_letter)).size} tables.\n`);
+
+  // ── HTML fallback if wikitext parsing found nothing ──
+  if (rows.length === 0) {
+    process.stdout.write('   ⚠ No rows from wikitext — trying HTML fallback…\n');
+    const htmlUrl = `https://adnd2e.fandom.com/wiki/${encodeURIComponent((usedTitle ?? pageCandidates[0]).replace(/ /g, '_'))}`;
+    try {
+      process.stdout.write(`   Fetching HTML: ${htmlUrl}\n`);
+      const html = await fetchHtmlPage(htmlUrl);
+      process.stdout.write(`   HTML size: ${html.length} chars\n`);
+      rows = parseHtmlTablePage(html);
+      process.stdout.write(`   HTML parse: ${rows.length} rows across ${new Set(rows.map(r => r.table_letter)).size} tables.\n`);
+    } catch (e) {
+      process.stdout.write(`   HTML fetch error: ${e.message}\n`);
+    }
+  }
+
+  if (rows.length === 0) {
+    process.stdout.write('  ⚠ Could not parse any table rows — skipping table import.\n');
     return 0;
   }
 
-  const rows = parseTablePage(wikitext);
-  process.stdout.write(`   Parsed ${rows.length} table rows across ${new Set(rows.map(r => r.table_letter)).size} tables.\n`);
-
   if (DRY_RUN) {
-    rows.slice(0, 5).forEach(r => process.stdout.write(`   [DRY] Table ${r.table_letter}: ${r.roll_min}-${r.roll_max} → ${r.item_name}\n`));
-    process.stdout.write(`   [DRY] Would insert ${rows.length} rows.\n`);
+    rows.slice(0, 10).forEach(r =>
+      process.stdout.write(`   [DRY] Table ${r.table_letter}: ${r.roll_min}-${r.roll_max} → ${r.item_name}\n`)
+    );
+    process.stdout.write(`   [DRY] Would insert ${rows.length} rows total.\n`);
     return rows.length;
   }
 
-  // Clear existing table data and re-import
   await dbQuery('DELETE FROM random_item_tables');
   let inserted = 0;
   for (const row of rows) {
