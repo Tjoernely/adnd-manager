@@ -108,26 +108,26 @@ const MAX_RETRY  = 3;
 
 // ── Table metadata ────────────────────────────────────────────────────────────
 const TABLE_META = {
-  A: { name: 'Magical Liquids',              dice: 'd20',  category: 'liquid'       },
-  B: { name: 'Scrolls',                      dice: 'd20',  category: 'scroll'       },
-  C: { name: 'Rings',                        dice: 'd20',  category: 'ring'         },
-  D: { name: 'Rods',                         dice: 'd20',  category: 'rod'          },
-  E: { name: 'Staves',                       dice: 'd20',  category: 'staff'        },
-  F: { name: 'Wands',                        dice: 'd20',  category: 'wand'         },
-  G: { name: 'Books & Tomes',                dice: 'd20',  category: 'book'         },
-  H: { name: 'Gems & Jewelry',               dice: 'd20',  category: 'gem'          },
-  I: { name: 'Clothing',                     dice: 'd20',  category: 'clothing'     },
-  J: { name: 'Boots, Gloves & Accessories',  dice: 'd20',  category: 'boots_gloves' },
-  K: { name: 'Girdles & Helmets',            dice: 'd20',  category: 'girdle_helm'  },
-  L: { name: 'Bags, Bands & Bottles',        dice: 'd20',  category: 'bag_bottle'   },
-  M: { name: 'Dusts & Stones',               dice: 'd20',  category: 'dust_stone'   },
-  N: { name: 'Household Items',              dice: 'd20',  category: 'household'    },
-  O: { name: 'Musical Instruments',          dice: 'd20',  category: 'instrument'   },
-  P: { name: 'Weird Stuff',                  dice: 'd20',  category: 'weird'        },
-  Q: { name: 'Humorous Items',               dice: 'd20',  category: 'humorous'     },
-  R: { name: 'Armor & Shields',              dice: 'd100', category: 'armor'        },
-  S: { name: 'Weapons',                      dice: 'd100', category: 'weapon'       },
-  T: { name: 'Artifacts & Relics',           dice: 'd20',  category: 'artifact'     },
+  A: { name: 'Magical Liquids',             dice: 'd20',  category: 'liquid',       wikiPage: 'Table A: Magical Liquids (EM)'                    },
+  B: { name: 'Scrolls',                     dice: 'd20',  category: 'scroll',       wikiPage: 'Table B: Scrolls (EM)'                            },
+  C: { name: 'Rings',                       dice: 'd20',  category: 'ring',         wikiPage: 'Table C: Rings (EM)'                              },
+  D: { name: 'Rods',                        dice: 'd20',  category: 'rod',          wikiPage: 'Table D: Rods (EM)'                               },
+  E: { name: 'Staves',                      dice: 'd20',  category: 'staff',        wikiPage: 'Table E: Staves (EM)'                             },
+  F: { name: 'Wands',                       dice: 'd20',  category: 'wand',         wikiPage: 'Table F: Wands (EM)'                              },
+  G: { name: 'Books & Tomes',               dice: 'd20',  category: 'book',         wikiPage: 'Table G: Books (EM)'                              },
+  H: { name: 'Gems & Jewelry',              dice: 'd20',  category: 'gem',          wikiPage: 'Table H: Gems & Jewelry (EM)'                     },
+  I: { name: 'Clothing',                    dice: 'd20',  category: 'clothing',     wikiPage: 'Table I: Clothing (EM)'                           },
+  J: { name: 'Boots, Gloves & Accessories', dice: 'd20',  category: 'boots_gloves', wikiPage: 'Table J: Boots, Gloves, and Accessories (EM)'     },
+  K: { name: 'Girdles & Helmets',           dice: 'd20',  category: 'girdle_helm',  wikiPage: 'Table K: Girdles and Helmets (EM)'                },
+  L: { name: 'Bags, Bands & Bottles',       dice: 'd20',  category: 'bag_bottle',   wikiPage: 'Table L: Bags, Bands, Bottles, and Basins (EM)'   },
+  M: { name: 'Dusts & Stones',              dice: 'd20',  category: 'dust_stone',   wikiPage: 'Table M: Dust and Stones (EM)'                    },
+  N: { name: 'Household Items',             dice: 'd20',  category: 'household',    wikiPage: 'Table N: Household Items (EM)'                    },
+  O: { name: 'Musical Instruments',         dice: 'd20',  category: 'instrument',   wikiPage: 'Table O: Musical Instruments (EM)'                },
+  P: { name: 'Weird Stuff',                 dice: 'd20',  category: 'weird',        wikiPage: 'Table P: Weird Stuff (EM)'                        },
+  Q: { name: 'Humorous Items',              dice: 'd20',  category: 'humorous',     wikiPage: 'Table Q: Humorous Items (EM)'                     },
+  R: { name: 'Armor & Shields',             dice: 'd100', category: 'armor',        wikiPage: 'Table R: Armor and Shields (EM)'                  },
+  S: { name: 'Weapons',                     dice: 'd100', category: 'weapon',       wikiPage: 'Table S: Weapons (EM)'                            },
+  T: { name: 'Artifacts & Relics',          dice: 'd20',  category: 'artifact',     wikiPage: 'Table T: Artifacts (EM)'                          },
 };
 
 // Category-name → table letter
@@ -135,12 +135,29 @@ const CATEGORY_TO_TABLE = Object.fromEntries(
   Object.entries(TABLE_META).map(([letter, { category }]) => [category, letter])
 );
 
-// Wiki category names to try (in order)
+// Wiki category names to try (in order) — log which ones return results
 const ITEM_CATEGORIES = [
-  'Magic items', 'Magical items', 'AD&D magic items',
-  'Magic weapons', 'Magic armor', 'Artifacts',
-  'Potions', 'Scrolls (magic)', 'Rings (magic)',
-  'Rods', 'Staves', 'Wands',
+  'Potions',              // Known to work (241 items)
+  'Magical Liquids',
+  'Potions (magical)',
+  'Magic rings',
+  'Magic wands',
+  'Magic staves',
+  'Magic rods',
+  'Scrolls',
+  'Magic armor',
+  'Magic weapons',
+  'Magic items (AD&D)',
+  'Encyclopedia Magica',
+  'Magic items',
+  'Magical items',
+  'AD&D magic items',
+  'Artifacts',
+  'Scrolls (magic)',
+  'Rings (magic)',
+  'Rods',
+  'Staves',
+  'Wands',
 ];
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -469,6 +486,64 @@ function parseHtmlTablePage(html) {
   return rows;
 }
 
+/**
+ * Parse all wiki table rows from a single-table page (no heading detection).
+ * Used for individual table pages like "Table A: Magical Liquids (EM)".
+ * The letter/name/dice are passed in directly.
+ * Returns rows in same format as parseTablePage.
+ */
+function parseWikitableRows(wikitext, letter, name, dice) {
+  const rows  = [];
+  const lines = wikitext.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Skip non-data lines
+    if (!line.startsWith('|')) continue;
+    if (line === '|-' || line.startsWith('|+') || line.startsWith('|}') || line.startsWith('|{')) continue;
+    if (line.startsWith('!')) continue;
+
+    // ── Case 1: | roll || item  (both cells on one line, possibly more cells) ──
+    if (line.includes('||')) {
+      const content = line.startsWith('||') ? line.slice(2) : line.slice(1);
+      const cells   = content.split('||').map(c => c.trim());
+      // First cell should be the roll range; second is item name
+      const rollRange = parseRollRange(cells[0]);
+      if (rollRange && cells[1]) {
+        const itemName = stripWikiMarkup(cells[1]);
+        if (itemName.length > 1) {
+          rows.push({ table_letter: letter, table_name: name, dice,
+                      roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+        }
+      }
+      continue;
+    }
+
+    // ── Case 2: | roll  (next non-blank line is | item) ──
+    const cellContent = line.slice(1).trim();
+    const rollRange   = parseRollRange(cellContent);
+    if (rollRange) {
+      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+        const next = lines[j].trim();
+        if (!next) continue;
+        if (next === '|-' || next.startsWith('|}') || next.startsWith('{|') || next.startsWith('=')) break;
+        if (next.startsWith('|') && !next.startsWith('|-')) {
+          const itemName = stripWikiMarkup(next.slice(1).trim());
+          if (itemName.length > 1) {
+            rows.push({ table_letter: letter, table_name: name, dice,
+                        roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+            i = j;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  return rows;
+}
+
 function parseRollRange(text) {
   if (!text) return null;
   const t = text.replace(/\s/g, '');
@@ -609,117 +684,219 @@ function progress(current, total, label = '') {
   process.stdout.write(`\r  [${bar}] ${current}/${total} ${label}`.padEnd(80));
 }
 
+// ── Fetch wikitext with revisions → parse → HTML fallback ─────────────────────
+/**
+ * Try revisions API then parse API for a page title.
+ * Returns { wikitext, source } or { wikitext: null }.
+ */
+async function fetchPageWikitext(title) {
+  // Try revisions API (raw stored wikitext)
+  try {
+    const wt = await fetchWikitextViaRevisions(title);
+    if (wt) return { wikitext: wt, source: 'revisions' };
+  } catch { /* fall through */ }
+  await sleep(DELAY_MS);
+  // Fallback: parse API
+  try {
+    const wt = await fetchWikitext(title);
+    if (wt) return { wikitext: wt, source: 'parse' };
+  } catch { /* fall through */ }
+  return { wikitext: null, source: null };
+}
+
 // ── STEP 1: Import Random Determination Tables ─────────────────────────────────
 async function importTables() {
   process.stdout.write('\n📋 STEP 1 — Fetching Random Determination Tables…\n');
 
-  const pageCandidates = [
-    'Magical_Item_Random_Determination_Tables_(EM)',
+  const allRows = [];
+
+  // ── 1a. Fetch the overview page (Table 1: d100 → category name) ──
+  process.stdout.write('\n   [overview] Fetching main tables page…\n');
+  const overviewCandidates = [
     'Magical Item Random Determination Tables (EM)',
+    'Magical_Item_Random_Determination_Tables_(EM)',
     'Magical Item Random Determination Tables',
-    'Random Magic Item Tables',
-    'Magic Item Tables',
   ];
 
-  let wikitext = null;
-  let usedTitle = null;
-
-  // ── Try revisions API first (returns raw stored wikitext) ──
-  for (const title of pageCandidates) {
-    process.stdout.write(`   [revisions] Trying: ${title}…`);
-    try {
-      const wt = await fetchWikitextViaRevisions(title);
-      if (wt) { wikitext = wt; usedTitle = title; process.stdout.write(` ✓ (${wt.length} chars)\n`); break; }
-      process.stdout.write(' not found\n');
-    } catch (e) {
-      process.stdout.write(` error (${e.message})\n`);
+  let overviewWikitext = null;
+  for (const title of overviewCandidates) {
+    process.stdout.write(`     Trying: "${title}"… `);
+    const { wikitext, source } = await fetchPageWikitext(title);
+    if (wikitext) {
+      overviewWikitext = wikitext;
+      process.stdout.write(`✓ via ${source} (${wikitext.length} chars)\n`);
+      // Debug: first 500 chars
+      process.stdout.write('\n   ── Overview wikitext preview (first 500 chars) ──\n   ');
+      process.stdout.write(wikitext.slice(0, 500).replace(/\n/g, '\n   '));
+      process.stdout.write('\n   ─────────────────────────────────────────────────\n\n');
+      break;
     }
+    process.stdout.write('not found\n');
     await sleep(DELAY_MS);
   }
 
-  // ── Fallback: parse API ──
-  if (!wikitext) {
-    for (const title of pageCandidates) {
-      process.stdout.write(`   [parse]     Trying: ${title}…`);
+  if (overviewWikitext) {
+    // Parse Table 1: rows like | 01-20 || Magical Liquids || EM Table A
+    const overviewRows = parseWikitableRows(overviewWikitext, 'overview', 'Overview Table 1', 'd100');
+    process.stdout.write(`   Overview: ${overviewRows.length} rows parsed.\n`);
+    allRows.push(...overviewRows);
+  } else {
+    process.stdout.write('   ⚠ Overview page not found — continuing with individual tables.\n');
+  }
+
+  // ── 1b. Fetch each individual table page (A through T) ──
+  process.stdout.write('\n   [individual tables] Fetching A–T…\n');
+  for (const [letter, meta] of Object.entries(TABLE_META)) {
+    const title    = meta.wikiPage;
+    // Also try with underscores as a fallback
+    const titleAlt = title.replace(/ /g, '_');
+    process.stdout.write(`     Table ${letter} ("${title}")… `);
+
+    let wikitext = null;
+    let source   = null;
+
+    for (const t of [title, titleAlt]) {
+      const result = await fetchPageWikitext(t);
+      if (result.wikitext) { wikitext = result.wikitext; source = result.source; break; }
+      await sleep(100);
+    }
+
+    if (!wikitext) {
+      // HTML fallback for this table
+      const htmlUrl = `https://adnd2e.fandom.com/wiki/${encodeURIComponent(titleAlt)}`;
       try {
-        const wt = await fetchWikitext(title);
-        if (wt) { wikitext = wt; usedTitle = title; process.stdout.write(` ✓ (${wt.length} chars)\n`); break; }
-        process.stdout.write(' not found\n');
-      } catch (e) {
-        process.stdout.write(` error (${e.message})\n`);
-      }
+        const html  = await fetchHtmlPage(htmlUrl);
+        const hRows = parseHtmlTablePage(html);
+        // parseHtmlTablePage needs headings in the page — individual pages may not have them
+        // so also try treating the whole HTML as one table for letter
+        const fallbackRows = hRows.length > 0
+          ? hRows.map(r => ({ ...r, table_letter: letter }))
+          : parseHtmlSingleTable(html, letter, meta.name, meta.dice);
+        if (fallbackRows.length > 0) {
+          process.stdout.write(`✓ HTML fallback (${fallbackRows.length} rows)\n`);
+          allRows.push(...fallbackRows);
+          await sleep(DELAY_MS);
+          continue;
+        }
+      } catch { /* silent */ }
+      process.stdout.write('not found\n');
       await sleep(DELAY_MS);
+      continue;
     }
-  }
 
-  // ── Debug: print first 500 chars so we can see the actual format ──
-  if (wikitext) {
-    process.stdout.write('\n   ── Wikitext preview (first 500 chars) ──\n');
-    process.stdout.write(wikitext.slice(0, 500).replace(/\n/g, '\n   ') + '\n');
-    process.stdout.write('   ─────────────────────────────────────────\n\n');
-  }
-
-  let rows = wikitext ? parseTablePage(wikitext) : [];
-  process.stdout.write(`   Wikitext parse: ${rows.length} rows across ${new Set(rows.map(r => r.table_letter)).size} tables.\n`);
-
-  // ── HTML fallback if wikitext parsing found nothing ──
-  if (rows.length === 0) {
-    process.stdout.write('   ⚠ No rows from wikitext — trying HTML fallback…\n');
-    const htmlUrl = `https://adnd2e.fandom.com/wiki/${encodeURIComponent((usedTitle ?? pageCandidates[0]).replace(/ /g, '_'))}`;
-    try {
-      process.stdout.write(`   Fetching HTML: ${htmlUrl}\n`);
-      const html = await fetchHtmlPage(htmlUrl);
-      process.stdout.write(`   HTML size: ${html.length} chars\n`);
-      rows = parseHtmlTablePage(html);
-      process.stdout.write(`   HTML parse: ${rows.length} rows across ${new Set(rows.map(r => r.table_letter)).size} tables.\n`);
-    } catch (e) {
-      process.stdout.write(`   HTML fetch error: ${e.message}\n`);
+    // Debug: show first 300 chars of first successful table
+    if (allRows.filter(r => r.table_letter !== 'overview').length === 0) {
+      process.stdout.write('\n   ── First individual table wikitext preview (first 300 chars) ──\n   ');
+      process.stdout.write(wikitext.slice(0, 300).replace(/\n/g, '\n   '));
+      process.stdout.write('\n   ───────────────────────────────────────────────────────────────\n');
     }
+
+    const rows = parseWikitableRows(wikitext, letter, meta.name, meta.dice);
+    process.stdout.write(`✓ via ${source} — ${rows.length} rows\n`);
+    allRows.push(...rows);
+    await sleep(DELAY_MS);
   }
 
-  if (rows.length === 0) {
-    process.stdout.write('  ⚠ Could not parse any table rows — skipping table import.\n');
+  // ── Summary ──
+  const letterCounts = {};
+  for (const r of allRows) letterCounts[r.table_letter] = (letterCounts[r.table_letter] ?? 0) + 1;
+  process.stdout.write('\n   Row counts per table:\n');
+  for (const [letter, count] of Object.entries(letterCounts)) {
+    process.stdout.write(`     Table ${letter}: ${count} rows\n`);
+  }
+  process.stdout.write(`   Total: ${allRows.length} rows\n`);
+
+  if (allRows.length === 0) {
+    process.stdout.write('  ⚠ No rows parsed — skipping table import.\n');
     return 0;
   }
 
   if (DRY_RUN) {
-    rows.slice(0, 10).forEach(r =>
+    const sample = allRows.filter(r => r.table_letter !== 'overview').slice(0, 10);
+    sample.forEach(r =>
       process.stdout.write(`   [DRY] Table ${r.table_letter}: ${r.roll_min}-${r.roll_max} → ${r.item_name}\n`)
     );
-    process.stdout.write(`   [DRY] Would insert ${rows.length} rows total.\n`);
-    return rows.length;
+    process.stdout.write(`   [DRY] Would insert ${allRows.length} rows total.\n`);
+    return allRows.length;
   }
 
   await dbQuery('DELETE FROM random_item_tables');
   let inserted = 0;
-  for (const row of rows) {
+  for (const row of allRows) {
     try {
       await upsertTableRow(row);
       inserted++;
     } catch (e) {
-      process.stderr.write(`\n  ⚠ Table row error: ${row.item_name} — ${e.message}`);
+      process.stderr.write(`\n  ⚠ Table row error (${row.table_letter}): ${row.item_name} — ${e.message}`);
     }
   }
   process.stdout.write(`   Inserted ${inserted} rows.\n`);
   return inserted;
 }
 
+/**
+ * HTML fallback for a single-table page (no heading context needed).
+ * Grabs the first wikitable on the page and extracts roll → item rows.
+ */
+function parseHtmlSingleTable(html, letter, name, dice) {
+  const rows  = [];
+  const clean = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '');
+  const tableMatch = clean.match(/<table[^>]*wikitable[^>]*>([\s\S]*?)<\/table>/i)
+                  || clean.match(/<table[^>]*article-table[^>]*>([\s\S]*?)<\/table>/i)
+                  || clean.match(/<table([\s\S]*?)<\/table>/i);
+  if (!tableMatch) return rows;
+
+  const trRe = /<tr[\s\S]*?<\/tr>/gi;
+  let tr;
+  while ((tr = trRe.exec(tableMatch[0])) !== null) {
+    const tdRe  = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const cells = [];
+    let td;
+    while ((td = tdRe.exec(tr[0])) !== null) {
+      cells.push(td[1].replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim());
+    }
+    if (cells.length < 2) continue;
+    const rollRange = parseRollRange(cells[0]);
+    if (!rollRange) continue;
+    const itemName = cells[1].trim();
+    if (itemName.length > 1) {
+      rows.push({ table_letter: letter, table_name: name, dice,
+                  roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+    }
+  }
+  return rows;
+}
+
 // ── STEP 2: Import item pages ─────────────────────────────────────────────────
 async function importItems() {
   process.stdout.write('\n📚 STEP 2 — Discovering item pages…\n');
 
-  const allTitles = new Set();
+  const allTitles   = new Set();
+  const catResults  = [];  // track which categories yielded pages
 
   for (const cat of ITEM_CATEGORIES) {
     process.stdout.write(`   Category: "${cat}"… `);
     try {
       const titles = await fetchCategoryPages(cat);
+      const newCount = titles.filter(t => !allTitles.has(t)).length;
       titles.forEach(t => allTitles.add(t));
-      process.stdout.write(`${titles.length} pages\n`);
+      const marker = titles.length > 0 ? '✓' : '–';
+      process.stdout.write(`${marker} ${titles.length} pages (${newCount} new)\n`);
+      catResults.push({ cat, total: titles.length, new: newCount });
     } catch (e) {
-      process.stdout.write(`error (${e.message})\n`);
+      process.stdout.write(`✗ error (${e.message})\n`);
+      catResults.push({ cat, total: 0, new: 0 });
     }
     await sleep(DELAY_MS);
+  }
+
+  // Summary of which categories worked
+  const working = catResults.filter(r => r.total > 0);
+  process.stdout.write(`\n   Categories with results (${working.length}/${catResults.length}):\n`);
+  for (const r of working) {
+    process.stdout.write(`     "${r.cat}": ${r.total} pages\n`);
   }
 
   const SKIP_PREFIXES = ['Category:', 'File:', 'Template:', 'Help:', 'User:', 'Talk:', 'Special:', 'MediaWiki:'];
