@@ -92,7 +92,7 @@ function resolve(params) {
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
 
-const SYS = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms. Generate vivid, lore-accurate NPCs that fit the Forgotten Realms setting. Use appropriate FR names for each race (elven names for elves, dwarven clan names for dwarves etc.). Reference FR factions, deities and locations in backgrounds. Respond with valid JSON only, no markdown.`;
+const SYS = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms. Generate vivid, lore-accurate NPCs that fit the Forgotten Realms setting. Use appropriate FR names for each race (elven names for elves, dwarven clan names for dwarves etc.). Reference FR factions, deities and locations in backgrounds. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 function buildPrompt(r) {
   const { race, charClass, gender, alignment, level, powerLevel, role, stats } = r;

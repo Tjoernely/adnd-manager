@@ -99,13 +99,23 @@ export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096, m
 }
 
 function extractJSON(text) {
-  // Try direct parse first
+  // 1. Try direct parse first
   try { return JSON.parse(text.trim()); } catch (_) {}
-  // Find first {...} block (handles markdown fences)
-  const m = text.match(/\{[\s\S]*\}/);
+
+  // 2. Strip markdown code fences (```json ... ``` or ``` ... ```) then parse
+  const stripped = text
+    .replace(/^```json\s*/im, '')
+    .replace(/^```\s*/im,     '')
+    .replace(/```\s*$/im,     '')
+    .trim();
+  try { return JSON.parse(stripped); } catch (_) {}
+
+  // 3. Find the outermost {...} block as a last resort
+  const m = stripped.match(/\{[\s\S]*\}/);
   if (m) {
     try { return JSON.parse(m[0]); } catch (_) {}
   }
+
   console.error('[callClaude] Could not extract JSON. Raw text (first 600 chars):\n', text.slice(0, 600));
   throw new Error(
     'AI response did not contain valid JSON.\n\n' +

@@ -99,7 +99,7 @@ function buildDallePrompt(r) {
 }
 
 // ── Claude system/user prompts (split into two smaller calls) ─────────────────
-const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. Respond with valid JSON only, no markdown.`;
+const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 const FR_CONTEXT = `Setting: Forgotten Realms / Faerûn.
 Use appropriate FR place names, factions (Zhentarim, Harpers, Lords' Alliance, Emerald Enclave, Order of the Gauntlet), deities (Mystra, Tempus, Bane, Selûne, Tymora etc.), and lore.
