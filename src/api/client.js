@@ -78,20 +78,30 @@ export const api = {
   deleteNpc:   (id)          => apiFetch(`/npcs/${id}`,   { method: 'DELETE' }),
 
   // ── Spells ────────────────────────────────────────────────────────
-  // params: { q, group, level, school, sphere, source, limit, offset }
+  // params: { q/search, group, level, minLevel, maxLevel, school,
+  //           sphere, source, reversible, sort, limit, offset }
   searchSpells: (params = {}) => {
     const qs = new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
     ).toString();
     return apiFetch(`/spells${qs ? `?${qs}` : ''}`);
   },
   randomSpell:  (params = {}) => {
     const qs = new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
     ).toString();
     return apiFetch(`/spells/random${qs ? `?${qs}` : ''}`);
   },
-  getSpell:     (id)          => apiFetch(`/spells/${id}`),
+  // params: same as randomSpell + count (1-20)
+  randomSpellBatch: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/spells/random/batch${qs ? `?${qs}` : ''}`);
+  },
+  getSpell:       (id) => apiFetch(`/spells/${id}`),
+  // Returns { total, wizard, priest, schools, spheres, levels }
+  getSpellsMeta:  ()   => apiFetch('/spells/meta'),
 
   // ── Quests ────────────────────────────────────────────────────────
   getQuests:    (campaignId) => apiFetch(`/quests?campaign_id=${campaignId}`),

@@ -77,8 +77,8 @@ const MODULES = [
     label: 'Spells',
     desc:  'Browse the arcane & divine spellbook',
     color: '#6070e0',
-    unit:  null,
-    fetch: () => Promise.resolve(null),
+    unit:  'spell',
+    fetch: () => api.getSpellsMeta().then(r => r.total),
   },
   {
     id:    'knowledge',

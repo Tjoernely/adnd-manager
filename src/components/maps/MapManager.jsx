@@ -68,10 +68,20 @@ const POI_TYPE_TO_MAP_TYPE = {
 };
 
 const MAP_TYPE_LABELS = {
-  dungeon:'🏚 Dungeon', world:'🌍 World', region:'🗾 Region',
-  city:'🏙 City', town:'🏘 Town', interior:'🏛 Interior',
-  encounter:'⚔ Encounter', other:'📍 Other',
+  dungeon:'💀 Dungeon', world:'🌍 World', region:'🌍 Region',
+  city:'🏰 City', town:'🏘 Village', interior:'🏛 Interior',
+  encounter:'⚔ Encounter', cave:'🕳 Cave', ruins:'🏚 Ruins',
+  wilderness:'🌲 Wilderness', temple:'⛪ Temple', other:'📍 Other',
 };
+
+function mapTypeIcon(type) {
+  const icons = {
+    region:'🌍', world:'🌍', city:'🏰', town:'🏘', village:'🏘',
+    dungeon:'💀', cave:'🕳', ruins:'🏚', wilderness:'🌲',
+    temple:'⛪', interior:'🏛', encounter:'⚔', other:'📍',
+  };
+  return icons[type] ?? '🗺';
+}
 
 const LOCATION_TYPES  = new Set(['city','village','ruins','cave','dungeon','wilderness','temple','bandit_camp','monster_lair']);
 const ENCOUNTER_TYPES = new Set(['encounter']);
@@ -363,7 +373,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [savingPoi,     setSavingPoi]     = useState(false);
   const [uploadingImg,  setUploadingImg]  = useState(false);
   const [randEnc,       setRandEnc]       = useState(null);
-  const fileRef = useRef(null);
+  const fileRef    = useRef(null);
+  const toastTimer = useRef(null);
+
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((msg, mapId = null) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, mapId });
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  }, []);
 
   const activeMap  = maps.find(m => m.id === activeMapId) ?? null;
   const pois       = (activeMap?.data?.pois ?? []).filter(p =>
@@ -522,11 +541,12 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
 
   // ── After map created ────────────────────────────────────────────────────────
   const handleMapCreated = useCallback((newMap) => {
+    // Add to list WITHOUT switching view — parent map stays active
     setMaps(prev => [...prev, newMap]);
-    setActiveMapId(newMap.id);
-    setSelectedPoiId(null);
     setShowGenerator(false);
+
     if (genContext?.parentMapId && genContext?.parentPoiId) {
+      // Update parent POI's child_map_id so the link is persisted
       const parentMap = maps.find(m => m.id === genContext.parentMapId);
       if (parentMap) {
         const newPois = (parentMap.data?.pois ?? []).map(p =>
@@ -537,9 +557,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           data: { ...parentMap.data, pois: newPois },
         }).then(updated => patchMap(updated)).catch(() => {});
       }
+      // Show toast instead of auto-navigating — DM can click to open
+      const icon = mapTypeIcon(newMap.type);
+      showToast(`✅ ${icon} "${newMap.name}" generated — click to open`, newMap.id);
+    } else {
+      // Top-level map creation (no parent) → navigate to it immediately
+      setActiveMapId(newMap.id);
+      setSelectedPoiId(null);
     }
     setGenContext(null);
-  }, [genContext, maps, patchMap]);
+  }, [genContext, maps, patchMap, showToast]);
 
   // ── Navigate to map ──────────────────────────────────────────────────────────
   const navigateToMap = useCallback((mapId) => {
@@ -587,6 +614,13 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             ))}
           </div>
 
+          {isDM && (
+            <button className="mm-sidebar-new-btn"
+              onClick={() => { setGenContext(null); setShowGenerator(true); }}>
+              ✦ New Map
+            </button>
+          )}
+
           <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
             onChange={e => { const f = e.target.files[0]; if (f) handleUploadImage(f); e.target.value=''; }}
           />
@@ -598,61 +632,65 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             <>
               {/* Breadcrumb + Toolbar */}
               <div className="mm-toolbar">
-                <div className="mm-breadcrumb">
-                  {ancestors.map(a => (
-                    <span key={a.id} className="mm-breadcrumb-item">
-                      <button className="mm-breadcrumb-btn" onClick={() => navigateToMap(a.id)}>
-                        {a.name}
-                      </button>
-                      <span className="mm-breadcrumb-sep">›</span>
+                <div className="mm-toolbar-row">
+                  <div className="mm-breadcrumb">
+                    {ancestors.map(a => (
+                      <span key={a.id} className="mm-breadcrumb-item">
+                        <button className="mm-breadcrumb-btn" onClick={() => navigateToMap(a.id)}>
+                          <span className="mm-bc-icon">{mapTypeIcon(a.type)}</span>{a.name}
+                        </button>
+                        <span className="mm-breadcrumb-sep">›</span>
+                      </span>
+                    ))}
+                    <span className="mm-breadcrumb-cur">
+                      <span className="mm-bc-icon">{mapTypeIcon(activeMap.type)}</span>{activeMap.name}
                     </span>
-                  ))}
-                  <span className="mm-breadcrumb-cur">{activeMap.name}</span>
-                </div>
+                  </div>
 
-                <div className="mm-toolbar-actions">
-                  {isDM && (
-                    <button
-                      className={`mm-btn${addPoiMode ? ' mm-btn--active' : ''}`}
-                      onClick={() => setAddPoiMode(v => !v)}
-                      title="Click on map to add a POI"
-                    >
-                      {addPoiMode ? '✕ Cancel' : '+ Add POI'}
-                    </button>
-                  )}
-                  <button className="mm-btn" onClick={handleRandomEncounter}>🎲 Encounter</button>
-                  {isDM && (
-                    <>
-                      <button className="mm-btn mm-btn--ai"
-                        onClick={() => { setGenContext(null); setShowGenerator(true); }}>
-                        ✦ New Map
-                      </button>
+                  <div className="mm-toolbar-actions">
+                    {isDM && (
                       <button
-                        className={`mm-btn${activeMap.data?.visible_to_players ? ' mm-btn--shared' : ''}`}
-                        onClick={toggleMapVisibility}
+                        className={`mm-btn${addPoiMode ? ' mm-btn--active' : ''}`}
+                        onClick={() => setAddPoiMode(v => !v)}
+                        title="Click on map to add a POI"
                       >
-                        {activeMap.data?.visible_to_players ? '👁 Shared' : '🔒 DM Only'}
+                        {addPoiMode ? '✕ Cancel' : '+ Add POI'}
                       </button>
-                      <button className="mm-btn" onClick={() => fileRef.current?.click()}
-                        disabled={uploadingImg}>
-                        {uploadingImg ? '⏳' : '🖼 Image'}
-                      </button>
-                      <button className="mm-btn mm-btn--danger" onClick={handleDeleteMap}>🗑</button>
-                    </>
-                  )}
-                  <button
-                    className={`mm-btn${playerView ? ' mm-btn--player' : ''}`}
-                    onClick={() => setPlayerView(v => !v)}
-                  >
-                    {playerView ? '🔒 DM View' : '👁 Player View'}
-                  </button>
-                  {savingPoi && <span className="mm-saving">Saving…</span>}
+                    )}
+                    <button className="mm-btn" onClick={handleRandomEncounter}>🎲 Encounter</button>
+                    {isDM && (
+                      <>
+                        <button className="mm-btn mm-btn--ai"
+                          onClick={() => { setGenContext(null); setShowGenerator(true); }}>
+                          ✦ New Map
+                        </button>
+                        <button
+                          className={`mm-btn${activeMap.data?.visible_to_players ? ' mm-btn--shared' : ''}`}
+                          onClick={toggleMapVisibility}
+                        >
+                          {activeMap.data?.visible_to_players ? '👁 Shared' : '🔒 DM Only'}
+                        </button>
+                        <button className="mm-btn" onClick={() => fileRef.current?.click()}
+                          disabled={uploadingImg}>
+                          {uploadingImg ? '⏳' : '🖼 Image'}
+                        </button>
+                        <button className="mm-btn mm-btn--danger" onClick={handleDeleteMap}>🗑</button>
+                      </>
+                    )}
+                    <button
+                      className={`mm-btn${playerView ? ' mm-btn--player' : ''}`}
+                      onClick={() => setPlayerView(v => !v)}
+                    >
+                      {playerView ? '🔒 DM View' : '👁 Player View'}
+                    </button>
+                    {savingPoi && <span className="mm-saving">Saving…</span>}
+                  </div>
                 </div>
-              </div>
 
-              {activeMap.data?.subtitle && (
-                <div className="mm-map-subtitle">{activeMap.data.subtitle}</div>
-              )}
+                {activeMap.data?.subtitle && (
+                  <div className="mm-map-subtitle">{activeMap.data.subtitle}</div>
+                )}
+              </div>
 
               {randEnc && (
                 <div className="mm-rand-enc" onClick={() => setRandEnc(null)}>
@@ -694,9 +732,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             </>
           ) : (
             <div className="mm-empty">
-              {isDM
-                ? 'Click ✦ in the sidebar to generate your first map.'
-                : 'No maps have been shared with you yet.'}
+              <CompassRoseSVG />
+              <div className="mm-empty-text">
+                {isDM ? 'No maps yet — begin your adventure' : 'No maps have been shared with you yet.'}
+              </div>
+              {isDM && (
+                <button className="mm-empty-btn"
+                  onClick={() => { setGenContext(null); setShowGenerator(true); }}>
+                  🗺 Generate Your First Map
+                </button>
+              )}
             </div>
           )}
         </main>
@@ -726,30 +771,101 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       )}
 
       {showApiKeys && <ApiKeySettings onClose={() => setShowApiKeys(false)} />}
+
+      {toast && (
+        <Toast
+          toast={toast}
+          onClose={() => setToast(null)}
+          onNavigate={(id) => { navigateToMap(id); setToast(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Compass rose SVG for empty state ──────────────────────────────────────────
+function CompassRoseSVG() {
+  return (
+    <svg className="mm-compass-svg" width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="46" stroke="#c8a84b" strokeWidth="0.5" opacity="0.3" strokeDasharray="3 3"/>
+      <circle cx="50" cy="50" r="34" stroke="#c8a84b" strokeWidth="0.5" opacity="0.2"/>
+      {/* N arrow (gold) */}
+      <path d="M50 6 L53.5 46 L50 42 L46.5 46 Z" fill="#c8a84b" opacity="0.85"/>
+      {/* S arrow */}
+      <path d="M50 94 L53.5 54 L50 58 L46.5 54 Z" fill="#6a5020" opacity="0.8"/>
+      {/* E arrow */}
+      <path d="M94 50 L54 53.5 L58 50 L54 46.5 Z" fill="#6a5020" opacity="0.8"/>
+      {/* W arrow */}
+      <path d="M6 50 L46 53.5 L42 50 L46 46.5 Z" fill="#6a5020" opacity="0.8"/>
+      {/* Diagonal ticks */}
+      <line x1="74" y1="26" x2="68" y2="32" stroke="#c8a84b" strokeWidth="1" opacity="0.3"/>
+      <line x1="26" y1="26" x2="32" y2="32" stroke="#c8a84b" strokeWidth="1" opacity="0.3"/>
+      <line x1="74" y1="74" x2="68" y2="68" stroke="#c8a84b" strokeWidth="1" opacity="0.3"/>
+      <line x1="26" y1="74" x2="32" y2="68" stroke="#c8a84b" strokeWidth="1" opacity="0.3"/>
+      {/* Centre */}
+      <circle cx="50" cy="50" r="4" fill="#c8a84b" opacity="0.75"/>
+      <circle cx="50" cy="50" r="2" fill="#1a1108"/>
+      {/* Cardinal letters */}
+      <text x="47" y="5" fill="#c8a84b" fontSize="7" fontFamily="serif" opacity="0.9">N</text>
+      <text x="47" y="99" fill="#6a5020" fontSize="7" fontFamily="serif" opacity="0.7">S</text>
+      <text x="95" y="53" fill="#6a5020" fontSize="7" fontFamily="serif" opacity="0.7">E</text>
+      <text x="1"  y="53" fill="#6a5020" fontSize="7" fontFamily="serif" opacity="0.7">W</text>
+    </svg>
+  );
+}
+
+// ── Toast notification ─────────────────────────────────────────────────────────
+function Toast({ toast, onClose, onNavigate }) {
+  if (!toast) return null;
+  return (
+    <div className="mm-toast" onClick={() => { if (toast.mapId) onNavigate(toast.mapId); else onClose(); }}>
+      <span className="mm-toast-msg">{toast.msg}</span>
+      <button className="mm-toast-close" onClick={e => { e.stopPropagation(); onClose(); }}>✕</button>
     </div>
   );
 }
 
 // ── MapTreeNode ───────────────────────────────────────────────────────────────
 function MapTreeNode({ map, allMaps, activeMapId, children_fn, onSelect, depth }) {
-  const kids = children_fn(map.id);
+  const kids    = children_fn(map.id);
   const isActive = map.id === activeMapId;
+  const hasKids  = kids.length > 0;
+  const [collapsed, setCollapsed] = useState(false);
+  const icon = mapTypeIcon(map.type);
+
   return (
     <div className="mm-tree-node">
-      <button
-        className={`mm-tree-item${isActive ? ' mm-tree-item--active' : ''}`}
-        style={{ paddingLeft: `${12 + depth * 14}px` }}
-        onClick={() => onSelect(map.id)}
+      <div
+        className={`mm-tree-item${isActive ? ' mm-tree-item--active' : ''}${depth > 0 ? ' mm-tree-item--child' : ''}`}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
-        <span className="mm-tree-type">{MAP_TYPE_LABELS[map.type] ?? map.type}</span>
-        <span className="mm-tree-name">{map.name}</span>
+        {/* Collapse toggle — invisible spacer when no children */}
+        <button
+          className="mm-tree-collapse-btn"
+          style={{ visibility: hasKids ? 'visible' : 'hidden' }}
+          onClick={e => { e.stopPropagation(); setCollapsed(v => !v); }}
+          tabIndex={-1}
+        >
+          {collapsed ? '▶' : '▼'}
+        </button>
+
+        <button className="mm-tree-name-btn" onClick={() => onSelect(map.id)}>
+          <span className="mm-tree-icon">{icon}</span>
+          <span className="mm-tree-label">{map.name}</span>
+        </button>
+
         {map.data?.visible_to_players && <span className="mm-tree-badge">👁</span>}
-        {(map.image_url || map.data?.imageUrl) && <span className="mm-tree-badge mm-tree-badge--img">🖼</span>}
-      </button>
-      {kids.map(child => (
-        <MapTreeNode key={child.id} map={child} allMaps={allMaps} activeMapId={activeMapId}
-          children_fn={children_fn} onSelect={onSelect} depth={depth + 1} />
-      ))}
+        {(map.image_url || map.data?.imageUrl) && <span className="mm-tree-badge">🖼</span>}
+      </div>
+
+      {hasKids && !collapsed && (
+        <div className="mm-tree-children">
+          {kids.map(child => (
+            <MapTreeNode key={child.id} map={child} allMaps={allMaps} activeMapId={activeMapId}
+              children_fn={children_fn} onSelect={onSelect} depth={depth + 1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -861,6 +977,7 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
       onPointerUp={handlePointerUp}
       role="button"
       title={poi.name}
+      data-name={poi.name}
     >
       <span className="mm-poi-icon">{info.icon}</span>
       {isSelected && <span className="mm-poi-label">{poi.name}</span>}
