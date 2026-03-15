@@ -456,7 +456,7 @@ function MapTreeNode({ map, allMaps, activeMapId, children_fn, onSelect, depth }
         <span className="mm-tree-type">{MAP_TYPE_LABELS[map.type] ?? map.type}</span>
         <span className="mm-tree-name">{map.name}</span>
         {map.data?.visible_to_players && <span className="mm-tree-badge">👁</span>}
-        {map.image_url && <span className="mm-tree-badge mm-tree-badge--img">🖼</span>}
+        {(map.image_url || map.data?.imageUrl) && <span className="mm-tree-badge mm-tree-badge--img">🖼</span>}
       </button>
       {kids.map(child => (
         <MapTreeNode key={child.id} map={child} allMaps={allMaps} activeMapId={activeMapId}
@@ -478,7 +478,9 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
     onMapClick(Math.max(2, Math.min(98, x)), Math.max(2, Math.min(98, y)));
   };
 
-  if (!map.image_url) {
+  const mapImageSrc = map.image_url || map.data?.imageUrl || null;
+
+  if (!mapImageSrc) {
     return (
       <div className="mm-canvas-empty">
         <div className="mm-canvas-empty-icon">🗺</div>
@@ -495,7 +497,7 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
         className={`mm-map-container${addPoiMode ? ' mm-map-container--place' : ''}`}
         onClick={handleContainerClick}
       >
-        <img src={map.image_url} alt={map.name} className="mm-map-image" draggable={false} />
+        <img src={mapImageSrc} alt={map.name} className="mm-map-image" draggable={false} />
 
         {/* Fantasy border overlay */}
         <div className="mm-map-border" aria-hidden="true" />

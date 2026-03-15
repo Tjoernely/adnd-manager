@@ -186,10 +186,7 @@ Rules:
 }
 
 // ── DALL-E generation ─────────────────────────────────────────────────────────
-async function generateAndUploadImage(mapId, prompt) {
-  const apiKey = getOpenAIKey();
-  if (!apiKey) throw new Error('No OpenAI API key — skipping image generation.');
-
+async function callDalleOnce(prompt, apiKey) {
   const resp = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -200,24 +197,52 @@ async function generateAndUploadImage(mapId, prompt) {
       size:            '1024x1024',
       quality:         'standard',
       style:           'vivid',
-      response_format: 'b64_json',
+      response_format: 'url',
     }),
   });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err?.error?.message ?? `OpenAI ${resp.status}`);
-  }
   const data = await resp.json();
-  const b64  = data.data[0].b64_json;
+  if (!resp.ok) {
+    const msg = data?.error?.message ?? `OpenAI ${resp.status}`;
+    const code = data?.error?.code ?? data?.error?.type ?? '';
+    throw Object.assign(new Error(msg), { code });
+  }
+  return data;
+}
 
-  // Convert base64 → File
-  const bytes = atob(b64);
-  const arr   = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  const file = new File([arr], 'map.png', { type: 'image/png' });
+async function generateAndSaveImage(map, prompt) {
+  const apiKey = getOpenAIKey();
+  if (!apiKey) throw new Error('No OpenAI API key — skipping image generation.');
 
-  // Upload to server
-  const updated = await api.uploadMapImage(mapId, file);
+  console.log('[Map] Calling DALL-E 3 for map image...');
+
+  let data;
+  try {
+    data = await callDalleOnce(prompt, apiKey);
+  } catch (firstErr) {
+    // Retry once on server_error after 3 s
+    if (firstErr.code === 'server_error' || firstErr.message?.includes('server_error')) {
+      console.warn('[Map] DALL-E server_error — retrying in 3 s...');
+      await new Promise(r => setTimeout(r, 3000));
+      data = await callDalleOnce(prompt, apiKey);
+    } else {
+      throw firstErr;
+    }
+  }
+
+  const imageUrl = data?.data?.[0]?.url;
+  if (!imageUrl) throw new Error('DALL-E returned no image URL.');
+
+  console.log('[Map] DALL-E URL received:', imageUrl);
+
+  // Persist URL to backend (image_url column + data.imageUrl for redundancy)
+  const updated = await api.updateMap(map.id, {
+    name:      map.name,
+    type:      map.type,
+    image_url: imageUrl,
+    data:      { ...map.data, imageUrl },
+  });
+
+  console.log('[Map] Map record updated with image URL — id:', updated?.id);
   return updated;
 }
 
@@ -332,7 +357,7 @@ export function MapGenerator({
         console.log('[MapGenerator] Step 3/3 — calling DALL-E...');
         try {
           const dallePrompt = buildDallePrompt(resolved);
-          const updated = await generateAndUploadImage(map.id, dallePrompt);
+          const updated = await generateAndSaveImage(map, dallePrompt);
           if (updated) map = updated;
           console.log('[MapGenerator] Step 3/3 done — image_url:', map?.image_url);
           setStep3Done(true);
@@ -484,6 +509,7 @@ export function MapGenerator({
                   }
                   subLabel={
                     step3Skip ? 'You can upload an image manually from the map toolbar' :
+                    step3Done ? 'Map image generated — save your campaign to preserve it' :
                     'DALL·E 3 is illustrating your map (up to 60s)'
                   }
                   done={step3Done || step3Skip}
