@@ -24,6 +24,7 @@ import { MapManager }        from "./components/maps/MapManager.jsx";
 import { CampaignDashboard } from "./components/campaign/CampaignDashboard.jsx";
 import { NPCManager }        from "./components/npcs/NPCManager.jsx";
 import SpellLibrary           from "./components/spells/SpellLibrary.jsx";
+import MagicalItemLibrary     from "./components/items/MagicalItemLibrary.jsx";
 import "./styles/adnd-theme.css";
 
 export default function App() {
@@ -40,7 +41,7 @@ export default function App() {
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
-  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters' | 'npcs' | 'spells'
+  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters' | 'npcs' | 'spells' | 'magical-items'
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
@@ -133,9 +134,10 @@ export default function App() {
           campaign={activeCampaign}
           user={user}
           onNavigate={(modId) => {
-            if (modId === 'characters') setScreen('characters');
-            if (modId === 'npcs')       setScreen('npcs');
-            if (modId === 'spells')     setScreen('spells');
+            if (modId === 'characters')    setScreen('characters');
+            if (modId === 'npcs')          setScreen('npcs');
+            if (modId === 'spells')        setScreen('spells');
+            if (modId === 'magical-items') setScreen('magical-items');
           }}
           onOpenMaps={() => setShowMaps(true)}
           onBack={() => { setActiveCampaign(null); setDbCharId(null); setScreen('dashboard'); }}
@@ -148,6 +150,13 @@ export default function App() {
           onClose={() => setShowMaps(false)}
         />
       </>
+    );
+  }
+
+  // ── Magical Items screen ────────────────────────────────────
+  if (screen === 'magical-items') {
+    return (
+      <MagicalItemLibrary onBack={() => setScreen('dashboard')} />
     );
   }
 

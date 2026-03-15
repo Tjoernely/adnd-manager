@@ -146,6 +146,47 @@ CREATE TABLE IF NOT EXISTS party_knowledge (
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
+-- ── Magical Items (global library) ──────────────────────────
+CREATE TABLE IF NOT EXISTS magical_items (
+  id              SERIAL PRIMARY KEY,
+  name            TEXT NOT NULL,
+  category        TEXT NOT NULL,
+  subcategory     TEXT,
+  source_page_title TEXT,
+  source_url      TEXT,
+  description     TEXT,
+  powers          TEXT,
+  charges         TEXT,
+  cursed          BOOLEAN NOT NULL DEFAULT false,
+  alignment       TEXT,
+  classes         TEXT[],
+  value_gp        INTEGER,
+  rarity          TEXT CHECK (rarity IN ('common','uncommon','rare','very rare','legendary') OR rarity IS NULL),
+  weight          TEXT,
+  intelligence    INTEGER,
+  ego             INTEGER,
+  special_purpose TEXT,
+  table_letter    TEXT,
+  table_roll_min  INTEGER,
+  table_roll_max  INTEGER,
+  import_warnings TEXT[],
+  raw_text        TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (name, category)
+);
+
+CREATE TABLE IF NOT EXISTS random_item_tables (
+  id           SERIAL PRIMARY KEY,
+  table_letter TEXT    NOT NULL,
+  table_name   TEXT    NOT NULL,
+  dice         TEXT    NOT NULL,
+  roll_min     INTEGER NOT NULL,
+  roll_max     INTEGER NOT NULL,
+  item_name    TEXT    NOT NULL,
+  item_id      INTEGER REFERENCES magical_items(id) ON DELETE SET NULL,
+  notes        TEXT
+);
+
 -- ── Indexes ─────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_campaigns_dm         ON campaigns(dm_user_id);
 CREATE INDEX IF NOT EXISTS idx_members_campaign     ON campaign_members(campaign_id);
@@ -163,6 +204,12 @@ CREATE INDEX IF NOT EXISTS idx_spells_name          ON spells USING gin(to_tsvec
 CREATE INDEX IF NOT EXISTS idx_spells_desc          ON spells USING gin(to_tsvector('english', COALESCE(description, '')));
 CREATE INDEX IF NOT EXISTS idx_maps_campaign        ON maps(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_pk_campaign          ON party_knowledge(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_mi_name              ON magical_items USING gin(to_tsvector('english', name));
+CREATE INDEX IF NOT EXISTS idx_mi_category          ON magical_items(category);
+CREATE INDEX IF NOT EXISTS idx_mi_table             ON magical_items(table_letter);
+CREATE INDEX IF NOT EXISTS idx_mi_rarity            ON magical_items(rarity);
+CREATE INDEX IF NOT EXISTS idx_mi_cursed            ON magical_items(cursed) WHERE cursed = true;
+CREATE INDEX IF NOT EXISTS idx_rit_letter           ON random_item_tables(table_letter);
 
 -- ── Auto-update updated_at trigger ─────────────────────────
 CREATE OR REPLACE FUNCTION set_updated_at()

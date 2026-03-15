@@ -124,6 +124,33 @@ export const api = {
   updateLoot:   (id, data)   => apiFetch(`/loot/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
   deleteLoot:   (id)         => apiFetch(`/loot/${id}`,   { method: 'DELETE' }),
 
+  // ── Magical Items ─────────────────────────────────────────────────
+  // params: { search/q, category, rarity, table_letter, cursed, sort, limit, offset }
+  searchMagicalItems: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/magical-items${qs ? `?${qs}` : ''}`);
+  },
+  getMagicalItemsMeta:  ()         => apiFetch('/magical-items/meta'),
+  getMagicalItem:       (id)       => apiFetch(`/magical-items/${id}`),
+  // params: { category, table_letter, cursed, count }
+  randomMagicalItems:   (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/magical-items/random${qs ? `?${qs}` : ''}`);
+  },
+  // Roll on a specific table: table = 'A'–'T'
+  rollMagicalTable:     (table)    => apiFetch(`/magical-items/roll-table?table=${table}`),
+  // params: { level, type }
+  randomMagicalHoard:   (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/magical-items/random-hoard${qs ? `?${qs}` : ''}`);
+  },
+
   // ── Maps ──────────────────────────────────────────────────────────
   getMaps:     (campaignId) => apiFetch(`/maps?campaign_id=${campaignId}`),
   getMap:      (id)         => apiFetch(`/maps/${id}`),

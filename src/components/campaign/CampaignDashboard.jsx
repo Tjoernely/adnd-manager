@@ -45,13 +45,13 @@ const MODULES = [
     fetch: (id) => api.getQuests(id).then(r => safeLen(r)),
   },
   {
-    id:    'loot',
-    icon:  '💰',
-    label: 'Loot',
-    desc:  'Treasure, magic items and equipment',
-    color: '#d4a840',
+    id:    'magical-items',
+    icon:  '⚗️',
+    label: 'Magical Items',
+    desc:  'Browse items, roll random treasure',
+    color: '#9060c0',
     unit:  'item',
-    fetch: (id) => api.getLootList(id).then(r => safeLen(r)),
+    fetch: () => api.getMagicalItemsMeta().then(r => r.total),
   },
   {
     id:    'maps',
@@ -126,6 +126,8 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
       onNavigate('npcs');
     } else if (mod.id === 'spells') {
       onNavigate('spells');
+    } else if (mod.id === 'magical-items') {
+      onNavigate('magical-items');
     } else {
       // Module exists in backend but has no dedicated UI page yet
       setComingSoon(mod);
