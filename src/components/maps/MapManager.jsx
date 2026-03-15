@@ -43,13 +43,28 @@ const DISPLAY_POI_TYPES = [
 
 // Map AI-returned suggested_submap_type (and old drill_down_type) → MapGenerator presetType
 const SUBMAP_TYPE_MAP = {
-  Dungeon:'Dungeon', dungeon:'Dungeon',
-  Cave:'Cave System', cave:'Cave System',
-  City:'City/Town',  city:'City/Town',
-  Ruins:'Ruins',     ruins:'Ruins',
-  Temple:'Temple',   temple:'Temple',
-  Wilderness:'Region',
+  Dungeon:'Dungeon',   dungeon:'Dungeon',
+  Cave:'Cave System',  cave:'Cave System',
+  City:'City/Town',    city:'City/Town',
+  Village:'Village',   village:'Village',
+  Ruins:'Ruins',       ruins:'Ruins',
+  Temple:'Temple',     temple:'Temple',
+  Wilderness:'Region', wilderness:'Region',
+  Region:'Region',     region:'Region',
   interior:'Interior',
+};
+
+// Fallback: derive map preset type directly from poi.type
+const POI_TYPE_TO_MAP_TYPE = {
+  city:          'City/Town',
+  village:       'Village',
+  ruins:         'Ruins',
+  cave:          'Cave System',
+  dungeon:       'Dungeon',
+  temple:        'Temple',
+  wilderness:    'Region',
+  bandit_camp:   'Region',
+  monster_lair:  'Dungeon',
 };
 
 const MAP_TYPE_LABELS = {
@@ -97,7 +112,7 @@ function buildTree(maps) {
 }
 
 // ── AI POI system prompt ──────────────────────────────────────────────────────
-const FR_POI_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate POI content. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+const FR_POI_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate POI content. Keep all descriptions concise — maximum 2 sentences per field. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 function mapCtx(map) {
   return `Parent map: "${map.name}" (type: ${map.type})
@@ -106,26 +121,33 @@ Atmosphere: ${map.data?.atmosphere_notes ?? ''}`;
 }
 
 function buildLocationPoiPrompt(type, map, dmNote) {
+  // Use type-appropriate submap suggestion
+  const submapTypeHint = {
+    city: 'City', village: 'Village', ruins: 'Ruins', cave: 'Cave',
+    dungeon: 'Dungeon', temple: 'Temple',
+    wilderness: 'Wilderness', bandit_camp: 'Wilderness', monster_lair: 'Dungeon',
+  }[type] ?? 'Dungeon';
+
   return `Generate a Forgotten Realms AD&D 2E ${type} POI for this map.
 ${mapCtx(map)}
 Additional context: ${dmNote || 'none'}
 
-Respond with ONLY this JSON:
+Respond with ONLY this JSON (keep descriptions to 1-2 sentences each):
 {
   "name": "Evocative FR-appropriate location name",
   "type": "${type}",
   "short_description": "One sentence players might learn (rumors, visible features)",
-  "dm_description": "Full atmospheric DM description (2-3 sentences)",
-  "history": "Brief FR-appropriate backstory",
+  "dm_description": "1-2 sentence DM description",
+  "history": "One sentence FR-appropriate backstory",
   "current_situation": "What is happening here RIGHT NOW",
-  "notable_features": ["Visual feature 1", "Interesting detail 2", "Notable element 3"],
+  "notable_features": ["Feature 1", "Feature 2"],
   "inhabitants": "Who or what lives/lurks here",
-  "secrets": ["Secret only DM knows", "Hidden plot hook"],
-  "quest_hooks": ["FR-flavoured hook 1", "Hook 2"],
-  "loot_hint": "What treasure or reward might be found here",
+  "secrets": ["Secret 1", "Secret 2"],
+  "quest_hooks": ["Hook 1", "Hook 2"],
+  "loot_hint": "What treasure might be found here",
   "is_dm_only": false,
   "can_generate_submap": true,
-  "suggested_submap_type": "Dungeon"
+  "suggested_submap_type": "${submapTypeHint}"
 }`;
 }
 
@@ -486,6 +508,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const handleDrillDown = useCallback((poi, autoGenerate = false) => {
     const submapPreset = SUBMAP_TYPE_MAP[poi.suggested_submap_type]
       ?? SUBMAP_TYPE_MAP[poi.drill_down_type]
+      ?? POI_TYPE_TO_MAP_TYPE[poi.type]
       ?? null;
     setGenContext({
       parentMapId:  activeMapId,
@@ -1026,7 +1049,7 @@ function CoinsRow({ coins }) {
 }
 
 // ── POIPanel ──────────────────────────────────────────────────────────────────
-const POI_PANEL_SYSTEM = `You are an expert AD&D 2nd Edition DM in the Forgotten Realms. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences.`;
+const POI_PANEL_SYSTEM = `You are an expert AD&D 2nd Edition DM in the Forgotten Realms. Keep responses concise — 1-2 sentences per item. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelete, onDrillDown, onNavigate, onShowApiKeys }) {
   const [activeTab,  setActiveTab]  = useState(isDM && !playerView ? 'dm' : 'player');

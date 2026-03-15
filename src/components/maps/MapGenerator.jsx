@@ -99,7 +99,7 @@ function buildDallePrompt(r) {
 }
 
 // ── Claude system/user prompts (split into two smaller calls) ─────────────────
-const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. Keep responses concise — maximum 2 sentences per description field. For POI arrays, generate maximum 6 POIs. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 const FR_CONTEXT = `Setting: Forgotten Realms / Faerûn.
 Use appropriate FR place names, factions (Zhentarim, Harpers, Lords' Alliance, Emerald Enclave, Order of the Gauntlet), deities (Mystra, Tempus, Bane, Selûne, Tymora etc.), and lore.
@@ -137,6 +137,8 @@ Respond with ONLY this JSON object:
 
 /** CALL 2 — POIs + encounter table. Uses title from call 1 for context. */
 function buildPoisPrompt(r, numPois, meta, parentCtx) {
+  // Cap at 6 to avoid token overflow
+  const cappedPois = Math.min(numPois, 6);
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
     ? 'For this region map include a variety of: settlements, ruins, caves, encounter areas, landmarks.'
     : 'For this interior/dungeon map include: rooms, traps, treasures, encounters, boss area.';
@@ -144,9 +146,9 @@ function buildPoisPrompt(r, numPois, meta, parentCtx) {
 Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
 ${parentNote(parentCtx)}
 ${typeHint}
-Use FR-appropriate names, factions and lore for all POIs.
+Use FR-appropriate names, factions and lore for all POIs. Keep each field to 1-2 sentences maximum.
 
-Generate exactly ${numPois} points of interest spread across the map.
+Generate exactly ${cappedPois} points of interest spread across the map.
 
 Respond with ONLY this JSON object:
 {
@@ -315,7 +317,7 @@ export function MapGenerator({
       const poiData = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
         userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx),
-        maxTokens:    2000,
+        maxTokens:    4000,
       });
       console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
 
