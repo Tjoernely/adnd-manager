@@ -380,20 +380,17 @@ function parseTablePage(wikitext) {
 
     // ── Case 1: | roll || item  (both cells on one line) ──
     if (line.includes('||')) {
-      const content = line.startsWith('||') ? line : line.slice(1);
+      const content = line.startsWith('||') ? line.slice(2) : line.slice(1);
       const cells   = content.split('||').map(c => c.trim());
-      // cells[0] may be empty if line started with ||
-      const [c0, c1] = cells;
-      const rollRange = parseRollRange(c0);
-      if (rollRange) {
-        const itemName = stripWikiMarkup(c1 ?? '');
-        if (itemName.length > 1) {
+      const row = extractRollRow(cells);
+      if (row) {
+        const min = sanitizeRoll(row.min);
+        const max = sanitizeRoll(row.max);
+        if (min !== null && max !== null) {
           rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
-                      roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+                      roll_min: min, roll_max: max, item_name: row.itemName });
         }
-        continue;
       }
-      // Maybe c0 is the item and there's no roll (table with roll already on prev |-); skip
       continue;
     }
 
@@ -408,9 +405,11 @@ function parseTablePage(wikitext) {
         if (nextLine.startsWith('=') || nextLine.startsWith('{|')) break;
         if (nextLine.startsWith('|') && !nextLine.startsWith('|-') && !nextLine.startsWith('|}')) {
           const itemName = stripWikiMarkup(nextLine.slice(1).trim());
-          if (itemName.length > 1) {
+          const min = sanitizeRoll(rollRange.min);
+          const max = sanitizeRoll(rollRange.max);
+          if (itemName.length > 1 && min !== null && max !== null) {
             rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
-                        roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+                        roll_min: min, roll_max: max, item_name: itemName });
             i = j;
           }
           break;
@@ -473,17 +472,53 @@ function parseHtmlTablePage(html) {
         cells.push(td[1].replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim());
       }
       if (cells.length < 2) continue;
-      const rollRange = parseRollRange(cells[0]);
-      if (!rollRange) continue;
-      const itemName = cells[1].trim();
-      if (itemName.length > 1) {
-        rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
-                    roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
-      }
+      const row = extractRollRow(cells);
+      if (!row) continue;
+      const min = sanitizeRoll(row.min);
+      const max = sanitizeRoll(row.max);
+      if (min === null || max === null || row.itemName.length < 2) continue;
+      rows.push({ table_letter: currentLetter, table_name: currentName, dice: currentDice,
+                  roll_min: min, roll_max: max, item_name: row.itemName });
     }
   }
 
   return rows;
+}
+
+/**
+ * Extract a validated row from an array of wiki table cells.
+ * Handles these formats:
+ *   2-cell:  ["001-010", "Item Name"]
+ *   3-cell:  ["001", "010", "Item Name"]       ← min / max / name split across cells
+ *   3-cell+: ["001-010", "Item Name", "extra"]  ← extra cols ignored
+ *
+ * Returns { min, max, itemName } or null if the row doesn't look like a data row.
+ */
+function extractRollRow(cells) {
+  if (!cells || cells.length < 2) return null;
+
+  const c0 = cells[0].trim();
+  const c1 = cells[1].trim();
+
+  // ── Try 3-cell format first: c0=min, c1=max, c2=name ──
+  if (cells.length >= 3) {
+    const min3 = sanitizeRoll(c0);
+    const max3 = sanitizeRoll(c1);
+    if (min3 !== null && max3 !== null) {
+      // Both c0 and c1 are pure numbers → they are roll bounds
+      const itemName = stripWikiMarkup(cells.slice(2).join(' ').trim());
+      if (itemName.length > 1) return { min: min3, max: max3, itemName };
+    }
+  }
+
+  // ── Standard format: c0=range ("001-010" or "001"), c1=name ──
+  const range = parseRollRange(c0);
+  if (range) {
+    const itemName = stripWikiMarkup(c1);
+    if (itemName.length > 1) return { min: range.min, max: range.max, itemName };
+  }
+
+  return null;
 }
 
 /**
@@ -493,8 +528,9 @@ function parseHtmlTablePage(html) {
  * Returns rows in same format as parseTablePage.
  */
 function parseWikitableRows(wikitext, letter, name, dice) {
-  const rows  = [];
-  const lines = wikitext.split('\n');
+  const rows    = [];
+  const skipped = [];
+  const lines   = wikitext.split('\n');
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -504,23 +540,27 @@ function parseWikitableRows(wikitext, letter, name, dice) {
     if (line === '|-' || line.startsWith('|+') || line.startsWith('|}') || line.startsWith('|{')) continue;
     if (line.startsWith('!')) continue;
 
-    // ── Case 1: | roll || item  (both cells on one line, possibly more cells) ──
+    // ── Case 1: all cells on one line separated by || ──
     if (line.includes('||')) {
+      // Strip the leading | (or || if the line itself starts with ||)
       const content = line.startsWith('||') ? line.slice(2) : line.slice(1);
       const cells   = content.split('||').map(c => c.trim());
-      // First cell should be the roll range; second is item name
-      const rollRange = parseRollRange(cells[0]);
-      if (rollRange && cells[1]) {
-        const itemName = stripWikiMarkup(cells[1]);
-        if (itemName.length > 1) {
+
+      const row = extractRollRow(cells);
+      if (row) {
+        const min = sanitizeRoll(row.min);
+        const max = sanitizeRoll(row.max);
+        if (min === null || max === null) {
+          skipped.push(`bad range in: ${line.slice(0, 80)}`);
+        } else {
           rows.push({ table_letter: letter, table_name: name, dice,
-                      roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
+                      roll_min: min, roll_max: max, item_name: row.itemName });
         }
       }
       continue;
     }
 
-    // ── Case 2: | roll  (next non-blank line is | item) ──
+    // ── Case 2: | roll on its own line, next | line is item name ──
     const cellContent = line.slice(1).trim();
     const rollRange   = parseRollRange(cellContent);
     if (rollRange) {
@@ -529,11 +569,29 @@ function parseWikitableRows(wikitext, letter, name, dice) {
         if (!next) continue;
         if (next === '|-' || next.startsWith('|}') || next.startsWith('{|') || next.startsWith('=')) break;
         if (next.startsWith('|') && !next.startsWith('|-')) {
-          const itemName = stripWikiMarkup(next.slice(1).trim());
-          if (itemName.length > 1) {
-            rows.push({ table_letter: letter, table_name: name, dice,
-                        roll_min: rollRange.min, roll_max: rollRange.max, item_name: itemName });
-            i = j;
+          const nextCells = next.slice(1).split('||').map(c => c.trim());
+          // nextCells[0] might be a second number (3-cell format split across lines)
+          const maybeMax  = sanitizeRoll(nextCells[0]);
+          if (maybeMax !== null && nextCells.length >= 2) {
+            // Format: | min\n| max || name
+            const itemName = stripWikiMarkup(nextCells.slice(1).join(' ').trim());
+            if (itemName.length > 1) {
+              const min = sanitizeRoll(rollRange.min);
+              rows.push({ table_letter: letter, table_name: name, dice,
+                          roll_min: min, roll_max: maybeMax, item_name: itemName });
+              i = j;
+            }
+          } else {
+            const itemName = stripWikiMarkup(next.slice(1).trim());
+            if (itemName.length > 1) {
+              const min = sanitizeRoll(rollRange.min);
+              const max = sanitizeRoll(rollRange.max);
+              if (min !== null && max !== null) {
+                rows.push({ table_letter: letter, table_name: name, dice,
+                            roll_min: min, roll_max: max, item_name: itemName });
+                i = j;
+              }
+            }
           }
           break;
         }
@@ -541,18 +599,43 @@ function parseWikitableRows(wikitext, letter, name, dice) {
     }
   }
 
+  if (skipped.length > 0) {
+    process.stderr.write(`  ⚠ Table ${letter}: skipped ${skipped.length} bad rows\n`);
+    skipped.slice(0, 3).forEach(s => process.stderr.write(`    ${s}\n`));
+  }
+
   return rows;
+}
+
+/**
+ * Clamp and validate a roll value.
+ * Returns an integer 1–9999, or null if invalid.
+ */
+function sanitizeRoll(val) {
+  if (val === null || val === undefined) return null;
+  const n = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+  if (isNaN(n) || n < 1 || n > 9999) return null;
+  return n;
 }
 
 function parseRollRange(text) {
   if (!text) return null;
   const t = text.replace(/\s/g, '');
-  // Range like 01-05, 1-3, 10-15
-  const rangeMatch = t.match(/^(\d+)-(\d+)$/);
-  if (rangeMatch) return { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
-  // Single number
-  const singleMatch = t.match(/^(\d+)$/);
-  if (singleMatch) { const n = parseInt(singleMatch[1]); return { min: n, max: n }; }
+  // Range like 001-010, 01-05, 1-3, 10-15
+  const rangeMatch = t.match(/^(\d{1,4})-(\d{1,4})$/);
+  if (rangeMatch) {
+    const min = sanitizeRoll(rangeMatch[1]);
+    const max = sanitizeRoll(rangeMatch[2]);
+    if (min === null || max === null) return null;
+    return { min, max };
+  }
+  // Single number (1–4 digits only — avoids matching concatenated garbage)
+  const singleMatch = t.match(/^(\d{1,4})$/);
+  if (singleMatch) {
+    const n = sanitizeRoll(singleMatch[1]);
+    if (n === null) return null;
+    return { min: n, max: n };
+  }
   return null;
 }
 
@@ -656,12 +739,22 @@ async function upsertItem(item) {
 }
 
 async function upsertTableRow(row) {
-  // Clear existing rows for this table first is handled outside; here we just insert
+  // Final guard: ensure roll values are safe integers before hitting the DB
+  const min = sanitizeRoll(row.roll_min);
+  const max = sanitizeRoll(row.roll_max);
+  if (min === null || max === null) {
+    process.stderr.write(`  ⚠ Skipping row with invalid roll range (${row.roll_min}-${row.roll_max}): ${row.item_name}\n`);
+    return;
+  }
+  if (!row.item_name || typeof row.item_name !== 'string' || row.item_name.trim().length === 0) {
+    process.stderr.write(`  ⚠ Skipping row with empty item_name (roll ${min}-${max})\n`);
+    return;
+  }
   const sql = `
     INSERT INTO random_item_tables (table_letter, table_name, dice, roll_min, roll_max, item_name)
     VALUES ($1, $2, $3, $4, $5, $6)
   `;
-  await dbQuery(sql, [row.table_letter, row.table_name, row.dice, row.roll_min, row.roll_max, row.item_name]);
+  await dbQuery(sql, [row.table_letter, row.table_name, row.dice, min, max, row.item_name.trim()]);
 }
 
 async function linkTableItems() {
