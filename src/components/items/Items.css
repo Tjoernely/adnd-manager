@@ -548,6 +548,8 @@
   -webkit-box-orient: vertical;
   text-overflow: ellipsis;
 }
+/* Inline description from table notes — slightly dimmer to indicate lower confidence */
+.ic-preview--inline { opacity: 0.75; font-style: italic; }
 
 /* ══════════════════════════════════════════════════════════════════════════════
    ItemDetail — id-
@@ -697,6 +699,13 @@
   text-transform: uppercase;
   color: var(--mi-purple-dim);
   flex-shrink: 0;
+}
+.id-divider-note {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--mi-purple-muted);
+  opacity: 0.7;
 }
 .id-text {
   font-size: 12px;

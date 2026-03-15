@@ -9,9 +9,11 @@ import './Items.css';
  *   onClick   — () => void
  */
 export default function ItemCard({ item, selected, onClick }) {
-  const preview = item.description
-    ? item.description.replace(/\s+/g, ' ').trim().slice(0, 120)
-    : null;
+  // List endpoint returns description_preview (300 chars); detail endpoint returns full description.
+  // fallback_description comes from random_item_tables.notes when description is null.
+  const rawDesc = item.fallback_description || item.description_preview || item.description;
+  const preview = rawDesc ? rawDesc.replace(/\s+/g, ' ').trim().slice(0, 120) : null;
+  const isInlineDesc = !item.description && !item.description_preview && !!item.fallback_description;
 
   const rarity = (item.rarity ?? 'common').toLowerCase().replace(/\s+/g, '-');
 
@@ -47,7 +49,7 @@ export default function ItemCard({ item, selected, onClick }) {
 
       {/* Description preview */}
       {preview && (
-        <div className="ic-preview">
+        <div className={`ic-preview${isInlineDesc ? ' ic-preview--inline' : ''}`}>
           {preview}{preview.length >= 120 ? '…' : ''}
         </div>
       )}

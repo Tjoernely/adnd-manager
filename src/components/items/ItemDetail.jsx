@@ -58,10 +58,24 @@ export default function ItemDetail({ item, loading, onClose }) {
 
   const rarity = (item.rarity ?? 'common').toLowerCase().replace(/\s+/g, '-');
 
+  // Source table info from random_item_tables LATERAL join (GET /:id)
+  const sourceTableLetter = item.source_table_letter ?? item.table_letter ?? null;
+  const sourceRollMin     = item.source_roll_min ?? null;
+  const sourceRollMax     = item.source_roll_max ?? null;
+  const sourceTableValue  = sourceTableLetter
+    ? (sourceRollMin != null
+        ? `Table ${sourceTableLetter}, roll ${sourceRollMin}${sourceRollMax !== sourceRollMin ? `–${sourceRollMax}` : ''}`
+        : `Table ${sourceTableLetter}`)
+    : null;
+
+  // Description: prefer wiki page description, fall back to inline table notes
+  const effectiveDescription = item.description || item.fallback_description || null;
+  const descIsInline = !item.description && !!item.fallback_description;
+
   const stats = [
     { label: 'Category',     value: item.category       || null, full: false },
     { label: 'Rarity',       value: item.rarity         || null, full: false },
-    { label: 'Table',        value: item.table_letter ? `Table ${item.table_letter}` : null, full: false },
+    { label: 'Source Table', value: sourceTableValue,            full: false },
     { label: 'Charges',      value: item.charges != null ? String(item.charges) : null, full: false },
     { label: 'Value (gp)',   value: item.value_gp != null ? item.value_gp.toLocaleString() : null, full: false },
     { label: 'Weight (lbs)', value: item.weight_lbs != null ? String(item.weight_lbs) : null, full: false },
@@ -102,14 +116,17 @@ export default function ItemDetail({ item, loading, onClose }) {
           </div>
         )}
 
-        {/* Description */}
-        {item.description && (
+        {/* Description (or inline table notes as fallback) */}
+        {effectiveDescription && (
           <div className="id-section">
             <div className="id-divider">
-              <span className="id-divider-title">Description</span>
+              <span className="id-divider-title">
+                Description
+                {descIsInline && <span className="id-divider-note"> (from table entry)</span>}
+              </span>
             </div>
             <div className="id-text">
-              {item.description.split('\n').map((para, i) =>
+              {effectiveDescription.split('\n').map((para, i) =>
                 para.trim() ? <p key={i}>{para.trim()}</p> : null
               )}
             </div>

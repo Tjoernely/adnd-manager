@@ -500,22 +500,28 @@ function extractRollRow(cells) {
   const c0 = cells[0].trim();
   const c1 = cells[1].trim();
 
-  // ── Try 3-cell format first: c0=min, c1=max, c2=name ──
+  // ── Try 3-cell format first: c0=min, c1=max, c2=name, c3?=description ──
   if (cells.length >= 3) {
     const min3 = sanitizeRoll(c0);
     const max3 = sanitizeRoll(c1);
     if (min3 !== null && max3 !== null) {
       // Both c0 and c1 are pure numbers → they are roll bounds
-      const itemName = stripWikiMarkup(cells.slice(2).join(' ').trim());
-      if (itemName.length > 1) return { min: min3, max: max3, itemName };
+      const itemName  = stripWikiMarkup(cells[2].trim());
+      const notesPart = cells.length >= 4
+        ? (stripWikiMarkup(cells.slice(3).join(' ').trim()) || null)
+        : null;
+      if (itemName.length > 1) return { min: min3, max: max3, itemName, notes: notesPart };
     }
   }
 
-  // ── Standard format: c0=range ("001-010" or "001"), c1=name ──
+  // ── Standard format: c0=range ("001-010" or "001"), c1=name, c2?=description ──
   const range = parseRollRange(c0);
   if (range) {
-    const itemName = stripWikiMarkup(c1);
-    if (itemName.length > 1) return { min: range.min, max: range.max, itemName };
+    const itemName  = stripWikiMarkup(c1);
+    const notesPart = cells.length >= 3
+      ? (stripWikiMarkup(cells.slice(2).join(' ').trim()) || null)
+      : null;
+    if (itemName.length > 1) return { min: range.min, max: range.max, itemName, notes: notesPart };
   }
 
   return null;
@@ -554,7 +560,8 @@ function parseWikitableRows(wikitext, letter, name, dice) {
           skipped.push(`bad range in: ${line.slice(0, 80)}`);
         } else {
           rows.push({ table_letter: letter, table_name: name, dice,
-                      roll_min: min, roll_max: max, item_name: row.itemName });
+                      roll_min: min, roll_max: max, item_name: row.itemName,
+                      notes: row.notes ?? null });
         }
       }
       continue;
@@ -573,12 +580,16 @@ function parseWikitableRows(wikitext, letter, name, dice) {
           // nextCells[0] might be a second number (3-cell format split across lines)
           const maybeMax  = sanitizeRoll(nextCells[0]);
           if (maybeMax !== null && nextCells.length >= 2) {
-            // Format: | min\n| max || name
-            const itemName = stripWikiMarkup(nextCells.slice(1).join(' ').trim());
+            // Format: | min\n| max || name || desc?
+            const itemName  = stripWikiMarkup(nextCells[1].trim());
+            const notesPart = nextCells.length >= 3
+              ? (stripWikiMarkup(nextCells.slice(2).join(' ').trim()) || null)
+              : null;
             if (itemName.length > 1) {
               const min = sanitizeRoll(rollRange.min);
               rows.push({ table_letter: letter, table_name: name, dice,
-                          roll_min: min, roll_max: maybeMax, item_name: itemName });
+                          roll_min: min, roll_max: maybeMax, item_name: itemName,
+                          notes: notesPart });
               i = j;
             }
           } else {
@@ -588,7 +599,8 @@ function parseWikitableRows(wikitext, letter, name, dice) {
               const max = sanitizeRoll(rollRange.max);
               if (min !== null && max !== null) {
                 rows.push({ table_letter: letter, table_name: name, dice,
-                            roll_min: min, roll_max: max, item_name: itemName });
+                            roll_min: min, roll_max: max, item_name: itemName,
+                            notes: null });
                 i = j;
               }
             }
@@ -751,23 +763,132 @@ async function upsertTableRow(row) {
     return;
   }
   const sql = `
-    INSERT INTO random_item_tables (table_letter, table_name, dice, roll_min, roll_max, item_name)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO random_item_tables (table_letter, table_name, dice, roll_min, roll_max, item_name, notes)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
   `;
-  await dbQuery(sql, [row.table_letter, row.table_name, row.dice, min, max, row.item_name.trim()]);
+  await dbQuery(sql, [
+    row.table_letter, row.table_name, row.dice, min, max,
+    row.item_name.trim(), row.notes ?? null,
+  ]);
+}
+
+/** Strip asterisks/marker chars from table entry names for matching. */
+function cleanItemName(name) {
+  return name.replace(/[*†‡✦✧•]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 async function linkTableItems() {
   process.stdout.write('\n⛓  Linking table entries to magical_items…\n');
-  const sql = `
+
+  // Pass 1: exact case-insensitive match on full name
+  const exactRes = await dbQuery(`
     UPDATE random_item_tables t
     SET    item_id = mi.id
     FROM   magical_items mi
     WHERE  LOWER(TRIM(t.item_name)) = LOWER(TRIM(mi.name))
       AND  t.item_id IS NULL
-  `;
-  const res = await dbQuery(sql);
-  process.stdout.write(`   Linked ${res.length ?? 0} entries.\n`);
+    RETURNING t.id
+  `);
+  process.stdout.write(`   Pass 1 (exact): ${exactRes.length} linked\n`);
+
+  // Pass 2: match after stripping asterisks and common marker characters
+  const fuzzyRes = await dbQuery(`
+    UPDATE random_item_tables t
+    SET    item_id = mi.id
+    FROM   magical_items mi
+    WHERE  t.item_id IS NULL
+      AND  LOWER(TRIM(REGEXP_REPLACE(t.item_name, '[*†‡✦✧•]', '', 'g')))
+         = LOWER(TRIM(mi.name))
+    RETURNING t.id
+  `);
+  process.stdout.write(`   Pass 2 (stripped markers): ${fuzzyRes.length} linked\n`);
+
+  // Pass 3: match ignoring parenthetical suffixes like "(EM)", "(Type I)", etc.
+  const parenRes = await dbQuery(`
+    UPDATE random_item_tables t
+    SET    item_id = mi.id
+    FROM   magical_items mi
+    WHERE  t.item_id IS NULL
+      AND  LOWER(TRIM(REGEXP_REPLACE(t.item_name, '\\s*\\([^)]*\\)\\s*$', '', 'g')))
+         = LOWER(TRIM(REGEXP_REPLACE(mi.name, '\\s*\\([^)]*\\)\\s*$', '', 'g')))
+    RETURNING t.id
+  `);
+  process.stdout.write(`   Pass 3 (strip parentheticals): ${parenRes.length} linked\n`);
+
+  const total = exactRes.length + fuzzyRes.length + parenRes.length;
+  process.stdout.write(`   Total linked: ${total}\n`);
+}
+
+/**
+ * For table rows that have inline notes but no linked item_id,
+ * create a stub magical_items entry and link it.
+ */
+async function createStubsFromTableNotes() {
+  process.stdout.write('\n📝 STEP 3b — Creating stubs from inline table descriptions…\n');
+
+  const rows = await dbQuery(`
+    SELECT id, table_letter, item_name, notes
+    FROM   random_item_tables
+    WHERE  notes IS NOT NULL AND notes <> ''
+      AND  item_id IS NULL
+    ORDER BY table_letter, roll_min
+  `);
+  process.stdout.write(`   ${rows.length} table entries have inline descriptions without a linked item.\n`);
+
+  let created = 0, linked = 0, skipped = 0;
+
+  for (const row of rows) {
+    const meta     = TABLE_META[row.table_letter];
+    const category = meta?.category ?? 'misc';
+    const name     = cleanItemName(row.item_name);
+
+    // Skip empty names or roll-again / see-table instructions
+    if (name.length < 3) { skipped++; continue; }
+    if (/^(roll|see|as |refer|use |same |table|\*)/i.test(name)) { skipped++; continue; }
+
+    try {
+      // Check if item already exists (may have been linked by linkTableItems)
+      const existing = await dbQuery(
+        `SELECT id FROM magical_items WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1`,
+        [name],
+      );
+      if (existing.length > 0) {
+        await dbQuery(
+          `UPDATE random_item_tables SET item_id = $1 WHERE id = $2`,
+          [existing[0].id, row.id],
+        );
+        linked++;
+        continue;
+      }
+
+      // Create a stub entry with the inline description
+      const result = await dbQuery(`
+        INSERT INTO magical_items (name, category, description, table_letter, import_warnings)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (name, category) DO UPDATE
+          SET description = COALESCE(magical_items.description, EXCLUDED.description)
+        RETURNING id
+      `, [
+        name,
+        category,
+        row.notes,
+        row.table_letter,
+        ['Stub: description from inline table entry'],
+      ]);
+
+      if (result.length > 0) {
+        await dbQuery(
+          `UPDATE random_item_tables SET item_id = $1 WHERE id = $2`,
+          [result[0].id, row.id],
+        );
+        created++;
+      }
+    } catch (e) {
+      process.stderr.write(`  ⚠ Stub error for "${name}": ${e.message}\n`);
+    }
+  }
+
+  process.stdout.write(`   Created ${created} stub items, linked ${linked} existing, skipped ${skipped}.\n`);
 }
 
 // ── Progress bar helper ───────────────────────────────────────────────────────
@@ -1038,6 +1159,7 @@ async function linkItems() {
     return;
   }
   await linkTableItems();
+  await createStubsFromTableNotes();
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

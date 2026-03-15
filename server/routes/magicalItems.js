@@ -247,7 +247,14 @@ router.get('/', async (req, res) => {
       `SELECT id, name, category, subcategory, source_url, cursed, rarity,
               table_letter, charges, alignment, classes, value_gp, intelligence, ego,
               LEFT(description, 300) AS description_preview,
-              LEFT(powers, 200) AS powers_preview
+              LEFT(powers, 200) AS powers_preview,
+              COALESCE(
+                LEFT(description, 300),
+                (SELECT LEFT(rit.notes, 300)
+                 FROM random_item_tables rit
+                 WHERE rit.item_id = magical_items.id AND rit.notes IS NOT NULL
+                 ORDER BY rit.roll_min ASC LIMIT 1)
+              ) AS fallback_description
        FROM magical_items
        ${where}
        ORDER BY ${orderBy}
@@ -272,7 +279,23 @@ router.get('/', async (req, res) => {
 // ── Single item ───────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const item = await db.one('SELECT * FROM magical_items WHERE id=$1', [req.params.id]);
+    const item = await db.one(
+      `SELECT mi.*,
+              rit.table_letter AS source_table_letter,
+              rit.roll_min     AS source_roll_min,
+              rit.roll_max     AS source_roll_max,
+              COALESCE(mi.description, rit.notes) AS fallback_description
+       FROM magical_items mi
+       LEFT JOIN LATERAL (
+         SELECT table_letter, roll_min, roll_max, notes
+         FROM   random_item_tables
+         WHERE  item_id = mi.id
+         ORDER  BY roll_min ASC
+         LIMIT  1
+       ) rit ON true
+       WHERE mi.id = $1`,
+      [req.params.id],
+    );
     if (!item) return res.status(404).json({ error: 'Item not found' });
     res.json(item);
   } catch (e) { next500(e, res); }
