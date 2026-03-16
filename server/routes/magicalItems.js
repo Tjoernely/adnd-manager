@@ -403,13 +403,19 @@ function buildFilters(query) {
 
   if (q && q.trim()) {
     searchTerm = q.trim();
-    params.push(searchTerm);
-    const qi = params.length;
-    conditions.push(
-      `(to_tsvector('english', name || ' ' || COALESCE(description,'')) @@ plainto_tsquery('english', $${qi})
-        OR name ILIKE $${qi + 1})`,
-    );
-    params.push(`%${searchTerm}%`);
+    if (query.exact === 'true') {
+      params.push(searchTerm);
+      conditions.push(`LOWER(name) = LOWER($${params.length})`);
+      searchTerm = null; // skip ts_rank ordering
+    } else {
+      params.push(searchTerm);
+      const qi = params.length;
+      conditions.push(
+        `(to_tsvector('english', name || ' ' || COALESCE(description,'')) @@ plainto_tsquery('english', $${qi})
+          OR name ILIKE $${qi + 1})`,
+      );
+      params.push(`%${searchTerm}%`);
+    }
   }
 
   return { conditions, params, searchTerm };

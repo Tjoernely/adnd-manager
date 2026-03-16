@@ -442,6 +442,14 @@ export default function DrillDown() {
     } catch { return null; }
   }, []);
 
+  const fetchItemByNameExact = useCallback(async (name) => {
+    if (!name) return null;
+    try {
+      const res = await api.searchMagicalItems({ search: name, exact: true, limit: 1 });
+      return res?.items?.[0] ?? null;
+    } catch { return null; }
+  }, []);
+
   const fetchEntry = useCallback(async (entry) => {
     if (!entry) return null;
     if (entry.item_id) {
@@ -610,14 +618,14 @@ export default function DrillDown() {
       let isFallback = false;
 
       if (!fullItem) {
-        // 1. Exact item name
-        fullItem = await fetchItemByName(itemName);
-        // 2. With "(EM)" suffix
-        if (!fullItem) fullItem = await fetchItemByName(`${itemName} (EM)`);
+        // 1. Exact name match
+        fullItem = await fetchItemByNameExact(itemName);
+        // 2. Exact name with "(EM)" suffix
+        if (!fullItem) fullItem = await fetchItemByNameExact(`${itemName} (EM)`);
         // 3. Fall back to category description
         if (!fullItem && catName) {
-          fullItem = await fetchItemByName(`${catName} (EM)`);
-          if (!fullItem) fullItem = await fetchItemByName(catName);
+          fullItem = await fetchItemByNameExact(`${catName} (EM)`);
+          if (!fullItem) fullItem = await fetchItemByNameExact(catName);
           if (fullItem) isFallback = true;
         }
       }
@@ -1045,7 +1053,7 @@ export default function DrillDown() {
               error={p4DetailErr}
               fallback="No description available — see Fandom Wiki for details."
               note={p4DetailIsFallback
-                ? `Category description shown — see wiki for "${p4SelItem?.item_name ?? ''}" specifically.`
+                ? `Specific item description not available — showing category description. See wiki for "${p4SelItem?.item_name ?? ''}" specifically.`
                 : null}
             />
           </>
