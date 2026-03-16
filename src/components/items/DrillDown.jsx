@@ -121,29 +121,78 @@ const R2_BONUS = [
   { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
 ];
 
+// ── Hardcoded S3 — Axe item list ───────────────────────────────────────────
+const S3_AXE = (() => {
+  const raw = [
+    { roll: 107, name: "Agni's Red" },
+    { roll: 108, name: "Ama-Tsu-Mara's Vorpal" },
+    { roll: 109, name: 'Arumdina' },
+    { roll: 110, name: 'Azuredge' },
+    { roll: 111, name: "Brihaspati's" },
+    { roll: 112, name: 'of Brotherhood' },
+    { roll: 113, name: 'Callarduran Smoothhands' },
+    { roll: 114, name: 'Cursed Battle' },
+    { roll: 115, name: 'of Cutting' },
+    { roll: 116, name: 'Deathstriker' },
+    { roll: 117, name: 'of the Dwarvish Lords' },
+    { roll: 118, name: 'of Enchantment' },
+    { roll: 119, name: 'Frostreaver' },
+    { roll: 120, name: "Garl Glittergold's Battle" },
+    { roll: 121, name: "Gnarldan's Battle" },
+    { roll: 122, name: "Hastseltsi's Hand" },
+    { rollMin: 123, rollMax: 124, name: "Hastsezini's Hand" },
+    { roll: 125, name: 'of Hurling' },
+    { roll: 126, name: "Lortz's Battle" },
+    { roll: 127, name: "Maglubiyet's" },
+    { roll: 128, name: 'Might of Heroes' },
+    { roll: 129, name: "Molydeus'" },
+    { roll: 130, name: 'Motopua' },
+    { roll: 131, name: "Nanna Sin's Black" },
+    { roll: 132, name: "Nomog-Geaya's Hand" },
+    { roll: 133, name: 'Pickaxe of Piercing' },
+    { roll: 134, name: 'Rocksplitter' },
+    { roll: 135, name: "Sampsa's Golden" },
+    { roll: 136, name: "Shag's Battle" },
+    { roll: 137, name: "Sulward's" },
+    { roll: 138, name: "Thor's Kiss" },
+    { roll: 139, name: 'Throwing' },
+    { roll: 140, name: "Thumb Height Man's" },
+    { rollMin: 141, rollMax: 142, name: 'Torshorak' },
+    { roll: 143, name: "Tunnelrunner's" },
+    { roll: 144, name: 'Withering Pickaxe' },
+    { roll: 145, name: 'of the Woodsman' },
+    { roll: 146, name: "Zebulon's of Leaving" },
+    { roll: 147, name: "Zzzzzz's of Snoring" },
+  ];
+  return raw.map(e => ({
+    roll_min:  e.roll ?? e.rollMin,
+    roll_max:  e.roll ?? e.rollMax,
+    item_name: e.name,
+  }));
+})();
+
 // ── Hardcoded S3 — Special Weapon Categories ──────────────────────────────
 const S3_CATEGORIES = [
-  { name: 'Enchanted Enhancements', min: 1,   max: 1,   special: true },
-  { name: 'Weapon Enhancements',    min: 2,   max: 2,   special: true },
-  { name: 'Arrow',                  min: 4,   max: 106  },
-  { name: 'Axe',                    min: 107, max: 151  },
-  { name: 'Ballista Bolt',          min: 152, max: 153  },
-  { name: 'Bow',                    min: 154, max: 195  },
-  { name: 'Club',                   min: 196, max: 200  },
-  { name: 'Crossbow',               min: 201, max: 210  },
-  { name: 'Dagger',                 min: 211, max: 268  },
-  { name: 'Dart',                   min: 269, max: 287  },
-  { name: 'Flail',                  min: 288, max: 295  },
-  { name: 'Hammer',                 min: 296, max: 315  },
-  { name: 'Javelin',                min: 316, max: 321  },
-  { name: 'Lance',                  min: 322, max: 325  },
-  { name: 'Mace',                   min: 326, max: 355  },
-  { name: 'Net',                    min: 356, max: 358  },
-  { name: 'Polearm',                min: 359, max: 409  },
-  { name: 'Sling',                  min: 410, max: 413  },
-  { name: 'Spear',                  min: 414, max: 437  },
-  { name: 'Sword',                  min: 438, max: 848  },
-  { name: 'Whip',                   min: 849, max: 854  },
+  { name: 'Arrow',                    min: 4,   max: 106, data: 'S3_ARROWS' },
+  { name: 'Axe',                      min: 107, max: 147, data: 'S3_AXE'    },
+  { name: 'Bow',                      min: 148, max: 195, data: 'fetch'      },
+  { name: 'Club',                     min: 196, max: 200, data: 'fetch'      },
+  { name: 'Crossbow',                 min: 201, max: 210, data: 'fetch'      },
+  { name: 'Dagger',                   min: 211, max: 268, data: 'fetch'      },
+  { name: 'Dart',                     min: 269, max: 287, data: 'fetch'      },
+  { name: 'Flail',                    min: 288, max: 295, data: 'fetch'      },
+  { name: 'Hammer',                   min: 296, max: 315, data: 'fetch'      },
+  { name: 'Javelin',                  min: 316, max: 321, data: 'fetch'      },
+  { name: 'Lance',                    min: 322, max: 325, data: 'fetch'      },
+  { name: 'Mace',                     min: 326, max: 355, data: 'fetch'      },
+  { name: 'Net',                      min: 356, max: 358, data: 'fetch'      },
+  { name: 'Polearm',                  min: 359, max: 409, data: 'fetch'      },
+  { name: 'Sling',                    min: 410, max: 413, data: 'fetch'      },
+  { name: 'Spear',                    min: 414, max: 437, data: 'fetch'      },
+  { name: 'Sword',                    min: 438, max: 848, data: 'fetch'      },
+  { name: 'Whip',                     min: 849, max: 854, data: 'fetch'      },
+  { name: 'Enchanted Enhancements*',  min: 1,   max: 1,   data: 'fetch', special: true },
+  { name: 'Weapon Enhancements*',     min: 2,   max: 2,   data: 'fetch', special: true },
 ];
 
 // ── Hardcoded S3 Arrow item list ───────────────────────────────────────────
@@ -633,26 +682,56 @@ export default function DrillDown() {
     const tbl = p1Sel?.table ?? 'S';
 
     try {
-      // Arrow: use hardcoded list
-      if (tbl === 'S' && cat.name === 'Arrow') {
+      // Hardcoded lists — Arrow
+      if (tbl === 'S' && cat.data === 'S3_ARROWS') {
         setP4CatItems(S3_ARROWS);
         setP4CatLoad(false);
         return;
       }
 
-      // Others: fetch from DB by category name search
+      // Hardcoded lists — Axe
+      if (tbl === 'S' && cat.data === 'S3_AXE') {
+        setP4CatItems(S3_AXE);
+        setP4CatLoad(false);
+        return;
+      }
+
+      // Fetch from DB by name search
       const searchTerm = cat.name.replace(/\*$/, '').trim();
-      const res = await api.searchMagicalItems({ search: searchTerm, limit: 100 });
-      setP4CatItems(
-        (res?.items ?? []).map(it => ({
-          roll_min:   null,
-          roll_max:   null,
-          item_name:  it.name,
-          description: it.description,
-          source_url:  it.source_url,
-          _fullItem:   it,
-        }))
-      );
+      const res = await api.searchMagicalItems({ search: searchTerm, limit: 200 });
+      let items = (res?.items ?? []).map(it => ({
+        roll_min:    null,
+        roll_max:    null,
+        item_name:   it.name,
+        description: it.description,
+        source_url:  it.source_url,
+        _fullItem:   it,
+      }));
+
+      // Fallback: if fewer than 5 results, also scan full table entries client-side
+      if (items.length < 5) {
+        try {
+          const tblRes = await api.getTableEntries(tbl, { limit: 500 });
+          const keyword = searchTerm.toLowerCase();
+          const existing = new Set(items.map(i => i.item_name));
+          for (const e of (tblRes?.entries ?? [])) {
+            const eName = (e.item_name ?? e.name ?? '').toLowerCase();
+            if (eName.includes(keyword) && !existing.has(e.item_name ?? e.name)) {
+              existing.add(e.item_name ?? e.name);
+              items.push({
+                roll_min:    e.roll_min ?? null,
+                roll_max:    e.roll_max ?? null,
+                item_name:   e.item_name ?? e.name,
+                description: e.description ?? null,
+                source_url:  null,
+                _fullItem:   null,
+              });
+            }
+          }
+        } catch { /* ignore fallback errors */ }
+      }
+
+      setP4CatItems(items);
     } catch (e) {
       setP4CatErr(e.message ?? 'Failed to load items');
     } finally {
