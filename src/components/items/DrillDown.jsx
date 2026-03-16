@@ -178,6 +178,14 @@ function findCat(cats, n) {
   return cats.find(c => n >= c.min && n <= c.max) ?? null;
 }
 
+function buildWikiUrl(name) {
+  if (!name) return null;
+  const wikiName = String(name)
+    .replace(/[\u2018\u2019\u02BC]/g, "'")   // curly/modifier apostrophes → straight
+    .replace(/\s+/g, '_');
+  return `https://adnd2e.fandom.com/wiki/${wikiName}_(EM)`;
+}
+
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 function PaneHeader({ title, subtitle, extra }) {
@@ -280,7 +288,7 @@ function ItemListRow({ item, selected, onClick }) {
 }
 
 /** Full item detail panel */
-function DetailPanel({ item, loading, error, compositeName, compositeAtk, compositeDmg, fallback, children }) {
+function DetailPanel({ item, loading, error, compositeName, compositeAtk, compositeDmg, fallback, note, children }) {
   if (loading) {
     return (
       <div className="mi-pane-loading" style={{ flex: 1, flexDirection: 'column', padding: 24 }}>
@@ -364,6 +372,12 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
         </>
       )}
 
+      {note && (
+        <div style={{ margin: '10px 0 4px', padding: '6px 10px', background: 'rgba(212,168,64,0.08)', borderLeft: '2px solid rgba(212,168,64,0.4)', borderRadius: 3, fontSize: 12, opacity: 0.8, fontStyle: 'italic' }}>
+          {note}
+        </div>
+      )}
+
       {item?.source_url && (
         <a className="mi-detail-source-link" href={item.source_url} target="_blank" rel="noopener noreferrer">
           📖 View on Fandom Wiki ↗
@@ -414,9 +428,10 @@ export default function DrillDown() {
   const [p4CatErr,     setP4CatErr]     = useState(null);
   const [p4SelItem,    setP4SelItem]    = useState(null);
   // item-detail mode (drill from list)
-  const [p4DetailItem, setP4DetailItem] = useState(null);
-  const [p4DetailLoad, setP4DetailLoad] = useState(false);
-  const [p4DetailErr,  setP4DetailErr]  = useState(null);
+  const [p4DetailItem,       setP4DetailItem]       = useState(null);
+  const [p4DetailLoad,       setP4DetailLoad]       = useState(false);
+  const [p4DetailErr,        setP4DetailErr]        = useState(null);
+  const [p4DetailIsFallback, setP4DetailIsFallback] = useState(false);
 
   // ── Fetch helpers ──────────────────────────────────────────────────────────
   const fetchItemByName = useCallback(async (name) => {
@@ -451,7 +466,7 @@ export default function DrillDown() {
       setP4Mode(null);
       setP4Composite(null); setP4BaseItem(null); setP4BaseLoad(false); setP4BaseErr(null);
       setP4CatItems([]); setP4CatLoad(false); setP4CatErr(null); setP4SelItem(null);
-      setP4DetailItem(null); setP4DetailLoad(false); setP4DetailErr(null);
+      setP4DetailItem(null); setP4DetailLoad(false); setP4DetailErr(null); setP4DetailIsFallback(false);
     }
   }
 
@@ -584,12 +599,35 @@ export default function DrillDown() {
     setP4DetailLoad(true);
     setP4DetailItem(null);
     setP4DetailErr(null);
+    setP4DetailIsFallback(false);
+
+    const itemName = item.item_name ?? item.name ?? '';
+    const catName  = (p3SpecCat?.name ?? '').replace(/[✦*]/g, '').trim();
+    const wikiUrl  = buildWikiUrl(itemName);
+
     try {
-      let fullItem = item._fullItem ?? null;
+      let fullItem   = item._fullItem ?? null;
+      let isFallback = false;
+
       if (!fullItem) {
-        fullItem = await fetchItemByName(item.item_name ?? item.name);
+        // 1. Exact item name
+        fullItem = await fetchItemByName(itemName);
+        // 2. With "(EM)" suffix
+        if (!fullItem) fullItem = await fetchItemByName(`${itemName} (EM)`);
+        // 3. Fall back to category description
+        if (!fullItem && catName) {
+          fullItem = await fetchItemByName(`${catName} (EM)`);
+          if (!fullItem) fullItem = await fetchItemByName(catName);
+          if (fullItem) isFallback = true;
+        }
       }
-      setP4DetailItem(fullItem ?? { name: item.item_name ?? item.name, description: item.description ?? null });
+
+      setP4DetailIsFallback(isFallback);
+      setP4DetailItem(
+        fullItem
+          ? { ...fullItem, source_url: fullItem.source_url || wikiUrl }
+          : { name: itemName, description: null, source_url: wikiUrl }
+      );
     } catch (e) {
       setP4DetailErr(e.message ?? 'Failed to load item');
     } finally {
@@ -617,8 +655,16 @@ export default function DrillDown() {
     setP4BaseItem(null);
     setP4BaseErr(null);
     try {
-      const item = await fetchItemByName(baseEntry?.item_name);
-      setP4BaseItem(item ?? null);
+      const catName = baseEntry?.item_name ?? '';
+      const wikiUrl = buildWikiUrl(catName);
+      // Try plain name, then with "(EM)" suffix
+      let item = await fetchItemByName(catName);
+      if (!item) item = await fetchItemByName(`${catName} (EM)`);
+      setP4BaseItem(
+        item
+          ? { ...item, source_url: item.source_url || wikiUrl }
+          : { name: catName, description: null, source_url: wikiUrl }
+      );
     } catch { /* fallback text shown */ }
     finally { setP4BaseLoad(false); }
   }
@@ -932,6 +978,9 @@ export default function DrillDown() {
                   ? `A magically enhanced ${p2Sel?.item_name ?? 'weapon'}. Apply the listed bonuses to attack and damage rolls.`
                   : `A magically enhanced ${p2Sel?.item_name ?? 'armor'}. Apply the listed bonus to armor class.`
               }
+              note={isWeapon
+                ? 'For a specific named weapon variant, roll on Table S3 — Special Weapons.'
+                : null}
             >
               <div className="mi-detail-roll-again">
                 <button className="mi-dice-btn" onClick={rollAgain}>🎲 Roll Again</button>
@@ -983,7 +1032,7 @@ export default function DrillDown() {
         ) : p4Mode === 'item-detail' ? (
           <>
             <PaneHeader
-              title={p4DetailItem?.name ?? p4SelItem?.item_name ?? 'Item Detail'}
+              title={p4SelItem?.item_name ?? p4DetailItem?.name ?? 'Item Detail'}
               extra={
                 <button className="mi-dice-btn" onClick={backToCatList} style={{ fontSize: 10 }}>
                   ← Back to {p3SpecCat?.name}
@@ -994,7 +1043,10 @@ export default function DrillDown() {
               item={p4DetailItem}
               loading={p4DetailLoad}
               error={p4DetailErr}
-              fallback="No description available. See source for details."
+              fallback="No description available — see Fandom Wiki for details."
+              note={p4DetailIsFallback
+                ? `Category description shown — see wiki for "${p4SelItem?.item_name ?? ''}" specifically.`
+                : null}
             />
           </>
 
