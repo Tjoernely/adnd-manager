@@ -12,6 +12,7 @@
  *
  * Options:
  *   --dry-run          Parse + print without writing to DB
+ *   --fresh            DELETE all existing magical_items + random_item_tables before import
  *   --limit N          Stop after N items per category group
  *   --tables-only      Only import random determination tables, skip item pages
  *   --items-only       Only import item pages, skip random tables
@@ -98,6 +99,7 @@ const args        = process.argv.slice(2);
 const DRY_RUN     = args.includes('--dry-run');
 const TABLES_ONLY = args.includes('--tables-only');
 const ITEMS_ONLY  = args.includes('--items-only');
+const FRESH       = args.includes('--fresh');
 const LIMIT       = (() => { const i = args.indexOf('--limit'); return i !== -1 ? parseInt(args[i + 1], 10) : Infinity; })();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -630,6 +632,22 @@ function sanitizeRoll(val) {
   return n;
 }
 
+/** Validate a gold piece value — must fit in a PostgreSQL INTEGER (≤ 2,147,483,647). */
+function sanitizeGP(val) {
+  if (!val && val !== 0) return null;
+  const n = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+  if (isNaN(n) || n > 2_147_483_647) return null;
+  return n;
+}
+
+/** Validate small integer fields like intelligence/ego (reasonable game range 1–100). */
+function sanitizeSmallInt(val) {
+  if (!val && val !== 0) return null;
+  const n = parseInt(String(val), 10);
+  if (isNaN(n) || n < 0 || n > 100) return null;
+  return n;
+}
+
 function parseRollRange(text) {
   if (!text) return null;
   const t = text.replace(/\s/g, '');
@@ -681,15 +699,15 @@ function parseItemPage(title, wikitext) {
   const classes    = extractClasses(extractField(wikitext, 'classes', 'class', 'usable by') ?? wikitext);
   const alignment  = extractField(wikitext, 'alignment', 'align');
   const valueGpStr = extractField(wikitext, 'value', 'cost', 'gp value', 'price');
-  const value_gp   = valueGpStr ? parseInt(valueGpStr.replace(/[^0-9]/g, '')) || null : null;
+  const value_gp   = sanitizeGP(valueGpStr);
 
   const intelligence = (() => {
     const f = extractField(wikitext, 'intelligence', 'int');
-    return f ? parseInt(f) || null : null;
+    return sanitizeSmallInt(f);
   })();
   const ego = (() => {
     const f = extractField(wikitext, 'ego');
-    return f ? parseInt(f) || null : null;
+    return sanitizeSmallInt(f);
   })();
 
   const source_url = `https://adnd2e.fandom.com/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
@@ -780,42 +798,61 @@ function cleanItemName(name) {
 async function linkTableItems() {
   process.stdout.write('\n⛓  Linking table entries to magical_items…\n');
 
-  // Pass 1: exact case-insensitive match on full name
-  const exactRes = await dbQuery(`
-    UPDATE random_item_tables t
-    SET    item_id = mi.id
-    FROM   magical_items mi
-    WHERE  LOWER(TRIM(t.item_name)) = LOWER(TRIM(mi.name))
-      AND  t.item_id IS NULL
-    RETURNING t.id
-  `);
-  process.stdout.write(`   Pass 1 (exact): ${exactRes.length} linked\n`);
+  // Debug: show row counts so we can tell if data is present at all
+  const [cItems] = await dbQuery('SELECT COUNT(*) AS n FROM magical_items');
+  const [cTable] = await dbQuery('SELECT COUNT(*) AS n FROM random_item_tables');
+  process.stdout.write(`   magical_items: ${cItems.n}   random_item_tables: ${cTable.n}\n`);
 
-  // Pass 2: match after stripping asterisks and common marker characters
-  const fuzzyRes = await dbQuery(`
-    UPDATE random_item_tables t
+  // Pass 1: exact case-insensitive match
+  const p1 = await dbQuery(`
+    UPDATE random_item_tables rt
     SET    item_id = mi.id
     FROM   magical_items mi
-    WHERE  t.item_id IS NULL
-      AND  LOWER(TRIM(REGEXP_REPLACE(t.item_name, '[*†‡✦✧•]', '', 'g')))
+    WHERE  rt.item_id IS NULL
+      AND  LOWER(TRIM(rt.item_name)) = LOWER(TRIM(mi.name))
+    RETURNING rt.id
+  `);
+  process.stdout.write(`   Pass 1 (exact): ${p1.length}\n`);
+
+  // Pass 2: strip asterisks/markers then match
+  const p2 = await dbQuery(`
+    UPDATE random_item_tables rt
+    SET    item_id = mi.id
+    FROM   magical_items mi
+    WHERE  rt.item_id IS NULL
+      AND  LOWER(TRIM(REGEXP_REPLACE(rt.item_name, '[*†‡✦✧•]', '', 'g')))
          = LOWER(TRIM(mi.name))
-    RETURNING t.id
+    RETURNING rt.id
   `);
-  process.stdout.write(`   Pass 2 (stripped markers): ${fuzzyRes.length} linked\n`);
+  process.stdout.write(`   Pass 2 (strip markers): ${p2.length}\n`);
 
-  // Pass 3: match ignoring parenthetical suffixes like "(EM)", "(Type I)", etc.
-  const parenRes = await dbQuery(`
-    UPDATE random_item_tables t
+  // Pass 3: strip trailing parentheticals on both sides
+  const p3 = await dbQuery(`
+    UPDATE random_item_tables rt
     SET    item_id = mi.id
     FROM   magical_items mi
-    WHERE  t.item_id IS NULL
-      AND  LOWER(TRIM(REGEXP_REPLACE(t.item_name, '\\s*\\([^)]*\\)\\s*$', '', 'g')))
-         = LOWER(TRIM(REGEXP_REPLACE(mi.name, '\\s*\\([^)]*\\)\\s*$', '', 'g')))
-    RETURNING t.id
+    WHERE  rt.item_id IS NULL
+      AND  LOWER(TRIM(REGEXP_REPLACE(rt.item_name, '\\s*\\([^)]*\\)\\s*$', '', 'g')))
+         = LOWER(TRIM(REGEXP_REPLACE(mi.name,      '\\s*\\([^)]*\\)\\s*$', '', 'g')))
+    RETURNING rt.id
   `);
-  process.stdout.write(`   Pass 3 (strip parentheticals): ${parenRes.length} linked\n`);
+  process.stdout.write(`   Pass 3 (strip parens): ${p3.length}\n`);
 
-  const total = exactRes.length + fuzzyRes.length + parenRes.length;
+  // Pass 4: item name contained within magical_items name (handles "Potion of X" matching
+  //          wiki page title "Potion of X (AD&D 2nd Edition)" etc.)
+  //          Guard: only match when the table entry is ≥ 8 chars to avoid false positives.
+  const p4 = await dbQuery(`
+    UPDATE random_item_tables rt
+    SET    item_id = mi.id
+    FROM   magical_items mi
+    WHERE  rt.item_id IS NULL
+      AND  LENGTH(TRIM(rt.item_name)) >= 8
+      AND  LOWER(TRIM(mi.name)) LIKE '%' || LOWER(TRIM(rt.item_name)) || '%'
+    RETURNING rt.id
+  `);
+  process.stdout.write(`   Pass 4 (item name contained in mi.name): ${p4.length}\n`);
+
+  const total = p1.length + p2.length + p3.length + p4.length;
   process.stdout.write(`   Total linked: ${total}\n`);
 }
 
@@ -1166,13 +1203,20 @@ async function linkItems() {
 async function main() {
   process.stdout.write('═══════════════════════════════════════════════\n');
   process.stdout.write(' AD&D 2E Magical Items Import\n');
-  process.stdout.write(` DRY_RUN=${DRY_RUN}  LIMIT=${LIMIT}  TABLES_ONLY=${TABLES_ONLY}  ITEMS_ONLY=${ITEMS_ONLY}\n`);
+  process.stdout.write(` DRY_RUN=${DRY_RUN}  FRESH=${FRESH}  LIMIT=${LIMIT}  TABLES_ONLY=${TABLES_ONLY}  ITEMS_ONLY=${ITEMS_ONLY}\n`);
   process.stdout.write('═══════════════════════════════════════════════\n');
 
   if (!DRY_RUN) {
     process.stdout.write('\n⚙ Verifying DB connection…');
     try { await dbQuery('SELECT 1'); process.stdout.write(' ✓\n'); }
     catch (e) { process.stderr.write(`\n✗ DB error: ${e.message}\n`); process.exit(1); }
+
+    if (FRESH) {
+      process.stdout.write('\n🗑 --fresh: clearing existing data…');
+      await dbQuery('DELETE FROM random_item_tables');
+      await dbQuery('DELETE FROM magical_items');
+      process.stdout.write(' ✓\n');
+    }
   }
 
   if (!ITEMS_ONLY) await importTables();
