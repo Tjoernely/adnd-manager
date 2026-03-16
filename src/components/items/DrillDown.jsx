@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { api } from '../../api/client.js';
 import DiceRoller from './DiceRoller.jsx';
 import './Items.css';
+import { S3_DATA, S3_CATEGORIES as S3_CATS } from './s3_data.js';
 
 // ── Table 1 master overview ────────────────────────────────────────────────
 const TABLE_1 = [
@@ -121,188 +122,22 @@ const R2_BONUS = [
   { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
 ];
 
-// ── Hardcoded S3 — Axe item list ───────────────────────────────────────────
-const S3_AXE = (() => {
-  const raw = [
-    { roll: 107, name: "Agni's Red" },
-    { roll: 108, name: "Ama-Tsu-Mara's Vorpal" },
-    { roll: 109, name: 'Arumdina' },
-    { roll: 110, name: 'Azuredge' },
-    { roll: 111, name: "Brihaspati's" },
-    { roll: 112, name: 'of Brotherhood' },
-    { roll: 113, name: 'Callarduran Smoothhands' },
-    { roll: 114, name: 'Cursed Battle' },
-    { roll: 115, name: 'of Cutting' },
-    { roll: 116, name: 'Deathstriker' },
-    { roll: 117, name: 'of the Dwarvish Lords' },
-    { roll: 118, name: 'of Enchantment' },
-    { roll: 119, name: 'Frostreaver' },
-    { roll: 120, name: "Garl Glittergold's Battle" },
-    { roll: 121, name: "Gnarldan's Battle" },
-    { roll: 122, name: "Hastseltsi's Hand" },
-    { rollMin: 123, rollMax: 124, name: "Hastsezini's Hand" },
-    { roll: 125, name: 'of Hurling' },
-    { roll: 126, name: "Lortz's Battle" },
-    { roll: 127, name: "Maglubiyet's" },
-    { roll: 128, name: 'Might of Heroes' },
-    { roll: 129, name: "Molydeus'" },
-    { roll: 130, name: 'Motopua' },
-    { roll: 131, name: "Nanna Sin's Black" },
-    { roll: 132, name: "Nomog-Geaya's Hand" },
-    { roll: 133, name: 'Pickaxe of Piercing' },
-    { roll: 134, name: 'Rocksplitter' },
-    { roll: 135, name: "Sampsa's Golden" },
-    { roll: 136, name: "Shag's Battle" },
-    { roll: 137, name: "Sulward's" },
-    { roll: 138, name: "Thor's Kiss" },
-    { roll: 139, name: 'Throwing' },
-    { roll: 140, name: "Thumb Height Man's" },
-    { rollMin: 141, rollMax: 142, name: 'Torshorak' },
-    { roll: 143, name: "Tunnelrunner's" },
-    { roll: 144, name: 'Withering Pickaxe' },
-    { roll: 145, name: 'of the Woodsman' },
-    { roll: 146, name: "Zebulon's of Leaving" },
-    { roll: 147, name: "Zzzzzz's of Snoring" },
-  ];
-  return raw.map(e => ({
-    roll_min:  e.roll ?? e.rollMin,
-    roll_max:  e.roll ?? e.rollMax,
+// ── S3 helpers — parse roll string from s3_data.js ────────────────────────
+function parseS3Roll(rollStr) {
+  const raw = String(rollStr);
+  if (raw.includes('-')) {
+    const [a, b] = raw.split('-').map(x => parseInt(x, 10));
+    return { roll_min: a, roll_max: b };
+  }
+  const n = parseInt(raw, 10);
+  return { roll_min: n, roll_max: n };
+}
+function s3DataToItems(key) {
+  return (S3_DATA[key] ?? []).map(e => ({
+    ...parseS3Roll(e.roll),
     item_name: e.name,
   }));
-})();
-
-// ── Hardcoded S3 — Special Weapon Categories ──────────────────────────────
-const S3_CATEGORIES = [
-  { name: 'Arrow',                    min: 4,   max: 106, data: 'S3_ARROWS' },
-  { name: 'Axe',                      min: 107, max: 147, data: 'S3_AXE'    },
-  { name: 'Bow',                      min: 148, max: 195, data: 'fetch'      },
-  { name: 'Club',                     min: 196, max: 200, data: 'fetch'      },
-  { name: 'Crossbow',                 min: 201, max: 210, data: 'fetch'      },
-  { name: 'Dagger',                   min: 211, max: 268, data: 'fetch'      },
-  { name: 'Dart',                     min: 269, max: 287, data: 'fetch'      },
-  { name: 'Flail',                    min: 288, max: 295, data: 'fetch'      },
-  { name: 'Hammer',                   min: 296, max: 315, data: 'fetch'      },
-  { name: 'Javelin',                  min: 316, max: 321, data: 'fetch'      },
-  { name: 'Lance',                    min: 322, max: 325, data: 'fetch'      },
-  { name: 'Mace',                     min: 326, max: 355, data: 'fetch'      },
-  { name: 'Net',                      min: 356, max: 358, data: 'fetch'      },
-  { name: 'Polearm',                  min: 359, max: 409, data: 'fetch'      },
-  { name: 'Sling',                    min: 410, max: 413, data: 'fetch'      },
-  { name: 'Spear',                    min: 414, max: 437, data: 'fetch'      },
-  { name: 'Sword',                    min: 438, max: 848, data: 'fetch'      },
-  { name: 'Whip',                     min: 849, max: 854, data: 'fetch'      },
-  { name: 'Enchanted Enhancements*',  min: 1,   max: 1,   data: 'fetch', special: true },
-  { name: 'Weapon Enhancements*',     min: 2,   max: 2,   data: 'fetch', special: true },
-];
-
-// ── Hardcoded S3 Arrow item list ───────────────────────────────────────────
-// Normalized: each entry has roll_min, roll_max, item_name
-const S3_ARROWS = (() => {
-  const raw = [
-    { roll: 4,   name: "Abaris'" },
-    { roll: 5,   name: 'Acid' },
-    { roll: 6,   name: 'of Aggravation' },
-    { roll: 7,   name: 'Antimagic' },
-    { roll: 8,   name: "Apollo's" },
-    { roll: 9,   name: 'of Attraction' },
-    { roll: 10,  name: 'of Biting' },
-    { roll: 11,  name: 'Black of Iuz' },
-    { roll: 12,  name: 'of Blinding' },
-    { roll: 13,  name: 'of Blinking' },
-    { roll: 14,  name: 'Bolt of Lightning' },
-    { roll: 15,  name: 'of Bow-Breaking' },
-    { roll: 16,  name: 'of Burning' },
-    { rollMin: 17, rollMax: 18, name: 'of Charming' },
-    { roll: 19,  name: 'of Charming II' },
-    { roll: 20,  name: 'of Clairaudience' },
-    { roll: 21,  name: 'of Clairvoyance' },
-    { roll: 22,  name: 'of Climbing' },
-    { roll: 23,  name: 'of Connection' },
-    { roll: 24,  name: 'of Curing' },
-    { roll: 25,  name: 'of Darkness' },
-    { roll: 26,  name: 'of Detonation' },
-    { roll: 27,  name: 'of Direction' },
-    { roll: 28,  name: 'of Disarming' },
-    { roll: 29,  name: 'of Disintegration' },
-    { roll: 30,  name: 'of Dispelling' },
-    { roll: 31,  name: 'of Distance' },
-    { roll: 32,  name: 'of Draconian Slaying' },
-    { roll: 33,  name: 'Elven' },
-    { roll: 34,  name: 'of Enchantment' },
-    { rollMin: 35, rollMax: 36, name: 'of Explosions' },
-    { roll: 37,  name: 'of Extended Range' },
-    { roll: 38,  name: 'Faerie Fire' },
-    { roll: 39,  name: 'of Fire' },
-    { roll: 40,  name: 'Fire Seed' },
-    { roll: 41,  name: 'Fire Trap' },
-    { roll: 42,  name: 'Flaming' },
-    { roll: 43,  name: 'of Flying' },
-    { roll: 44,  name: 'of Force' },
-    { roll: 45,  name: 'of Harm' },
-    { roll: 46,  name: 'of Holding' },
-    { roll: 47,  name: 'of Holding II' },
-    { roll: 48,  name: 'of Ice' },
-    { roll: 49,  name: 'of Illumination' },
-    { roll: 50,  name: 'Illusory Missile' },
-    { roll: 51,  name: 'of Justice' },
-    { rollMin: 52, rollMax: 53, name: 'of Law' },
-    { roll: 54,  name: 'of Light' },
-    { roll: 55,  name: 'of Lighting' },
-    { roll: 56,  name: 'of Lightning' },
-    { roll: 57,  name: 'Lycanthrope Slayer' },
-    { roll: 58,  name: "Maglubiyet's Wounding" },
-    { roll: 59,  name: 'of Misdirection' },
-    { roll: 60,  name: 'Missile Weapon of Accuracy' },
-    { roll: 61,  name: 'Missile Weapon of Distance' },
-    { roll: 62,  name: 'of Multiplicity' },
-    { roll: 63,  name: 'Nilbog' },
-    { roll: 64,  name: "Oberon's of Subduing" },
-    { roll: 65,  name: "Oberon's of Slaying" },
-    { roll: 66,  name: 'of Paralyzation' },
-    { roll: 67,  name: 'of Penetrating' },
-    { roll: 68,  name: 'of Penetration' },
-    { roll: 69,  name: 'of Perseverance' },
-    { rollMin: 70, rollMax: 71, name: 'of Piercing' },
-    { roll: 72,  name: 'of Polymorphing' },
-    { roll: 73,  name: 'of Pursuit' },
-    { roll: 74,  name: 'Quarrel of Biting (Acid)' },
-    { roll: 75,  name: 'Quarrel of Biting (Normal)' },
-    { roll: 76,  name: 'Quarrel of Biting (Poison)' },
-    { roll: 77,  name: 'Red' },
-    { roll: 78,  name: 'of Refilling' },
-    { roll: 79,  name: 'of Returning' },
-    { roll: 80,  name: 'of Rock Piercing' },
-    { roll: 81,  name: 'of Roping' },
-    { roll: 82,  name: 'of Scent Detection' },
-    { roll: 83,  name: 'of Screaming' },
-    { roll: 84,  name: 'of Screaming II' },
-    { roll: 85,  name: 'of Seeking' },
-    { roll: 86,  name: 'of Seeking II' },
-    { roll: 87,  name: 'of Set' },
-    { rollMin: 88, rollMax: 89, name: 'of Signaling' },
-    { roll: 90,  name: 'of Silence' },
-    { roll: 91,  name: 'of Sinking' },
-    { roll: 92,  name: 'of Slaying' },
-    { roll: 93,  name: 'of Slaying II' },
-    { roll: 94,  name: 'of Slaying III' },
-    { roll: 95,  name: 'of Slaying IV' },
-    { roll: 96,  name: 'Snake' },
-    { roll: 97,  name: 'of Speaking' },
-    { roll: 98,  name: 'Stun Bolt' },
-    { roll: 99,  name: 'of Stunning' },
-    { roll: 100, name: "Stirge's Bite" },
-    { roll: 101, name: 'of Teleporting' },
-    { roll: 102, name: 'of Transporting' },
-    { roll: 103, name: 'Wooden' },
-    { roll: 104, name: 'of Wounding' },
-    { rollMin: 105, rollMax: 106, name: 'Arrowhead of Marking' },
-  ];
-  return raw.map(e => ({
-    roll_min:  e.roll ?? e.rollMin,
-    roll_max:  e.roll ?? e.rollMax,
-    item_name: e.name,
-  }));
-})();
+}
 
 // ── Hardcoded R3 — Special Armor Categories ───────────────────────────────
 const R3_CATEGORIES = [
@@ -410,7 +245,7 @@ function CatRow({ cat, selected, onClick }) {
       <span className="mi-row-name">{cat.name}</span>
       {!isSpecCat && (
         <span className="mi-row-arrow" style={{ fontSize: 9, opacity: 0.5 }}>
-          {cat.max - cat.min + 1}
+          {cat.count ?? (cat.max - cat.min + 1)}
         </span>
       )}
       <span className="mi-row-arrow">›</span>
@@ -420,9 +255,10 @@ function CatRow({ cat, selected, onClick }) {
 
 /** Item row in Pane 4 cat-items view */
 function ItemListRow({ item, selected, onClick }) {
-  const name = item.item_name ?? item.name ?? '—';
-  const rangeStr = item.roll_min != null
-    ? (item.roll_min === item.roll_max ? String(item.roll_min) : `${item.roll_min}–${item.roll_max}`)
+  const name      = item.item_name ?? item.name ?? '—';
+  const isSpecial = name.includes('*');
+  const rangeStr  = item.roll_min != null
+    ? (item.roll_min === item.roll_max ? pad3(item.roll_min) : `${pad3(item.roll_min)}–${pad3(item.roll_max)}`)
     : null;
   return (
     <div
@@ -431,7 +267,10 @@ function ItemListRow({ item, selected, onClick }) {
       onKeyDown={e => e.key === 'Enter' && onClick?.()}
     >
       {rangeStr && <span className="mi-row-range">{rangeStr}</span>}
-      <span className="mi-row-name">{name}</span>
+      <span
+        className="mi-row-name"
+        style={isSpecial ? { fontWeight: 700, color: '#d4a840' } : undefined}
+      >{name}</span>
       {!!(item.description || item.fallback_description) && (
         <span className="mi-row-dot" title="Has description">●</span>
       )}
@@ -682,22 +521,15 @@ export default function DrillDown() {
     const tbl = p1Sel?.table ?? 'S';
 
     try {
-      // Hardcoded lists — Arrow
-      if (tbl === 'S' && cat.data === 'S3_ARROWS') {
-        setP4CatItems(S3_ARROWS);
-        setP4CatLoad(false);
-        return;
-      }
-
-      // Hardcoded lists — Axe
-      if (tbl === 'S' && cat.data === 'S3_AXE') {
-        setP4CatItems(S3_AXE);
+      // Hardcoded lists from s3_data.js — use key lookup
+      if (tbl === 'S' && cat.key && S3_DATA[cat.key] !== undefined) {
+        setP4CatItems(s3DataToItems(cat.key));
         setP4CatLoad(false);
         return;
       }
 
       // Fetch from DB by name search
-      const searchTerm = cat.name.replace(/\*$/, '').trim();
+      const searchTerm = cat.name.replace(/[✦*]/g, '').trim();
       const res = await api.searchMagicalItems({ search: searchTerm, limit: 200 });
       let items = (res?.items ?? []).map(it => ({
         roll_min:    null,
@@ -740,7 +572,7 @@ export default function DrillDown() {
   }
 
   function handleP3CatRoll(n) {
-    const cats = p1Sel?.table === 'R' ? R3_CATEGORIES : S3_CATEGORIES;
+    const cats = p1Sel?.table === 'R' ? R3_CATEGORIES : S3_CATS;
     const cat  = findCat(cats, n);
     if (cat) selectP3Category(cat);
   }
@@ -835,10 +667,16 @@ export default function DrillDown() {
   function rollNewItem() { rollAgain(); }
 
   function rollAnotherCat() {
-    const cats = p1Sel?.table === 'R' ? R3_CATEGORIES : S3_CATEGORIES;
+    const cats = p1Sel?.table === 'R' ? R3_CATEGORIES : S3_CATS;
     const n    = rollDie(1000);
     const cat  = findCat(cats, n) ?? cats[Math.floor(Math.random() * cats.length)];
     if (cat) selectP3Category(cat);
+  }
+
+  function rollRandomCatItem() {
+    if (!p4CatItems.length) return;
+    const idx  = Math.floor(Math.random() * p4CatItems.length);
+    selectP4CatItem(p4CatItems[idx]);
   }
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -846,7 +684,7 @@ export default function DrillDown() {
   const isComplex = COMPLEX_TABLES.includes(tbl);
   const isWeapon  = tbl === 'S';
   const isArmor   = tbl === 'R';
-  const cats      = isArmor ? R3_CATEGORIES : S3_CATEGORIES;
+  const cats      = isArmor ? R3_CATEGORIES : S3_CATS;
 
   const showP2 = !!p1Sel;
   const showP3 = showP2 && (isComplex || p3Mode !== null);
@@ -1043,11 +881,13 @@ export default function DrillDown() {
             />
             <div className="mi-pane-body">
               {cats.map((cat, i) => {
-                const isSpecCat = !!cat.special;
+                const isSpecCat  = !!cat.special;
+                const prevIsSpec = !!cats[i - 1]?.special;
+                const showSep    = i > 0 && isSpecCat !== prevIsSpec;
                 return (
                   <div key={`cat-${i}`}>
-                    {isSpecCat && i > 0 && (
-                      <div style={{ borderTop: '1px solid rgba(212,168,64,0.15)', margin: '4px 0' }} />
+                    {showSep && (
+                      <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />
                     )}
                     <CatRow
                       cat={cat}
@@ -1104,11 +944,20 @@ export default function DrillDown() {
           <>
             <PaneHeader
               title={`${p3SpecCat?.name ?? 'Special'} — Items`}
-              subtitle={`${p4CatItems.length} item${p4CatItems.length !== 1 ? 's' : ''} found`}
+              subtitle={(() => {
+                const cnt = p3SpecCat?.count ?? p4CatItems.length;
+                return `${cnt} item${cnt !== 1 ? 's' : ''}`;
+              })()}
               extra={
-                <button className="mi-dice-btn" onClick={rollAnotherCat} style={{ fontSize: 10 }}>
-                  🎲 Random Category
-                </button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button className="mi-dice-btn" onClick={rollRandomCatItem} style={{ fontSize: 10 }}
+                    disabled={p4CatLoad || p4CatItems.length === 0}>
+                    🎲 Random Item
+                  </button>
+                  <button className="mi-dice-btn" onClick={rollAnotherCat} style={{ fontSize: 10 }}>
+                    🎲 Random Category
+                  </button>
+                </div>
               }
             />
             {p4CatLoad ? (
