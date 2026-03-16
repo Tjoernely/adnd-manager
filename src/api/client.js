@@ -143,8 +143,13 @@ export const api = {
   },
   // Roll on a specific table: table = 'A'–'T'
   rollMagicalTable:     (table)    => apiFetch(`/magical-items/roll-table?table=${table}`),
-  // All entries for a table (for display in ItemDetail)
-  getTableEntries:      (table, limit = 200) => apiFetch(`/magical-items/table-entries?table=${table}&limit=${limit}`),
+  // All entries for a table. opts: { subtable: '1'|'2'|'3', limit }
+  getTableEntries: (table, opts = {}) => {
+    const p = new URLSearchParams({ table });
+    if (opts.subtable != null) p.set('subtable', opts.subtable);
+    if (opts.limit    != null) p.set('limit',    opts.limit);
+    return apiFetch(`/magical-items/table-entries?${p}`);
+  },
   // params: { level, type }
   randomMagicalHoard:   (params = {}) => {
     const qs = new URLSearchParams(

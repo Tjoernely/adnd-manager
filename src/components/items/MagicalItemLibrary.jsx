@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/client.js';
-import ItemCard           from './ItemCard.jsx';
-import ItemDetail         from './ItemDetail.jsx';
-import RandomTableRoller  from './RandomTableRoller.jsx';
+import ItemCard   from './ItemCard.jsx';
+import ItemDetail from './ItemDetail.jsx';
+import DrillDown  from './DrillDown.jsx';
 import './Items.css';
 
 const PAGE_SIZE = 50;
@@ -154,7 +154,7 @@ export default function MagicalItemLibrary({ onBack }) {
           <button
             className={`mi-tab${tab === 'roller' ? ' mi-tab--active' : ''}`}
             onClick={() => setTab('roller')}
-          >⚄ Random Tables</button>
+          >🎲 Drill-Down Tables</button>
         </div>
       </header>
 
@@ -347,8 +347,8 @@ export default function MagicalItemLibrary({ onBack }) {
           </>
         )}
 
-        {/* ── Random Tables Tab ───────────────────────────────────────────────── */}
-        {tab === 'roller' && <RandomTableRoller />}
+        {/* ── Drill-Down Tables Tab ────────────────────────────────────────────── */}
+        {tab === 'roller' && <DrillDown />}
 
       </div>
     </div>

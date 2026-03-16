@@ -22,6 +22,27 @@ const db      = require('../db');
 
 const router = express.Router();
 
+// ── Hardcoded S2/R2 bonus tables ──────────────────────────────────────────────
+const S2_BONUS = [
+  { id: 's2-1',  roll_min:  1, roll_max:  2, item_name: '+1',           bonus: 1,  cursed: false },
+  { id: 's2-2',  roll_min:  3, roll_max:  5, item_name: '+2',           bonus: 2,  cursed: false },
+  { id: 's2-3',  roll_min:  6, roll_max:  9, item_name: '+3',           bonus: 3,  cursed: false },
+  { id: 's2-4',  roll_min: 10, roll_max: 14, item_name: '+4',           bonus: 4,  cursed: false },
+  { id: 's2-5',  roll_min: 15, roll_max: 17, item_name: '+5',           bonus: 5,  cursed: false },
+  { id: 's2-6',  roll_min: 18, roll_max: 18, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
+  { id: 's2-7',  roll_min: 19, roll_max: 19, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
+  { id: 's2-8',  roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
+];
+const R2_BONUS = [
+  { id: 'r2-1',  roll_min:  1, roll_max:  5, item_name: '+1',           bonus: 1,  cursed: false },
+  { id: 'r2-2',  roll_min:  6, roll_max:  9, item_name: '+2',           bonus: 2,  cursed: false },
+  { id: 'r2-3',  roll_min: 10, roll_max: 13, item_name: '+3',           bonus: 3,  cursed: false },
+  { id: 'r2-4',  roll_min: 14, roll_max: 16, item_name: '+4',           bonus: 4,  cursed: false },
+  { id: 'r2-5',  roll_min: 17, roll_max: 18, item_name: '+5',           bonus: 5,  cursed: false },
+  { id: 'r2-6',  roll_min: 19, roll_max: 19, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
+  { id: 'r2-7',  roll_min: 20, roll_max: 20, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
+];
+
 // ── Table metadata (for roll-table endpoint) ──────────────────────────────────
 const TABLE_META = {
   A: { name: 'Magical Liquids',             dice: 'd20',  category: 'liquid'       },
@@ -192,21 +213,49 @@ router.get('/random-hoard', async (req, res) => {
 });
 
 // ── List all entries for a table (/table-entries before /:id) ────────────────
+// Query params:
+//   table=X         — table letter A–T (required)
+//   subtable=1|2|3  — for R/S: 1=generic, 2=bonus(hardcoded), 3=special
+//   limit=N         — max rows (default 500)
 router.get('/table-entries', async (req, res) => {
   try {
-    const letter = (req.query.table ?? '').toUpperCase();
+    const letter   = (req.query.table ?? '').toUpperCase();
+    const subtable = req.query.subtable; // '1' | '2' | '3' | undefined
+
     if (!TABLE_META[letter]) {
       return res.status(400).json({ error: 'Invalid table letter. Use A–T.' });
     }
     const meta  = TABLE_META[letter];
-    const limit = Math.min(parseInt(req.query.limit ?? 200, 10), 500);
+    const limit = Math.min(parseInt(req.query.limit ?? 500, 10), 1000);
+
+    // S2 / R2: return hardcoded bonus table
+    if (subtable === '2' && (letter === 'S' || letter === 'R')) {
+      const bonus = letter === 'S' ? S2_BONUS : R2_BONUS;
+      return res.json({
+        table_letter: letter,
+        subtable:     '2',
+        table_name:   letter === 'S' ? 'Attack Adjustment (S2)' : 'Armor Bonus (R2)',
+        dice:         'd20',
+        total:        bonus.length,
+        entries:      bonus,
+        is_bonus:     true,
+      });
+    }
+
+    // For S/R split into generic (1) vs special (3) via roll threshold
+    let whereExtra = '';
+    if (letter === 'S' || letter === 'R') {
+      const threshold = 975; // roll_min >= 975 = special entries
+      if (subtable === '1') whereExtra = `AND rit.roll_max < ${threshold}`;
+      if (subtable === '3') whereExtra = `AND rit.roll_min >= ${threshold}`;
+    }
 
     const rows = await db.all(
-      `SELECT rit.id, rit.roll_min, rit.roll_max, rit.item_name,
-              mi.id AS item_id, mi.description
+      `SELECT rit.id, rit.roll_min, rit.roll_max, rit.item_name, rit.notes,
+              mi.id AS item_id, mi.description, mi.cursed, mi.source_url
        FROM   random_item_tables rit
        LEFT JOIN magical_items mi ON mi.id = rit.item_id
-       WHERE  rit.table_letter = $1
+       WHERE  rit.table_letter = $1 ${whereExtra}
        ORDER BY rit.roll_min ASC
        LIMIT  $2`,
       [letter, limit],
@@ -214,10 +263,12 @@ router.get('/table-entries', async (req, res) => {
 
     res.json({
       table_letter: letter,
+      subtable:     subtable ?? null,
       table_name:   meta.name,
       dice:         meta.dice,
       total:        rows.length,
       entries:      rows,
+      has_subtables: letter === 'S' || letter === 'R',
     });
   } catch (e) { next500(e, res); }
 });
