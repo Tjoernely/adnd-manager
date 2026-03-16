@@ -3,54 +3,140 @@ import { api } from '../../api/client.js';
 import DiceRoller from './DiceRoller.jsx';
 import './Items.css';
 
-// ── Overview table (d100 master) ───────────────────────────────────────────
+// ── Table 1 master overview ────────────────────────────────────────────────
 const TABLE_1 = [
-  { rollMin:  1, rollMax: 20, label: '01–20', category: 'Magical Liquids',             table: 'A', dice: 'd20'   },
-  { rollMin: 21, rollMax: 35, label: '21–35', category: 'Scrolls',                     table: 'B', dice: 'd20'   },
-  { rollMin: 36, rollMax: 40, label: '36–40', category: 'Rings',                       table: 'C', dice: 'd20'   },
-  { rollMin: 41, rollMax: 45, label: '41–45', category: 'Rods',                        table: 'D', dice: 'd20'   },
-  { rollMin: 46, rollMax: 50, label: '46–50', category: 'Staves',                      table: 'E', dice: 'd20'   },
-  { rollMin: 51, rollMax: 55, label: '51–55', category: 'Wands',                       table: 'F', dice: 'd20'   },
-  { rollMin: 56, rollMax: 60, label: '56–60', category: 'Books & Tomes',               table: 'G', dice: 'd20'   },
-  { rollMin: 61, rollMax: 65, label: '61–65', category: 'Gems & Jewelry',              table: 'H', dice: 'd20'   },
-  { rollMin: 66, rollMax: 68, label: '66–68', category: 'Clothing',                    table: 'I', dice: 'd20'   },
-  { rollMin: 69, rollMax: 72, label: '69–72', category: 'Boots, Gloves & Accessories', table: 'J', dice: 'd20'   },
-  { rollMin: 73, rollMax: 74, label: '73–74', category: 'Girdles & Helmets',           table: 'K', dice: 'd20'   },
-  { rollMin: 75, rollMax: 77, label: '75–77', category: 'Bags, Bands & Bottles',       table: 'L', dice: 'd20'   },
-  { rollMin: 78, rollMax: 80, label: '78–80', category: 'Dusts & Stones',              table: 'M', dice: 'd20'   },
-  { rollMin: 81, rollMax: 83, label: '81–83', category: 'Household Items',             table: 'N', dice: 'd20'   },
-  { rollMin: 84, rollMax: 85, label: '84–85', category: 'Musical Instruments',         table: 'O', dice: 'd20'   },
-  { rollMin: 86, rollMax: 87, label: '86–87', category: 'Weird Stuff',                 table: 'P', dice: 'd20'   },
-  { rollMin: 88, rollMax: 89, label: '88–89', category: 'Humorous Items',              table: 'Q', dice: 'd20'   },
-  { rollMin: 90, rollMax: 95, label: '90–95', category: 'Armor & Shields',             table: 'R', dice: 'd100'  },
-  { rollMin: 96, rollMax: 99, label: '96–99', category: 'Weapons',                     table: 'S', dice: 'd1000' },
-  { rollMin:100, rollMax:100, label: '00',    category: 'Artifacts & Relics',          table: 'T', dice: 'd20'   },
+  { rollMin:  1, rollMax: 20,  label: '01–20', category: 'Magical Liquids',             table: 'A', dice: 'd20'   },
+  { rollMin: 21, rollMax: 35,  label: '21–35', category: 'Scrolls',                     table: 'B', dice: 'd20'   },
+  { rollMin: 36, rollMax: 40,  label: '36–40', category: 'Rings',                       table: 'C', dice: 'd20'   },
+  { rollMin: 41, rollMax: 45,  label: '41–45', category: 'Rods',                        table: 'D', dice: 'd20'   },
+  { rollMin: 46, rollMax: 50,  label: '46–50', category: 'Staves',                      table: 'E', dice: 'd20'   },
+  { rollMin: 51, rollMax: 55,  label: '51–55', category: 'Wands',                       table: 'F', dice: 'd20'   },
+  { rollMin: 56, rollMax: 60,  label: '56–60', category: 'Books & Tomes',               table: 'G', dice: 'd20'   },
+  { rollMin: 61, rollMax: 65,  label: '61–65', category: 'Gems & Jewelry',              table: 'H', dice: 'd20'   },
+  { rollMin: 66, rollMax: 68,  label: '66–68', category: 'Clothing',                    table: 'I', dice: 'd20'   },
+  { rollMin: 69, rollMax: 72,  label: '69–72', category: 'Boots, Gloves & Accessories', table: 'J', dice: 'd20'   },
+  { rollMin: 73, rollMax: 74,  label: '73–74', category: 'Girdles & Helmets',           table: 'K', dice: 'd20'   },
+  { rollMin: 75, rollMax: 77,  label: '75–77', category: 'Bags, Bands & Bottles',       table: 'L', dice: 'd20'   },
+  { rollMin: 78, rollMax: 80,  label: '78–80', category: 'Dusts & Stones',              table: 'M', dice: 'd20'   },
+  { rollMin: 81, rollMax: 83,  label: '81–83', category: 'Household Items',             table: 'N', dice: 'd20'   },
+  { rollMin: 84, rollMax: 85,  label: '84–85', category: 'Musical Instruments',         table: 'O', dice: 'd20'   },
+  { rollMin: 86, rollMax: 87,  label: '86–87', category: 'Weird Stuff',                 table: 'P', dice: 'd20'   },
+  { rollMin: 88, rollMax: 89,  label: '88–89', category: 'Humorous Items',              table: 'Q', dice: 'd20'   },
+  { rollMin: 90, rollMax: 95,  label: '90–95', category: 'Armor & Shields',             table: 'R', dice: 'd1000' },
+  { rollMin: 96, rollMax: 99,  label: '96–99', category: 'Weapons',                     table: 'S', dice: 'd1000' },
+  { rollMin: 100, rollMax: 100, label: '00',   category: 'Artifacts & Relics',          table: 'T', dice: 'd20'   },
 ];
 
-const COMPLEX_TABLES    = ['R', 'S'];
-const SPECIAL_THRESHOLD = 975;
-const SPECIAL_ROW       = { id: '__special__', roll_min: 975, roll_max: 1000, item_name: '✦ Special', isSpecialRow: true };
+// ── Hardcoded Table S1 — Generic Magical Weapons (d1000) ──────────────────
+const S1_WEAPONS = [
+  { roll_min: 1,    roll_max: 97,   item_name: 'Arrow'                          },
+  { roll_min: 98,   roll_max: 100,  item_name: 'Quarrel (Bolt)'                 },
+  { roll_min: 101,  roll_max: 102,  item_name: 'Arrowhead'                      },
+  { roll_min: 103,  roll_max: 143,  item_name: 'Axe'                            },
+  { roll_min: 144,  roll_max: 146,  item_name: 'Ballista'                       },
+  { roll_min: 147,  roll_max: 148,  item_name: 'Battering Ram'                  },
+  { roll_min: 149,  roll_max: 151,  item_name: 'Blowgun'                        },
+  { roll_min: 152,  roll_max: 152,  item_name: 'Bombard'                        },
+  { roll_min: 153,  roll_max: 206,  item_name: 'Bow'                            },
+  { roll_min: 207,  roll_max: 213,  item_name: 'Crossbow'                       },
+  { roll_min: 214,  roll_max: 216,  item_name: 'Catapult'                       },
+  { roll_min: 217,  roll_max: 223,  item_name: 'Club'                           },
+  { roll_min: 224,  roll_max: 302,  item_name: 'Dagger'                         },
+  { roll_min: 303,  roll_max: 332,  item_name: 'Dart'                           },
+  { roll_min: 333,  roll_max: 343,  item_name: 'Flail'                          },
+  { roll_min: 344,  roll_max: 372,  item_name: 'Hammer'                         },
+  { roll_min: 373,  roll_max: 373,  item_name: 'Harpoon'                        },
+  { roll_min: 374,  roll_max: 380,  item_name: 'Javelin'                        },
+  { roll_min: 381,  roll_max: 387,  item_name: 'Jettison'                       },
+  { roll_min: 388,  roll_max: 404,  item_name: 'Lance'                          },
+  { roll_min: 405,  roll_max: 440,  item_name: 'Mace'                           },
+  { roll_min: 441,  roll_max: 442,  item_name: 'Mattock'                        },
+  { roll_min: 443,  roll_max: 473,  item_name: 'Net'                            },
+  { roll_min: 474,  roll_max: 505,  item_name: 'Polearm'                        },
+  { roll_min: 506,  roll_max: 513,  item_name: 'Quiver'                         },
+  { roll_min: 514,  roll_max: 522,  item_name: 'Sickle'                         },
+  { roll_min: 523,  roll_max: 526,  item_name: 'Sling'                          },
+  { roll_min: 527,  roll_max: 527,  item_name: 'Sling Bullet'                   },
+  { roll_min: 528,  roll_max: 528,  item_name: 'Slingstone'                     },
+  { roll_min: 529,  roll_max: 555,  item_name: 'Spear'                          },
+  { roll_min: 556,  roll_max: 559,  item_name: 'Spelljamming Ram'               },
+  { roll_min: 560,  roll_max: 958,  item_name: 'Sword'                          },
+  { roll_min: 959,  roll_max: 960,  item_name: 'Throwing Stars'                 },
+  { roll_min: 961,  roll_max: 974,  item_name: 'Whip'                           },
+  { roll_min: 975,  roll_max: 1000, item_name: '✦ Special (Roll on Table S3)',  isSpecialRow: true },
+];
 
-const COMPLEX_CFG = {
-  S: { col1: 'Attack Adj.', col2: 'Damage Adj.', specialTitle: 'S3 — Special Weapons', bonus2Title: 'S2 — Weapon Bonus' },
-  R: { col1: 'AC Bonus',    col2: 'vs Missiles',  specialTitle: 'R3 — Special Armor',   bonus2Title: 'R2 — Armor Bonus'  },
-};
+// ── Hardcoded Table S2 — Attack & Damage Bonus (d20) ──────────────────────
+const S2_ATTACK = [
+  { roll_min: 1,  roll_max: 2,  item_name: '+1',          bonus: 1,  cursed: false },
+  { roll_min: 3,  roll_max: 5,  item_name: '+2',          bonus: 2,  cursed: false },
+  { roll_min: 6,  roll_max: 9,  item_name: '+3',          bonus: 3,  cursed: false },
+  { roll_min: 10, roll_max: 14, item_name: '+4',          bonus: 4,  cursed: false },
+  { roll_min: 15, roll_max: 17, item_name: '+5',          bonus: 5,  cursed: false },
+  { roll_min: 18, roll_max: 18, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
+  { roll_min: 19, roll_max: 19, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
+  { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
+];
+
+const S2_DAMAGE = [
+  { roll_min: 1,  roll_max: 2,  item_name: '+1',          bonus: 1,  cursed: false },
+  { roll_min: 3,  roll_max: 5,  item_name: '+2',          bonus: 2,  cursed: false },
+  { roll_min: 6,  roll_max: 9,  item_name: '+3',          bonus: 3,  cursed: false },
+  { roll_min: 10, roll_max: 14, item_name: '+4',          bonus: 4,  cursed: false },
+  { roll_min: 15, roll_max: 17, item_name: '+5',          bonus: 5,  cursed: false },
+  { roll_min: 18, roll_max: 18, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
+  { roll_min: 19, roll_max: 19, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
+  { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
+];
+
+// ── Hardcoded Table R1 — Generic Magical Armor (d1000) ────────────────────
+const R1_ARMOR = [
+  { roll_min: 1,    roll_max: 50,   item_name: 'Banded Mail'       },
+  { roll_min: 51,   roll_max: 100,  item_name: 'Brigandine'        },
+  { roll_min: 101,  roll_max: 150,  item_name: 'Bronze Plate'      },
+  { roll_min: 151,  roll_max: 300,  item_name: 'Chain Mail'        },
+  { roll_min: 301,  roll_max: 350,  item_name: 'Field Plate'       },
+  { roll_min: 351,  roll_max: 400,  item_name: 'Full Plate'        },
+  { roll_min: 401,  roll_max: 440,  item_name: 'Hide Armor'        },
+  { roll_min: 441,  roll_max: 530,  item_name: 'Leather Armor'     },
+  { roll_min: 531,  roll_max: 580,  item_name: 'Padded Armor'      },
+  { roll_min: 581,  roll_max: 660,  item_name: 'Plate Mail'        },
+  { roll_min: 661,  roll_max: 710,  item_name: 'Ring Mail'         },
+  { roll_min: 711,  roll_max: 760,  item_name: 'Scale Mail'        },
+  { roll_min: 761,  roll_max: 860,  item_name: 'Shield'            },
+  { roll_min: 861,  roll_max: 910,  item_name: 'Splint Mail'       },
+  { roll_min: 911,  roll_max: 960,  item_name: 'Studded Leather'   },
+  { roll_min: 961,  roll_max: 974,  item_name: 'War Hammer'        },
+  { roll_min: 975,  roll_max: 1000, item_name: '✦ Special (Roll on Table R3)', isSpecialRow: true },
+];
+
+// ── Hardcoded Table R2 — Armor Bonus (d20) ────────────────────────────────
+const R2_BONUS = [
+  { roll_min: 1,  roll_max: 2,  item_name: '+1',          bonus: 1,  cursed: false },
+  { roll_min: 3,  roll_max: 5,  item_name: '+2',          bonus: 2,  cursed: false },
+  { roll_min: 6,  roll_max: 9,  item_name: '+3',          bonus: 3,  cursed: false },
+  { roll_min: 10, roll_max: 14, item_name: '+4',          bonus: 4,  cursed: false },
+  { roll_min: 15, roll_max: 17, item_name: '+5',          bonus: 5,  cursed: false },
+  { roll_min: 18, roll_max: 18, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
+  { roll_min: 19, roll_max: 19, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
+  { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
+];
+
+const COMPLEX_TABLES = ['R', 'S'];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function rollDie(sides) { return Math.floor(Math.random() * sides) + 1; }
 function parseSides(d)  { const m = String(d ?? 'd20').match(/d(\d+)/i); return m ? +m[1] : 20; }
 
-function padRoll(n, sides) {
-  if (sides >= 1000) return String(n).padStart(3, '0');
-  if (sides >= 100)  return n === 100 ? '00' : String(n).padStart(2, '0');
-  return String(n).padStart(2, '0');
-}
+function pad3(n) { return String(n).padStart(3, '0'); }
+function pad2(n) { return n === 100 ? '00' : String(n).padStart(2, '0'); }
 
 function fmtRange(min, max, dice) {
-  if (min >= SPECIAL_THRESHOLD) return '975–000';
-  const s = parseSides(dice);
-  const p = n => padRoll(n, s);
-  return min === max ? p(min) : `${p(min)}–${p(max)}`;
+  const sides = parseSides(dice);
+  if (min >= 975 && sides >= 1000) return '975–000';
+  if (sides >= 1000) return min === max ? pad3(min) : `${pad3(min)}–${pad3(max)}`;
+  if (sides >= 100)  return min === max ? pad2(min)  : `${pad2(min)}–${pad2(max)}`;
+  return min === max ? String(min) : `${min}–${max}`;
 }
 
 function findRow(entries, n) {
@@ -64,16 +150,16 @@ function PaneHeader({ title, subtitle, extra }) {
     <div className="mi-pane-header">
       <div className="mi-pane-title">{title}</div>
       {subtitle && <div className="mi-pane-subtitle">{subtitle}</div>}
-      {extra && <div className="mi-pane-dice-row">{extra}</div>}
+      {extra   && <div className="mi-pane-dice-row">{extra}</div>}
     </div>
   );
 }
 
+/** Generic table row (Pane 1, 2, Pane 3 special list) */
 function TableRow({ entry, selected, dice, onClick }) {
-  const isSpecial = entry.isSpecialRow || entry.roll_min >= SPECIAL_THRESHOLD;
-  const isCursed  = !entry.isSpecialRow && (entry.cursed || entry.bonus < 0);
-  const range     = entry.isSpecialRow ? '975–000' : fmtRange(entry.roll_min, entry.roll_max, dice);
-  const hasDesc   = !entry.isSpecialRow && !!(entry.notes || entry.description);
+  const isSpecial = !!entry.isSpecialRow;
+  const isCursed  = !isSpecial && !!entry.cursed;
+  const range     = fmtRange(entry.roll_min, entry.roll_max, dice ?? 'd20');
 
   const cls = [
     'mi-table-row',
@@ -87,14 +173,17 @@ function TableRow({ entry, selected, dice, onClick }) {
          onKeyDown={e => e.key === 'Enter' && onClick?.()}>
       <span className="mi-row-range">{range}</span>
       <span className="mi-row-name">{entry.item_name}</span>
-      {hasDesc && <span className="mi-row-dot" title="Has description">●</span>}
-      {(isSpecial || entry.has_children) && <span className="mi-row-arrow">›</span>}
+      {!isSpecial && !!(entry.notes || entry.description) && (
+        <span className="mi-row-dot" title="Has description">●</span>
+      )}
+      {isSpecial && <span className="mi-row-arrow">›</span>}
     </div>
   );
 }
 
+/** Bonus table row (each column in Pane 3 bonus) */
 function BonusRow({ entry, selected, onClick }) {
-  const isCursed = entry.bonus < 0 || entry.cursed;
+  const isCursed = entry.cursed || entry.bonus < 0;
   const cls = [
     'mi-bonus-row',
     selected ? 'mi-bonus-row--selected' : '',
@@ -109,153 +198,203 @@ function BonusRow({ entry, selected, onClick }) {
   );
 }
 
-function ItemDetailBody({ item, compositeName, compositeAtk, compositeDmg, tableLetter, onRollAgain }) {
-  if (!item && !compositeName) return null;
+/**
+ * Full item description panel (used in Pane 3 for simple categories,
+ * and in Pane 4 for both composite and special results).
+ */
+function DetailPanel({ item, loading, error, compositeName, compositeAtk, compositeDmg, fallback, children }) {
+  if (loading) {
+    return (
+      <div className="mi-pane-loading" style={{ flex: 1, flexDirection: 'column', padding: 24 }}>
+        <div className="mi-spinner" />Loading…
+      </div>
+    );
+  }
+  if (error) {
+    return <div className="mi-pane-empty" style={{ flex: 1 }}>{error}</div>;
+  }
 
-  const isCursed    = (compositeAtk?.bonus ?? 0) < 0 || (compositeDmg?.bonus ?? 0) < 0 || !!item?.cursed;
+  const isCursed    = (compositeAtk?.cursed) || (compositeDmg?.cursed) || !!item?.cursed;
   const displayName = compositeName ?? item?.name ?? '—';
   const description = item?.description || item?.fallback_description || null;
 
   return (
-    <>
-      <div className="mi-detail-body">
-        <h2 className={`mi-result-name${isCursed ? ' mi-result-name--cursed' : ''}`}>
-          {displayName}
-        </h2>
+    <div className="mi-detail-body">
+      <h2 className={`mi-result-name${isCursed ? ' mi-result-name--cursed' : ''}`}>
+        {displayName}
+      </h2>
 
-        {compositeName && (compositeAtk || compositeDmg) && (
-          <div className="mi-result-subtitle">
-            {compositeAtk && `${compositeAtk.item_name}`}
-            {compositeAtk && compositeDmg && '  ·  '}
-            {compositeDmg && `${compositeDmg.item_name}`}
-          </div>
-        )}
-
-        {isCursed && (
-          <div className="mi-result-cursed-warning">☠ Cursed — handle with care!</div>
-        )}
-
-        <div className="mi-detail-badges">
-          {tableLetter && <span className="mi-meta-badge">Table {tableLetter}</span>}
-          {item?.category && <span className="ic-cat-badge">{item.category}</span>}
-          {item?.rarity && (
-            <span className={`ic-rarity-badge ic-rarity-badge--${item.rarity.toLowerCase().replace(/\s+/g, '-')}`}>
-              {item.rarity}
-            </span>
-          )}
-          {item?.cursed && !compositeName && (
-            <span className="mi-meta-badge mi-meta-badge--cursed">☠ Cursed</span>
-          )}
+      {compositeName && (compositeAtk || compositeDmg) && (
+        <div className="mi-result-subtitle">
+          {compositeAtk && `+${Math.abs(compositeAtk.bonus ?? 0)} to hit`}
+          {compositeAtk && compositeDmg && ', '}
+          {compositeDmg && `+${Math.abs(compositeDmg.bonus ?? 0)} to damage`}
         </div>
+      )}
 
-        {item && (item.charges || item.value_gp || item.alignment || item.intelligence) && (
-          <div className="mi-detail-stat-grid">
-            {item.charges      && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Charges:</span> <span className="mi-detail-stat-value">{item.charges}</span></div>}
-            {item.value_gp     && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Value:</span> <span className="mi-detail-stat-value">{item.value_gp.toLocaleString()} gp</span></div>}
-            {item.alignment    && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Alignment:</span> <span className="mi-detail-stat-value">{item.alignment}</span></div>}
-            {item.intelligence && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Intelligence:</span> <span className="mi-detail-stat-value">{item.intelligence}</span></div>}
-          </div>
+      {isCursed && (
+        <div className="mi-result-cursed-warning">⚠ CURSED — imposes penalties instead of bonuses!</div>
+      )}
+
+      <div className="mi-detail-badges">
+        {item?.category && <span className="ic-cat-badge">{item.category}</span>}
+        {item?.rarity && (
+          <span className={`ic-rarity-badge ic-rarity-badge--${item.rarity.toLowerCase().replace(/\s+/g, '-')}`}>
+            {item.rarity}
+          </span>
         )}
-
-        {description ? (
-          <>
-            <div className="mi-detail-divider"><span className="mi-detail-divider-label">Description</span></div>
-            <div className="mi-detail-text">
-              {description.split('\n').map((para, i) =>
-                para.trim() ? <p key={i}>{para.trim()}</p> : null
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="mi-detail-text" style={{ marginTop: 12, fontStyle: 'italic', opacity: 0.45 }}>
-            No wiki description available for this item.
-          </div>
-        )}
-
-        {item?.powers && (
-          <>
-            <div className="mi-detail-divider"><span className="mi-detail-divider-label">Powers</span></div>
-            <div className="mi-detail-text">
-              {item.powers.split('\n').map((para, i) =>
-                para.trim() ? <p key={i}>{para.trim()}</p> : null
-              )}
-            </div>
-          </>
-        )}
-
-        {item?.source_url && (
-          <a className="mi-detail-source-link" href={item.source_url} target="_blank" rel="noopener noreferrer">
-            📖 View on Fandom Wiki ↗
-          </a>
+        {item?.cursed && !compositeName && (
+          <span className="mi-meta-badge mi-meta-badge--cursed">☠ Cursed</span>
         )}
       </div>
 
-      {onRollAgain && (
-        <div className="mi-detail-roll-again">
-          <button className="mi-dice-btn" onClick={onRollAgain}>🎲 Roll Again in Category</button>
+      {item && (item.charges || item.value_gp || item.alignment || item.intelligence) && (
+        <div className="mi-detail-stat-grid">
+          {item.charges      && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Charges:</span> <span className="mi-detail-stat-value">{item.charges}</span></div>}
+          {item.value_gp     && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Value:</span> <span className="mi-detail-stat-value">{item.value_gp.toLocaleString()} gp</span></div>}
+          {item.alignment    && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Alignment:</span> <span className="mi-detail-stat-value">{item.alignment}</span></div>}
+          {item.intelligence && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Intelligence:</span> <span className="mi-detail-stat-value">{item.intelligence}</span></div>}
         </div>
       )}
-    </>
+
+      {description ? (
+        <>
+          <div className="mi-detail-divider"><span className="mi-detail-divider-label">Description</span></div>
+          <div className="mi-detail-text">
+            {description.split('\n').map((para, i) =>
+              para.trim() ? <p key={i}>{para.trim()}</p> : null
+            )}
+          </div>
+        </>
+      ) : fallback ? (
+        <>
+          <div className="mi-detail-divider"><span className="mi-detail-divider-label">Notes</span></div>
+          <div className="mi-detail-text" style={{ fontStyle: 'italic', opacity: 0.7 }}>{fallback}</div>
+        </>
+      ) : (
+        <div className="mi-detail-text" style={{ marginTop: 12, fontStyle: 'italic', opacity: 0.45 }}>
+          No wiki description available for this item.
+        </div>
+      )}
+
+      {item?.powers && (
+        <>
+          <div className="mi-detail-divider"><span className="mi-detail-divider-label">Powers</span></div>
+          <div className="mi-detail-text">
+            {item.powers.split('\n').map((para, i) =>
+              para.trim() ? <p key={i}>{para.trim()}</p> : null
+            )}
+          </div>
+        </>
+      )}
+
+      {item?.source_url && (
+        <a className="mi-detail-source-link" href={item.source_url} target="_blank" rel="noopener noreferrer">
+          📖 View on Fandom Wiki ↗
+        </a>
+      )}
+
+      {children}
+    </div>
   );
 }
 
-// ── DrillDown (main) ────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────
 export default function DrillDown() {
 
   // Pane 1
-  const [p1Sel,      setP1Sel]      = useState(null);   // TABLE_1 row
+  const [p1Sel,       setP1Sel]       = useState(null);  // TABLE_1 row
 
-  // Pane 2
-  const [p2Data,     setP2Data]     = useState(null);   // { entries, table_name, dice, isComplex }
-  const [p2Loading,  setP2Loading]  = useState(false);
-  const [p2Sel,      setP2Sel]      = useState(null);   // selected entry
+  // Pane 2  (for complex tables this is the hardcoded list; for simple it's fetched)
+  const [p2Entries,   setP2Entries]   = useState([]);
+  const [p2Loading,   setP2Loading]   = useState(false);
+  const [p2Error,     setP2Error]     = useState(null);
+  const [p2Sel,       setP2Sel]       = useState(null);  // selected entry
 
   // Pane 3
-  const [p3Mode,     setP3Mode]     = useState(null);   // 'detail' | 'bonus' | 'special'
-  const [p3Data,     setP3Data]     = useState(null);   // varies by mode
-  const [p3Loading,  setP3Loading]  = useState(false);
-  const [p3AtkSel,   setP3AtkSel]  = useState(null);   // bonus mode: attack bonus entry
-  const [p3DmgSel,   setP3DmgSel]  = useState(null);   // bonus mode: damage bonus entry
-  const [p3SpecSel,  setP3SpecSel] = useState(null);   // special mode: selected entry
+  const [p3Mode,      setP3Mode]      = useState(null);  // 'detail' | 'bonus' | 'special'
+  const [p3Item,      setP3Item]      = useState(null);  // for 'detail' mode
+  const [p3ItemLoad,  setP3ItemLoad]  = useState(false);
+  const [p3ItemErr,   setP3ItemErr]   = useState(null);
+  const [p3SpecEntries, setP3SpecEntries] = useState([]);
+  const [p3SpecLoad,  setP3SpecLoad]  = useState(false);
+  const [p3SpecErr,   setP3SpecErr]   = useState(null);
+  const [p3SpecSel,   setP3SpecSel]   = useState(null);
+  const [p3AtkSel,    setP3AtkSel]    = useState(null);  // attack bonus entry (or single bonus for armor)
+  const [p3DmgSel,    setP3DmgSel]    = useState(null);  // damage bonus entry (weapons only)
 
-  // Pane 4
-  const [p4State,    setP4State]    = useState(null);   // { item, compositeName, compositeAtk, compositeDmg, loading, error }
+  // Pane 4 (complex R/S only)
+  const [p4Item,      setP4Item]      = useState(null);
+  const [p4Loading,   setP4Loading]   = useState(false);
+  const [p4Error,     setP4Error]     = useState(null);
+  const [p4Composite, setP4Composite] = useState(null); // { name, atk, dmg }
+  const [p4SpecItem,  setP4SpecItem]  = useState(null); // for special selection → pane 4
 
   // Dual-roll animation
   const [dualRolling, setDualRolling] = useState(false);
-  const [dualResult,  setDualResult]  = useState(null); // [atkN, dmgN]
+  const [dualResult,  setDualResult]  = useState(null); // [atkRoll, dmgRoll]
 
-  // ── Fetch item by entry ────────────────────────────────────────────────────
-  const fetchItem = useCallback(async (entry) => {
-    if (!entry) return null;
-    if (entry.item_id) {
-      try { return await api.getMagicalItem(entry.item_id); } catch { /* fall through */ }
-    }
+  // ── Fetch item from DB by name ─────────────────────────────────────────────
+  const fetchItemByName = useCallback(async (name) => {
+    if (!name) return null;
     try {
-      const res = await api.searchMagicalItems({ search: entry.item_name, limit: 1 });
+      const res = await api.searchMagicalItems({ search: name, limit: 1 });
       return res?.items?.[0] ?? null;
     } catch { return null; }
   }, []);
 
+  const fetchItemById = useCallback(async (id) => {
+    if (!id) return null;
+    try { return await api.getMagicalItem(id); } catch { return null; }
+  }, []);
+
+  const fetchEntry = useCallback(async (entry) => {
+    if (!entry) return null;
+    if (entry.item_id) {
+      const item = await fetchItemById(entry.item_id);
+      if (item) return item;
+    }
+    return fetchItemByName(entry.item_name);
+  }, [fetchItemById, fetchItemByName]);
+
   // ── Clear downstream state ─────────────────────────────────────────────────
   function clearFrom(level) {
-    if (level <= 2) { setP2Data(null); setP2Sel(null); }
-    if (level <= 3) { setP3Mode(null); setP3Data(null); setP3AtkSel(null); setP3DmgSel(null); setP3SpecSel(null); setDualResult(null); }
-    if (level <= 4) { setP4State(null); }
+    if (level <= 2) {
+      setP2Entries([]); setP2Sel(null); setP2Error(null);
+    }
+    if (level <= 3) {
+      setP3Mode(null);
+      setP3Item(null); setP3ItemLoad(false); setP3ItemErr(null);
+      setP3SpecEntries([]); setP3SpecLoad(false); setP3SpecErr(null); setP3SpecSel(null);
+      setP3AtkSel(null); setP3DmgSel(null);
+      setDualResult(null);
+    }
+    if (level <= 4) {
+      setP4Item(null); setP4Loading(false); setP4Error(null);
+      setP4Composite(null); setP4SpecItem(null);
+    }
   }
 
   // ── Pane 1 select ──────────────────────────────────────────────────────────
   async function selectP1(row) {
     clearFrom(2);
     setP1Sel(row);
+
+    if (row.table === 'S') {
+      setP2Entries(S1_WEAPONS);
+      return;
+    }
+    if (row.table === 'R') {
+      setP2Entries(R1_ARMOR);
+      return;
+    }
+    // Simple categories — fetch from DB
     setP2Loading(true);
     try {
-      const isComplex = COMPLEX_TABLES.includes(row.table);
-      const opts      = isComplex ? { subtable: '1' } : {};
-      const data      = await api.getTableEntries(row.table, opts);
-      setP2Data({ ...data, isComplex });
+      const data = await api.getTableEntries(row.table, { limit: 500 });
+      setP2Entries(data.entries ?? []);
     } catch (e) {
-      setP2Data({ entries: [], table_name: row.category, dice: row.dice, isComplex: false, error: e.message });
+      setP2Error(e.message ?? 'Failed to load table');
     } finally {
       setP2Loading(false);
     }
@@ -271,149 +410,159 @@ export default function DrillDown() {
     clearFrom(3);
     setP2Sel(entry);
 
-    const isComplex = !!(p1Sel && COMPLEX_TABLES.includes(p1Sel.table));
+    const tbl = p1Sel?.table;
 
-    if (!isComplex) {
-      // Simple category: Pane 3 = full item detail
-      setP3Mode('detail');
-      setP3Loading(true);
-      try {
-        const item = await fetchItem(entry);
-        setP3Data({ item: item ?? { name: entry.item_name, description: entry.notes ?? null } });
-      } catch (e) {
-        setP3Data({ item: null, error: e.message });
-      } finally {
-        setP3Loading(false);
+    // ── Complex tables (R / S) ──────────────────────────────────────────────
+    if (tbl === 'S' || tbl === 'R') {
+      if (entry.isSpecialRow) {
+        // Load S3 / R3 from DB
+        setP3Mode('special');
+        setP3SpecLoad(true);
+        try {
+          const data = await api.getTableEntries(tbl, { subtable: '3' });
+          setP3SpecEntries(data.entries ?? []);
+        } catch (e) {
+          setP3SpecErr(e.message ?? 'Failed to load special table');
+        } finally {
+          setP3SpecLoad(false);
+        }
+      } else {
+        // Generic weapon / armor → show bonus columns
+        setP3Mode('bonus');
       }
       return;
     }
 
-    if (entry.isSpecialRow) {
-      // Special synthetic row: Pane 3 = S3/R3 list
-      setP3Mode('special');
-      setP3Loading(true);
-      try {
-        const data = await api.getTableEntries(p1Sel.table, { subtable: '3' });
-        setP3Data(data);
-      } catch (e) {
-        setP3Data({ entries: [], dice: 'd100', table_name: 'Special Items', error: e.message });
-      } finally {
-        setP3Loading(false);
-      }
-      return;
-    }
-
-    // Generic weapon/armor: Pane 3 = two bonus columns (S2/R2)
-    setP3Mode('bonus');
-    setP3Loading(true);
+    // ── Simple categories (A–Q, T) ─────────────────────────────────────────
+    setP3Mode('detail');
+    setP3ItemLoad(true);
     try {
-      const data = await api.getTableEntries(p1Sel.table, { subtable: '2' });
-      setP3Data({ bonusEntries: data.entries ?? [], dice: data.dice ?? 'd20', table_name: data.table_name });
+      const item = await fetchEntry(entry);
+      setP3Item(item ?? { name: entry.item_name, description: entry.notes ?? null });
     } catch (e) {
-      setP3Data({ bonusEntries: [], dice: 'd20', table_name: 'Bonus', error: e.message });
+      setP3ItemErr(e.message ?? 'Failed to load item');
     } finally {
-      setP3Loading(false);
+      setP3ItemLoad(false);
     }
   }
 
   function handleP2Roll(n) {
-    if (!p2Data) return;
-    // For complex tables: entries < 975 = generic, 975+ = special
-    const generic = (p2Data.entries ?? []).filter(e => e.roll_min < SPECIAL_THRESHOLD);
-    const entry   = findRow(generic, n) ?? (n >= SPECIAL_THRESHOLD ? SPECIAL_ROW : null);
+    const entry = findRow(p2Entries, n);
     if (entry) selectP2(entry);
   }
 
-  // ── Open Pane 4 composite (weapon + atk + dmg bonuses) ────────────────────
-  async function openP4Composite(baseEntry, atkEntry, dmgEntry) {
-    const atkStr    = atkEntry?.item_name ?? '?';
-    const dmgStr    = dmgEntry?.item_name ?? '?';
-    const composite = `${baseEntry?.item_name ?? 'Weapon'} ${atkStr} / ${dmgStr}`;
-    setP4State({ item: null, compositeName: composite, compositeAtk: atkEntry, compositeDmg: dmgEntry, loading: true, error: null });
-    const item = await fetchItem(baseEntry);
-    setP4State(prev => ({
-      ...prev,
-      item:    item ?? { name: baseEntry?.item_name, cursed: (atkEntry?.bonus < 0 || dmgEntry?.bonus < 0) },
-      loading: false,
-    }));
+  // ── Pane 3 special select ─────────────────────────────────────────────────
+  async function selectP3Special(entry) {
+    clearFrom(4);
+    setP3SpecSel(entry);
+    setP4Loading(true);
+    try {
+      const item = await fetchEntry(entry);
+      setP4SpecItem(item ?? { name: entry.item_name, description: entry.notes ?? null, source_url: entry.source_url });
+    } catch (e) {
+      setP4Error(e.message ?? 'Failed to load item');
+    } finally {
+      setP4Loading(false);
+    }
   }
 
-  // ── Bonus column selections ────────────────────────────────────────────────
-  function selectBonusAtk(entry) {
+  function handleP3SpecRoll(n) {
+    const entry = findRow(p3SpecEntries, n);
+    if (entry) selectP3Special(entry);
+  }
+
+  // ── Open Pane 4 with composite result ─────────────────────────────────────
+  async function openComposite(baseEntry, atkEntry, dmgEntry) {
+    // For armor dmgEntry is null (single bonus)
+    const atkStr  = atkEntry?.item_name ?? '?';
+    const dmgStr  = dmgEntry?.item_name ?? null;
+    const name    = dmgStr
+      ? `${baseEntry?.item_name ?? 'Weapon'} ${atkStr} / ${dmgStr}`
+      : `${baseEntry?.item_name ?? 'Armor'} ${atkStr}`;
+
+    setP4Composite({ name, atk: atkEntry, dmg: dmgEntry });
+    setP4Loading(true);
+    setP4Item(null);
+    setP4Error(null);
+    try {
+      const item = await fetchItemByName(baseEntry?.item_name);
+      setP4Item(item ?? null);
+    } catch { /* item stays null, fallback text shown */ }
+    finally { setP4Loading(false); }
+  }
+
+  // ── Bonus column clicks ────────────────────────────────────────────────────
+  function selectAtk(entry) {
     setP3AtkSel(entry);
-    if (p3DmgSel) openP4Composite(p2Sel, entry, p3DmgSel);
+    const tbl = p1Sel?.table;
+    if (tbl === 'R') {
+      // Armor — single bonus, open immediately
+      openComposite(p2Sel, entry, null);
+    } else if (p3DmgSel) {
+      openComposite(p2Sel, entry, p3DmgSel);
+    }
   }
 
-  function selectBonusDmg(entry) {
+  function selectDmg(entry) {
     setP3DmgSel(entry);
-    if (p3AtkSel) openP4Composite(p2Sel, p3AtkSel, entry);
+    if (p3AtkSel) openComposite(p2Sel, p3AtkSel, entry);
   }
 
-  // ── Both-d20 roll ─────────────────────────────────────────────────────────
+  // ── Roll Both d20s ─────────────────────────────────────────────────────────
   function handleBothRoll() {
-    if (dualRolling || !p3Data?.bonusEntries?.length) return;
+    if (dualRolling) return;
     setDualRolling(true);
     setDualResult(null);
     setTimeout(() => {
       const atkN     = rollDie(20);
       const dmgN     = rollDie(20);
-      const atkEntry = findRow(p3Data.bonusEntries, atkN);
-      const dmgEntry = findRow(p3Data.bonusEntries, dmgN);
+      const atkEntry = findRow(S2_ATTACK, atkN);
+      const dmgEntry = findRow(S2_DAMAGE, dmgN);
       setP3AtkSel(atkEntry);
       setP3DmgSel(dmgEntry);
       setDualResult([atkN, dmgN]);
       setDualRolling(false);
-      if (atkEntry && dmgEntry) openP4Composite(p2Sel, atkEntry, dmgEntry);
+      if (atkEntry && dmgEntry) openComposite(p2Sel, atkEntry, dmgEntry);
     }, 340);
   }
 
-  // ── Pane 3 special select → Pane 4 ───────────────────────────────────────
-  async function selectP3Special(entry) {
-    setP3SpecSel(entry);
-    setP4State({ item: null, compositeName: null, compositeAtk: null, compositeDmg: null, loading: true, error: null });
-    try {
-      const item = await fetchItem(entry);
-      setP4State({
-        item:          item ?? { name: entry.item_name, description: entry.notes ?? null },
-        compositeName: null, compositeAtk: null, compositeDmg: null,
-        loading: false, error: null,
-      });
-    } catch (e) {
-      setP4State(prev => ({ ...prev, loading: false, error: e.message }));
-    }
-  }
-
-  function handleP3SpecRoll(n) {
-    if (!p3Data?.entries?.length) return;
-    const entry = findRow(p3Data.entries, n);
-    if (entry) selectP3Special(entry);
-  }
-
-  // ── Roll again ────────────────────────────────────────────────────────────
-  function handleRollAgain() {
-    if (!p1Sel || !p2Data?.entries?.length) return;
-    const generic = (p2Data.entries ?? []).filter(e => e.roll_min < SPECIAL_THRESHOLD);
-    const sides   = parseSides(p1Sel.dice);
-    const n       = rollDie(sides);
-    const entry   = findRow(generic, n) ?? (n >= SPECIAL_THRESHOLD ? SPECIAL_ROW : null);
+  // ── Roll Again helpers ─────────────────────────────────────────────────────
+  function rollAgain() {
+    if (!p1Sel || !p2Entries.length) return;
+    const sides = parseSides(p1Sel.dice);
+    const n     = rollDie(sides);
+    const entry = findRow(p2Entries.filter(e => !e.isSpecialRow), n)
+               ?? (n >= 975 ? p2Entries.find(e => e.isSpecialRow) : null);
     if (entry) selectP2(entry);
   }
 
-  // ── Derived visibility ────────────────────────────────────────────────────
-  const isComplex = !!(p1Sel && COMPLEX_TABLES.includes(p1Sel.table));
-  const showP2    = !!p1Sel;
-  const showP3    = showP2 && (isComplex || p3Mode !== null);
-  const showP4    = isComplex && (p3Mode === 'bonus' || p3Mode === 'special');
-  const rightmost = (showP4 && p4State) ? 4 : (showP3 && p3Mode) ? 3 : showP2 ? 2 : 1;
+  function rollNewWeapon() { rollAgain(); }
 
-  // P2 entries — for complex: generic only + synthetic special row at bottom
-  const p2Entries = p2Data
-    ? [...(p2Data.entries ?? []).filter(e => e.roll_min < SPECIAL_THRESHOLD), ...(isComplex ? [SPECIAL_ROW] : [])]
-    : [];
+  function rollAnotherSpecial() {
+    if (!p3SpecEntries.length) return;
+    const n     = rollDie(1000);
+    const entry = findRow(p3SpecEntries, n) ?? p3SpecEntries[0];
+    if (entry) selectP3Special(entry);
+  }
 
-  const cfg = p1Sel ? COMPLEX_CFG[p1Sel.table] : null;
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const tbl       = p1Sel?.table ?? '';
+  const isComplex = COMPLEX_TABLES.includes(tbl);
+  const isWeapon  = tbl === 'S';
+  const isArmor   = tbl === 'R';
 
-  // ── Pane class helper ─────────────────────────────────────────────────────
+  const showP2 = !!p1Sel;
+  const showP3 = showP2 && (isComplex || p3Mode !== null);
+  const showP4 = isComplex && (p3Mode === 'bonus' || p3Mode === 'special');
+
+  // For pane 4: do we have actual content to display?
+  const p4HasContent = p4Loading || p4Error || p4Composite || p4SpecItem;
+
+  const rightmost = (showP4 && p4HasContent) ? 4
+                  : (showP3 && p3Mode)        ? 3
+                  : showP2                    ? 2
+                  :                             1;
+
   function paneClass(num) {
     const visible    = num === 1 ? true : num === 2 ? showP2 : num === 3 ? showP3 : num === 4 ? showP4 : false;
     const detailMode = p3Mode === 'detail' && num === 3;
@@ -422,18 +571,22 @@ export default function DrillDown() {
     const mobileVis  = rightmost === num;
     return [
       'mi-pane',
-      !visible  ? 'mi-pane--empty'         : '',
-      isFixed   ? 'mi-pane--dd-fixed'      : '',
-      isExpand  ? 'mi-pane--dd-expand'     : '',
-      mobileVis ? 'mi-pane--mobile-visible': '',
+      !visible  ? 'mi-pane--empty'          : '',
+      isFixed   ? 'mi-pane--dd-fixed'       : '',
+      isExpand  ? 'mi-pane--dd-expand'      : '',
+      mobileVis ? 'mi-pane--mobile-visible' : '',
     ].filter(Boolean).join(' ');
   }
+
+  // Bonus table config per table
+  const bonusAtkEntries = isArmor ? R2_BONUS : S2_ATTACK;
+  const bonusDmgEntries = S2_DAMAGE;  // weapons only
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="mi-drilldown mi-drilldown--warm">
 
-      {/* ── PANE 1: Overview ─────────────────────────────────────────────── */}
+      {/* ══ PANE 1 — Table 1 Overview ══════════════════════════════════════ */}
       <div className={paneClass(1)}>
         <PaneHeader
           title="Table 1 — Overview"
@@ -446,8 +599,7 @@ export default function DrillDown() {
               key={row.table}
               className={['mi-table-row', p1Sel?.table === row.table ? 'mi-table-row--selected' : ''].filter(Boolean).join(' ')}
               onClick={() => selectP1(row)}
-              role="button"
-              tabIndex={0}
+              role="button" tabIndex={0}
               onKeyDown={e => e.key === 'Enter' && selectP1(row)}
             >
               <span className="mi-row-range">{row.label}</span>
@@ -458,7 +610,7 @@ export default function DrillDown() {
         </div>
       </div>
 
-      {/* ── PANE 2: Category Table ───────────────────────────────────────── */}
+      {/* ══ PANE 2 — Category Table ════════════════════════════════════════ */}
       <div className={paneClass(2)}>
         {!showP2 ? (
           <div className="mi-pane-placeholder">
@@ -468,9 +620,11 @@ export default function DrillDown() {
         ) : (
           <>
             <PaneHeader
-              title={`Table ${p1Sel.table} — ${p2Data?.table_name ?? p1Sel.category}`}
-              subtitle={p1Sel.dice}
-              extra={!p2Loading && p2Data && (
+              title={isWeapon ? 'Table S1 — Generic Magical Weapons'
+                    : isArmor ? 'Table R1 — Generic Magical Armor'
+                    : `Table ${tbl} — ${p1Sel?.category}`}
+              subtitle={p1Sel?.dice}
+              extra={!p2Loading && p2Entries.length > 0 && (
                 <DiceRoller
                   sides={parseSides(p1Sel.dice)}
                   label={p1Sel.dice}
@@ -481,178 +635,232 @@ export default function DrillDown() {
             <div className="mi-pane-body">
               {p2Loading ? (
                 <div className="mi-pane-loading"><div className="mi-spinner" />Loading…</div>
+              ) : p2Error ? (
+                <div className="mi-pane-empty">{p2Error}</div>
               ) : p2Entries.length === 0 ? (
-                <div className="mi-pane-empty">{p2Data?.error ?? 'No entries found.'}</div>
+                <div className="mi-pane-empty">No entries. Run the import script to populate.</div>
               ) : (
-                p2Entries.map((entry, i) => (
-                  <TableRow
-                    key={entry.id ?? `row-${i}`}
-                    entry={entry}
-                    selected={
-                      entry.isSpecialRow
-                        ? !!p2Sel?.isSpecialRow
-                        : p2Sel?.id === entry.id && p2Sel?.roll_min === entry.roll_min
-                    }
-                    dice={p1Sel.dice}
-                    onClick={() => selectP2(entry)}
-                  />
-                ))
+                p2Entries.map((entry, i) => {
+                  const isSpecRow = !!entry.isSpecialRow;
+                  return (
+                    <div key={`p2-${i}`}>
+                      {/* Separator line above the Special row */}
+                      {isSpecRow && (
+                        <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />
+                      )}
+                      <TableRow
+                        entry={entry}
+                        selected={
+                          isSpecRow
+                            ? !!p2Sel?.isSpecialRow
+                            : p2Sel?.roll_min === entry.roll_min && p2Sel?.item_name === entry.item_name
+                        }
+                        dice={p1Sel?.dice}
+                        onClick={() => selectP2(entry)}
+                      />
+                    </div>
+                  );
+                })
               )}
             </div>
           </>
         )}
       </div>
 
-      {/* ── PANE 3: Bonus Columns / Special List / Item Detail ──────────── */}
+      {/* ══ PANE 3 — Bonus Columns / Special List / Item Detail ═══════════ */}
       <div className={paneClass(3)}>
         {!p3Mode ? (
-          /* Placeholder — visible for complex tables before p2 click */
+          /* Placeholder — shown for complex tables before a p2 click */
           <div className="mi-pane-placeholder">
             <div className="mi-pane-placeholder-icon">{isComplex ? '⚔️' : '📖'}</div>
             <div className="mi-pane-placeholder-text">
-              {isComplex ? 'Select an item\nto roll for its bonus' : 'Select an item\nfor its description'}
+              {isComplex
+                ? 'Select a weapon or armor\nto roll for its bonus'
+                : 'Select an item\nto view its description'}
             </div>
           </div>
+
         ) : p3Mode === 'detail' ? (
-          /* Simple category — full item detail fills this pane */
+          /* ── Simple category: full item detail ── */
           <>
             <PaneHeader
               title={p2Sel?.item_name ?? 'Item Detail'}
               subtitle="Description"
-              extra={<button className="mi-dice-btn" onClick={handleRollAgain}>🎲 Roll Again</button>}
+              extra={<button className="mi-dice-btn" onClick={rollAgain}>🎲 Roll Again</button>}
             />
-            {p3Loading ? (
-              <div className="mi-pane-loading" style={{ flex: 1 }}><div className="mi-spinner" />Loading…</div>
-            ) : p3Data?.error ? (
-              <div className="mi-pane-empty" style={{ flex: 1 }}>{p3Data.error}</div>
-            ) : (
-              <ItemDetailBody item={p3Data?.item} tableLetter={p1Sel?.table} />
-            )}
+            <DetailPanel
+              item={p3Item}
+              loading={p3ItemLoad}
+              error={p3ItemErr}
+            />
           </>
+
         ) : p3Mode === 'bonus' ? (
-          /* Complex — two side-by-side bonus columns */
+          /* ── Complex: two bonus columns (weapons) or one (armor) ── */
           <>
             <PaneHeader
-              title={cfg?.bonus2Title ?? `${p1Sel?.table}2 — Bonus Table`}
-              subtitle={p3Data?.dice ?? 'd20'}
+              title={isWeapon ? 'Table S2 — Attack & Damage Adjustments' : 'Table R2 — Armor Bonus'}
+              subtitle={`Weapon: ${p2Sel?.item_name ?? '—'}`}
               extra={
-                <button
-                  className={`mi-dice-btn${dualRolling ? ' mi-dice-btn--rolling' : ''}`}
-                  onClick={handleBothRoll}
-                  disabled={dualRolling || !p3Data?.bonusEntries?.length}
-                >
-                  {dualRolling ? '⏳' : '🎲'} Both d20
-                  {dualResult && !dualRolling && (
-                    <span className="mi-roll-result" style={{ fontSize: 11, marginLeft: 4 }}>
-                      {dualResult[0]}/{dualResult[1]}
-                    </span>
-                  )}
-                </button>
+                isWeapon ? (
+                  /* "Roll Both" button for weapons */
+                  <button
+                    className={`mi-dice-btn${dualRolling ? ' mi-dice-btn--rolling' : ''}`}
+                    onClick={handleBothRoll}
+                    disabled={dualRolling}
+                  >
+                    {dualRolling ? '⏳' : '🎲'} Roll Both
+                    {dualResult && !dualRolling && (
+                      <span className="mi-roll-result" style={{ fontSize: 11, marginLeft: 4 }}>
+                        {dualResult[0]}/{dualResult[1]}
+                      </span>
+                    )}
+                  </button>
+                ) : null
               }
             />
-            {p3Loading ? (
-              <div className="mi-pane-loading"><div className="mi-spinner" />Loading…</div>
-            ) : p3Data?.error ? (
-              <div className="mi-pane-empty">{p3Data.error}</div>
-            ) : (
-              <div className="mi-bonus-cols">
-                {/* Attack / Bonus 1 column */}
-                <div className="mi-bonus-col">
-                  <div className="mi-bonus-col-head">{cfg?.col1 ?? 'Bonus 1'}</div>
-                  <div className="mi-bonus-col-body">
-                    {(p3Data?.bonusEntries ?? []).map((entry, i) => (
-                      <BonusRow
-                        key={entry.id ?? `atk-${i}`}
-                        entry={entry}
-                        selected={p3AtkSel?.roll_min === entry.roll_min && p3AtkSel?.item_name === entry.item_name}
-                        onClick={() => selectBonusAtk(entry)}
-                      />
-                    ))}
-                  </div>
+
+            <div className="mi-bonus-cols">
+              {/* ── Attack Bonus column (or sole AC Bonus column for armor) ── */}
+              <div className="mi-bonus-col">
+                <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
+                  <span>{isArmor ? 'AC Bonus' : 'Attack Bonus'}</span>
+                  <DiceRoller
+                    sides={20}
+                    label="d20"
+                    onRoll={n => {
+                      const e = findRow(bonusAtkEntries, n);
+                      if (e) selectAtk(e);
+                    }}
+                  />
                 </div>
-                {/* Damage / Bonus 2 column */}
-                <div className="mi-bonus-col">
-                  <div className="mi-bonus-col-head">{cfg?.col2 ?? 'Bonus 2'}</div>
-                  <div className="mi-bonus-col-body">
-                    {(p3Data?.bonusEntries ?? []).map((entry, i) => (
-                      <BonusRow
-                        key={entry.id ?? `dmg-${i}`}
-                        entry={entry}
-                        selected={p3DmgSel?.roll_min === entry.roll_min && p3DmgSel?.item_name === entry.item_name}
-                        onClick={() => selectBonusDmg(entry)}
-                      />
-                    ))}
-                  </div>
+                <div className="mi-bonus-col-body">
+                  {bonusAtkEntries.map((entry, i) => (
+                    <BonusRow
+                      key={`atk-${i}`}
+                      entry={entry}
+                      selected={p3AtkSel?.roll_min === entry.roll_min && p3AtkSel?.item_name === entry.item_name}
+                      onClick={() => selectAtk(entry)}
+                    />
+                  ))}
                 </div>
               </div>
-            )}
+
+              {/* ── Damage Bonus column (weapons only) ── */}
+              {isWeapon && (
+                <div className="mi-bonus-col">
+                  <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
+                    <span>Damage Bonus</span>
+                    <DiceRoller
+                      sides={20}
+                      label="d20"
+                      onRoll={n => {
+                        const e = findRow(bonusDmgEntries, n);
+                        if (e) selectDmg(e);
+                      }}
+                    />
+                  </div>
+                  <div className="mi-bonus-col-body">
+                    {bonusDmgEntries.map((entry, i) => (
+                      <BonusRow
+                        key={`dmg-${i}`}
+                        entry={entry}
+                        selected={p3DmgSel?.roll_min === entry.roll_min && p3DmgSel?.item_name === entry.item_name}
+                        onClick={() => selectDmg(entry)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </>
+
         ) : p3Mode === 'special' ? (
-          /* Complex — special items list (S3/R3) */
+          /* ── Complex: special items list (S3/R3) ── */
           <>
             <PaneHeader
-              title={cfg?.specialTitle ?? `${p1Sel?.table}3 — Special Items`}
-              subtitle={p3Data?.dice ?? 'd100'}
-              extra={!p3Loading && p3Data?.entries?.length > 0 && (
-                <DiceRoller
-                  sides={parseSides(p3Data.dice ?? 'd100')}
-                  label={p3Data.dice ?? 'd100'}
-                  onRoll={handleP3SpecRoll}
-                />
+              title={isWeapon ? 'Table S3 — Special Weapons' : 'Table R3 — Special Armor'}
+              subtitle="d1000"
+              extra={!p3SpecLoad && p3SpecEntries.length > 0 && (
+                <DiceRoller sides={1000} label="d1000" onRoll={handleP3SpecRoll} />
               )}
             />
             <div className="mi-pane-body">
-              {p3Loading ? (
+              {p3SpecLoad ? (
                 <div className="mi-pane-loading"><div className="mi-spinner" />Loading…</div>
-              ) : !p3Data?.entries?.length ? (
-                <div className="mi-pane-empty">{p3Data?.error ?? 'No special entries found.'}</div>
+              ) : p3SpecErr ? (
+                <div className="mi-pane-empty">{p3SpecErr}</div>
+              ) : p3SpecEntries.length === 0 ? (
+                <div className="mi-pane-empty">No special entries found in database.</div>
               ) : (
-                (p3Data.entries ?? []).map((entry, i) => (
+                p3SpecEntries.map((entry, i) => (
                   <TableRow
-                    key={entry.id ?? `spec-${i}`}
+                    key={`spec-${i}`}
                     entry={entry}
-                    selected={p3SpecSel?.id === entry.id && p3SpecSel?.roll_min === entry.roll_min}
-                    dice={p3Data.dice ?? 'd100'}
+                    selected={p3SpecSel?.roll_min === entry.roll_min && p3SpecSel?.item_name === entry.item_name}
+                    dice="d1000"
                     onClick={() => selectP3Special(entry)}
                   />
                 ))
               )}
             </div>
           </>
+
         ) : null}
       </div>
 
-      {/* ── PANE 4: Result (complex R/S only) ───────────────────────────── */}
+      {/* ══ PANE 4 — Result (complex R/S only) ════════════════════════════ */}
       <div className={paneClass(4)}>
-        {!p4State ? (
-          /* Placeholder shown while waiting for selections */
+        {!p4HasContent ? (
           <div className="mi-pane-placeholder">
             <div className="mi-pane-placeholder-icon">⚗️</div>
             <div className="mi-pane-placeholder-text">
               {p3Mode === 'bonus'
-                ? (!p3AtkSel ? 'Select an attack bonus\nto begin' : 'Select a damage bonus\nto see the result')
+                ? (isWeapon
+                    ? (!p3AtkSel ? 'Select attack bonus\nto begin' : 'Select damage bonus\nto see result')
+                    : 'Select AC bonus\nto see result')
                 : 'Select a special item\nfor its full description'}
             </div>
           </div>
         ) : (
           <>
-            <PaneHeader
-              title="Result"
-              extra={<button className="mi-dice-btn" onClick={handleRollAgain} style={{ fontSize: 10 }}>🎲 Roll Again</button>}
-            />
-            {p4State.loading ? (
-              <div className="mi-pane-loading" style={{ flex: 1 }}><div className="mi-spinner" />Loading…</div>
-            ) : p4State.error ? (
-              <div className="mi-pane-empty" style={{ flex: 1 }}>{p4State.error}</div>
+            <PaneHeader title="Result" />
+            {p3Mode === 'bonus' && p4Composite ? (
+              /* ── Composite weapon/armor result ── */
+              <DetailPanel
+                item={p4Item}
+                loading={p4Loading}
+                error={p4Error}
+                compositeName={p4Composite.name}
+                compositeAtk={p4Composite.atk}
+                compositeDmg={p4Composite.dmg}
+                fallback={
+                  isWeapon
+                    ? `A magically enhanced ${p2Sel?.item_name ?? 'weapon'}. Apply the listed bonuses to attack and damage rolls.`
+                    : `A magically enhanced ${p2Sel?.item_name ?? 'armor'}. Apply the listed bonus to armor class.`
+                }
+              >
+                <div className="mi-detail-roll-again">
+                  <button className="mi-dice-btn" onClick={rollAgain}>🎲 Roll Again</button>
+                  <button className="mi-dice-btn" onClick={rollNewWeapon}>🎲 New {isWeapon ? 'Weapon' : 'Armor'}</button>
+                </div>
+              </DetailPanel>
+            ) : p3Mode === 'special' && (p4Loading || p4Error || p4SpecItem) ? (
+              /* ── Special item result ── */
+              <DetailPanel
+                item={p4SpecItem}
+                loading={p4Loading}
+                error={p4Error}
+                fallback="No description available. See source for details."
+              >
+                <div className="mi-detail-roll-again">
+                  <button className="mi-dice-btn" onClick={rollAnotherSpecial}>🎲 Roll Another Special</button>
+                </div>
+              </DetailPanel>
             ) : (
-              <ItemDetailBody
-                item={p4State.item}
-                compositeName={p4State.compositeName}
-                compositeAtk={p4State.compositeAtk}
-                compositeDmg={p4State.compositeDmg}
-                tableLetter={p1Sel?.table}
-                onRollAgain={handleRollAgain}
-              />
+              <div className="mi-pane-loading" style={{ flex: 1 }}>
+                <div className="mi-spinner" />Loading…
+              </div>
             )}
           </>
         )}
