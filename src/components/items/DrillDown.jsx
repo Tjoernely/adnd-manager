@@ -234,6 +234,8 @@ function parseItemTemplate(wikitext) {
 
 // ── Wiki description fetcher (S3 items) ────────────────────────────────────
 async function fetchWikiDescription(displayName) {
+  console.log('fetchWikiDescription called with:', displayName);
+  console.log('wikiPage lookup:', S3_WIKI_LINKS[displayName]);
   const wikiPage = S3_WIKI_LINKS[displayName];
   const wikiUrl = wikiPage
     ? 'https://adnd2e.fandom.com/wiki/' + wikiPage.replace(/ /g, '_').replace(/'/g, '%27')
@@ -634,6 +636,7 @@ export default function DrillDown() {
         : catName ? `${catName} ${itemName}` : itemName;
 
       pushPane(fromIdx, { type: 'description', mode: 'wiki', displayName, itemName, loading: true, item: null, error: null });
+      console.log('About to fetch for:', displayName, '| catName:', catName, '| itemName:', itemName);
       fetchWikiDescription(displayName)
         .then(result => updatePane(newIdx, { loading: false, item: { name: itemName, ...result } }))
         .catch(() => {
