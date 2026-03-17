@@ -3,6 +3,7 @@ import { api } from '../../api/client.js';
 import DiceRoller from './DiceRoller.jsx';
 import './Items.css';
 import { S3_DATA, S3_CATEGORIES as S3_CATS } from './s3_data.js';
+import { S3_WIKI_LINKS, getS3WikiUrl } from './s3_wiki_links.js';
 
 // ── Table 1 master overview ────────────────────────────────────────────────
 const TABLE_1 = [
@@ -184,6 +185,43 @@ function buildWikiUrl(name) {
     .replace(/[\u2018\u2019\u02BC]/g, "'")   // curly/modifier apostrophes → straight
     .replace(/\s+/g, '_');
   return `https://adnd2e.fandom.com/wiki/${wikiName}_(EM)`;
+}
+
+// ── Wiki description fetcher (S3 items) ────────────────────────────────────
+async function fetchWikiDescription(displayName) {
+  // Get the exact wiki page title from our mapping
+  const wikiPage = S3_WIKI_LINKS[displayName];
+  if (!wikiPage) return null;
+
+  const encoded = encodeURIComponent(wikiPage);
+  const url = `https://adnd2e.fandom.com/api.php?action=query&titles=${encoded}&prop=revisions&rvprop=content&format=json&origin=*`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = data.query.pages;
+    const page = Object.values(pages)[0];
+    if (page.missing) return null;
+
+    const wikitext = page.revisions[0]['*'];
+
+    // Parse the description from wikitext
+    // Strip wiki markup: {{Item|...}} template, [[links]], '''bold''', ''italic''
+    let text = wikitext
+      .replace(/\{\{Item[^}]*\}\}/gs, '')           // remove {{Item}} template
+      .replace(/\[\[Category:[^\]]+\]\]/g, '')        // remove categories
+      .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, '$2') // [[link|text]] -> text
+      .replace(/'''([^']+)'''/g, '$1')                // bold
+      .replace(/''([^']+)''/g, '$1')                  // italic
+      .replace(/==+[^=]+=+/g, '')                     // headings
+      .replace(/\{\{[^}]+\}\}/g, '')                  // remaining templates
+      .replace(/\n{3,}/g, '\n\n')                     // excess newlines
+      .trim();
+
+    return text || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -611,8 +649,29 @@ export default function DrillDown() {
 
     const itemName = item.item_name ?? item.name ?? '';
     const catName  = (p3SpecCat?.name ?? '').replace(/[✦*]/g, '').trim();
-    const wikiUrl  = buildWikiUrl(itemName);
 
+    // ── S3 special weapons: fetch description directly from Fandom wiki ──
+    if (p1Sel?.table === 'S') {
+      // Build full display name: DB items already include the category in their
+      // name; s3_data.js items only have the partial name (e.g. "of Attraction").
+      const displayName = item._fullItem
+        ? (item._fullItem.name ?? itemName).replace(/\s*\(EM\)\s*$/i, '').trim()
+        : catName ? `${catName} ${itemName}` : itemName;
+
+      const wikiUrl = getS3WikiUrl(displayName);
+      try {
+        const wikiText = await fetchWikiDescription(displayName);
+        setP4DetailItem({ name: itemName, description: wikiText, source_url: wikiUrl });
+      } catch {
+        setP4DetailItem({ name: itemName, description: null, source_url: wikiUrl });
+      } finally {
+        setP4DetailLoad(false);
+      }
+      return;
+    }
+
+    // ── R3 and all other categories: use DB lookup ───────────────────────
+    const wikiUrl = buildWikiUrl(itemName);
     try {
       let fullItem   = item._fullItem ?? null;
       let isFallback = false;
