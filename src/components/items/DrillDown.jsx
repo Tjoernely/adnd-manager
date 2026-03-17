@@ -235,64 +235,57 @@ function parseItemTemplate(wikitext) {
 // ── Wiki description fetcher (S3 items) ────────────────────────────────────
 async function fetchWikiDescription(displayName) {
   const wikiPage = S3_WIKI_LINKS[displayName];
-  if (!wikiPage) return { html: null, wikiUrl: null, stats: null };
-
-  const encoded  = encodeURIComponent(wikiPage);
-  const url      = `https://adnd2e.fandom.com/api.php?action=query&titles=${encoded}&prop=revisions&rvprop=content&format=json&origin=*`;
-  const wikiUrl  = `https://adnd2e.fandom.com/wiki/${wikiPage.replace(/ /g, '_')}`;
-
+  const wikiUrl = wikiPage
+    ? 'https://adnd2e.fandom.com/wiki/' + wikiPage.replace(/ /g, '_')
+    : null;
+  if (!wikiPage) return { html: null, stats: null, wikiUrl: null };
+  const apiUrl = 'https://adnd2e.fandom.com/api.php?action=query&titles='
+    + encodeURIComponent(wikiPage)
+    + '&prop=revisions&rvprop=content&format=json&origin=*';
   try {
-    const res  = await fetch(url);
+    const res = await fetch(apiUrl);
     const data = await res.json();
-    const page = Object.values(data.query.pages)[0];
-    if (page.missing !== undefined) return { html: null, wikiUrl, stats: null };
-
-    let wikitext = page.revisions[0]['*'];
-
-    // Extract stats before removing the template
-    const stats = parseItemTemplate(wikitext);
-
-    // Step 1: Remove {{Item...}} multi-line template block
-    wikitext = wikitext.replace(/\{\{Item[\s\S]*?\}\}/g, '');
-
-    // Step 2: Remove [[Category:...]] lines
-    wikitext = wikitext.replace(/\[\[Category:[^\]]+\]\]\n?/g, '');
-
-    // Step 3: [[PageTitle|Display Text]] → clickable link
-    wikitext = wikitext.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, pg, display) => {
-      const href = 'https://adnd2e.fandom.com/wiki/' + pg.trim().replace(/ /g, '_');
-      return `<a href="${href}" target="_blank" rel="noopener" style="color:#c8a84b;text-decoration:underline">${display.trim()}</a>`;
-    });
-
-    // Step 4: [[PageTitle]] → clickable link
-    wikitext = wikitext.replace(/\[\[([^\]]+)\]\]/g, (_, pg) => {
-      const href = 'https://adnd2e.fandom.com/wiki/' + pg.trim().replace(/ /g, '_');
-      return `<a href="${href}" target="_blank" rel="noopener" style="color:#c8a84b;text-decoration:underline">${pg.trim()}</a>`;
-    });
-
-    // Step 5: '''bold''' and ''italic''
-    wikitext = wikitext.replace(/'''([^']+)'''/g, '<strong>$1</strong>');
-    wikitext = wikitext.replace(/''([^']+)''/g,   '<em>$1</em>');
-
-    // Step 6: {{br}} → <br>
-    wikitext = wikitext.replace(/\{\{br\}\}/gi, '<br>');
-
-    // Step 7: Remove remaining {{ }} templates
-    wikitext = wikitext.replace(/\{\{[^}]+\}\}/g, '');
-
-    // Step 8: Newlines → paragraphs
-    wikitext = wikitext.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, ' ');
-
-    const html = '<p>' + wikitext.trim() + '</p>';
-
-    if (html.replace(/<[^>]+>/g, '').trim().length < 5) {
-      return { html: null, wikiUrl, stats };
+    const pages = data.query.pages;
+    const page = Object.values(pages)[0];
+    if (page.missing !== undefined) return { html: null, stats: null, wikiUrl };
+    const raw = page.revisions[0]['*'];
+    // --- Parse {{Item|...}} stats block (multi-line) ---
+    const stats = {};
+    const templateMatch = raw.match(/\{\{Item([\s\S]*?)\}\}/);
+    if (templateMatch) {
+      const lines = templateMatch[1].split('\n');
+      for (const line of lines) {
+        const m = line.match(/\|\s*(\w+)\s*=\s*(.+)/);
+        if (m) stats[m[1].trim()] = m[2].trim();
+      }
     }
-
-    return { html, wikiUrl, stats };
+    // --- Extract body text (everything after the closing }}) ---
+    let body = raw
+      .replace(/\{\{Item[\s\S]*?\}\}/, '')        // remove Item template
+      .replace(/\[\[Category:[^\]]+\]\]\n?/g, '')  // remove categories
+      .trim();
+    // --- Convert wikitext to HTML ---
+    // [[Page|Display]] → clickable link
+    body = body.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, pg, disp) =>
+      `<a href="https://adnd2e.fandom.com/wiki/${pg.trim().replace(/ /g,'_')}" target="_blank" style="color:#c8a84b;text-decoration:underline">${disp.trim()}</a>`
+    );
+    // [[Page]] → clickable link
+    body = body.replace(/\[\[([^\]]+)\]\]/g, (_, pg) =>
+      `<a href="https://adnd2e.fandom.com/wiki/${pg.trim().replace(/ /g,'_')}" target="_blank" style="color:#c8a84b;text-decoration:underline">${pg.trim()}</a>`
+    );
+    // '''bold''' and ''italic''
+    body = body.replace(/'''([^']+)'''/g, '<strong>$1</strong>');
+    body = body.replace(/''([^']+)''/g, '<em>$1</em>');
+    // {{br}} → <br>
+    body = body.replace(/\{\{br\}\}/gi, '<br>');
+    // Remove remaining {{...}}
+    body = body.replace(/\{\{[^}]*\}\}/g, '');
+    // Paragraphs
+    body = '<p>' + body.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, ' ') + '</p>';
+    return { html: body, stats, wikiUrl };
   } catch (e) {
-    console.error('Wiki fetch error:', e);
-    return { html: null, wikiUrl, stats: null };
+    console.error('Wiki fetch failed:', e);
+    return { html: null, stats: null, wikiUrl };
   }
 }
 
@@ -682,37 +675,49 @@ export default function DrillDown() {
 
     if (mode === 'wiki') {
       const wikiUrl = item?.wikiUrl ?? getS3WikiUrl(pane.displayName);
+      const stats   = item?.stats ?? {};
+      const hasStats = stats.type || stats.xp || stats.value;
       return (
-        <>
-          <PaneHeader title={pane.itemName ?? '—'} subtitle="Wiki Description" />
-          <div className="mi-detail-body">
-            <h2 className="mi-result-name">{pane.itemName}</h2>
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {/* Large gold item name */}
+          <h2 style={{ fontSize: '1.6em', color: '#d4a840', margin: '0 0 8px', fontWeight: 700, lineHeight: 1.2 }}>
+            {pane.itemName}
+          </h2>
 
-            {item?.stats && (item.stats.type || item.stats.xp || item.stats.value) && (
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: '6px 0 12px', borderBottom: '1px solid rgba(212,168,64,0.2)', marginBottom: 10, fontSize: 12, color: '#c8a84b' }}>
-                {item.stats.type  && <span><strong>Type:</strong> {item.stats.type}</span>}
-                {item.stats.xp    && <span><strong>XP:</strong> {item.stats.xp}</span>}
-                {item.stats.value && <span><strong>Value:</strong> {item.stats.value}</span>}
-              </div>
-            )}
+          {/* Stats row */}
+          {hasStats && (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'rgba(212,168,64,0.65)', marginBottom: 10 }}>
+              {stats.type  && <span>Type: {stats.type}</span>}
+              {stats.xp    && <span>XP: {stats.xp}</span>}
+              {stats.value && <span>Value: {stats.value}</span>}
+            </div>
+          )}
 
-            <div className="mi-detail-divider"><span className="mi-detail-divider-label">Description</span></div>
+          {/* Horizontal rule */}
+          <hr style={{ border: 'none', borderTop: '1px solid rgba(212,168,64,0.25)', margin: '0 0 14px' }} />
 
-            {item?.html ? (
-              <div className="mi-detail-text" dangerouslySetInnerHTML={{ __html: item.html }} />
-            ) : (
-              <div className="mi-detail-text" style={{ marginTop: 12, fontStyle: 'italic', opacity: 0.45 }}>
-                No description available on the wiki.
-              </div>
-            )}
+          {/* Description HTML */}
+          {item?.html ? (
+            <div className="mi-detail-text" dangerouslySetInnerHTML={{ __html: item.html }} />
+          ) : (
+            <div className="mi-detail-text" style={{ fontStyle: 'italic', opacity: 0.45 }}>
+              No description available on the wiki.
+            </div>
+          )}
 
-            {wikiUrl && (
-              <a className="mi-detail-source-link" href={wikiUrl} target="_blank" rel="noopener noreferrer">
-                📖 View on Fandom Wiki ↗
-              </a>
-            )}
-          </div>
-        </>
+          {/* Wiki button */}
+          {wikiUrl && (
+            <a
+              href={wikiUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mi-detail-source-link"
+              style={{ marginTop: 20, display: 'inline-block' }}
+            >
+              📖 View on Fandom Wiki ↗
+            </a>
+          )}
+        </div>
       );
     }
 
@@ -1051,8 +1056,8 @@ export default function DrillDown() {
             key={i}
             className="mi-pane mi-pane--dd-fixed"
             style={isDesc
-              ? { flex: 1, minWidth: 350, height: '100%', overflowY: 'auto', borderRight: '1px solid #3a2a12', display: 'flex', flexDirection: 'column' }
-              : { minWidth: 240, maxWidth: 320, height: '100%', overflowY: 'auto', borderRight: '1px solid #3a2a12', display: 'flex', flexDirection: 'column', flexShrink: 0 }
+              ? { flex: 1, minWidth: 420, height: '100%', overflowY: 'auto', background: '#1a1108', borderRight: '1px solid #3a2a12', display: 'flex', flexDirection: 'column' }
+              : { minWidth: 220, maxWidth: 260, height: '100%', overflowY: 'auto', borderRight: '1px solid #3a2a12', display: 'flex', flexDirection: 'column', flexShrink: 0 }
             }
           >
             {renderPaneContent(pane, i)}
