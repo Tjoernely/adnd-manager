@@ -38,6 +38,8 @@ fi
 if [ -d "$APP_DIR/.git" ]; then
   echo "→ Henter seneste kode..."
   cd "$APP_DIR"
+  # Remove npm-generated files that would block git pull
+  rm -f "$APP_DIR/server/package-lock.json"
   git pull
 else
   echo "→ Kloner repository..."
