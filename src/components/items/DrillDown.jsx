@@ -631,13 +631,15 @@ export default function DrillDown() {
     const isS3Item = tbl === 'S' || pane.fromS3 === true;
 
     if (isS3Item) {
-      // Always use Fandom wiki for S3 special weapons
+      // Always use Fandom wiki for S3 special weapons.
+      // S3_WIKI_LINKS keys are the short item names from s3_data (e.g. "Abaris'"),
+      // NOT the prefixed form "Arrow Abaris'" — so use itemName directly.
       const displayName = item._fullItem
         ? (item._fullItem.name ?? itemName).replace(/\s*\(EM\)\s*$/i, '').trim()
-        : catName ? `${catName} ${itemName}` : itemName;
+        : itemName;
 
       pushPane(fromIdx, { type: 'description', mode: 'wiki', displayName, itemName, loading: true, item: null, error: null });
-      console.log('About to fetch for:', displayName, '| catName:', catName, '| itemName:', itemName);
+      console.log('S3 item clicked:', displayName, 'wiki page:', S3_WIKI_LINKS[displayName]);
       fetchWikiDescription(displayName)
         .then(result => updatePane(newIdx, { loading: false, item: { name: itemName, ...result } }))
         .catch(() => {
