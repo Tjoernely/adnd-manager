@@ -602,7 +602,7 @@ export default function DrillDown() {
   function selectSpecialCategory(fromIdx, tableRow, cat) {
     const tbl    = tableRow?.table ?? 'S';
     const newIdx = fromIdx + 1;
-    pushPane(fromIdx, { type: 'special_items', tableRow, cat, loading: true, items: [], error: null });
+    pushPane(fromIdx, { type: 'special_items', tableRow, cat, fromS3: tbl === 'S', loading: true, items: [], error: null });
 
     if (tbl === 'S' && cat.key && S3_DATA[cat.key] !== undefined) {
       updatePane(newIdx, { loading: false, items: s3DataToItems(cat.key) });
@@ -628,8 +628,9 @@ export default function DrillDown() {
     const itemName = item.item_name ?? item.name ?? '';
     const tbl      = pane.tableRow?.table ?? 'S';
     const newIdx   = fromIdx + 1;
+    const isS3Item = tbl === 'S' || pane.fromS3 === true;
 
-    if (tbl === 'S') {
+    if (isS3Item) {
       // Always use Fandom wiki for S3 special weapons
       const displayName = item._fullItem
         ? (item._fullItem.name ?? itemName).replace(/\s*\(EM\)\s*$/i, '').trim()
