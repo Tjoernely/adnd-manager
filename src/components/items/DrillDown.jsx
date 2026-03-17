@@ -236,7 +236,7 @@ function parseItemTemplate(wikitext) {
 async function fetchWikiDescription(displayName) {
   const wikiPage = S3_WIKI_LINKS[displayName];
   const wikiUrl = wikiPage
-    ? 'https://adnd2e.fandom.com/wiki/' + wikiPage.replace(/ /g, '_')
+    ? 'https://adnd2e.fandom.com/wiki/' + wikiPage.replace(/ /g, '_').replace(/'/g, '%27')
     : null;
   if (!wikiPage) return { html: null, stats: null, wikiUrl: null };
   const apiUrl = 'https://adnd2e.fandom.com/api.php?action=query&titles='
@@ -260,10 +260,11 @@ async function fetchWikiDescription(displayName) {
       }
     }
     // --- Extract body text (everything after the closing }}) ---
-    let body = raw
-      .replace(/\{\{Item[\s\S]*?\}\}/, '')        // remove Item template
-      .replace(/\[\[Category:[^\]]+\]\]\n?/g, '')  // remove categories
-      .trim();
+    // \n\}\} matches }} on its own line, avoiding the }} inside {{br}}
+    let body = raw.replace(/\{\{Item[\s\S]*?\n\}\}\n?/, '');
+    body = body.replace(/\[\[Category:[^\]]+\]\]\n?/g, '');
+    body = body.replace(/^[^\n]*\}\}\n?/, ''); // safety: strip any leaked }} remnant
+    body = body.trim();
     // --- Convert wikitext to HTML ---
     // [[Page|Display]] → clickable link
     body = body.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, pg, disp) =>
