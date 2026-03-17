@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { api } from '../../api/client.js';
 import DiceRoller from './DiceRoller.jsx';
 import './Items.css';
@@ -155,8 +155,6 @@ const R3_CATEGORIES = [
   { name: 'Miscellaneous',     min: 971, max: 1000 },
 ];
 
-const COMPLEX_TABLES = ['R', 'S'];
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 function rollDie(sides) { return Math.floor(Math.random() * sides) + 1; }
 function parseSides(d)  { const m = String(d ?? 'd20').match(/d(\d+)/i); return m ? +m[1] : 20; }
@@ -182,45 +180,119 @@ function findCat(cats, n) {
 function buildWikiUrl(name) {
   if (!name) return null;
   const wikiName = String(name)
-    .replace(/[\u2018\u2019\u02BC]/g, "'")   // curly/modifier apostrophes → straight
+    .replace(/[\u2018\u2019\u02BC]/g, "'")
     .replace(/\s+/g, '_');
   return `https://adnd2e.fandom.com/wiki/${wikiName}_(EM)`;
 }
 
+// ── Module-level fetch helpers ─────────────────────────────────────────────
+async function fetchItemByName(name) {
+  if (!name) return null;
+  try {
+    const res = await api.searchMagicalItems({ search: name, limit: 1 });
+    return res?.items?.[0] ?? null;
+  } catch { return null; }
+}
+
+async function fetchItemByNameExact(name) {
+  if (!name) return null;
+  try {
+    const res = await api.searchMagicalItems({ search: name, exact: true, limit: 1 });
+    return res?.items?.[0] ?? null;
+  } catch { return null; }
+}
+
+async function fetchEntry(entry) {
+  if (!entry) return null;
+  if (entry.item_id) {
+    try { return await api.getMagicalItem(entry.item_id); } catch { /* fall through */ }
+  }
+  return fetchItemByName(entry.item_name ?? entry.name);
+}
+
+// ── Parse {{Item|...}} template from wikitext ──────────────────────────────
+function parseItemTemplate(wikitext) {
+  const match = wikitext.match(/\{\{Item([\s\S]*?)\}\}/);
+  if (!match) return {};
+  const body = match[1];
+  const extract = (field) => {
+    const m = body.match(new RegExp(`\\|\\s*${field}\\s*=\\s*([^|\n}]+)`));
+    if (!m) return null;
+    return m[1]
+      .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, '$2') // strip wiki links
+      .replace(/\{\{[^}]+\}\}/g, '')                   // strip templates
+      .trim() || null;
+  };
+  return {
+    name:   extract('name'),
+    type:   extract('type'),
+    xp:     extract('xp'),
+    value:  extract('value'),
+    source: extract('source'),
+  };
+}
+
 // ── Wiki description fetcher (S3 items) ────────────────────────────────────
 async function fetchWikiDescription(displayName) {
-  // Get the exact wiki page title from our mapping
   const wikiPage = S3_WIKI_LINKS[displayName];
-  if (!wikiPage) return null;
+  if (!wikiPage) return { html: null, wikiUrl: null, stats: null };
 
-  const encoded = encodeURIComponent(wikiPage);
-  const url = `https://adnd2e.fandom.com/api.php?action=query&titles=${encoded}&prop=revisions&rvprop=content&format=json&origin=*`;
+  const encoded  = encodeURIComponent(wikiPage);
+  const url      = `https://adnd2e.fandom.com/api.php?action=query&titles=${encoded}&prop=revisions&rvprop=content&format=json&origin=*`;
+  const wikiUrl  = `https://adnd2e.fandom.com/wiki/${wikiPage.replace(/ /g, '_')}`;
 
   try {
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json();
-    const pages = data.query.pages;
-    const page = Object.values(pages)[0];
-    if (page.missing) return null;
+    const page = Object.values(data.query.pages)[0];
+    if (page.missing !== undefined) return { html: null, wikiUrl, stats: null };
 
-    const wikitext = page.revisions[0]['*'];
+    let wikitext = page.revisions[0]['*'];
 
-    // Parse the description from wikitext
-    // Strip wiki markup: {{Item|...}} template, [[links]], '''bold''', ''italic''
-    let text = wikitext
-      .replace(/\{\{Item[^}]*\}\}/gs, '')           // remove {{Item}} template
-      .replace(/\[\[Category:[^\]]+\]\]/g, '')        // remove categories
-      .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, '$2') // [[link|text]] -> text
-      .replace(/'''([^']+)'''/g, '$1')                // bold
-      .replace(/''([^']+)''/g, '$1')                  // italic
-      .replace(/==+[^=]+=+/g, '')                     // headings
-      .replace(/\{\{[^}]+\}\}/g, '')                  // remaining templates
-      .replace(/\n{3,}/g, '\n\n')                     // excess newlines
-      .trim();
+    // Extract stats before removing the template
+    const stats = parseItemTemplate(wikitext);
 
-    return text || null;
+    // Step 1: Remove {{Item...}} multi-line template block
+    wikitext = wikitext.replace(/\{\{Item[\s\S]*?\}\}/g, '');
+
+    // Step 2: Remove [[Category:...]] lines
+    wikitext = wikitext.replace(/\[\[Category:[^\]]+\]\]\n?/g, '');
+
+    // Step 3: [[PageTitle|Display Text]] → clickable link
+    wikitext = wikitext.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, pg, display) => {
+      const href = 'https://adnd2e.fandom.com/wiki/' + pg.trim().replace(/ /g, '_');
+      return `<a href="${href}" target="_blank" rel="noopener" style="color:#c8a84b;text-decoration:underline">${display.trim()}</a>`;
+    });
+
+    // Step 4: [[PageTitle]] → clickable link
+    wikitext = wikitext.replace(/\[\[([^\]]+)\]\]/g, (_, pg) => {
+      const href = 'https://adnd2e.fandom.com/wiki/' + pg.trim().replace(/ /g, '_');
+      return `<a href="${href}" target="_blank" rel="noopener" style="color:#c8a84b;text-decoration:underline">${pg.trim()}</a>`;
+    });
+
+    // Step 5: '''bold''' and ''italic''
+    wikitext = wikitext.replace(/'''([^']+)'''/g, '<strong>$1</strong>');
+    wikitext = wikitext.replace(/''([^']+)''/g,   '<em>$1</em>');
+
+    // Step 6: {{br}} → <br>
+    wikitext = wikitext.replace(/\{\{br\}\}/gi, '<br>');
+
+    // Step 7: Remove remaining {{ }} templates
+    wikitext = wikitext.replace(/\{\{[^}]+\}\}/g, '');
+
+    // Step 8: Newlines → paragraphs
+    wikitext = wikitext.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, ' ');
+
+    const html = '<p>' + wikitext.trim() + '</p>';
+
+    if (html.replace(/<[^>]+>/g, '').trim().length < 5) {
+      return { html: null, wikiUrl, stats };
+    }
+
+    return { html, wikiUrl, stats };
   } catch (e) {
-    return null;
+    console.error('Wiki fetch error:', e);
+    return { html: null, wikiUrl, stats: null };
   }
 }
 
@@ -275,7 +347,6 @@ function BonusRow({ entry, selected, onClick }) {
   );
 }
 
-/** Category row in Pane 3 special view */
 function CatRow({ cat, selected, onClick }) {
   const isSpecCat = !!cat.special;
   const rangeStr  = cat.min === cat.max ? String(cat.min) : `${pad3(cat.min)}–${pad3(cat.max)}`;
@@ -299,7 +370,6 @@ function CatRow({ cat, selected, onClick }) {
   );
 }
 
-/** Item row in Pane 4 cat-items view */
 function ItemListRow({ item, selected, onClick }) {
   const name      = item.item_name ?? item.name ?? '—';
   const isSpecial = name.includes('*');
@@ -325,7 +395,6 @@ function ItemListRow({ item, selected, onClick }) {
   );
 }
 
-/** Full item detail panel */
 function DetailPanel({ item, loading, error, compositeName, compositeAtk, compositeDmg, fallback, note, children }) {
   if (loading) {
     return (
@@ -427,699 +496,569 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
+// ── Main component — dynamic pane stack ───────────────────────────────────
 export default function DrillDown() {
+  const [panes, setPanes] = useState([{ type: 'overview' }]);
+  const containerRef = useRef(null);
 
-  // Pane 1
-  const [p1Sel,       setP1Sel]      = useState(null);
+  // Scroll right when a new pane is added
+  useEffect(() => {
+    const el = containerRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [panes.length]);
 
-  // Pane 2
-  const [p2Entries,   setP2Entries]  = useState([]);
-  const [p2Loading,   setP2Loading]  = useState(false);
-  const [p2Error,     setP2Error]    = useState(null);
-  const [p2Sel,       setP2Sel]      = useState(null);
+  function pushPane(fromIdx, newPane) {
+    setPanes(prev => [...prev.slice(0, fromIdx + 1), newPane]);
+  }
 
-  // Pane 3
-  const [p3Mode,      setP3Mode]     = useState(null); // 'detail'|'bonus'|'special'
-  // detail mode
-  const [p3Item,      setP3Item]     = useState(null);
-  const [p3ItemLoad,  setP3ItemLoad] = useState(false);
-  const [p3ItemErr,   setP3ItemErr]  = useState(null);
-  // special mode
-  const [p3SpecCat,   setP3SpecCat]  = useState(null); // selected S3/R3 category
-  // bonus mode
-  const [p3AtkSel,    setP3AtkSel]   = useState(null);
-  const [p3DmgSel,    setP3DmgSel]   = useState(null);
-  const [dualRolling, setDualRolling]= useState(false);
-  const [dualResult,  setDualResult] = useState(null);
+  function updatePane(idx, updates) {
+    setPanes(prev => prev.map((p, i) => i === idx ? { ...p, ...updates } : p));
+  }
 
-  // Pane 4 — three modes: 'composite' | 'cat-items' | 'item-detail'
-  const [p4Mode,       setP4Mode]       = useState(null);
-  // composite mode
-  const [p4Composite,  setP4Composite]  = useState(null); // { name, atk, dmg }
-  const [p4BaseItem,   setP4BaseItem]   = useState(null);
-  const [p4BaseLoad,   setP4BaseLoad]   = useState(false);
-  const [p4BaseErr,    setP4BaseErr]    = useState(null);
-  // cat-items mode
-  const [p4CatItems,   setP4CatItems]   = useState([]);
-  const [p4CatLoad,    setP4CatLoad]    = useState(false);
-  const [p4CatErr,     setP4CatErr]     = useState(null);
-  const [p4SelItem,    setP4SelItem]    = useState(null);
-  // item-detail mode (drill from list)
-  const [p4DetailItem,       setP4DetailItem]       = useState(null);
-  const [p4DetailLoad,       setP4DetailLoad]       = useState(false);
-  const [p4DetailErr,        setP4DetailErr]        = useState(null);
-  const [p4DetailIsFallback, setP4DetailIsFallback] = useState(false);
-
-  // ── Fetch helpers ──────────────────────────────────────────────────────────
-  const fetchItemByName = useCallback(async (name) => {
-    if (!name) return null;
-    try {
-      const res = await api.searchMagicalItems({ search: name, limit: 1 });
-      return res?.items?.[0] ?? null;
-    } catch { return null; }
-  }, []);
-
-  const fetchItemByNameExact = useCallback(async (name) => {
-    if (!name) return null;
-    try {
-      const res = await api.searchMagicalItems({ search: name, exact: true, limit: 1 });
-      return res?.items?.[0] ?? null;
-    } catch { return null; }
-  }, []);
-
-  const fetchEntry = useCallback(async (entry) => {
-    if (!entry) return null;
-    if (entry.item_id) {
-      try { return await api.getMagicalItem(entry.item_id); } catch { /* fall through */ }
-    }
-    return fetchItemByName(entry.item_name ?? entry.name);
-  }, [fetchItemByName]);
-
-  // ── Clear downstream ───────────────────────────────────────────────────────
-  function clearFrom(level) {
-    if (level <= 2) {
-      setP2Entries([]); setP2Sel(null); setP2Error(null);
-    }
-    if (level <= 3) {
-      setP3Mode(null);
-      setP3Item(null); setP3ItemLoad(false); setP3ItemErr(null);
-      setP3SpecCat(null);
-      setP3AtkSel(null); setP3DmgSel(null);
-      setDualResult(null);
-    }
-    if (level <= 4) {
-      setP4Mode(null);
-      setP4Composite(null); setP4BaseItem(null); setP4BaseLoad(false); setP4BaseErr(null);
-      setP4CatItems([]); setP4CatLoad(false); setP4CatErr(null); setP4SelItem(null);
-      setP4DetailItem(null); setP4DetailLoad(false); setP4DetailErr(null); setP4DetailIsFallback(false);
+  // ── Table 1 click ──────────────────────────────────────────────────────────
+  function selectTable1Row(fromIdx, row) {
+    if (row.table === 'S') {
+      pushPane(fromIdx, { type: 'weapons_s1', tableRow: row });
+    } else if (row.table === 'R') {
+      pushPane(fromIdx, { type: 'weapons_r1', tableRow: row });
+    } else {
+      const newIdx = fromIdx + 1;
+      pushPane(fromIdx, { type: 'table', tableRow: row, loading: true, entries: [], error: null });
+      api.getTableEntries(row.table, { limit: 500 })
+        .then(data  => updatePane(newIdx, { loading: false, entries: data.entries ?? [] }))
+        .catch(e    => updatePane(newIdx, { loading: false, error: e.message ?? 'Failed to load' }));
     }
   }
 
-  // ── Pane 1 select ──────────────────────────────────────────────────────────
-  async function selectP1(row) {
-    clearFrom(2);
-    setP1Sel(row);
-    if (row.table === 'S') { setP2Entries(S1_WEAPONS); return; }
-    if (row.table === 'R') { setP2Entries(R1_ARMOR);   return; }
-    setP2Loading(true);
-    try {
-      const data = await api.getTableEntries(row.table, { limit: 500 });
-      setP2Entries(data.entries ?? []);
-    } catch (e) {
-      setP2Error(e.message ?? 'Failed to load table');
-    } finally {
-      setP2Loading(false);
+  // ── Simple table entry → description ──────────────────────────────────────
+  function selectTableEntry(fromIdx, entry) {
+    const name   = entry.item_name ?? entry.name ?? '';
+    const newIdx = fromIdx + 1;
+    pushPane(fromIdx, { type: 'description', mode: 'simple', name, loading: true, item: null, error: null });
+    fetchEntry(entry)
+      .then(item => updatePane(newIdx, { loading: false, item: item ?? { name, description: entry.notes ?? null } }))
+      .catch(e   => updatePane(newIdx, { loading: false, error: e.message }));
+  }
+
+  // ── S1 / R1 click ─────────────────────────────────────────────────────────
+  function selectS1Entry(fromIdx, tableRow, entry) {
+    if (entry.isSpecialRow) {
+      pushPane(fromIdx, tableRow.table === 'S'
+        ? { type: 'weapons_s3', tableRow }
+        : { type: 'weapons_r3', tableRow });
+    } else {
+      pushPane(fromIdx, tableRow.table === 'S'
+        ? { type: 'weapons_s2', tableRow, weaponEntry: entry, atkSel: null, dmgSel: null, lastRoll: null }
+        : { type: 'weapons_r2', tableRow, armorEntry: entry, bonusSel: null });
     }
   }
 
-  function handleP1Roll(n) {
-    const row = TABLE_1.find(r => n >= r.rollMin && n <= r.rollMax);
-    if (row) selectP1(row);
+  // ── Push a composite (bonus + base item) description pane ─────────────────
+  function pushCompositePane(fromIdx, baseEntry, atkEntry, dmgEntry) {
+    const atkStr  = atkEntry?.item_name ?? '?';
+    const dmgStr  = dmgEntry?.item_name ?? null;
+    const isArmor = !dmgEntry;
+    const name    = dmgStr
+      ? `${baseEntry?.item_name ?? 'Weapon'} ${atkStr} / ${dmgStr}`
+      : `${baseEntry?.item_name ?? 'Armor'} ${atkStr}`;
+    const newIdx  = fromIdx + 1;
+
+    pushPane(fromIdx, { type: 'description', mode: 'composite', name, baseEntry, atkEntry, dmgEntry, isArmor, loading: true, item: null, error: null });
+
+    const catName = baseEntry?.item_name ?? '';
+    const wikiUrl = buildWikiUrl(catName);
+    fetchItemByName(catName)
+      .then(item => item || fetchItemByName(`${catName} (EM)`))
+      .then(item => updatePane(newIdx, {
+        loading: false,
+        item: item
+          ? { ...item, source_url: item.source_url || wikiUrl }
+          : { name: catName, description: null, source_url: wikiUrl },
+      }))
+      .catch(() => updatePane(newIdx, { loading: false, item: { name: catName, description: null, source_url: wikiUrl } }));
   }
 
-  // ── Pane 2 select ──────────────────────────────────────────────────────────
-  async function selectP2(entry) {
-    clearFrom(3);
-    setP2Sel(entry);
-    const tbl = p1Sel?.table;
+  // ── S2 atk / dmg clicks ───────────────────────────────────────────────────
+  function selectS2Atk(fromIdx, pane, entry) {
+    updatePane(fromIdx, { atkSel: entry });
+    pushCompositePane(fromIdx, pane.weaponEntry, entry, pane.dmgSel);
+  }
+  function selectS2Dmg(fromIdx, pane, entry) {
+    updatePane(fromIdx, { dmgSel: entry });
+    pushCompositePane(fromIdx, pane.weaponEntry, pane.atkSel, entry);
+  }
+  function rollBothS2(fromIdx, pane) {
+    const atkN     = rollDie(20);
+    const dmgN     = rollDie(20);
+    const atkEntry = findRow(S2_ATTACK, atkN);
+    const dmgEntry = findRow(S2_DAMAGE, dmgN);
+    updatePane(fromIdx, { atkSel: atkEntry, dmgSel: dmgEntry, lastRoll: [atkN, dmgN] });
+    if (atkEntry && dmgEntry) pushCompositePane(fromIdx, pane.weaponEntry, atkEntry, dmgEntry);
+  }
 
-    if (tbl === 'S' || tbl === 'R') {
-      if (entry.isSpecialRow) {
-        setP3Mode('special');   // show categories, not fetched list
-      } else {
-        setP3Mode('bonus');     // show bonus columns
-      }
+  // ── R2 bonus click ────────────────────────────────────────────────────────
+  function selectR2Bonus(fromIdx, pane, entry) {
+    updatePane(fromIdx, { bonusSel: entry });
+    pushCompositePane(fromIdx, pane.armorEntry, entry, null);
+  }
+
+  // ── S3 / R3 category click → items pane ───────────────────────────────────
+  function selectSpecialCategory(fromIdx, tableRow, cat) {
+    const tbl    = tableRow?.table ?? 'S';
+    const newIdx = fromIdx + 1;
+    pushPane(fromIdx, { type: 'special_items', tableRow, cat, loading: true, items: [], error: null });
+
+    if (tbl === 'S' && cat.key && S3_DATA[cat.key] !== undefined) {
+      updatePane(newIdx, { loading: false, items: s3DataToItems(cat.key) });
       return;
     }
 
-    // Simple category
-    setP3Mode('detail');
-    setP3ItemLoad(true);
-    try {
-      const item = await fetchEntry(entry);
-      setP3Item(item ?? { name: entry.item_name, description: entry.notes ?? null });
-    } catch (e) {
-      setP3ItemErr(e.message ?? 'Failed to load item');
-    } finally {
-      setP3ItemLoad(false);
-    }
+    const term = cat.name.replace(/[✦*]/g, '').trim();
+    api.searchMagicalItems({ search: term, limit: 200 })
+      .then(res => {
+        const items = (res?.items ?? []).map(it => ({
+          roll_min: null, roll_max: null,
+          item_name: it.name, description: it.description,
+          source_url: it.source_url, _fullItem: it,
+        }));
+        updatePane(newIdx, { loading: false, items });
+      })
+      .catch(e => updatePane(newIdx, { loading: false, error: e.message ?? 'Failed to load' }));
   }
 
-  function handleP2Roll(n) {
-    const entry = findRow(p2Entries.filter(e => !e.isSpecialRow), n)
-               ?? (n >= 975 ? p2Entries.find(e => e.isSpecialRow) : null);
-    if (entry) selectP2(entry);
-  }
-
-  // ── Pane 3 special: select category → load Pane 4 items ───────────────────
-  async function selectP3Category(cat) {
-    clearFrom(4);
-    setP3SpecCat(cat);
-    setP4Mode('cat-items');
-    setP4CatLoad(true);
-
-    const tbl = p1Sel?.table ?? 'S';
-
-    try {
-      // Hardcoded lists from s3_data.js — use key lookup
-      if (tbl === 'S' && cat.key && S3_DATA[cat.key] !== undefined) {
-        setP4CatItems(s3DataToItems(cat.key));
-        setP4CatLoad(false);
-        return;
-      }
-
-      // Fetch from DB by name search
-      const searchTerm = cat.name.replace(/[✦*]/g, '').trim();
-      const res = await api.searchMagicalItems({ search: searchTerm, limit: 200 });
-      let items = (res?.items ?? []).map(it => ({
-        roll_min:    null,
-        roll_max:    null,
-        item_name:   it.name,
-        description: it.description,
-        source_url:  it.source_url,
-        _fullItem:   it,
-      }));
-
-      // Fallback: if fewer than 5 results, also scan full table entries client-side
-      if (items.length < 5) {
-        try {
-          const tblRes = await api.getTableEntries(tbl, { limit: 500 });
-          const keyword = searchTerm.toLowerCase();
-          const existing = new Set(items.map(i => i.item_name));
-          for (const e of (tblRes?.entries ?? [])) {
-            const eName = (e.item_name ?? e.name ?? '').toLowerCase();
-            if (eName.includes(keyword) && !existing.has(e.item_name ?? e.name)) {
-              existing.add(e.item_name ?? e.name);
-              items.push({
-                roll_min:    e.roll_min ?? null,
-                roll_max:    e.roll_max ?? null,
-                item_name:   e.item_name ?? e.name,
-                description: e.description ?? null,
-                source_url:  null,
-                _fullItem:   null,
-              });
-            }
-          }
-        } catch { /* ignore fallback errors */ }
-      }
-
-      setP4CatItems(items);
-    } catch (e) {
-      setP4CatErr(e.message ?? 'Failed to load items');
-    } finally {
-      setP4CatLoad(false);
-    }
-  }
-
-  function handleP3CatRoll(n) {
-    const cats = p1Sel?.table === 'R' ? R3_CATEGORIES : S3_CATS;
-    const cat  = findCat(cats, n);
-    if (cat) selectP3Category(cat);
-  }
-
-  // ── Pane 4 cat-items: click item → drill to detail ─────────────────────────
-  async function selectP4CatItem(item) {
-    setP4SelItem(item);
-    setP4Mode('item-detail');
-    setP4DetailLoad(true);
-    setP4DetailItem(null);
-    setP4DetailErr(null);
-    setP4DetailIsFallback(false);
-
+  // ── Special item click → description pane ─────────────────────────────────
+  function selectSpecialItem(fromIdx, pane, item) {
+    const catName  = (pane.cat?.name ?? '').replace(/[✦*]/g, '').trim();
     const itemName = item.item_name ?? item.name ?? '';
-    const catName  = (p3SpecCat?.name ?? '').replace(/[✦*]/g, '').trim();
+    const tbl      = pane.tableRow?.table ?? 'S';
+    const newIdx   = fromIdx + 1;
 
-    // ── S3 special weapons: fetch description directly from Fandom wiki ──
-    if (p1Sel?.table === 'S') {
-      // Build full display name: DB items already include the category in their
-      // name; s3_data.js items only have the partial name (e.g. "of Attraction").
+    if (tbl === 'S') {
+      // Always use Fandom wiki for S3 special weapons
       const displayName = item._fullItem
         ? (item._fullItem.name ?? itemName).replace(/\s*\(EM\)\s*$/i, '').trim()
         : catName ? `${catName} ${itemName}` : itemName;
 
-      const wikiUrl = getS3WikiUrl(displayName);
-      try {
-        const wikiText = await fetchWikiDescription(displayName);
-        setP4DetailItem({ name: itemName, description: wikiText, source_url: wikiUrl });
-      } catch {
-        setP4DetailItem({ name: itemName, description: null, source_url: wikiUrl });
-      } finally {
-        setP4DetailLoad(false);
-      }
-      return;
-    }
+      pushPane(fromIdx, { type: 'description', mode: 'wiki', displayName, itemName, loading: true, item: null, error: null });
+      fetchWikiDescription(displayName)
+        .then(result => updatePane(newIdx, { loading: false, item: { name: itemName, ...result } }))
+        .catch(() => {
+          const wikiUrl = getS3WikiUrl(displayName);
+          updatePane(newIdx, { loading: false, item: { name: itemName, html: null, wikiUrl, stats: null } });
+        });
+    } else {
+      // R3: use DB lookup
+      const wikiUrl = buildWikiUrl(itemName);
+      pushPane(fromIdx, { type: 'description', mode: 'simple', name: itemName, loading: true, item: null, error: null });
 
-    // ── R3 and all other categories: use DB lookup ───────────────────────
-    const wikiUrl = buildWikiUrl(itemName);
-    try {
-      let fullItem   = item._fullItem ?? null;
-      let isFallback = false;
-
-      if (!fullItem) {
-        // 1. Exact name match
-        fullItem = await fetchItemByNameExact(itemName);
-        // 2. Exact name with "(EM)" suffix
-        if (!fullItem) fullItem = await fetchItemByNameExact(`${itemName} (EM)`);
-        // 3. Fall back to category description
-        if (!fullItem && catName) {
-          fullItem = await fetchItemByNameExact(`${catName} (EM)`);
-          if (!fullItem) fullItem = await fetchItemByNameExact(catName);
-          if (fullItem) isFallback = true;
-        }
-      }
-
-      setP4DetailIsFallback(isFallback);
-      setP4DetailItem(
-        fullItem
-          ? { ...fullItem, source_url: fullItem.source_url || wikiUrl }
-          : { name: itemName, description: null, source_url: wikiUrl }
-      );
-    } catch (e) {
-      setP4DetailErr(e.message ?? 'Failed to load item');
-    } finally {
-      setP4DetailLoad(false);
+      (item._fullItem
+        ? Promise.resolve(item._fullItem)
+        : fetchItemByNameExact(itemName)
+            .then(r => r || fetchItemByNameExact(`${itemName} (EM)`))
+            .then(r => r || (catName ? fetchItemByNameExact(`${catName} (EM)`) : null))
+            .then(r => r || (catName ? fetchItemByNameExact(catName) : null))
+      )
+        .then(fullItem => updatePane(newIdx, {
+          loading: false,
+          item: fullItem
+            ? { ...fullItem, source_url: fullItem.source_url || wikiUrl }
+            : { name: itemName, description: null, source_url: wikiUrl },
+        }))
+        .catch(() => updatePane(newIdx, { loading: false, item: { name: itemName, description: null, source_url: wikiUrl } }));
     }
   }
 
-  function backToCatList() {
-    setP4Mode('cat-items');
-    setP4SelItem(null);
-    setP4DetailItem(null);
-    setP4DetailErr(null);
-  }
-
-  // ── Bonus column clicks ────────────────────────────────────────────────────
-  async function openComposite(baseEntry, atkEntry, dmgEntry) {
-    const atkStr  = atkEntry?.item_name ?? '?';
-    const dmgStr  = dmgEntry?.item_name ?? null;
-    const name    = dmgStr
-      ? `${baseEntry?.item_name ?? 'Weapon'} ${atkStr} / ${dmgStr}`
-      : `${baseEntry?.item_name ?? 'Armor'} ${atkStr}`;
-    setP4Mode('composite');
-    setP4Composite({ name, atk: atkEntry, dmg: dmgEntry });
-    setP4BaseLoad(true);
-    setP4BaseItem(null);
-    setP4BaseErr(null);
-    try {
-      const catName = baseEntry?.item_name ?? '';
-      const wikiUrl = buildWikiUrl(catName);
-      // Try plain name, then with "(EM)" suffix
-      let item = await fetchItemByName(catName);
-      if (!item) item = await fetchItemByName(`${catName} (EM)`);
-      setP4BaseItem(
-        item
-          ? { ...item, source_url: item.source_url || wikiUrl }
-          : { name: catName, description: null, source_url: wikiUrl }
-      );
-    } catch { /* fallback text shown */ }
-    finally { setP4BaseLoad(false); }
-  }
-
-  function selectAtk(entry) {
-    setP3AtkSel(entry);
-    if (p1Sel?.table === 'R') {
-      openComposite(p2Sel, entry, null);
-    } else if (p3DmgSel) {
-      openComposite(p2Sel, entry, p3DmgSel);
-    }
-  }
-
-  function selectDmg(entry) {
-    setP3DmgSel(entry);
-    if (p3AtkSel) openComposite(p2Sel, p3AtkSel, entry);
-  }
-
-  function handleBothRoll() {
-    if (dualRolling) return;
-    setDualRolling(true);
-    setDualResult(null);
-    setTimeout(() => {
-      const atkN     = rollDie(20);
-      const dmgN     = rollDie(20);
-      const atkEntry = findRow(S2_ATTACK, atkN);
-      const dmgEntry = findRow(S2_DAMAGE, dmgN);
-      setP3AtkSel(atkEntry);
-      setP3DmgSel(dmgEntry);
-      setDualResult([atkN, dmgN]);
-      setDualRolling(false);
-      if (atkEntry && dmgEntry) openComposite(p2Sel, atkEntry, dmgEntry);
-    }, 340);
-  }
-
-  // ── Roll Again helpers ─────────────────────────────────────────────────────
-  function rollAgain() {
-    if (!p1Sel || !p2Entries.length) return;
-    const sides = parseSides(p1Sel.dice);
-    const n     = rollDie(sides);
-    const entry = findRow(p2Entries.filter(e => !e.isSpecialRow), n)
-               ?? (n >= 975 ? p2Entries.find(e => e.isSpecialRow) : null);
-    if (entry) selectP2(entry);
-  }
-
-  function rollNewItem() { rollAgain(); }
-
-  function rollAnotherCat() {
-    const cats = p1Sel?.table === 'R' ? R3_CATEGORIES : S3_CATS;
-    const n    = rollDie(1000);
-    const cat  = findCat(cats, n) ?? cats[Math.floor(Math.random() * cats.length)];
-    if (cat) selectP3Category(cat);
-  }
-
-  function rollRandomCatItem() {
-    if (!p4CatItems.length) return;
-    const idx  = Math.floor(Math.random() * p4CatItems.length);
-    selectP4CatItem(p4CatItems[idx]);
-  }
-
-  // ── Derived state ──────────────────────────────────────────────────────────
-  const tbl       = p1Sel?.table ?? '';
-  const isComplex = COMPLEX_TABLES.includes(tbl);
-  const isWeapon  = tbl === 'S';
-  const isArmor   = tbl === 'R';
-  const cats      = isArmor ? R3_CATEGORIES : S3_CATS;
-
-  const showP2 = !!p1Sel;
-  const showP3 = showP2 && (isComplex || p3Mode !== null);
-  const showP4 = isComplex && (p3Mode === 'bonus' || p3Mode === 'special');
-
-  const p4HasContent = p4Mode !== null;
-
-  const rightmost = (showP4 && p4HasContent) ? 4
-                  : (showP3 && p3Mode)        ? 3
-                  : showP2                    ? 2
-                  :                             1;
-
-  function paneClass(num) {
-    const visible    = num === 1 ? true : num === 2 ? showP2 : num === 3 ? showP3 : num === 4 ? showP4 : false;
-    const detailMode = p3Mode === 'detail' && num === 3;
-    const isFixed    = visible && num <= 3 && !detailMode;
-    const isExpand   = visible && (detailMode || num === 4);
-    const mobileVis  = rightmost === num;
-    return [
-      'mi-pane',
-      !visible  ? 'mi-pane--empty'          : '',
-      isFixed   ? 'mi-pane--dd-fixed'       : '',
-      isExpand  ? 'mi-pane--dd-expand'      : '',
-      mobileVis ? 'mi-pane--mobile-visible' : '',
-    ].filter(Boolean).join(' ');
-  }
-
-  const bonusAtkEntries = isArmor ? R2_BONUS : S2_ATTACK;
-  const bonusDmgEntries = S2_DAMAGE;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <div className="mi-drilldown mi-drilldown--warm">
-
-      {/* ══ PANE 1 — Table 1 Overview ══════════════════════════════════════ */}
-      <div className={paneClass(1)}>
-        <PaneHeader
-          title="Table 1 — Overview"
-          subtitle="Roll d100"
-          extra={<DiceRoller sides={100} label="d100" onRoll={handleP1Roll} />}
-        />
-        <div className="mi-pane-body">
-          {TABLE_1.map(row => (
-            <div
-              key={row.table}
-              className={['mi-table-row', p1Sel?.table === row.table ? 'mi-table-row--selected' : ''].filter(Boolean).join(' ')}
-              onClick={() => selectP1(row)}
-              role="button" tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && selectP1(row)}
-            >
-              <span className="mi-row-range">{row.label}</span>
-              <span className="mi-row-name">{row.category}</span>
-              <span className="mi-row-arrow" style={{ fontSize: 9 }}>Tbl {row.table}</span>
-            </div>
-          ))}
+  // ── Render description pane ────────────────────────────────────────────────
+  function renderDescriptionPane(pane) {
+    if (pane.loading) {
+      return (
+        <div className="mi-pane-loading" style={{ flex: 1, flexDirection: 'column', padding: 24 }}>
+          <div className="mi-spinner" />Loading…
         </div>
-      </div>
+      );
+    }
 
-      {/* ══ PANE 2 — Category Table ════════════════════════════════════════ */}
-      <div className={paneClass(2)}>
-        {!showP2 ? (
-          <div className="mi-pane-placeholder">
-            <div className="mi-pane-placeholder-icon">📜</div>
-            <div className="mi-pane-placeholder-text">Select a category<br />from Table 1</div>
-          </div>
-        ) : (
-          <>
-            <PaneHeader
-              title={isWeapon ? 'Table S1 — Generic Magical Weapons'
-                    : isArmor ? 'Table R1 — Generic Magical Armor'
-                    : `Table ${tbl} — ${p1Sel?.category}`}
-              subtitle={p1Sel?.dice}
-              extra={!p2Loading && p2Entries.length > 0 && (
-                <DiceRoller sides={parseSides(p1Sel.dice)} label={p1Sel.dice} onRoll={handleP2Roll} />
-              )}
-            />
-            <div className="mi-pane-body">
-              {p2Loading ? (
-                <div className="mi-pane-loading"><div className="mi-spinner" />Loading…</div>
-              ) : p2Error ? (
-                <div className="mi-pane-empty">{p2Error}</div>
-              ) : p2Entries.length === 0 ? (
-                <div className="mi-pane-empty">No entries. Run the import script to populate.</div>
-              ) : (
-                p2Entries.map((entry, i) => (
-                  <div key={`p2-${i}`}>
-                    {entry.isSpecialRow && (
-                      <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />
-                    )}
-                    <TableRow
-                      entry={entry}
-                      selected={
-                        entry.isSpecialRow
-                          ? !!p2Sel?.isSpecialRow
-                          : p2Sel?.roll_min === entry.roll_min && p2Sel?.item_name === entry.item_name
-                      }
-                      dice={p1Sel?.dice}
-                      onClick={() => selectP2(entry)}
-                    />
-                  </div>
-                ))
-              )}
-            </div>
-          </>
-        )}
-      </div>
+    const { item, mode } = pane;
 
-      {/* ══ PANE 3 ═════════════════════════════════════════════════════════ */}
-      <div className={paneClass(3)}>
-        {!p3Mode ? (
-          <div className="mi-pane-placeholder">
-            <div className="mi-pane-placeholder-icon">{isComplex ? '⚔️' : '📖'}</div>
-            <div className="mi-pane-placeholder-text">
-              {isComplex ? 'Select a weapon or armor\nto continue' : 'Select an item\nto view its description'}
-            </div>
-          </div>
+    if (mode === 'wiki') {
+      const wikiUrl = item?.wikiUrl ?? getS3WikiUrl(pane.displayName);
+      return (
+        <>
+          <PaneHeader title={pane.itemName ?? '—'} subtitle="Wiki Description" />
+          <div className="mi-detail-body">
+            <h2 className="mi-result-name">{pane.itemName}</h2>
 
-        ) : p3Mode === 'detail' ? (
-          <>
-            <PaneHeader
-              title={p2Sel?.item_name ?? 'Item Detail'}
-              subtitle="Description"
-              extra={<button className="mi-dice-btn" onClick={rollAgain}>🎲 Roll Again</button>}
-            />
-            <DetailPanel item={p3Item} loading={p3ItemLoad} error={p3ItemErr} />
-          </>
-
-        ) : p3Mode === 'bonus' ? (
-          <>
-            <PaneHeader
-              title={isWeapon ? 'Table S2 — Attack & Damage Adjustments' : 'Table R2 — Armor Bonus'}
-              subtitle={`${isArmor ? 'Armor' : 'Weapon'}: ${p2Sel?.item_name ?? '—'}`}
-              extra={isWeapon ? (
-                <button
-                  className={`mi-dice-btn${dualRolling ? ' mi-dice-btn--rolling' : ''}`}
-                  onClick={handleBothRoll}
-                  disabled={dualRolling}
-                >
-                  {dualRolling ? '⏳' : '🎲'} Roll Both
-                  {dualResult && !dualRolling && (
-                    <span className="mi-roll-result" style={{ fontSize: 11, marginLeft: 4 }}>
-                      {dualResult[0]}/{dualResult[1]}
-                    </span>
-                  )}
-                </button>
-              ) : null}
-            />
-            <div className="mi-bonus-cols">
-              <div className="mi-bonus-col">
-                <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
-                  <span>{isArmor ? 'AC Bonus' : 'Attack Bonus'}</span>
-                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(bonusAtkEntries, n); if (e) selectAtk(e); }} />
-                </div>
-                <div className="mi-bonus-col-body">
-                  {bonusAtkEntries.map((entry, i) => (
-                    <BonusRow
-                      key={`atk-${i}`}
-                      entry={entry}
-                      selected={p3AtkSel?.roll_min === entry.roll_min && p3AtkSel?.item_name === entry.item_name}
-                      onClick={() => selectAtk(entry)}
-                    />
-                  ))}
-                </div>
+            {item?.stats && (item.stats.type || item.stats.xp || item.stats.value) && (
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: '6px 0 12px', borderBottom: '1px solid rgba(212,168,64,0.2)', marginBottom: 10, fontSize: 12, color: '#c8a84b' }}>
+                {item.stats.type  && <span><strong>Type:</strong> {item.stats.type}</span>}
+                {item.stats.xp    && <span><strong>XP:</strong> {item.stats.xp}</span>}
+                {item.stats.value && <span><strong>Value:</strong> {item.stats.value}</span>}
               </div>
-              {isWeapon && (
-                <div className="mi-bonus-col">
-                  <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
-                    <span>Damage Bonus</span>
-                    <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(bonusDmgEntries, n); if (e) selectDmg(e); }} />
-                  </div>
-                  <div className="mi-bonus-col-body">
-                    {bonusDmgEntries.map((entry, i) => (
-                      <BonusRow
-                        key={`dmg-${i}`}
-                        entry={entry}
-                        selected={p3DmgSel?.roll_min === entry.roll_min && p3DmgSel?.item_name === entry.item_name}
-                        onClick={() => selectDmg(entry)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
+            )}
 
-        ) : p3Mode === 'special' ? (
+            <div className="mi-detail-divider"><span className="mi-detail-divider-label">Description</span></div>
+
+            {item?.html ? (
+              <div className="mi-detail-text" dangerouslySetInnerHTML={{ __html: item.html }} />
+            ) : (
+              <div className="mi-detail-text" style={{ marginTop: 12, fontStyle: 'italic', opacity: 0.45 }}>
+                No description available on the wiki.
+              </div>
+            )}
+
+            {wikiUrl && (
+              <a className="mi-detail-source-link" href={wikiUrl} target="_blank" rel="noopener noreferrer">
+                📖 View on Fandom Wiki ↗
+              </a>
+            )}
+          </div>
+        </>
+      );
+    }
+
+    if (mode === 'composite') {
+      return (
+        <>
+          <PaneHeader title="Result" />
+          <DetailPanel
+            item={item}
+            loading={false}
+            error={pane.error}
+            compositeName={pane.name}
+            compositeAtk={pane.atkEntry}
+            compositeDmg={pane.dmgEntry}
+            fallback={
+              pane.isArmor
+                ? `A magically enhanced ${pane.baseEntry?.item_name ?? 'armor'}. Apply the listed bonus to armor class.`
+                : `A magically enhanced ${pane.baseEntry?.item_name ?? 'weapon'}. Apply the listed bonuses to attack and damage rolls.`
+            }
+            note={!pane.isArmor ? 'For a specific named weapon variant, roll on Table S3 — Special Weapons.' : null}
+          />
+        </>
+      );
+    }
+
+    // simple
+    return (
+      <>
+        <PaneHeader title={item?.name ?? pane.name ?? 'Item Detail'} subtitle="Description" />
+        <DetailPanel item={item} loading={false} error={pane.error}
+          fallback="No description available — see Fandom Wiki for details." />
+      </>
+    );
+  }
+
+  // ── Render a single pane by type ───────────────────────────────────────────
+  function renderPaneContent(pane, i) {
+    const next = panes[i + 1];
+
+    switch (pane.type) {
+
+      case 'overview':
+        return (
           <>
             <PaneHeader
-              title={isWeapon ? 'Table S3 — Special Weapons' : 'Table R3 — Special Armor'}
-              subtitle="Select a weapon type"
-              extra={
-                <DiceRoller sides={1000} label="d1000" onRoll={handleP3CatRoll} />
-              }
+              title="Table 1 — Overview"
+              subtitle="Roll d100"
+              extra={<DiceRoller sides={100} label="d100" onRoll={n => {
+                const row = TABLE_1.find(r => n >= r.rollMin && n <= r.rollMax);
+                if (row) selectTable1Row(i, row);
+              }} />}
             />
             <div className="mi-pane-body">
-              {cats.map((cat, i) => {
-                const isSpecCat  = !!cat.special;
-                const prevIsSpec = !!cats[i - 1]?.special;
-                const showSep    = i > 0 && isSpecCat !== prevIsSpec;
+              {TABLE_1.map(row => {
+                const isSelected = next?.tableRow?.table === row.table;
                 return (
-                  <div key={`cat-${i}`}>
-                    {showSep && (
-                      <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />
-                    )}
-                    <CatRow
-                      cat={cat}
-                      selected={p3SpecCat?.name === cat.name}
-                      onClick={() => selectP3Category(cat)}
-                    />
+                  <div key={row.table}
+                    className={['mi-table-row', isSelected ? 'mi-table-row--selected' : ''].filter(Boolean).join(' ')}
+                    onClick={() => selectTable1Row(i, row)}
+                    role="button" tabIndex={0}
+                    onKeyDown={e => e.key === 'Enter' && selectTable1Row(i, row)}
+                  >
+                    <span className="mi-row-range">{row.label}</span>
+                    <span className="mi-row-name">{row.category}</span>
+                    <span className="mi-row-arrow" style={{ fontSize: 9 }}>Tbl {row.table}</span>
                   </div>
                 );
               })}
             </div>
           </>
+        );
 
-        ) : null}
-      </div>
-
-      {/* ══ PANE 4 — Result (complex R/S only) ════════════════════════════ */}
-      <div className={paneClass(4)}>
-        {!p4HasContent ? (
-          <div className="mi-pane-placeholder">
-            <div className="mi-pane-placeholder-icon">⚗️</div>
-            <div className="mi-pane-placeholder-text">
-              {p3Mode === 'bonus'
-                ? (isWeapon
-                    ? (!p3AtkSel ? 'Select attack bonus\nto begin' : 'Select damage bonus\nto see result')
-                    : 'Select AC bonus\nto see result')
-                : 'Select a weapon type\nto browse special items'}
-            </div>
-          </div>
-
-        ) : p4Mode === 'composite' ? (
-          <>
-            <PaneHeader title="Result" />
-            <DetailPanel
-              item={p4BaseItem}
-              loading={p4BaseLoad}
-              error={p4BaseErr}
-              compositeName={p4Composite?.name}
-              compositeAtk={p4Composite?.atk}
-              compositeDmg={p4Composite?.dmg}
-              fallback={
-                isWeapon
-                  ? `A magically enhanced ${p2Sel?.item_name ?? 'weapon'}. Apply the listed bonuses to attack and damage rolls.`
-                  : `A magically enhanced ${p2Sel?.item_name ?? 'armor'}. Apply the listed bonus to armor class.`
-              }
-              note={isWeapon
-                ? 'For a specific named weapon variant, roll on Table S3 — Special Weapons.'
-                : null}
-            >
-              <div className="mi-detail-roll-again">
-                <button className="mi-dice-btn" onClick={rollAgain}>🎲 Roll Again</button>
-                <button className="mi-dice-btn" onClick={rollNewItem}>🎲 New {isWeapon ? 'Weapon' : 'Armor'}</button>
-              </div>
-            </DetailPanel>
-          </>
-
-        ) : p4Mode === 'cat-items' ? (
+      case 'table':
+        return (
           <>
             <PaneHeader
-              title={`${p3SpecCat?.name ?? 'Special'} — Items`}
-              subtitle={(() => {
-                const cnt = p3SpecCat?.count ?? p4CatItems.length;
-                return `${cnt} item${cnt !== 1 ? 's' : ''}`;
-              })()}
+              title={`Table ${pane.tableRow.table} — ${pane.tableRow.category}`}
+              subtitle={pane.tableRow.dice}
+              extra={!pane.loading && pane.entries.length > 0 && (
+                <DiceRoller sides={parseSides(pane.tableRow.dice)} label={pane.tableRow.dice}
+                  onRoll={n => { const e = findRow(pane.entries, n); if (e) selectTableEntry(i, e); }} />
+              )}
+            />
+            <div className="mi-pane-body">
+              {pane.loading ? (
+                <div className="mi-pane-loading"><div className="mi-spinner" />Loading…</div>
+              ) : pane.error ? (
+                <div className="mi-pane-empty">{pane.error}</div>
+              ) : pane.entries.length === 0 ? (
+                <div className="mi-pane-empty">No entries. Run the import script to populate.</div>
+              ) : pane.entries.map((entry, j) => {
+                const isSelected = next?.mode === 'simple' && next?.name === (entry.item_name ?? entry.name);
+                return (
+                  <TableRow key={j} entry={entry} selected={isSelected}
+                    dice={pane.tableRow.dice} onClick={() => selectTableEntry(i, entry)} />
+                );
+              })}
+            </div>
+          </>
+        );
+
+      case 'weapons_s1':
+        return (
+          <>
+            <PaneHeader
+              title="Table S1 — Generic Magical Weapons" subtitle="Roll d1000"
+              extra={<DiceRoller sides={1000} label="d1000" onRoll={n => {
+                const e = findRow(S1_WEAPONS.filter(x => !x.isSpecialRow), n)
+                       ?? (n >= 975 ? S1_WEAPONS.find(x => x.isSpecialRow) : null);
+                if (e) selectS1Entry(i, pane.tableRow, e);
+              }} />}
+            />
+            <div className="mi-pane-body">
+              {S1_WEAPONS.map((entry, j) => {
+                const isSelected = entry.isSpecialRow
+                  ? next?.type === 'weapons_s3'
+                  : next?.type === 'weapons_s2' && next.weaponEntry?.roll_min === entry.roll_min && next.weaponEntry?.item_name === entry.item_name;
+                return (
+                  <div key={j}>
+                    {entry.isSpecialRow && <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />}
+                    <TableRow entry={entry} selected={isSelected} dice="d1000"
+                      onClick={() => selectS1Entry(i, pane.tableRow, entry)} />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+
+      case 'weapons_r1':
+        return (
+          <>
+            <PaneHeader
+              title="Table R1 — Generic Magical Armor" subtitle="Roll d1000"
+              extra={<DiceRoller sides={1000} label="d1000" onRoll={n => {
+                const e = findRow(R1_ARMOR.filter(x => !x.isSpecialRow), n)
+                       ?? (n >= 975 ? R1_ARMOR.find(x => x.isSpecialRow) : null);
+                if (e) selectS1Entry(i, pane.tableRow, e);
+              }} />}
+            />
+            <div className="mi-pane-body">
+              {R1_ARMOR.map((entry, j) => {
+                const isSelected = entry.isSpecialRow
+                  ? next?.type === 'weapons_r3'
+                  : next?.type === 'weapons_r2' && next.armorEntry?.roll_min === entry.roll_min && next.armorEntry?.item_name === entry.item_name;
+                return (
+                  <div key={j}>
+                    {entry.isSpecialRow && <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />}
+                    <TableRow entry={entry} selected={isSelected} dice="d1000"
+                      onClick={() => selectS1Entry(i, pane.tableRow, entry)} />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+
+      case 'weapons_s2':
+        return (
+          <>
+            <PaneHeader
+              title="Table S2 — Attack & Damage Adjustments"
+              subtitle={`Weapon: ${pane.weaponEntry?.item_name ?? '—'}`}
+              extra={
+                <button className="mi-dice-btn" onClick={() => rollBothS2(i, pane)}>
+                  🎲 Roll Both
+                  {pane.lastRoll && (
+                    <span className="mi-roll-result" style={{ fontSize: 11, marginLeft: 4 }}>
+                      {pane.lastRoll[0]}/{pane.lastRoll[1]}
+                    </span>
+                  )}
+                </button>
+              }
+            />
+            <div className="mi-bonus-cols">
+              <div className="mi-bonus-col">
+                <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
+                  <span>Attack Bonus</span>
+                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(S2_ATTACK, n); if (e) selectS2Atk(i, pane, e); }} />
+                </div>
+                <div className="mi-bonus-col-body">
+                  {S2_ATTACK.map((entry, j) => (
+                    <BonusRow key={j} entry={entry}
+                      selected={pane.atkSel?.roll_min === entry.roll_min && pane.atkSel?.item_name === entry.item_name}
+                      onClick={() => selectS2Atk(i, pane, entry)} />
+                  ))}
+                </div>
+              </div>
+              <div className="mi-bonus-col">
+                <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
+                  <span>Damage Bonus</span>
+                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(S2_DAMAGE, n); if (e) selectS2Dmg(i, pane, e); }} />
+                </div>
+                <div className="mi-bonus-col-body">
+                  {S2_DAMAGE.map((entry, j) => (
+                    <BonusRow key={j} entry={entry}
+                      selected={pane.dmgSel?.roll_min === entry.roll_min && pane.dmgSel?.item_name === entry.item_name}
+                      onClick={() => selectS2Dmg(i, pane, entry)} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        );
+
+      case 'weapons_r2':
+        return (
+          <>
+            <PaneHeader
+              title="Table R2 — Armor Bonus"
+              subtitle={`Armor: ${pane.armorEntry?.item_name ?? '—'}`}
+            />
+            <div className="mi-bonus-cols">
+              <div className="mi-bonus-col">
+                <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
+                  <span>AC Bonus</span>
+                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(R2_BONUS, n); if (e) selectR2Bonus(i, pane, e); }} />
+                </div>
+                <div className="mi-bonus-col-body">
+                  {R2_BONUS.map((entry, j) => (
+                    <BonusRow key={j} entry={entry}
+                      selected={pane.bonusSel?.roll_min === entry.roll_min && pane.bonusSel?.item_name === entry.item_name}
+                      onClick={() => selectR2Bonus(i, pane, entry)} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        );
+
+      case 'weapons_s3':
+        return (
+          <>
+            <PaneHeader
+              title="Table S3 — Special Weapons" subtitle="Select a weapon type"
+              extra={<DiceRoller sides={1000} label="d1000" onRoll={n => {
+                const cat = findCat(S3_CATS, n);
+                if (cat) selectSpecialCategory(i, pane.tableRow, cat);
+              }} />}
+            />
+            <div className="mi-pane-body">
+              {S3_CATS.map((cat, j) => {
+                const isSelected = next?.type === 'special_items' && next.cat?.name === cat.name;
+                const prevIsSpec = !!S3_CATS[j - 1]?.special;
+                const showSep    = j > 0 && !!cat.special !== prevIsSpec;
+                return (
+                  <div key={j}>
+                    {showSep && <div style={{ borderTop: '1px solid rgba(212,168,64,0.25)', margin: '4px 0' }} />}
+                    <CatRow cat={cat} selected={isSelected} onClick={() => selectSpecialCategory(i, pane.tableRow, cat)} />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+
+      case 'weapons_r3':
+        return (
+          <>
+            <PaneHeader
+              title="Table R3 — Special Armor" subtitle="Select an armor type"
+              extra={<DiceRoller sides={1000} label="d1000" onRoll={n => {
+                const cat = findCat(R3_CATEGORIES, n);
+                if (cat) selectSpecialCategory(i, pane.tableRow, cat);
+              }} />}
+            />
+            <div className="mi-pane-body">
+              {R3_CATEGORIES.map((cat, j) => {
+                const isSelected = next?.type === 'special_items' && next.cat?.name === cat.name;
+                return <CatRow key={j} cat={cat} selected={isSelected} onClick={() => selectSpecialCategory(i, pane.tableRow, cat)} />;
+              })}
+            </div>
+          </>
+        );
+
+      case 'special_items': {
+        const cnt = pane.cat?.count ?? pane.items?.length ?? 0;
+        return (
+          <>
+            <PaneHeader
+              title={`${pane.cat?.name ?? 'Special'} — Items`}
+              subtitle={`${cnt} item${cnt !== 1 ? 's' : ''}`}
               extra={
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="mi-dice-btn" onClick={rollRandomCatItem} style={{ fontSize: 10 }}
-                    disabled={p4CatLoad || p4CatItems.length === 0}>
-                    🎲 Random Item
-                  </button>
-                  <button className="mi-dice-btn" onClick={rollAnotherCat} style={{ fontSize: 10 }}>
-                    🎲 Random Category
+                  <button className="mi-dice-btn" style={{ fontSize: 10 }}
+                    disabled={pane.loading || !pane.items?.length}
+                    onClick={() => {
+                      const idx = Math.floor(Math.random() * pane.items.length);
+                      selectSpecialItem(i, pane, pane.items[idx]);
+                    }}>
+                    🎲 Random
                   </button>
                 </div>
               }
             />
-            {p4CatLoad ? (
+            {pane.loading ? (
               <div className="mi-pane-loading" style={{ flex: 1 }}><div className="mi-spinner" />Loading…</div>
-            ) : p4CatErr ? (
-              <div className="mi-pane-empty" style={{ flex: 1 }}>{p4CatErr}</div>
-            ) : p4CatItems.length === 0 ? (
-              <div className="mi-pane-empty" style={{ flex: 1 }}>No items found in the database for this category.</div>
+            ) : pane.error ? (
+              <div className="mi-pane-empty">{pane.error}</div>
+            ) : !pane.items?.length ? (
+              <div className="mi-pane-empty">No items found for this category.</div>
             ) : (
               <div className="mi-pane-body">
-                {p4CatItems.map((item, i) => (
-                  <ItemListRow
-                    key={`cat-item-${i}`}
-                    item={item}
-                    selected={p4SelItem === item}
-                    onClick={() => selectP4CatItem(item)}
-                  />
-                ))}
+                {pane.items.map((item, j) => {
+                  const isSelected = next?.type === 'description' && next.itemName === item.item_name;
+                  return (
+                    <ItemListRow key={j} item={item} selected={isSelected}
+                      onClick={() => selectSpecialItem(i, pane, item)} />
+                  );
+                })}
               </div>
             )}
           </>
+        );
+      }
 
-        ) : p4Mode === 'item-detail' ? (
-          <>
-            <PaneHeader
-              title={p4SelItem?.item_name ?? p4DetailItem?.name ?? 'Item Detail'}
-              extra={
-                <button className="mi-dice-btn" onClick={backToCatList} style={{ fontSize: 10 }}>
-                  ← Back to {p3SpecCat?.name}
-                </button>
-              }
-            />
-            <DetailPanel
-              item={p4DetailItem}
-              loading={p4DetailLoad}
-              error={p4DetailErr}
-              fallback="No description available — see Fandom Wiki for details."
-              note={p4DetailIsFallback
-                ? `Specific item description not available — showing category description. See wiki for "${p4SelItem?.item_name ?? ''}" specifically.`
-                : null}
-            />
-          </>
+      case 'description':
+        return renderDescriptionPane(pane);
 
-        ) : null}
-      </div>
+      default:
+        return null;
+    }
+  }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+  return (
+    <div
+      ref={containerRef}
+      className="mi-drilldown mi-drilldown--warm"
+      style={{ display: 'flex', flexDirection: 'row', overflowX: 'auto', height: '100%' }}
+    >
+      {panes.map((pane, i) => {
+        const isDesc = pane.type === 'description';
+        return (
+          <div
+            key={i}
+            className="mi-pane mi-pane--dd-fixed"
+            style={isDesc
+              ? { flex: 1, minWidth: 350, height: '100%', overflowY: 'auto', borderRight: '1px solid #3a2a12', display: 'flex', flexDirection: 'column' }
+              : { minWidth: 240, maxWidth: 320, height: '100%', overflowY: 'auto', borderRight: '1px solid #3a2a12', display: 'flex', flexDirection: 'column', flexShrink: 0 }
+            }
+          >
+            {renderPaneContent(pane, i)}
+          </div>
+        );
+      })}
     </div>
   );
 }
