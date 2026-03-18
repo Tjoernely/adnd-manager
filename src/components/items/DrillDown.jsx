@@ -388,7 +388,7 @@ function ItemListRow({ item, selected, onClick }) {
         className="mi-row-name"
         style={isSpecial ? { fontWeight: 700, color: '#d4a840' } : undefined}
       >{name}</span>
-      {!!(item.description || item.fallback_description) && (
+      {!!(item.description_preview || item.description || item.fallback_description) && (
         <span className="mi-row-dot" title="Has description">●</span>
       )}
       <span className="mi-row-arrow">›</span>
@@ -408,7 +408,7 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
 
   const isCursed    = compositeAtk?.cursed || compositeDmg?.cursed || !!item?.cursed;
   const displayName = compositeName ?? item?.name ?? '—';
-  const description = item?.description || item?.fallback_description || null;
+  const description = item?.description_preview || item?.description || item?.fallback_description || null;
 
   return (
     <div className="mi-detail-body">
