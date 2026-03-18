@@ -446,10 +446,11 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
         )}
       </div>
 
-      {item && (item.charges || item.value_gp || item.alignment || item.intelligence) && (
+      {item && (item.charges || item.value_gp || item.xp_value || item.alignment || item.intelligence) && (
         <div className="mi-detail-stat-grid">
           {item.charges      && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Charges:</span> <span className="mi-detail-stat-value">{item.charges}</span></div>}
           {item.value_gp     && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Value:</span> <span className="mi-detail-stat-value">{item.value_gp.toLocaleString()} gp</span></div>}
+          {item.xp_value     && <div className="mi-detail-stat"><span className="mi-detail-stat-label">XP Value:</span> <span className="mi-detail-stat-value">{item.xp_value.toLocaleString()} xp</span></div>}
           {item.alignment    && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Alignment:</span> <span className="mi-detail-stat-value">{item.alignment}</span></div>}
           {item.intelligence && <div className="mi-detail-stat"><span className="mi-detail-stat-label">Intelligence:</span> <span className="mi-detail-stat-value">{item.intelligence}</span></div>}
         </div>
@@ -718,9 +719,13 @@ export default function DrillDown() {
     const { item, mode } = pane;
 
     if (mode === 'wiki') {
-      const wikiUrl = item?.wikiUrl ?? getS3WikiUrl(pane.displayName);
-      const stats   = item?.stats ?? {};
-      const hasStats = stats.type || stats.xp || stats.value;
+      const wikiUrl = item?.wikiUrl ?? item?.source_url ?? getS3WikiUrl(pane.displayName);
+      const stats = {
+        type:  item?.category || '',
+        value: item?.value_gp ? item.value_gp.toLocaleString() + ' gp' : '—',
+        xp:    item?.xp_value ? item.xp_value.toLocaleString() + ' xp' : '—',
+      };
+      const hasStats = !!(item?.category || item?.value_gp != null || item?.xp_value != null);
       return (
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 0 }}>
           {/* Large gold item name */}

@@ -463,7 +463,7 @@ async function fetchWikitextWithFallback(candidates) {
 
 // ── Parse wikitext → plain-text description + stat fields ────────────────────
 function parseWikitext(raw) {
-  if (!raw) return { description: null, valueGp: null };
+  if (!raw) return { description: null, valueGp: null, xpValue: null };
 
   const stats = {};
   const templateMatch = raw.match(/\{\{Item([\s\S]*?)\n\}\}/);
@@ -492,20 +492,28 @@ function parseWikitext(raw) {
     if (m) valueGp = parseInt(m[0], 10);
   }
 
-  return { description: body || null, valueGp };
+  let xpValue = null;
+  const rawXp = stats.xp ?? null;
+  if (rawXp && rawXp !== '—' && rawXp !== '-') {
+    const m = rawXp.match(/\d+/);
+    if (m) xpValue = parseInt(m[0], 10);
+  }
+
+  return { description: body || null, valueGp, xpValue };
 }
 
 // ── DB upsert ─────────────────────────────────────────────────────────────────
-async function upsertItem({ displayName, description, sourceUrl, valueGp }) {
+async function upsertItem({ displayName, description, sourceUrl, valueGp, xpValue }) {
   await getPool().query(
-    `INSERT INTO magical_items (name, category, description, source_url, table_letter, value_gp)
-     VALUES ($1, 'weapon', $2, $3, 'S', $4)
+    `INSERT INTO magical_items (name, category, description, source_url, table_letter, value_gp, xp_value)
+     VALUES ($1, 'weapon', $2, $3, 'S', $4, $5)
      ON CONFLICT (name, category) DO UPDATE SET
        description = EXCLUDED.description,
-       source_url  = EXCLUDED.source_url
+       source_url  = EXCLUDED.source_url,
+       xp_value    = COALESCE(EXCLUDED.xp_value, magical_items.xp_value)
      WHERE magical_items.description IS NULL
         OR magical_items.description = ''`,
-    [displayName, description, sourceUrl, valueGp],
+    [displayName, description, sourceUrl, valueGp, xpValue],
   );
 }
 
@@ -577,7 +585,7 @@ async function main() {
     if (isAltHit) altHit++;
 
     // ── Parse ────────────────────────────────────────────────────────────────
-    const { description, valueGp } = parseWikitext(raw);
+    const { description, valueGp, xpValue } = parseWikitext(raw);
     if (!description) noDesc++;
 
     const sourceUrl = toWikiUrl(foundTitle);
@@ -593,7 +601,7 @@ async function main() {
     } else {
       try {
         // Always store under the canonical display name ("Abaris' Arrow")
-        await upsertItem({ displayName, description, sourceUrl, valueGp });
+        await upsertItem({ displayName, description, sourceUrl, valueGp, xpValue });
 
         // Also store under the wiki page base name if it differs
         // e.g. "Abaris's Arrow" (from wiki) ≠ "Abaris' Arrow" (display)
@@ -604,6 +612,7 @@ async function main() {
             description,
             sourceUrl,
             valueGp,
+            xpValue,
           });
         }
 

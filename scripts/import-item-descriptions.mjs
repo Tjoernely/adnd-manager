@@ -398,7 +398,14 @@ function parseWikitext(raw) {
     if (m) valueGp = parseInt(m[0], 10);
   }
 
-  return { description: body || null, valueGp };
+  let xpValue = null;
+  const rawXp = stats.xp ?? null;
+  if (rawXp && rawXp !== '—' && rawXp !== '-') {
+    const m = rawXp.match(/\d+/);
+    if (m) xpValue = parseInt(m[0], 10);
+  }
+
+  return { description: body || null, valueGp, xpValue };
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -444,17 +451,18 @@ async function fetchExistingNames() {
 }
 
 /** Upsert: insert new item or fill in missing description on existing row. */
-async function upsertItem({ name, category, tableLetter, description, sourceUrl, valueGp }) {
+async function upsertItem({ name, category, tableLetter, description, sourceUrl, valueGp, xpValue }) {
   await getPool().query(
     `INSERT INTO magical_items
-       (name, category, table_letter, description, source_url, value_gp)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (name, category, table_letter, description, source_url, value_gp, xp_value)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (name, category) DO UPDATE SET
        description = EXCLUDED.description,
-       source_url  = COALESCE(EXCLUDED.source_url, magical_items.source_url)
+       source_url  = COALESCE(EXCLUDED.source_url, magical_items.source_url),
+       xp_value    = COALESCE(EXCLUDED.xp_value, magical_items.xp_value)
      WHERE magical_items.description IS NULL
         OR magical_items.description = ''`,
-    [name, category, tableLetter, description, sourceUrl, valueGp],
+    [name, category, tableLetter, description, sourceUrl, valueGp, xpValue],
   );
 }
 
@@ -488,7 +496,7 @@ async function processItem({ name, category, table_letter: tableLetter, source_u
     return;
   }
 
-  const { description, valueGp } = parseWikitext(raw);
+  const { description, valueGp, xpValue } = parseWikitext(raw);
   if (!description) stats.noDesc++;
 
   const resolvedUrl = toWikiUrl(foundTitle);
@@ -504,7 +512,7 @@ async function processItem({ name, category, table_letter: tableLetter, source_u
   }
 
   try {
-    await upsertItem({ name, category, tableLetter, description, sourceUrl: resolvedUrl, valueGp });
+    await upsertItem({ name, category, tableLetter, description, sourceUrl: resolvedUrl, valueGp, xpValue });
     stats.success++;
   } catch (err) {
     process.stderr.write(`\n  ✗ DB "${name}": ${err.message}`);
@@ -610,7 +618,7 @@ async function main() {
             continue;
           }
 
-          const { description, valueGp } = parseWikitext(raw);
+          const { description, valueGp, xpValue } = parseWikitext(raw);
           if (!description) stats.noDesc++;
 
           if (DRY_RUN) {
@@ -628,6 +636,7 @@ async function main() {
                 description,
                 sourceUrl:   toWikiUrl(foundTitle),
                 valueGp,
+                xpValue,
               });
               existing.add(title.toLowerCase());
               stats.discovered++;

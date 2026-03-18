@@ -296,7 +296,7 @@ router.get('/', async (req, res) => {
 
     const rows = await db.all(
       `SELECT id, name, category, subcategory, source_url, cursed, rarity,
-              table_letter, charges, alignment, classes, value_gp, intelligence, ego,
+              table_letter, charges, alignment, classes, value_gp, xp_value, intelligence, ego,
               LEFT(description, 300) AS description_preview,
               LEFT(powers, 200) AS powers_preview,
               COALESCE(
