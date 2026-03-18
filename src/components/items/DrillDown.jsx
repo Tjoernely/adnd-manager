@@ -3,7 +3,7 @@ import { api } from '../../api/client.js';
 import DiceRoller from './DiceRoller.jsx';
 import './Items.css';
 import { S3_DATA, S3_CATEGORIES as S3_CATS } from './s3_data.js';
-import { S3_WIKI_LINKS, getS3WikiUrl } from './s3_wiki_links.js';
+import { buildS3WikiTitle, getS3WikiUrl } from './s3_wiki_links.js';
 
 // ── Table 1 master overview ────────────────────────────────────────────────
 const TABLE_1 = [
@@ -133,18 +133,12 @@ function parseS3Roll(rollStr) {
   const n = parseInt(raw, 10);
   return { roll_min: n, roll_max: n };
 }
-// Build full item name: "of X" → "{Cat} of X", else "{name} {Cat}"
-function buildS3FullName(catKey, partialName) {
-  const norm = String(partialName).replace(/[\u2018\u2019\u02BC]/g, "'");
-  const lcN  = norm.toLowerCase();
-  return (lcN.startsWith('of ') || lcN.startsWith('the '))
-    ? `${catKey} ${norm}`
-    : `${norm} ${catKey}`;
-}
+// Returns short names as-is from s3_data (e.g. "Acid", "of Aggravation")
+// Full name / wiki title is derived in selectSpecialItem using buildS3WikiTitle.
 function s3DataToItems(key) {
   return (S3_DATA[key] ?? []).map(e => ({
     ...parseS3Roll(e.roll),
-    item_name: buildS3FullName(key, e.name),
+    item_name: e.name,
   }));
 }
 
@@ -642,22 +636,28 @@ export default function DrillDown() {
     const isS3Item = tbl === 'S' || pane.fromS3 === true;
 
     if (isS3Item) {
-      // S3 items: look up description from DB (populated by import:s3items script).
-      // Fall back to Fandom wiki link if not found in DB.
-      const displayName = item._fullItem
-        ? (item._fullItem.name ?? itemName).replace(/\s*\(EM\)\s*$/i, '').trim()
+      // S3 items: itemName is the SHORT name from s3_data (e.g. "Acid", "of Aggravation").
+      // Use buildS3WikiTitle to derive the full DB name and wiki URL.
+      const catKey   = pane.cat?.key ?? catName;
+      const wikiPage = buildS3WikiTitle(catKey, itemName);
+      // Strip "(Magic …)" suffix to get the name stored in the DB: "Acid Arrow"
+      const dbName   = wikiPage
+        ? wikiPage.replace(/\s*\([^)]+\)\s*$/, '').trim()
         : itemName;
-      const wikiUrl = getS3WikiUrl(displayName);
+      const wikiUrl  = wikiPage
+        ? 'https://adnd2e.fandom.com/wiki/' + wikiPage.replace(/\s+/g, '_')
+        : getS3WikiUrl(catKey, itemName);
 
-      pushPane(fromIdx, { type: 'description', mode: 'simple', name: itemName, loading: true, item: null, error: null });
-      fetchItemByNameExact(itemName)
+      pushPane(fromIdx, { type: 'description', mode: 'simple', name: dbName, loading: true, item: null, error: null });
+      fetchItemByNameExact(dbName)
+        .then(fullItem => fullItem || fetchItemByName(dbName))
         .then(fullItem => updatePane(newIdx, {
           loading: false,
           item: fullItem
             ? { ...fullItem, source_url: fullItem.source_url || wikiUrl }
-            : { name: itemName, description: null, source_url: wikiUrl },
+            : { name: dbName, description: null, source_url: wikiUrl },
         }))
-        .catch(() => updatePane(newIdx, { loading: false, item: { name: itemName, description: null, source_url: wikiUrl } }));
+        .catch(() => updatePane(newIdx, { loading: false, item: { name: dbName, description: null, source_url: wikiUrl } }));
     } else {
       // R3: use DB lookup
       const wikiUrl = buildWikiUrl(itemName);
