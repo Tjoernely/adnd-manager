@@ -188,28 +188,34 @@ function buildWikiUrl(name) {
 }
 
 // ── Module-level fetch helpers ─────────────────────────────────────────────
-async function fetchItemByName(name) {
+// tableLetter (optional) — restricts search to one table, preventing
+// cross-category false matches (e.g. "of Distortion" in D hitting Table A).
+async function fetchItemByName(name, tableLetter) {
   if (!name) return null;
   try {
-    const res = await api.searchMagicalItems({ search: name, limit: 1 });
+    const opts = { search: name, limit: 1 };
+    if (tableLetter) opts.table_letter = tableLetter;
+    const res = await api.searchMagicalItems(opts);
     return res?.items?.[0] ?? null;
   } catch { return null; }
 }
 
-async function fetchItemByNameExact(name) {
+async function fetchItemByNameExact(name, tableLetter) {
   if (!name) return null;
   try {
-    const res = await api.searchMagicalItems({ search: name, exact: true, limit: 1 });
+    const opts = { search: name, exact: true, limit: 1 };
+    if (tableLetter) opts.table_letter = tableLetter;
+    const res = await api.searchMagicalItems(opts);
     return res?.items?.[0] ?? null;
   } catch { return null; }
 }
 
-async function fetchEntry(entry) {
+async function fetchEntry(entry, tableLetter) {
   if (!entry) return null;
   if (entry.item_id) {
     try { return await api.getMagicalItem(entry.item_id); } catch { /* fall through */ }
   }
-  return fetchItemByName(entry.item_name ?? entry.name);
+  return fetchItemByName(entry.item_name ?? entry.name, tableLetter);
 }
 
 // ── Parse {{Item|...}} template from wikitext ──────────────────────────────
@@ -533,9 +539,9 @@ export default function DrillDown() {
 
   // ── Simple table entry → description (all tables A–Q, T) ─────────────────
   // Search order: 1) exact name in DB → 2) item_id / fuzzy fallback
-  // Always attaches source_url so the wiki link is available even when
-  // the description pane renders a stub.
-  function selectTableEntry(fromIdx, entry) {
+  // tableLetter is passed so queries are scoped to the correct table,
+  // preventing cross-category false matches (e.g. "of Distortion" in D).
+  function selectTableEntry(fromIdx, entry, tableLetter) {
     const name   = entry.item_name ?? entry.name ?? '';
     const newIdx = fromIdx + 1;
     pushPane(fromIdx, { type: 'description', mode: 'simple', name, loading: true, item: null, error: null });
@@ -543,10 +549,10 @@ export default function DrillDown() {
     // Fallback wiki URL: most non-S items use the "(EM)" suffix on the wiki
     const wikiUrl = entry.source_url ?? buildWikiUrl(name);
 
-    // 1. Exact match on the full item name (e.g. "Crown (EM)", "Potion of Healing (Magical Liquid)")
-    // 2. item_id lookup or fuzzy text-search via fetchEntry
-    fetchItemByNameExact(name)
-      .then(item => item || fetchEntry(entry))
+    // 1. Exact match on the full item name, scoped to this table
+    // 2. item_id lookup or fuzzy text-search via fetchEntry (also scoped)
+    fetchItemByNameExact(name, tableLetter)
+      .then(item => item || fetchEntry(entry, tableLetter))
       .then(item => updatePane(newIdx, {
         loading: false,
         item: item
@@ -578,13 +584,15 @@ export default function DrillDown() {
       ? `${baseEntry?.item_name ?? 'Weapon'} ${atkStr} / ${dmgStr}`
       : `${baseEntry?.item_name ?? 'Armor'} ${atkStr}`;
     const newIdx  = fromIdx + 1;
+    // Composite panes are always weapons (S) or armor (R)
+    const tbl     = isArmor ? 'R' : 'S';
 
     pushPane(fromIdx, { type: 'description', mode: 'composite', name, baseEntry, atkEntry, dmgEntry, isArmor, loading: true, item: null, error: null });
 
     const catName = baseEntry?.item_name ?? '';
     const wikiUrl = buildWikiUrl(catName);
-    fetchItemByName(catName)
-      .then(item => item || fetchItemByName(`${catName} (EM)`))
+    fetchItemByName(catName, tbl)
+      .then(item => item || fetchItemByName(`${catName} (EM)`, tbl))
       .then(item => updatePane(newIdx, {
         loading: false,
         item: item
@@ -630,7 +638,9 @@ export default function DrillDown() {
     }
 
     const term = cat.name.replace(/[✦*]/g, '').trim();
-    api.searchMagicalItems({ search: term, limit: 200 })
+    const searchOpts = { search: term, limit: 200 };
+    if (tbl) searchOpts.table_letter = tbl;
+    api.searchMagicalItems(searchOpts)
       .then(res => {
         const items = (res?.items ?? []).map(it => ({
           roll_min: null, roll_max: null,
@@ -664,8 +674,8 @@ export default function DrillDown() {
         : getS3WikiUrl(catKey, itemName);
 
       pushPane(fromIdx, { type: 'description', mode: 'simple', name: dbName, loading: true, item: null, error: null });
-      fetchItemByNameExact(dbName)
-        .then(fullItem => fullItem || fetchItemByName(dbName))
+      fetchItemByNameExact(dbName, 'S')
+        .then(fullItem => fullItem || fetchItemByName(dbName, 'S'))
         .then(fullItem => updatePane(newIdx, {
           loading: false,
           item: fullItem
@@ -674,16 +684,16 @@ export default function DrillDown() {
         }))
         .catch(() => updatePane(newIdx, { loading: false, item: { name: dbName, description: null, source_url: wikiUrl } }));
     } else {
-      // R3: use DB lookup
+      // R3: use DB lookup scoped to Table R
       const wikiUrl = buildWikiUrl(itemName);
       pushPane(fromIdx, { type: 'description', mode: 'simple', name: itemName, loading: true, item: null, error: null });
 
       (item._fullItem
         ? Promise.resolve(item._fullItem)
-        : fetchItemByNameExact(itemName)
-            .then(r => r || fetchItemByNameExact(`${itemName} (EM)`))
-            .then(r => r || (catName ? fetchItemByNameExact(`${catName} (EM)`) : null))
-            .then(r => r || (catName ? fetchItemByNameExact(catName) : null))
+        : fetchItemByNameExact(itemName, 'R')
+            .then(r => r || fetchItemByNameExact(`${itemName} (EM)`, 'R'))
+            .then(r => r || (catName ? fetchItemByNameExact(`${catName} (EM)`, 'R') : null))
+            .then(r => r || (catName ? fetchItemByNameExact(catName, 'R') : null))
       )
         .then(fullItem => updatePane(newIdx, {
           loading: false,
@@ -832,7 +842,7 @@ export default function DrillDown() {
               subtitle={pane.tableRow.dice}
               extra={!pane.loading && pane.entries.length > 0 && (
                 <DiceRoller sides={parseSides(pane.tableRow.dice)} label={pane.tableRow.dice}
-                  onRoll={n => { const e = findRow(pane.entries, n); if (e) selectTableEntry(i, e); }} />
+                  onRoll={n => { const e = findRow(pane.entries, n); if (e) selectTableEntry(i, e, pane.tableRow.table); }} />
               )}
             />
             <div className="mi-pane-body">
@@ -846,7 +856,7 @@ export default function DrillDown() {
                 const isSelected = next?.mode === 'simple' && next?.name === (entry.item_name ?? entry.name);
                 return (
                   <TableRow key={j} entry={entry} selected={isSelected}
-                    dice={pane.tableRow.dice} onClick={() => selectTableEntry(i, entry)} />
+                    dice={pane.tableRow.dice} onClick={() => selectTableEntry(i, entry, pane.tableRow.table)} />
                 );
               })}
             </div>
