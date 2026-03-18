@@ -175,6 +175,11 @@ const TABLE_CONFIG = {
     wikiSuffixes:   ['(EM)'],
     wikiCategories: [],
   },
+  N: {
+    category:       'household',
+    wikiSuffixes:   ['(Household Item)', '(EM)', '(Magic Item)'],
+    wikiCategories: [],
+  },
   O: {
     category:       'instrument',
     wikiSuffixes:   ['(EM)', '(Magical Liquid)'],
@@ -183,6 +188,11 @@ const TABLE_CONFIG = {
   P: {
     category:       'weird',
     wikiSuffixes:   ['(EM)', '(Magical Liquid)', '(Wizard Spell)', '(Enhancement)', '(Magic Item)'],
+    wikiCategories: [],
+  },
+  Q: {
+    category:       'humorous',
+    wikiSuffixes:   ['(Humorous Item)', '(EM)', '(Magic Item)'],
     wikiCategories: [],
   },
   R: {
