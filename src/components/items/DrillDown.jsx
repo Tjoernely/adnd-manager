@@ -531,14 +531,29 @@ export default function DrillDown() {
     }
   }
 
-  // ── Simple table entry → description ──────────────────────────────────────
+  // ── Simple table entry → description (all tables A–Q, T) ─────────────────
+  // Search order: 1) exact name in DB → 2) item_id / fuzzy fallback
+  // Always attaches source_url so the wiki link is available even when
+  // the description pane renders a stub.
   function selectTableEntry(fromIdx, entry) {
     const name   = entry.item_name ?? entry.name ?? '';
     const newIdx = fromIdx + 1;
     pushPane(fromIdx, { type: 'description', mode: 'simple', name, loading: true, item: null, error: null });
-    fetchEntry(entry)
-      .then(item => updatePane(newIdx, { loading: false, item: item ?? { name, description: entry.notes ?? null } }))
-      .catch(e   => updatePane(newIdx, { loading: false, error: e.message }));
+
+    // Fallback wiki URL: most non-S items use the "(EM)" suffix on the wiki
+    const wikiUrl = entry.source_url ?? buildWikiUrl(name);
+
+    // 1. Exact match on the full item name (e.g. "Crown (EM)", "Potion of Healing (Magical Liquid)")
+    // 2. item_id lookup or fuzzy text-search via fetchEntry
+    fetchItemByNameExact(name)
+      .then(item => item || fetchEntry(entry))
+      .then(item => updatePane(newIdx, {
+        loading: false,
+        item: item
+          ? { ...item, source_url: item.source_url || wikiUrl }
+          : { name, description: entry.notes ?? null, source_url: wikiUrl },
+      }))
+      .catch(e => updatePane(newIdx, { loading: false, error: e.message }));
   }
 
   // ── S1 / R1 click ─────────────────────────────────────────────────────────
