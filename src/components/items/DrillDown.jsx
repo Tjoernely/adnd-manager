@@ -133,10 +133,18 @@ function parseS3Roll(rollStr) {
   const n = parseInt(raw, 10);
   return { roll_min: n, roll_max: n };
 }
+// Build full item name: "of X" → "{Cat} of X", else "{name} {Cat}"
+function buildS3FullName(catKey, partialName) {
+  const norm = String(partialName).replace(/[\u2018\u2019\u02BC]/g, "'");
+  const lcN  = norm.toLowerCase();
+  return (lcN.startsWith('of ') || lcN.startsWith('the '))
+    ? `${catKey} ${norm}`
+    : `${norm} ${catKey}`;
+}
 function s3DataToItems(key) {
   return (S3_DATA[key] ?? []).map(e => ({
     ...parseS3Roll(e.roll),
-    item_name: e.name,
+    item_name: buildS3FullName(key, e.name),
   }));
 }
 

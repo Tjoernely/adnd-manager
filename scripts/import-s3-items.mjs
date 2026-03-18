@@ -5,8 +5,8 @@
  * Fetches S3 special weapon descriptions from the Fandom wiki (MediaWiki API)
  * and UPSERTs them into the magical_items table in PostgreSQL.
  *
- * Item names are taken directly from s3_data.js (the same source as the UI).
- * Wiki page titles are auto-generated: spaces → underscores + "_(EM)" suffix.
+ * Full display names are built from category + partial name (e.g. "Arrow of Aggravation").
+ * Wiki page titles use the "(Magic {Category})" suffix matching the Fandom wiki format.
  *
  * Run from the server/ directory (so .env is found automatically):
  *   cd server && node ../scripts/import-s3-items.mjs [options]
@@ -99,12 +99,62 @@ const USER_AGENT = 'adnd-campaign-manager/1.0 (https://github.com/Tjoernely/adnd
 const DELAY_MS   = 200;
 const MAX_RETRY  = 3;
 
-// ── Auto-title (mirrors s3_wiki_links.js logic) ───────────────────────────────
-function autoTitle(displayName) {
-  return String(displayName)
-    .replace(/[\u2018\u2019\u02BC]/g, "'") // curly/modifier apostrophes → straight
-    .replace(/\s+/g, '_')
-    + '_(EM)';
+// ── Category → wiki suffix (singular) map ────────────────────────────────────
+const WIKI_SINGULAR = {
+  'Arrow':                    'Arrow',
+  'Axe':                      'Axe',
+  'Ballista':                 'Ballista',
+  'Battering Ram':            'Battering Ram',
+  'Blowgun':                  'Blowgun',
+  'Bow':                      'Bow',
+  'Catapult':                 'Catapult',
+  'Club':                     'Club',
+  'Dagger':                   'Dagger',
+  'Dart':                     'Dart',
+  'Explosive Device':         'Explosive Device',
+  'Flail Weapon':             'Flail',
+  'Hammer':                   'Hammer',
+  'Harpoon':                  'Harpoon',
+  'Helmseeker':               'Helmseeker',
+  'Javelin':                  'Javelin',
+  'Jettison':                 'Jettison',
+  'Lance':                    'Lance',
+  'Mace':                     'Mace',
+  'Mattock':                  'Mattock',
+  'Net':                      'Net',
+  'Paddleboard':              'Paddleboard',
+  'Pellet':                   'Pellet',
+  'Polearm':                  'Polearm',
+  'Quiver':                   'Quiver',
+  'Shot':                     'Shot',
+  'Sickle':                   'Sickle',
+  'Sling':                    'Sling',
+  'Spear':                    'Spear',
+  'Spelljamming Ram':         'Spelljamming Ram',
+  'Sword':                    'Sword',
+  'Throwing Star (Shuriken)': 'Shuriken',
+  'Whip':                     'Whip',
+};
+
+// ── Build full display name: "of X" → "{Cat} of X", else "{name} {Cat}" ──────
+function buildFullName(catKey, partialName) {
+  const norm  = String(partialName).replace(/[\u2018\u2019\u02BC]/g, "'");
+  const lcN   = norm.toLowerCase();
+  return (lcN.startsWith('of ') || lcN.startsWith('the '))
+    ? `${catKey} ${norm}`
+    : `${norm} ${catKey}`;
+}
+
+// ── Build wiki page title: "{fullName} (Magic {Singular})" ────────────────────
+function buildWikiTitle(catKey, partialName) {
+  const fullName = buildFullName(catKey, partialName);
+  const singular = WIKI_SINGULAR[catKey] ?? catKey;
+  return `${fullName} (Magic ${singular})`;
+}
+
+// ── Convert wiki page title to URL (spaces → underscores) ────────────────────
+function toWikiUrl(title) {
+  return WIKI_BASE + title.replace(/\s+/g, '_');
 }
 
 // ── Build flat item list from S3_DATA ─────────────────────────────────────────
@@ -118,10 +168,13 @@ function buildItemList() {
       const raw = entry.name ?? '';
       if (!raw) continue;
       // Strip trailing * (marks cross-reference entries like "Missile Weapon of Distance*")
-      const name = raw.replace(/\*+$/, '').trim();
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      items.push({ displayName: name, wikiPage: autoTitle(name) });
+      const partial = raw.replace(/\*+$/, '').trim();
+      if (!partial) continue;
+      const fullName  = buildFullName(catKey, partial);
+      const wikiPage  = buildWikiTitle(catKey, partial);
+      if (seen.has(fullName)) continue;
+      seen.add(fullName);
+      items.push({ displayName: fullName, wikiPage });
     }
   }
 
@@ -271,7 +324,7 @@ async function main() {
 
   for (let n = 0; n < slice.length; n++) {
     const { displayName, wikiPage } = slice[n];
-    const sourceUrl = WIKI_BASE + wikiPage;
+    const sourceUrl = toWikiUrl(wikiPage);
 
     // ── Fetch wikitext ───────────────────────────────────────────────────────
     let raw = null;
