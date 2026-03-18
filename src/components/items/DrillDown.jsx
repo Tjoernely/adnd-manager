@@ -235,8 +235,11 @@ function parseItemTemplate(wikitext) {
 // ── Wiki description fetcher (S3 items) ────────────────────────────────────
 async function fetchWikiDescription(displayName) {
   console.log('fetchWikiDescription called with:', displayName);
-  console.log('wikiPage lookup:', S3_WIKI_LINKS[displayName]);
-  const wikiPage = S3_WIKI_LINKS[displayName];
+  const normalized = displayName.replace(/[\u2018\u2019\u02BC]/g, "'");
+  let wikiPage = S3_WIKI_LINKS[normalized] || S3_WIKI_LINKS[displayName];
+  console.log('keys sample:', Object.keys(S3_WIKI_LINKS).slice(0,3));
+  console.log('lookup result:', S3_WIKI_LINKS["Abaris'"]);
+  console.log('wikiPage lookup:', wikiPage);
   const wikiUrl = wikiPage
     ? 'https://adnd2e.fandom.com/wiki/' + wikiPage.replace(/ /g, '_').replace(/'/g, '%27')
     : null;
