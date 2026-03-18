@@ -449,7 +449,7 @@ async function upsertItem({ name, category, tableLetter, description, sourceUrl,
 }
 
 // ── Process a single item: find its wiki page, parse, upsert ─────────────────
-async function processItem({ name, category, tableLetter, sourceUrl, conf, stats }) {
+async function processItem({ name, category, table_letter: tableLetter, source_url: sourceUrl, conf, stats }) {
   const candidates = buildCandidates(name, sourceUrl, conf);
 
   // Fetch wikitext via candidate titles
