@@ -9,7 +9,8 @@
     "migrate": "node migrate.js",
     "import-spells": "node scripts/import-spells.js",
     "import:spells": "node ../scripts/import-spells.mjs",
-    "import:items":  "node ../scripts/import-magical-items.mjs"
+    "import:items":   "node ../scripts/import-magical-items.mjs",
+    "import:s3items": "node ../scripts/import-s3-items.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

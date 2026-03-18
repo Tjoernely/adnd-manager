@@ -634,21 +634,22 @@ export default function DrillDown() {
     const isS3Item = tbl === 'S' || pane.fromS3 === true;
 
     if (isS3Item) {
-      // Always use Fandom wiki for S3 special weapons.
-      // S3_WIKI_LINKS keys are the short item names from s3_data (e.g. "Abaris'"),
-      // NOT the prefixed form "Arrow Abaris'" — so use itemName directly.
+      // S3 items: look up description from DB (populated by import:s3items script).
+      // Fall back to Fandom wiki link if not found in DB.
       const displayName = item._fullItem
         ? (item._fullItem.name ?? itemName).replace(/\s*\(EM\)\s*$/i, '').trim()
         : itemName;
+      const wikiUrl = getS3WikiUrl(displayName);
 
-      pushPane(fromIdx, { type: 'description', mode: 'wiki', displayName, itemName, loading: true, item: null, error: null });
-      console.log('S3 item clicked:', displayName, 'wiki page:', S3_WIKI_LINKS[displayName]);
-      fetchWikiDescription(displayName)
-        .then(result => updatePane(newIdx, { loading: false, item: { name: itemName, ...result } }))
-        .catch(() => {
-          const wikiUrl = getS3WikiUrl(displayName);
-          updatePane(newIdx, { loading: false, item: { name: itemName, html: null, wikiUrl, stats: null } });
-        });
+      pushPane(fromIdx, { type: 'description', mode: 'simple', name: itemName, loading: true, item: null, error: null });
+      fetchItemByNameExact(itemName)
+        .then(fullItem => updatePane(newIdx, {
+          loading: false,
+          item: fullItem
+            ? { ...fullItem, source_url: fullItem.source_url || wikiUrl }
+            : { name: itemName, description: null, source_url: wikiUrl },
+        }))
+        .catch(() => updatePane(newIdx, { loading: false, item: { name: itemName, description: null, source_url: wikiUrl } }));
     } else {
       // R3: use DB lookup
       const wikiUrl = buildWikiUrl(itemName);
