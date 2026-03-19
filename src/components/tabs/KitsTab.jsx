@@ -13,7 +13,27 @@ export function KitsTab(props) {
     kitAlignOk, kitBarredOk,
     ALL_PROFS,
     socialStatus, rollSocialStatus, setSocialStatusOverride,
+    kitFreeWeaponPick, setKitFreeWeaponPick,
   } = props;
+
+  // Militant Wizard allowed free weapon proficiencies
+  const MILITANT_WIZ_WEAPS = [
+    { id:"wa_battle_axe",  name:"Battle Axe"       },
+    { id:"wb_short_bow",   name:"Short Bow"         },
+    { id:"wb_long_bow",    name:"Long Bow"          },
+    { id:"wd_light_xbow",  name:"Light Crossbow"    },
+    { id:"wd_heavy_xbow",  name:"Heavy Crossbow"    },
+    { id:"we_dagger",      name:"Dagger"            },
+    { id:"wh_javelin",     name:"Javelin"           },
+    { id:"wm_sling",       name:"Sling"             },
+    { id:"wh_spear",       name:"Spear"             },
+    { id:"ws_short_sword", name:"Short Sword"       },
+    { id:"ws_long_sword",  name:"Long Sword"        },
+    { id:"ws_bastard_sword",name:"Bastard Sword"    },
+    { id:"ws_broadsword",  name:"Broadsword"        },
+    { id:"ws_2h_sword",    name:"Two-Handed Sword"  },
+    { id:"wa_war_hammer",  name:"War Hammer"        },
+  ];
   const _handleKitSelect = handleKitSelect ?? setSelectedKit;
 
   const [overrideInput, setOverrideInput] = useState(socialStatus?.override ?? "");
@@ -237,6 +257,51 @@ export function KitsTab(props) {
                 </div>
               )}
             </div>
+
+            {/* ── Militant Wizard: Free Weapon Proficiency Selector ── */}
+            {activeKit.kitFreeWeapProf && (
+              <div style={{ marginBottom:14, padding:"10px 14px",
+                background:"rgba(80,130,200,.08)", border:`1px solid rgba(80,130,200,.35)`,
+                borderRadius:8 }}>
+                <div style={{ fontSize:10, color:"#70a8e8", letterSpacing:2,
+                  textTransform:"uppercase", marginBottom:8 }}>
+                  🗡️ Free Weapon Proficiency
+                </div>
+                <div style={{ fontSize:11, color:C.textDim, marginBottom:10, lineHeight:1.6 }}>
+                  Choose one weapon from the list below. It counts as a free proficiency slot
+                  (no CP cost) in addition to your normal wizard proficiencies.
+                  Then add it in the <strong style={{ color:C.gold }}>Weapons tab</strong>{" "}
+                  — it will cost 0 CP automatically.
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {MILITANT_WIZ_WEAPS.map(w => {
+                    const sel = kitFreeWeaponPick === w.id;
+                    return (
+                      <button key={w.id} onClick={() =>
+                        setKitFreeWeaponPick(sel ? null : w.id)
+                      } style={{
+                        padding:"4px 10px", borderRadius:5, cursor:"pointer",
+                        fontSize:11, fontFamily:"inherit",
+                        background: sel ? "rgba(80,130,200,.35)" : "rgba(0,0,0,.3)",
+                        border: `1px solid ${sel ? "#70a8e8" : C.border}`,
+                        color: sel ? "#a8d0ff" : C.textDim,
+                        fontWeight: sel ? "bold" : "normal",
+                        transition:"all .12s",
+                      }}>
+                        {sel ? "✓ " : ""}{w.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {kitFreeWeaponPick && (
+                  <div style={{ marginTop:8, fontSize:11, color:C.green }}>
+                    ✓ Free proficiency: <strong>
+                      {MILITANT_WIZ_WEAPS.find(w=>w.id===kitFreeWeaponPick)?.name ?? kitFreeWeaponPick}
+                    </strong> — add it in the Weapons tab for 0 CP.
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* NWP sections */}
             {((activeKit.nwpRequired||[]).length>0 || (activeKit.nwpRecommended||[]).length>0) && (

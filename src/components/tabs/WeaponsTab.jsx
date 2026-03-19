@@ -31,10 +31,22 @@ export function WeaponsTab(props) {
     weapCPSp, wSlotCost,
     ruleBreaker, setInfoModal, setConfirmBox,
     classAbilPicked,
+    kitFreeWeaponPick, selectedKit,
     toggleWeap,
   } = props;
 
+  const isKitFreeWeap = (weapId) =>
+    weapId === kitFreeWeaponPick && selectedKit === "mag_militant-wizard";
+
   const classRestriction = getClassWeaponRestriction(selectedClass, classGroup, classAbilPicked);
+
+  // Count how many non-standard (edged) weapons a cleric has already picked
+  // via the Weapon Allowance exception (limit: 1)
+  const edgedWeapPickedCount = (classRestriction?.weaponAllowance)
+    ? Object.entries(weapPicked).filter(
+        ([id, lvl]) => lvl === "single" && !classRestriction.allowed.has(id) && !id.startsWith("wsp_")
+      ).length
+    : 0;
 
   function warnAndToggle(weapId, name, level) {
     if (!isWeaponAllowed(weapId, selectedClass, classGroup, classAbilPicked)) {
@@ -43,6 +55,21 @@ export function WeaponsTab(props) {
         body: `${classRestriction?.label ?? "This class has weapon restrictions."}\n\n` +
           `"${name}" is outside the allowed list and cannot be selected.\n\n` +
           (classRestriction?.weaponAllowanceNote ?? ""),
+      });
+      return;
+    }
+    // Weapon Allowance: only ONE edged weapon allowed — block if slot already used
+    if (
+      classRestriction?.weaponAllowance &&
+      !classRestriction.allowed.has(weapId) &&
+      !weapId.startsWith("wsp_") &&
+      !weapPicked[weapId] &&   // not already picked (deselecting is always allowed)
+      edgedWeapPickedCount >= 1
+    ) {
+      setInfoModal({
+        title: "⚠ Weapon Allowance Limit",
+        body: "Weapon Allowance allows only ONE edged weapon of your deity's choice.\n\n" +
+          "You already have one selected — deselect it first to choose a different weapon.",
       });
       return;
     }
@@ -102,6 +129,13 @@ export function WeaponsTab(props) {
           {classRestriction.weaponAllowanceNote && (
             <div style={{ marginTop:4, color: classRestriction.weaponAllowance ? C.green : C.textDim }}>
               {classRestriction.weaponAllowanceNote}
+              {classRestriction.weaponAllowance && (
+                <span style={{ marginLeft:8, color: edgedWeapPickedCount >= 1 ? C.textDim : C.gold }}>
+                  {edgedWeapPickedCount >= 1
+                    ? "✓ Edged weapon slot used (1/1)"
+                    : "— Edged weapon slot available (0/1)"}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -296,8 +330,9 @@ export function WeaponsTab(props) {
                             {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }} title={classRestriction?.label}>🔒</span>}
                             {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
                             {familiar && <span style={{ fontSize:9, color:"#b08030" }}>~</span>}
+                            {isKitFreeWeap(w.id) && <span style={{ fontSize:9, color:"#70a8ff" }} title="Kit free weapon — 0 CP">🎁</span>}
                             {!anyPicked && !familiar && (
-                              <CpBadge cost={singleCost} color={unaffordable ? "green" : badgeColor} />
+                              <CpBadge cost={isKitFreeWeap(w.id) ? 0 : singleCost} color={isKitFreeWeap(w.id) ? "green" : unaffordable ? "green" : badgeColor} />
                             )}
                           </div>
                         );
@@ -362,8 +397,9 @@ export function WeaponsTab(props) {
                           {directPicked && "✓ "}{w.name}
                           {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }}>🔒</span>}
                           {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
+                          {isKitFreeWeap(w.id) && <span style={{ fontSize:9, color:"#70a8ff" }} title="Kit free weapon — 0 CP">🎁</span>}
                           {!anyPicked && (
-                            <CpBadge cost={singleCost} color={unaffordable ? "green" : badgeColor} />
+                            <CpBadge cost={isKitFreeWeap(w.id) ? 0 : singleCost} color={isKitFreeWeap(w.id) ? "green" : unaffordable ? "green" : badgeColor} />
                           )}
                         </div>
                       );

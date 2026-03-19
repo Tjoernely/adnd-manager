@@ -68,6 +68,7 @@ export function useCharacter() {
   const [classAbilPicked, setClassAbilPicked] = useState({}); // { abilId: true }
   const [selectedKit,     setSelectedKit]     = useState(null); // kit id string
   const [kitAutoNWPs,     setKitAutoNWPs]     = useState({}); // { profId: true } auto-added by kit
+  const [kitFreeWeaponPick, setKitFreeWeaponPick] = useState(null); // weapon ID granted free by kit (e.g. Militant Wizard)
 
   // Sub-ability split modifiers per sub-id. Within each pair, mods sum to 0.
   // |mod| ≤ MAX_SPLIT unless ruleBreaker.
@@ -174,8 +175,14 @@ export function useCharacter() {
 
   // CP spent on class abilities (restrictions give CP back)
   const classAbilCPSpent = useMemo(() => {
+    // Sub-spheres that are free because Elemental All (major/minor) is active
+    const elaFree = new Set([
+      ...(classAbilPicked["cl_ela_maj"] ? ["cl_air_maj","cl_ear_maj","cl_fir_maj","cl_wat_maj"] : []),
+      ...(classAbilPicked["cl_ela_min"] ? ["cl_air_min","cl_ear_min","cl_fir_min","cl_wat_min"] : []),
+    ]);
     const abilCost = currentAbils.reduce((sum, a) => {
       if (!classAbilPicked[a.id]) return sum;
+      if (elaFree.has(a.id)) return sum;              // free via Elemental All
       return a.restriction ? sum - a.cp : sum + a.cp;
     }, 0);
     // Mage school access: 5 CP per school picked individually (S&P p.163)
@@ -332,7 +339,9 @@ export function useCharacter() {
     let total = 0;
     Object.entries(weapPicked).forEach(([id, level]) => {
       if (!level) return;
-      if (level === "single")        total += getWeapSingleCostByTier(classGroup, getWeapTier(id));
+      // Militant Wizard kit: one chosen weapon is free
+      const isFreeKitWeap = id === kitFreeWeaponPick && level === "single" && selectedKit === "mag_militant-wizard";
+      if (level === "single")        total += isFreeKitWeap ? 0 : getWeapSingleCostByTier(classGroup, getWeapTier(id));
       else if (level === "tight")    total += getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 2;
       else if (level === "broad")    total += getWeapSingleCostByTier(classGroup, getGroupMaxTier(id)) * 3;
       else if (level === "shield")   total += getWeapCost(classGroup, "shield");
@@ -341,7 +350,7 @@ export function useCharacter() {
       else if (level === "special")  total += getWeapCost(classGroup, "shield"); // compat
     });
     return total;
-  }, [weapPicked, classGroup]);
+  }, [weapPicked, classGroup, kitFreeWeaponPick, selectedKit]);
   // Ch.8 CP: mastery tiers + weapon of choice + fighting styles
   const mastCPSp    = useMemo(() => {
     const col = specCol(selectedClass);
@@ -510,9 +519,25 @@ export function useCharacter() {
   //  HANDLERS
   // ═════════════════════════════════════════════════════════════════
 
+  // Elemental All cascade: when maj/min is toggled, auto-set the 4 sub-spheres
+  // free of charge (cost excluded in classAbilCPSpent when the parent is active).
+  const ELA_SUB_MAJ = ["cl_air_maj", "cl_ear_maj", "cl_fir_maj", "cl_wat_maj"];
+  const ELA_SUB_MIN = ["cl_air_min", "cl_ear_min", "cl_fir_min", "cl_wat_min"];
+
   // ── Toggle class ability
   const toggleClassAbil = useCallback((abilId) => {
-    setClassAbilPicked(p => ({ ...p, [abilId]: !p[abilId] }));
+    setClassAbilPicked(p => {
+      const next = { ...p, [abilId]: !p[abilId] };
+      const on = next[abilId];
+      if (abilId === "cl_ela_maj") {
+        if (on) { ELA_SUB_MAJ.forEach(id => { next[id] = true; }); }
+        else    { ELA_SUB_MAJ.forEach(id => { delete next[id]; }); }
+      } else if (abilId === "cl_ela_min") {
+        if (on) { ELA_SUB_MIN.forEach(id => { next[id] = true; }); }
+        else    { ELA_SUB_MIN.forEach(id => { delete next[id]; }); }
+      }
+      return next;
+    });
   }, []);
 
   // ── 4d6 drop lowest roll
@@ -861,6 +886,7 @@ export function useCharacter() {
     setProfsPicked(base);
     setKitAutoNWPs(newAuto);
     setSelectedKit(newKitId ?? null);
+    setKitFreeWeaponPick(null); // clear any free weapon when kit changes
   }, [selectedClass, kitAutoNWPs, profsPicked, ALL_PROFS]);
 
   const toggleWeap = (id, name, level) => {
@@ -981,7 +1007,7 @@ export function useCharacter() {
     charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards,
     baseScores, exPcts, splitMods,
-    classAbilPicked, selectedKit, kitAutoNWPs,
+    classAbilPicked, selectedKit, kitAutoNWPs, kitFreeWeaponPick,
     selectedRace, selectedSubRace, racialPicked, abilChosenSub,
     monstrousRaceId, monstrousSelFeats, monstrousCustomize, mongrelChoice,
     selectedClass,
@@ -996,7 +1022,7 @@ export function useCharacter() {
   }), [
     charName, charGender, charLevel, ruleBreaker, cpPerLevelOverride,
     dmAwards, baseScores, exPcts, splitMods,
-    classAbilPicked, selectedKit, kitAutoNWPs,
+    classAbilPicked, selectedKit, kitAutoNWPs, kitFreeWeaponPick,
     selectedRace, selectedSubRace, racialPicked, abilChosenSub,
     monstrousRaceId, monstrousSelFeats, monstrousCustomize, mongrelChoice,
     selectedClass,
@@ -1025,6 +1051,7 @@ export function useCharacter() {
     setClassAbilPicked(d.classAbilPicked ?? {});
     setSelectedKit(d.selectedKit ?? null);
     setKitAutoNWPs(d.kitAutoNWPs ?? {});
+    setKitFreeWeaponPick(d.kitFreeWeaponPick ?? null);
     setSelectedRace(d.selectedRace ?? null);
     setSelectedSubRace(d.selectedSubRace ?? null);
     setRacialPicked(d.racialPicked ?? {});
@@ -1075,6 +1102,7 @@ export function useCharacter() {
     classAbilPicked, setClassAbilPicked,
     selectedKit, setSelectedKit, handleKitSelect,
     kitAutoNWPs,
+    kitFreeWeaponPick, setKitFreeWeaponPick,
     splitMods, setSplitMods, exPcts, setExPcts,
     rollD100,
     // Race
