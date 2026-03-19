@@ -32,27 +32,60 @@ export default function App() {
   const { user, loading: authLoading, error: authError, login, register, logout } = useAuth();
 
   // ── Campaign selection ──────────────────────────────────────────
-  const [activeCampaign, setActiveCampaign] = useState(null);
+  const [activeCampaign, setActiveCampaign] = useState(() => {
+    try { const v = sessionStorage.getItem('adnd_campaign'); return v ? JSON.parse(v) : null; } catch { return null; }
+  });
 
   // ── Character persistence state ─────────────────────────────────
-  const [dbCharId,    setDbCharId]    = useState(null);   // null = unsaved new char
+  const [dbCharId,    setDbCharId]    = useState(() => {
+    try { const v = sessionStorage.getItem('adnd_char_id'); return v ? Number(v) : null; } catch { return null; }
+  });   // null = unsaved new char
   const [characters,  setCharacters]  = useState([]);     // list in this campaign
   const [saveStatus,  setSaveStatus]  = useState('idle'); // 'idle'|'saving'|'saved'|'error'
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
-  const [screen,       setScreen]       = useState('dashboard'); // 'dashboard' | 'characters' | 'npcs' | 'spells' | 'magical-items'
+  const [screen,       setScreen]       = useState(() => {
+    try { return sessionStorage.getItem('adnd_screen') || 'dashboard'; } catch { return 'dashboard'; }
+  }); // 'dashboard' | 'characters' | 'npcs' | 'spells' | 'magical-items'
+
+  // ── Sync navigation state to sessionStorage ──────────────────────
+  useEffect(() => {
+    try {
+      if (activeCampaign) sessionStorage.setItem('adnd_campaign', JSON.stringify(activeCampaign));
+      else sessionStorage.removeItem('adnd_campaign');
+    } catch {}
+  }, [activeCampaign]);
+
+  useEffect(() => {
+    try {
+      if (dbCharId != null) sessionStorage.setItem('adnd_char_id', String(dbCharId));
+      else sessionStorage.removeItem('adnd_char_id');
+    } catch {}
+  }, [dbCharId]);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('adnd_screen', screen); } catch {}
+  }, [screen]);
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
 
-  // Load character list when entering a campaign
+  // Load character list when entering a campaign; auto-load last active character
   useEffect(() => {
     if (!activeCampaign) return;
     api.getCharacters(activeCampaign.id)
-      .then(setCharacters)
+      .then(list => {
+        setCharacters(list);
+        // If we have a stored char id from a previous session, auto-load it
+        if (dbCharId) {
+          const stored = list.find(c => c.id === dbCharId);
+          if (stored) loadCharacterState(stored.character_data);
+          else setDbCharId(null); // stale id, clear it
+        }
+      })
       .catch(console.error);
-  }, [activeCampaign]);
+  }, [activeCampaign]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save character to DB (create or update)
   const saveCharacter = useCallback(async () => {
@@ -84,7 +117,7 @@ export default function App() {
 
   // Load a character from the DB list
   const loadCharacter = useCallback((dbChar) => {
-    loadCharacterState(dbChar.data);
+    loadCharacterState(dbChar.character_data);
     setDbCharId(dbChar.id);
     setShowCharMenu(false);
   }, [loadCharacterState]);
