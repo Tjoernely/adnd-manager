@@ -30,18 +30,21 @@ export function WeaponsTab(props) {
     weapPicked, remainCP, classGroup, selectedClass,
     weapCPSp, wSlotCost,
     ruleBreaker, setInfoModal, setConfirmBox,
+    classAbilPicked,
     toggleWeap,
   } = props;
 
-  const classRestriction = getClassWeaponRestriction(selectedClass, classGroup);
+  const classRestriction = getClassWeaponRestriction(selectedClass, classGroup, classAbilPicked);
 
   function warnAndToggle(weapId, name, level) {
-    if (!isWeaponAllowed(weapId, selectedClass, classGroup)) {
+    if (!isWeaponAllowed(weapId, selectedClass, classGroup, classAbilPicked)) {
       setInfoModal({
         title: "⚠ Weapon Restriction",
-        body: `${classRestriction?.label ?? "This class has weapon restrictions."}\n\n"${name}" is outside the allowed list. You may still select it (Rule-Breaker).`,
+        body: `${classRestriction?.label ?? "This class has weapon restrictions."}\n\n` +
+          `"${name}" is outside the allowed list and cannot be selected.\n\n` +
+          (classRestriction?.weaponAllowanceNote ?? ""),
       });
-      return; // block unless ruleBreaker allows
+      return;
     }
     toggleWeap(weapId, name, level);
   }
@@ -90,10 +93,17 @@ export function WeaponsTab(props) {
       {/* ── Class restriction banner ── */}
       {classRestriction && (
         <div style={{ marginBottom:14, padding:"8px 14px",
-          background:"rgba(180,80,20,.1)", border:`1px solid rgba(200,100,30,.4)`,
-          borderRadius:8, fontSize:12, color:C.amber }}>
-          ⚠ <strong>Weapon restriction:</strong> {classRestriction.label}
-          {" "}Forbidden weapons are marked with ⊘.
+          background: classRestriction.weaponAllowance ? "rgba(60,120,60,.1)" : "rgba(180,80,20,.1)",
+          border:`1px solid ${classRestriction.weaponAllowance ? "rgba(60,160,60,.4)" : "rgba(200,100,30,.4)"}`,
+          borderRadius:8, fontSize:12, color: classRestriction.weaponAllowance ? C.green : C.amber }}>
+          {classRestriction.weaponAllowance ? "✓" : "⚠"}{" "}
+          <strong>Weapon restriction:</strong> {classRestriction.label}
+          {" "}Forbidden weapons are marked with 🔒.
+          {classRestriction.weaponAllowanceNote && (
+            <div style={{ marginTop:4, color: classRestriction.weaponAllowance ? C.green : C.textDim }}>
+              {classRestriction.weaponAllowanceNote}
+            </div>
+          )}
         </div>
       )}
 
@@ -250,7 +260,7 @@ export function WeaponsTab(props) {
                         const canAfford      = remainCP >= singleCost;
                         const unaffordable   = !anyPicked && !familiar && !groupCovered && !siblingCovered && !canAfford && !ruleBreaker;
                         const clickable      = !groupCovered && !siblingCovered && !familiar && !unaffordable;
-                        const restricted     = !isWeaponAllowed(w.id, selectedClass, classGroup);
+                        const restricted     = !isWeaponAllowed(w.id, selectedClass, classGroup, classAbilPicked);
                         return (
                           <div key={w.id}
                             title={
@@ -283,7 +293,7 @@ export function WeaponsTab(props) {
                               display:"flex", alignItems:"center", gap:5,
                             }}>
                             {directPicked && "✓ "}{w.name}
-                            {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }} title={classRestriction?.label}>⊘</span>}
+                            {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }} title={classRestriction?.label}>🔒</span>}
                             {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
                             {familiar && <span style={{ fontSize:9, color:"#b08030" }}>~</span>}
                             {!anyPicked && !familiar && (
@@ -322,7 +332,7 @@ export function WeaponsTab(props) {
                       const canAfford      = remainCP >= singleCost;
                       const unaffordable   = !anyPicked && !groupCovered && !siblingCovered && !canAfford && !ruleBreaker;
                       const clickable      = !groupCovered && !siblingCovered && !unaffordable;
-                      const restricted     = !isWeaponAllowed(w.id, selectedClass, classGroup);
+                      const restricted     = !isWeaponAllowed(w.id, selectedClass, classGroup, classAbilPicked);
                       return (
                         <div key={w.id}
                           title={
@@ -350,7 +360,7 @@ export function WeaponsTab(props) {
                             display:"flex", alignItems:"center", gap:5,
                           }}>
                           {directPicked && "✓ "}{w.name}
-                          {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }}>⊘</span>}
+                          {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }}>🔒</span>}
                           {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
                           {!anyPicked && (
                             <CpBadge cost={singleCost} color={unaffordable ? "green" : badgeColor} />

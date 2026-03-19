@@ -480,13 +480,13 @@ export function computeProfCanonicalIds(weapPicked) {
 }
 
 // ── Class weapon restrictions ─────────────────────────────────────────────────
-// Cleric: bludgeoning weapons + staff only (clubs, maces, flails, hammers, staff)
+// Cleric: bludgeoning weapons + staff + sling only
 const CLERIC_ALLOWED = new Set([
   "wc_club","wc_great_club","wc_war_club","wc_ankus","wc_morning_star",
   "wc_foot_mace","wc_horse_mace","wc_mace_axe","wa_mace_axe",
   "wc_horse_flail","wc_foot_flail",
   "wa_war_hammer","wa_maul","wa_sledge",
-  "wm_staff","wj_bo_stick",
+  "wm_staff","wj_bo_stick","wm_sling",
 ]);
 
 // Druid: club, dagger, dart, scimitar, sickle*, sling, spear, staff (* not in data)
@@ -501,39 +501,46 @@ const DRUID_ALLOWED = new Set([
   "wm_staff",
 ]);
 
-// Wizard (mage/illusionist/specialist): dagger, dart, knife, staff, sling
-const WIZARD_ALLOWED = new Set([
-  "we_dagger","we_stiletto","we_jambiya","we_main_gauche","we_parry_dagger","we_knife","we_katar",
-  "ws_dagger_sw","ws_main_gauche_f","ws_parry_dag_f",
-  "wh_dart",
-  "wm_staff",
-  "wm_sling",
-]);
-
-/** Returns { label, allowed: Set } for the class, or null if unrestricted. */
-export function getClassWeaponRestriction(selectedClass, classGroup) {
-  if (selectedClass === "cleric" || selectedClass === "shaman")
-    return { label:"Clerics may only use bludgeoning weapons (clubs, maces, flails, hammers, staff).", allowed: CLERIC_ALLOWED };
+/**
+ * Returns { label, allowed: Set, weaponAllowance: bool } for hard-restricted classes,
+ * or null for unrestricted classes (wizards use CP surcharges, not hard blocks).
+ * classAbilPicked is optional; used to check Weapon Allowance (cl13) for clerics.
+ */
+export function getClassWeaponRestriction(selectedClass, classGroup, classAbilPicked) {
+  if (selectedClass === "cleric" || selectedClass === "shaman") {
+    const weaponAllowance = !!(classAbilPicked?.cl13);
+    return {
+      label: "Clerics may only use bludgeoning weapons (clubs, maces, flails, hammers, staff, sling).",
+      weaponAllowance,
+      weaponAllowanceNote: weaponAllowance
+        ? "Weapon Allowance active — one favored edged weapon of your deity is permitted."
+        : "Purchase Weapon Allowance (Classes tab) to add one edged weapon of your deity.",
+      allowed: CLERIC_ALLOWED,
+    };
+  }
   if (selectedClass === "druid")
-    return { label:"Druids may only use: club, dagger, dart, scimitar, sickle, sling, spear, staff.", allowed: DRUID_ALLOWED };
-  if (classGroup === "wizard")
-    return { label:"Wizards may only use: dagger, dart, knife, staff, sling.", allowed: WIZARD_ALLOWED };
+    return { label:"Druids may only use: club, dagger, dart, scimitar, sickle, sling, spear, staff.", allowed: DRUID_ALLOWED, weaponAllowance: false };
+  // All other classes (including wizard) are NOT hard-restricted.
+  // Wizards pay CP surcharges for higher-tier weapons (shown via tier badges in UI).
   return null;
 }
 
-/** True if the given weapon ID is allowed for this class. Shield/armor profs always pass. */
-export function isWeaponAllowed(weapId, selectedClass, classGroup) {
+/** True if the given weapon ID is allowed for this class/abilities. Shield/armor profs always pass. */
+export function isWeaponAllowed(weapId, selectedClass, classGroup, classAbilPicked) {
   if (weapId.startsWith("wsp_")) return true; // shield/armor profs — always OK
-  const r = getClassWeaponRestriction(selectedClass, classGroup);
+  const r = getClassWeaponRestriction(selectedClass, classGroup, classAbilPicked);
   if (!r) return true;
-  return r.allowed.has(weapId);
+  if (r.allowed.has(weapId)) return true;
+  // Weapon Allowance exception: cleric may pick one edged weapon of their deity
+  if (r.weaponAllowance) return true;
+  return false;
 }
 
 /** Returns true if at least one weapon in the group is restricted. */
-export function isGroupRestricted(groupWeapIds, selectedClass, classGroup) {
-  const r = getClassWeaponRestriction(selectedClass, classGroup);
+export function isGroupRestricted(groupWeapIds, selectedClass, classGroup, classAbilPicked) {
+  const r = getClassWeaponRestriction(selectedClass, classGroup, classAbilPicked);
   if (!r) return false;
-  return groupWeapIds.some(id => !r.allowed.has(id));
+  return groupWeapIds.some(id => !r.allowed.has(id) && !(r.weaponAllowance));
 }
 
 // ═══════════════════════════════════════════════════════════════════

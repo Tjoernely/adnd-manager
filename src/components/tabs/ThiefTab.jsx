@@ -77,102 +77,99 @@ export function ThiefTab(props) {
     const hasTurnAbil  = !!(classAbilPicked?.cl11 || classAbilPicked?.pa12);
     const isPaladin    = selectedClass === "paladin";
     const lvl          = Math.max(1, charLevel ?? 1);
-    // Paladins turn as a cleric 2 levels lower (minimum 1)
     const effLvl       = isPaladin ? Math.max(1, lvl - 2) : lvl;
-    const colIdx       = Math.min(effLvl - 1, 12); // 0-based index into TURN_COLS
+    const colIdx       = Math.min(effLvl - 1, 12);
 
     return (
       <div>
-        <ChHead icon="✝️" num="Chapter 9" title="Turn Undead"
+        <ChHead icon="✝️" num="Class Specific Skills" title="Turn Undead"
           sub={isPaladin
-            ? `Paladins turn as a cleric 2 levels lower. Your level: ${lvl} → effective cleric level: ${effLvl}. Purchase "Turn Undead" in the Classes tab to unlock.`
-            : `Turn or destroy undead per Table 36 (S&P p.86). Purchase "Turn Undead" in the Classes tab to unlock.`}
+            ? `Paladins turn as a cleric 2 levels lower. Your level: ${lvl} → effective cleric level: ${effLvl}.`
+            : `Turn or destroy undead per Table 36 (S&P p.86).`}
         />
 
-        {!hasTurnAbil && (
-          <div style={{ marginBottom:16, padding:"8px 14px",
-            background:"rgba(180,120,20,.1)", border:`1px solid rgba(180,120,20,.35)`,
-            borderRadius:8, fontSize:12, color:C.amber }}>
-            ⚠ Turn Undead is not yet purchased — buy it in the <strong>Classes tab</strong> to confirm access.
+        {!hasTurnAbil ? (
+          <div style={{ padding:"40px 0", textAlign:"center", color:C.textDim, fontStyle:"italic" }}>
+            No class-specific skills selected.{" "}
+            <strong style={{ color:C.gold }}>Select Turn Undead</strong> from your class abilities
+            in the <strong style={{ color:C.gold }}>Classes tab</strong> to unlock this section.
           </div>
-        )}
+        ) : (
+          <>
+            {isPaladin && (
+              <div style={{ marginBottom:14, padding:"8px 14px",
+                background:"rgba(80,80,160,.12)", border:`1px solid rgba(120,120,200,.3)`,
+                borderRadius:8, fontSize:12, color:"#a0a8e0" }}>
+                🛡 Paladin: turns as Cleric level <strong>{effLvl}</strong> (character level {lvl} − 2)
+              </div>
+            )}
 
-        {isPaladin && (
-          <div style={{ marginBottom:14, padding:"8px 14px",
-            background:"rgba(80,80,160,.12)", border:`1px solid rgba(120,120,200,.3)`,
-            borderRadius:8, fontSize:12, color:"#a0a8e0" }}>
-            🛡 Paladin: turns as Cleric level <strong>{effLvl}</strong> (character level {lvl} − 2)
-          </div>
-        )}
-
-        <div style={{ overflowX:"auto", marginBottom:24 }}>
-          <table style={{ borderCollapse:"collapse", fontSize:11, minWidth:600 }}>
-            <thead>
-              <tr style={{ borderBottom:`2px solid ${C.borderHi}` }}>
-                <th style={{ padding:"6px 12px", textAlign:"left",
-                  fontSize:10, letterSpacing:1.5, color:C.textDim,
-                  textTransform:"uppercase", whiteSpace:"nowrap" }}>
-                  Undead Type
-                </th>
-                {TURN_COLS.map((col, ci) => (
-                  <th key={ci} style={{
-                    padding:"6px 10px", textAlign:"center", minWidth:36,
-                    fontSize:10, letterSpacing:1, color: ci === colIdx ? C.gold : C.textDim,
-                    textTransform:"uppercase", whiteSpace:"nowrap",
-                    background: ci === colIdx ? "rgba(212,160,53,.15)" : "transparent",
-                    borderRadius: ci === colIdx ? "6px 6px 0 0" : 0,
-                    fontWeight: ci === colIdx ? "bold" : "normal",
-                  }}>
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {TURN_TABLE.map((row, ri) => (
-                <tr key={ri} style={{
-                  background: ri % 2 === 0 ? "rgba(0,0,0,.15)" : "transparent",
-                  opacity: hasTurnAbil ? 1 : 0.5,
-                }}>
-                  <td style={{ padding:"5px 12px", color:C.textBri, fontWeight:"bold", whiteSpace:"nowrap" }}>
-                    {row.name}
-                  </td>
-                  {row.vals.map((v, ci) => {
-                    const isActive = ci === colIdx;
-                    return (
-                      <td key={ci} style={{
-                        padding:"5px 10px", textAlign:"center",
-                        background: isActive ? "rgba(212,160,53,.12)" : "transparent",
-                        fontWeight: isActive ? "bold" : "normal",
-                        fontSize: isActive ? 13 : 12,
+            <div style={{ overflowX:"auto", marginBottom:24 }}>
+              <table style={{ borderCollapse:"collapse", fontSize:11, minWidth:600 }}>
+                <thead>
+                  <tr style={{ borderBottom:`2px solid ${C.borderHi}` }}>
+                    <th style={{ padding:"6px 12px", textAlign:"left",
+                      fontSize:10, letterSpacing:1.5, color:C.textDim,
+                      textTransform:"uppercase", whiteSpace:"nowrap" }}>
+                      Undead Type
+                    </th>
+                    {TURN_COLS.map((col, ci) => (
+                      <th key={ci} style={{
+                        padding:"6px 10px", textAlign:"center", minWidth:36,
+                        fontSize:10, letterSpacing:1, color: ci === colIdx ? C.gold : C.textDim,
+                        textTransform:"uppercase", whiteSpace:"nowrap",
+                        background: ci === colIdx ? "rgba(212,160,53,.15)" : "transparent",
+                        borderRadius: ci === colIdx ? "6px 6px 0 0" : 0,
+                        fontWeight: ci === colIdx ? "bold" : "normal",
                       }}>
-                        <span style={{
-                          color: isActive ? (v === "-" ? C.textDim : cellColor(v)) : cellColor(v),
-                          textShadow: isActive && v !== "-" ? `0 0 8px ${cellColor(v)}60` : "none",
-                        }}>
-                          {v}
-                        </span>
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {TURN_TABLE.map((row, ri) => (
+                    <tr key={ri} style={{ background: ri % 2 === 0 ? "rgba(0,0,0,.15)" : "transparent" }}>
+                      <td style={{ padding:"5px 12px", color:C.textBri, fontWeight:"bold", whiteSpace:"nowrap" }}>
+                        {row.name}
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      {row.vals.map((v, ci) => {
+                        const isActive = ci === colIdx;
+                        return (
+                          <td key={ci} style={{
+                            padding:"5px 10px", textAlign:"center",
+                            background: isActive ? "rgba(212,160,53,.12)" : "transparent",
+                            fontWeight: isActive ? "bold" : "normal",
+                            fontSize: isActive ? 13 : 12,
+                          }}>
+                            <span style={{
+                              color: isActive ? (v === "-" ? C.textDim : cellColor(v)) : cellColor(v),
+                              textShadow: isActive && v !== "-" ? `0 0 8px ${cellColor(v)}60` : "none",
+                            }}>
+                              {v}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-        {/* Legend */}
-        <div style={{ display:"flex", gap:20, flexWrap:"wrap", fontSize:11, color:C.textDim, marginBottom:12 }}>
-          <span>Legend:</span>
-          <span style={{ color:C.textDim }}>— = Cannot turn</span>
-          <span style={{ color:C.red }}>20/19/16 = Hard (high d20 roll needed)</span>
-          <span style={{ color:C.amber }}>13/10/7 = Moderate</span>
-          <span style={{ color:C.green }}>4 / T = Easy / Auto-Turn</span>
-          <span style={{ color:"#a8ff78" }}>D = Auto-Destroy</span>
-        </div>
-        <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic" }}>
-          Roll d20 equal to or above the listed number to turn. T = automatic turn, D = automatic destroy.
-        </div>
+            <div style={{ display:"flex", gap:20, flexWrap:"wrap", fontSize:11, color:C.textDim, marginBottom:12 }}>
+              <span>Legend:</span>
+              <span style={{ color:C.textDim }}>— = Cannot turn</span>
+              <span style={{ color:C.red }}>20/19/16 = Hard (high d20 roll needed)</span>
+              <span style={{ color:C.amber }}>13/10/7 = Moderate</span>
+              <span style={{ color:C.green }}>4 / T = Easy / Auto-Turn</span>
+              <span style={{ color:"#a8ff78" }}>D = Auto-Destroy</span>
+            </div>
+            <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic" }}>
+              Roll d20 equal to or above the listed number to turn. T = automatic turn, D = automatic destroy.
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -182,7 +179,7 @@ export function ThiefTab(props) {
   if (!isThiefClass) {
     return (
       <div>
-        <ChHead icon="🗝️" num="Chapter 9" title="Class Skills"
+        <ChHead icon="🗝️" num="Class Specific Skills" title="Thieving Abilities"
           sub="Class-specific skills are available to Thieves, Bards, Rangers, Clerics, and Paladins." />
         <div style={{ padding:"40px 0", textAlign:"center", color:C.textDim, fontStyle:"italic" }}>
           Select <strong style={{ color:C.gold }}>Thief</strong>,{" "}
@@ -248,12 +245,22 @@ export function ThiefTab(props) {
   const discLeft = (discPool ?? THIEF_DISC_POINTS) - discUsed;
 
   // ── How many skills are still locked (needs purchase) ────────────────────────
-  const lockedCount = availableSkills.filter(sk => !isUnlocked(sk)).length;
+  const lockedCount  = availableSkills.filter(sk => !isUnlocked(sk)).length;
+  const unlockedCount = availableSkills.length - lockedCount;
 
   return (
     <div>
-      <ChHead icon="🗝️" num="Chapter 9" title="Thieving Abilities"
+      <ChHead icon="🗝️" num="Class Specific Skills" title="Thieving Abilities"
         sub="60 discretionary points in multiples of 5. Base + Racial (Table 28) + Sub-Stat (Table 29) + Armor (Table 30) + Discretionary = Final %. Purchase class abilities in the Classes tab to unlock each skill." />
+
+      {/* ── Gate: show table only if at least one skill is unlocked ── */}
+      {unlockedCount === 0 ? (
+        <div style={{ padding:"40px 0", textAlign:"center", color:C.textDim, fontStyle:"italic" }}>
+          No class-specific skills selected.{" "}
+          <strong style={{ color:C.gold }}>Select Thieving abilities</strong> from your class abilities
+          in the <strong style={{ color:C.gold }}>Classes tab</strong> to unlock them here.
+        </div>
+      ) : (<>
 
       {/* ── Class ability reminder (if any skills still locked) ── */}
       {lockedCount > 0 && (
@@ -492,6 +499,8 @@ export function ThiefTab(props) {
         <span style={{ color:C.amber }}>● 20–49% Novice</span>
         <span style={{ color:C.green }}>● 50%+ Proficient</span>
       </div>
+
+      </>)}
     </div>
   );
 }

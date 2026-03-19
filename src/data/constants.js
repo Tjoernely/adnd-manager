@@ -9,7 +9,7 @@ export const TABS = [
   { id:"profs",   label:"VI. Nonweapon Proficiencies",    icon:"📖" },
   { id:"weapons",  label:"VII. Weapon Proficiencies",     icon:"🗡️" },
   { id:"mastery",  label:"VIII. Specialization & Mastery", icon:"⭐" },
-  { id:"thieving", label:"IX. Thieving Abilities",         icon:"🗝️" },
+  { id:"thieving", label:"IX. Class Specific Skills",       icon:"🗝️" },
   { id:"portrait", label:"X. Portrait",                     icon:"🎨" },
 ];
 
