@@ -44,6 +44,16 @@ const TURN_TABLE = [
 ];
 const TURN_COLS = ["1","2","3","4","5","6","7","8","9","10","11","12","13+"];
 
+// Cell color for Turn Undead table values
+const cellColor = (v) => {
+  if (v === "-") return C.textDim;
+  if (v === "D") return "#a8ff78";
+  if (v === "T") return C.green;
+  if (typeof v === "number" && v <= 7)  return C.green;
+  if (typeof v === "number" && v <= 13) return C.amber;
+  return C.red;
+};
+
 export function ThiefTab(props) {
   const {
     selectedClass,
@@ -70,15 +80,6 @@ export function ThiefTab(props) {
     // Paladins turn as a cleric 2 levels lower (minimum 1)
     const effLvl       = isPaladin ? Math.max(1, lvl - 2) : lvl;
     const colIdx       = Math.min(effLvl - 1, 12); // 0-based index into TURN_COLS
-
-    function cellColor(v) {
-      if (v === "-") return C.textDim;
-      if (v === "D") return "#a8ff78";
-      if (v === "T") return C.green;
-      if (typeof v === "number" && v <= 7)  return C.green;
-      if (typeof v === "number" && v <= 13) return C.amber;
-      return C.red;
-    }
 
     return (
       <div>

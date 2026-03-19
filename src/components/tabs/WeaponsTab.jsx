@@ -3,7 +3,7 @@ import {
   WEAPON_GROUPS_49, getWeaponSiblings, getWeapCost, weapSlotCost, WEAP_COSTS,
   getWeapTier, getWeapSingleCostByTier, getGroupMaxTier,
   getWeapBadgeColor, getWeapCostTooltip,
-  getClassWeaponRestriction, isWeaponAllowed, isGroupRestricted,
+  getClassWeaponRestriction, isWeaponAllowed,
 } from "../../data/weapons.js";
 import { ChHead, GroupLabel } from "../ui/index.js";
 
