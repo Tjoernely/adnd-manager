@@ -68,26 +68,29 @@ const S1_WEAPONS = [
   { roll_min: 975,  roll_max: 1000, item_name: '✦ Special (Roll on Table S3)',  isSpecialRow: true },
 ];
 
-// ── Hardcoded S2 — Bonus tables (d20) ─────────────────────────────────────
+// ── Hardcoded S2 — Bonus tables (d100) ────────────────────────────────────
+// Curse is NOT encoded here — determined probabilistically in pushCompositePane.
 const S2_ATTACK = [
-  { roll_min: 1,  roll_max: 2,  item_name: '+1',          bonus: 1,  cursed: false },
-  { roll_min: 3,  roll_max: 5,  item_name: '+2',          bonus: 2,  cursed: false },
-  { roll_min: 6,  roll_max: 9,  item_name: '+3',          bonus: 3,  cursed: false },
-  { roll_min: 10, roll_max: 14, item_name: '+4',          bonus: 4,  cursed: false },
-  { roll_min: 15, roll_max: 17, item_name: '+5',          bonus: 5,  cursed: false },
-  { roll_min: 18, roll_max: 18, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
-  { roll_min: 19, roll_max: 19, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
-  { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
+  { roll_min:  1, roll_max:  1,  item_name: '−3', bonus: -3 },
+  { roll_min:  2, roll_max:  4,  item_name: '−2', bonus: -2 },
+  { roll_min:  5, roll_max: 10,  item_name: '−1', bonus: -1 },
+  { roll_min: 11, roll_max: 20,  item_name: '0',  bonus:  0 },
+  { roll_min: 21, roll_max: 55,  item_name: '+1', bonus:  1 },
+  { roll_min: 56, roll_max: 76,  item_name: '+2', bonus:  2 },
+  { roll_min: 77, roll_max: 87,  item_name: '+3', bonus:  3 },
+  { roll_min: 88, roll_max: 98,  item_name: '+4', bonus:  4 },
+  { roll_min: 99, roll_max: 100, item_name: '+5', bonus:  5 },
 ];
 const S2_DAMAGE = [
-  { roll_min: 1,  roll_max: 2,  item_name: '+1',          bonus: 1,  cursed: false },
-  { roll_min: 3,  roll_max: 5,  item_name: '+2',          bonus: 2,  cursed: false },
-  { roll_min: 6,  roll_max: 9,  item_name: '+3',          bonus: 3,  cursed: false },
-  { roll_min: 10, roll_max: 14, item_name: '+4',          bonus: 4,  cursed: false },
-  { roll_min: 15, roll_max: 17, item_name: '+5',          bonus: 5,  cursed: false },
-  { roll_min: 18, roll_max: 18, item_name: '−1 (Cursed)', bonus: -1, cursed: true  },
-  { roll_min: 19, roll_max: 19, item_name: '−2 (Cursed)', bonus: -2, cursed: true  },
-  { roll_min: 20, roll_max: 20, item_name: '−3 (Cursed)', bonus: -3, cursed: true  },
+  { roll_min:  1, roll_max:  2,  item_name: '−3', bonus: -3 },
+  { roll_min:  3, roll_max:  7,  item_name: '−2', bonus: -2 },
+  { roll_min:  8, roll_max: 12,  item_name: '−1', bonus: -1 },
+  { roll_min: 13, roll_max: 20,  item_name: '0',  bonus:  0 },
+  { roll_min: 21, roll_max: 41,  item_name: '+1', bonus:  1 },
+  { roll_min: 42, roll_max: 62,  item_name: '+2', bonus:  2 },
+  { roll_min: 63, roll_max: 83,  item_name: '+3', bonus:  3 },
+  { roll_min: 84, roll_max: 95,  item_name: '+4', bonus:  4 },
+  { roll_min: 96, roll_max: 100, item_name: '+5', bonus:  5 },
 ];
 
 // ── Hardcoded R1 — Generic Magical Armor (d1000) ──────────────────────────
@@ -185,6 +188,29 @@ function buildWikiUrl(name) {
     .replace(/[\u2018\u2019\u02BC]/g, "'")
     .replace(/\s+/g, '_');
   return `https://adnd2e.fandom.com/wiki/${wikiName}_(EM)`;
+}
+
+// ── Curse determination for weapon S2 rolls ───────────────────────────────
+// Rules:
+//   Both hit AND damage negative  → always cursed (100%)
+//   Either modifier is −1         → 30% chance cursed
+//   Either modifier is −2         → 60% chance cursed
+//   Either modifier is −3         → 90% chance cursed
+//   No negative modifier          → not cursed
+function determineCursed(atkEntry, dmgEntry) {
+  const atkBonus = atkEntry?.bonus ?? 0;
+  const hasDmg   = dmgEntry != null;
+  const dmgBonus = hasDmg ? (dmgEntry?.bonus ?? 0) : 0;
+
+  // Both negative → always cursed
+  if (hasDmg && atkBonus < 0 && dmgBonus < 0) return true;
+
+  // Worst (most negative) single modifier
+  const worstBonus = hasDmg ? Math.min(atkBonus, dmgBonus) : atkBonus;
+  if (worstBonus >= 0) return false;
+
+  const chance = worstBonus === -1 ? 0.30 : worstBonus === -2 ? 0.60 : 0.90;
+  return Math.random() < chance;
 }
 
 // ── Module-level fetch helpers ─────────────────────────────────────────────
@@ -402,7 +428,7 @@ function ItemListRow({ item, selected, onClick }) {
   );
 }
 
-function DetailPanel({ item, loading, error, compositeName, compositeAtk, compositeDmg, fallback, note, children }) {
+function DetailPanel({ item, loading, error, compositeName, compositeAtk, compositeDmg, cursed: forceCursed, fallback, note, children }) {
   if (loading) {
     return (
       <div className="mi-pane-loading" style={{ flex: 1, flexDirection: 'column', padding: 24 }}>
@@ -412,7 +438,7 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
   }
   if (error) return <div className="mi-pane-empty" style={{ flex: 1 }}>{error}</div>;
 
-  const isCursed    = compositeAtk?.cursed || compositeDmg?.cursed || !!item?.cursed;
+  const isCursed    = !!forceCursed || compositeAtk?.cursed || compositeDmg?.cursed || !!item?.cursed;
   const displayName = compositeName ?? item?.name ?? '—';
   const description = item?.description_preview || item?.description || item?.fallback_description || null;
 
@@ -588,7 +614,13 @@ export default function DrillDown() {
     // Composite panes are always weapons (S) or armor (R)
     const tbl     = isArmor ? 'R' : 'S';
 
-    pushPane(fromIdx, { type: 'description', mode: 'composite', name, baseEntry, atkEntry, dmgEntry, isArmor, loading: true, item: null, error: null });
+    // For weapons: probabilistic curse from S2 modifiers.
+    // For armor:  use cursed flag from R2_BONUS entry (old behaviour preserved).
+    const isCursed = isArmor
+      ? (atkEntry?.cursed ?? false)
+      : determineCursed(atkEntry, dmgEntry);
+
+    pushPane(fromIdx, { type: 'description', mode: 'composite', name, baseEntry, atkEntry, dmgEntry, isArmor, cursed: isCursed, loading: true, item: null, error: null });
 
     const catName = baseEntry?.item_name ?? '';
     const wikiUrl = buildWikiUrl(catName);
@@ -613,8 +645,8 @@ export default function DrillDown() {
     pushCompositePane(fromIdx, pane.weaponEntry, pane.atkSel, entry);
   }
   function rollBothS2(fromIdx, pane) {
-    const atkN     = rollDie(20);
-    const dmgN     = rollDie(20);
+    const atkN     = rollDie(100);
+    const dmgN     = rollDie(100);
     const atkEntry = findRow(S2_ATTACK, atkN);
     const dmgEntry = findRow(S2_DAMAGE, dmgN);
     updatePane(fromIdx, { atkSel: atkEntry, dmgSel: dmgEntry, lastRoll: [atkN, dmgN] });
@@ -781,6 +813,7 @@ export default function DrillDown() {
             compositeName={pane.name}
             compositeAtk={pane.atkEntry}
             compositeDmg={pane.dmgEntry}
+            cursed={pane.cursed}
             fallback={
               pane.isArmor
                 ? `A magically enhanced ${pane.baseEntry?.item_name ?? 'armor'}. Apply the listed bonus to armor class.`
@@ -945,7 +978,7 @@ export default function DrillDown() {
               <div className="mi-bonus-col">
                 <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
                   <span>Attack Bonus</span>
-                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(S2_ATTACK, n); if (e) selectS2Atk(i, pane, e); }} />
+                  <DiceRoller sides={100} label="d100" onRoll={n => { const e = findRow(S2_ATTACK, n); if (e) selectS2Atk(i, pane, e); }} />
                 </div>
                 <div className="mi-bonus-col-body">
                   {S2_ATTACK.map((entry, j) => (
@@ -958,7 +991,7 @@ export default function DrillDown() {
               <div className="mi-bonus-col">
                 <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
                   <span>Damage Bonus</span>
-                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(S2_DAMAGE, n); if (e) selectS2Dmg(i, pane, e); }} />
+                  <DiceRoller sides={100} label="d100" onRoll={n => { const e = findRow(S2_DAMAGE, n); if (e) selectS2Dmg(i, pane, e); }} />
                 </div>
                 <div className="mi-bonus-col-body">
                   {S2_DAMAGE.map((entry, j) => (
