@@ -27,13 +27,13 @@ const MODULES = [
     fetch: (id) => api.getCharacters(id).then(r => safeLen(r)),
   },
   {
-    id:    'encounters',
-    icon:  '⚔️',
-    label: 'Encounters',
-    desc:  'Plan monsters, tactics and battlefields',
+    id:    'monsters',
+    icon:  '🐉',
+    label: 'Monsters & Encounters',
+    desc:  'Browse the monster manual & plan encounters',
     color: '#c84444',
-    unit:  'encounter',
-    fetch: (id) => api.getEncounters(id).then(r => safeLen(r)),
+    unit:  'monster',
+    fetch: () => api.getMonstersMeta().then(r => r.total),
   },
   {
     id:    'quests',
@@ -128,6 +128,8 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
       onNavigate('spells');
     } else if (mod.id === 'magical-items') {
       onNavigate('magical-items');
+    } else if (mod.id === 'monsters') {
+      onNavigate('monsters');
     } else {
       // Module exists in backend but has no dedicated UI page yet
       setComingSoon(mod);

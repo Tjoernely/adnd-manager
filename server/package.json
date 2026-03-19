@@ -11,7 +11,8 @@
     "import:spells": "node ../scripts/import-spells.mjs",
     "import:items":   "node ../scripts/import-magical-items.mjs",
     "import:s3items":    "node ../scripts/import-s3-items.mjs",
-    "import:items-all":  "node ../scripts/import-item-descriptions.mjs"
+    "import:items-all":  "node ../scripts/import-item-descriptions.mjs",
+    "import:monsters":   "node ../scripts/import-monsters.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

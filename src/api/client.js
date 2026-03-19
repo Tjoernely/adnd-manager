@@ -158,6 +158,20 @@ export const api = {
     return apiFetch(`/magical-items/random-hoard${qs ? `?${qs}` : ''}`);
   },
 
+  // ── Monsters ──────────────────────────────────────────────────────
+  // params: { search, type, size, alignment, habitat, campaign_id, hd_min, hd_max, limit, page }
+  searchMonsters: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/monsters${qs ? `?${qs}` : ''}`);
+  },
+  getMonstersMeta:   ()          => apiFetch('/monsters/meta'),
+  getMonster:        (id)        => apiFetch(`/monsters/${id}`),
+  createMonster:     (data)      => apiFetch('/monsters',       { method: 'POST',   body: JSON.stringify(data) }),
+  updateMonster:     (id, data)  => apiFetch(`/monsters/${id}`,  { method: 'PUT',   body: JSON.stringify(data) }),
+  deleteMonster:     (id)        => apiFetch(`/monsters/${id}`,  { method: 'DELETE' }),
+
   // ── Maps ──────────────────────────────────────────────────────────
   getMaps:     (campaignId) => apiFetch(`/maps?campaign_id=${campaignId}`),
   getMap:      (id)         => apiFetch(`/maps/${id}`),

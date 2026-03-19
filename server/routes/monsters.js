@@ -1,0 +1,207 @@
+/**
+ * /api/monsters
+ *   GET    /           — search/filter monsters
+ *   GET    /meta       — counts, types, sizes for filters
+ *   GET    /:id        — single monster
+ *   POST   /           — create custom monster (DM only)
+ *   PUT    /:id        — update monster
+ *   DELETE /:id        — delete monster
+ *
+ * Query params for GET /:
+ *   search, type, size, campaign_id, hd_min, hd_max, alignment, habitat
+ *   limit (default 50), page (default 1)
+ */
+const express = require('express');
+const db      = require('../db');
+const { auth } = require('../middleware/auth');
+
+const router = express.Router();
+
+// ── GET /meta ──────────────────────────────────────────────────────────────
+router.get('/meta', async (req, res) => {
+  try {
+    const [totalRow, types, sizes] = await Promise.all([
+      db.one('SELECT COUNT(*)::int AS total FROM monsters WHERE campaign_id IS NULL'),
+      db.all(`SELECT type, COUNT(*)::int AS count FROM monsters
+              WHERE campaign_id IS NULL AND type IS NOT NULL
+              GROUP BY type ORDER BY count DESC`),
+      db.all(`SELECT size, COUNT(*)::int AS count FROM monsters
+              WHERE campaign_id IS NULL AND size IS NOT NULL
+              GROUP BY size ORDER BY count DESC`),
+    ]);
+    res.json({ total: totalRow?.total ?? 0, types, sizes });
+  } catch (e) { next500(e, res); }
+});
+
+// ── GET / ──────────────────────────────────────────────────────────────────
+router.get('/', async (req, res) => {
+  try {
+    const {
+      search     = '',
+      type       = '',
+      size       = '',
+      alignment  = '',
+      habitat    = '',
+      campaign_id,
+      hd_min,
+      hd_max,
+      limit  = 50,
+      page   = 1,
+    } = req.query;
+
+    const params  = [];
+    const clauses = [];
+    let   p       = 1;
+
+    // Global monsters (campaign_id IS NULL) or campaign-specific
+    if (campaign_id) {
+      clauses.push(`(campaign_id IS NULL OR campaign_id=$${p++})`);
+      params.push(Number(campaign_id));
+    } else {
+      clauses.push('campaign_id IS NULL');
+    }
+
+    if (search) {
+      clauses.push(`name ILIKE $${p++}`);
+      params.push(`%${search}%`);
+    }
+    if (type)      { clauses.push(`type ILIKE $${p++}`);      params.push(`%${type}%`);      }
+    if (size)      { clauses.push(`size ILIKE $${p++}`);      params.push(size);             }
+    if (alignment) { clauses.push(`alignment ILIKE $${p++}`); params.push(`%${alignment}%`); }
+    if (habitat)   { clauses.push(`habitat ILIKE $${p++}`);   params.push(`%${habitat}%`);   }
+
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const lim    = Math.min(Math.max(1, Number(limit)),  200);
+    const offset = (Math.max(1, Number(page)) - 1) * lim;
+
+    const [rows, countRow] = await Promise.all([
+      db.all(
+        `SELECT id, name, source, hit_dice, hit_points, armor_class, thac0,
+                movement, size, type, alignment, attacks, damage, xp_value,
+                armor_profile_id, generated_hp, frequency, habitat, tags
+         FROM monsters ${where}
+         ORDER BY name ASC
+         LIMIT $${p} OFFSET $${p+1}`,
+        [...params, lim, offset],
+      ),
+      db.one(`SELECT COUNT(*)::int AS total FROM monsters ${where}`, params),
+    ]);
+
+    res.json({ monsters: rows, total: countRow?.total ?? 0, page: Number(page), limit: lim });
+  } catch (e) { next500(e, res); }
+});
+
+// ── GET /:id ───────────────────────────────────────────────────────────────
+router.get('/:id', async (req, res) => {
+  try {
+    const monster = await db.one('SELECT * FROM monsters WHERE id=$1', [req.params.id]);
+    if (!monster) return res.status(404).json({ error: 'Monster not found' });
+    res.json(monster);
+  } catch (e) { next500(e, res); }
+});
+
+// ── POST / ────────────────────────────────────────────────────────────────
+router.post('/', auth, async (req, res) => {
+  try {
+    const {
+      campaign_id, name, source = 'Custom',
+      hit_dice, hit_points, armor_class, thac0, movement,
+      size, type, alignment, attacks, damage,
+      special_attacks, special_defenses, save_as, morale, xp_value,
+      description, habitat, frequency,
+      armor_profile_id = 'none', generated_hp, tags = [],
+    } = req.body ?? {};
+
+    if (!name) return res.status(400).json({ error: 'name required' });
+
+    // DM check for campaign-specific monsters
+    if (campaign_id) {
+      const ok = await db.one(
+        'SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2',
+        [campaign_id, req.user.id],
+      );
+      if (!ok) return res.status(403).json({ error: 'DM only' });
+    }
+
+    const row = await db.one(
+      `INSERT INTO monsters
+         (name, source, hit_dice, hit_points, armor_class, thac0, movement,
+          size, type, alignment, attacks, damage, special_attacks, special_defenses,
+          save_as, morale, xp_value, description, habitat, frequency,
+          armor_profile_id, generated_hp, tags, campaign_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       RETURNING *`,
+      [name, source, hit_dice, hit_points, armor_class, thac0, movement,
+       size, type, alignment, attacks, damage, special_attacks, special_defenses,
+       save_as, morale, xp_value, description, habitat, frequency,
+       armor_profile_id, generated_hp, tags, campaign_id ?? null],
+    );
+    res.status(201).json(row);
+  } catch (e) { next500(e, res); }
+});
+
+// ── PUT /:id ───────────────────────────────────────────────────────────────
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const existing = await db.one('SELECT * FROM monsters WHERE id=$1', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    if (existing.campaign_id) {
+      const ok = await db.one(
+        'SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2',
+        [existing.campaign_id, req.user.id],
+      );
+      if (!ok) return res.status(403).json({ error: 'DM only' });
+    }
+
+    const fields = [
+      'name','source','hit_dice','hit_points','armor_class','thac0','movement',
+      'size','type','alignment','attacks','damage','special_attacks','special_defenses',
+      'save_as','morale','xp_value','description','habitat','frequency',
+      'armor_profile_id','generated_hp','tags',
+    ];
+    const updates = [];
+    const values  = [];
+    let p = 1;
+    fields.forEach(f => {
+      if (req.body[f] !== undefined) {
+        updates.push(`${f}=$${p++}`);
+        values.push(req.body[f]);
+      }
+    });
+    if (!updates.length) return res.json(existing);
+
+    values.push(req.params.id);
+    const row = await db.one(
+      `UPDATE monsters SET ${updates.join(',')} WHERE id=$${p} RETURNING *`,
+      values,
+    );
+    res.json(row);
+  } catch (e) { next500(e, res); }
+});
+
+// ── DELETE /:id ────────────────────────────────────────────────────────────
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const existing = await db.one('SELECT campaign_id FROM monsters WHERE id=$1', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    if (existing.campaign_id) {
+      const ok = await db.one(
+        'SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2',
+        [existing.campaign_id, req.user.id],
+      );
+      if (!ok) return res.status(403).json({ error: 'DM only' });
+    }
+    await db.query('DELETE FROM monsters WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (e) { next500(e, res); }
+});
+
+function next500(e, res) {
+  console.error('[monsters]', e.message);
+  res.status(500).json({ error: 'Server error' });
+}
+
+module.exports = router;

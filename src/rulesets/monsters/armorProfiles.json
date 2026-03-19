@@ -1,0 +1,122 @@
+[
+  {
+    "id": "none",
+    "name": "Unarmored / Bare Flesh",
+    "desc": "No significant protection. Skin or light covering only.",
+    "icon": "🩸",
+    "reductionByType": {
+      "slashing": 0, "piercing": 0, "bludgeoning": 0,
+      "fire": 0, "cold": 0, "lightning": 0, "acid": 0, "poison": 0
+    },
+    "gracePct": 1.0,
+    "notes": "All damage passes through fully."
+  },
+  {
+    "id": "padded_cloth",
+    "name": "Padded / Cloth",
+    "desc": "Light fabric padding provides minimal protection.",
+    "icon": "🧥",
+    "reductionByType": {
+      "slashing": 1, "piercing": 0, "bludgeoning": 1,
+      "fire": 0, "cold": 1, "lightning": 0, "acid": 0, "poison": 0
+    },
+    "gracePct": 0.90,
+    "notes": "Minor padding reduces cutting and cold damage slightly."
+  },
+  {
+    "id": "leather",
+    "name": "Leather / Hide",
+    "desc": "Cured hide or leather armor providing moderate protection.",
+    "icon": "🥋",
+    "reductionByType": {
+      "slashing": 2, "piercing": 1, "bludgeoning": 0,
+      "fire": 1, "cold": 1, "lightning": 0, "acid": 0, "poison": 0
+    },
+    "gracePct": 0.85,
+    "notes": "Good vs slashing. Poor vs bludgeoning and energy."
+  },
+  {
+    "id": "chain",
+    "name": "Chain Mail",
+    "desc": "Interlocking metal rings. Excellent vs slashing and piercing.",
+    "icon": "⛓️",
+    "reductionByType": {
+      "slashing": 3, "piercing": 3, "bludgeoning": 0,
+      "fire": 1, "cold": 1, "lightning": 1, "acid": 1, "poison": 0
+    },
+    "gracePct": 0.80,
+    "notes": "Strong vs weapons. Weak vs blunt and electricity."
+  },
+  {
+    "id": "plate",
+    "name": "Full Plate",
+    "desc": "Solid metal plate offering superior protection in most categories.",
+    "icon": "🛡️",
+    "reductionByType": {
+      "slashing": 5, "piercing": 4, "bludgeoning": 2,
+      "fire": 2, "cold": 2, "lightning": 2, "acid": 2, "poison": 0
+    },
+    "gracePct": 0.70,
+    "notes": "Best physical protection. Still vulnerable to poison and extreme elements."
+  },
+  {
+    "id": "dense_flesh",
+    "name": "Dense Flesh",
+    "desc": "Thick, tough musculature typical of most large monsters.",
+    "icon": "💪",
+    "reductionByType": {
+      "slashing": 1, "piercing": 1, "bludgeoning": 2,
+      "fire": 0, "cold": 0, "lightning": 0, "acid": 0, "poison": 0
+    },
+    "gracePct": 0.88,
+    "notes": "Default for most creatures. Slightly better vs blunt."
+  },
+  {
+    "id": "thick_hide",
+    "name": "Thick Hide",
+    "desc": "Rhinoceros-thick skin found on giants, ogres, large beasts.",
+    "icon": "🦏",
+    "reductionByType": {
+      "slashing": 3, "piercing": 2, "bludgeoning": 2,
+      "fire": 1, "cold": 1, "lightning": 0, "acid": 1, "poison": 0
+    },
+    "gracePct": 0.80,
+    "notes": "Broad physical resistance. Balanced profile."
+  },
+  {
+    "id": "carapace",
+    "name": "Chitinous Carapace",
+    "desc": "Hard insect or crustacean shell. Excellent vs piercing and slashing.",
+    "icon": "🦀",
+    "reductionByType": {
+      "slashing": 4, "piercing": 4, "bludgeoning": -1,
+      "fire": 0, "cold": 0, "lightning": 0, "acid": 2, "poison": 2
+    },
+    "gracePct": 0.75,
+    "notes": "Very hard shell. Weak spot: bludgeoning (+1 extra damage)."
+  },
+  {
+    "id": "stone_body",
+    "name": "Stone / Construct Body",
+    "desc": "Rock, iron, or animated stone golem-like construction.",
+    "icon": "🗿",
+    "reductionByType": {
+      "slashing": 6, "piercing": 6, "bludgeoning": 3,
+      "fire": 4, "cold": 4, "lightning": 4, "acid": 2, "poison": 10
+    },
+    "gracePct": 0.55,
+    "notes": "Near-immune to most physical and energy attacks. High flat reductions."
+  },
+  {
+    "id": "dragon_scales",
+    "name": "Dragon Scales",
+    "desc": "Overlapping magical scales with elemental affinity.",
+    "icon": "🐉",
+    "reductionByType": {
+      "slashing": 5, "piercing": 4, "bludgeoning": 4,
+      "fire": 8, "cold": 8, "lightning": 8, "acid": 8, "poison": 5
+    },
+    "gracePct": 0.60,
+    "notes": "Extraordinarily resilient. Elemental affinity may grant immunity."
+  }
+]
