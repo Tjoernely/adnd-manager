@@ -364,16 +364,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {/* Maps button (all campaign members) */}
-                <button onClick={()=>setShowMaps(true)} style={{
-                  fontSize:11, padding:"4px 10px", borderRadius:5, cursor:"pointer",
-                  background:"rgba(0,0,0,.35)", border:`1px solid ${C.border}`,
-                  color:C.textDim, fontFamily:"inherit",
-                }}
-                  onMouseEnter={e=>{ e.target.style.background="rgba(20,60,20,.35)"; e.target.style.color="#6ab04a"; }}
-                  onMouseLeave={e=>{ e.target.style.background="rgba(0,0,0,.35)";    e.target.style.color=C.textDim; }}>
-                  🗺 Maps
-                </button>
                 {/* Print button */}
                 <button onClick={()=>setShowPrint(true)} style={{
                   fontSize:11, padding:"4px 10px", borderRadius:5, cursor:"pointer",

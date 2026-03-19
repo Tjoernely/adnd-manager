@@ -342,7 +342,10 @@ export function useCharacter() {
     });
     return total;
   }, [weapPicked, classGroup]);
-  const profCPSp    = useMemo(() => ALL_NWP.filter(p => profsPicked[p.id]).reduce((s, p) => s + nwpEffCp(p), 0), [profsPicked, nwpEffCp]);
+  const profCPSp    = useMemo(() =>
+    ALL_NWP.filter(p => profsPicked[p.id])
+      .reduce((s, p) => s + Math.max(0, nwpEffCp(p) - (isKitRecommended(p) && activeKitObj ? 1 : 0)), 0),
+    [profsPicked, nwpEffCp, isKitRecommended, activeKitObj]);
 
   // Ch.8 CP: mastery tiers + weapon of choice + fighting styles
   const mastCPSp    = useMemo(() => {

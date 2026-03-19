@@ -479,6 +479,63 @@ export function computeProfCanonicalIds(weapPicked) {
   return ids;
 }
 
+// ── Class weapon restrictions ─────────────────────────────────────────────────
+// Cleric: bludgeoning weapons + staff only (clubs, maces, flails, hammers, staff)
+const CLERIC_ALLOWED = new Set([
+  "wc_club","wc_great_club","wc_war_club","wc_ankus","wc_morning_star",
+  "wc_foot_mace","wc_horse_mace","wc_mace_axe","wa_mace_axe",
+  "wc_horse_flail","wc_foot_flail",
+  "wa_war_hammer","wa_maul","wa_sledge",
+  "wm_staff","wj_bo_stick",
+]);
+
+// Druid: club, dagger, dart, scimitar, sickle*, sling, spear, staff (* not in data)
+const DRUID_ALLOWED = new Set([
+  "wc_club","wc_great_club","wc_war_club","wc_ankus","wc_morning_star",
+  "we_dagger","we_stiletto","we_jambiya","we_main_gauche","we_parry_dagger","we_knife","we_katar",
+  "ws_dagger_sw","ws_main_gauche_f","ws_parry_dag_f",
+  "wh_dart",
+  "ws_scimitar","ws_great_scimitar","ws_great_scimitar_me",
+  "wm_sling",
+  "wh_spear","wh_long_spear",
+  "wm_staff",
+]);
+
+// Wizard (mage/illusionist/specialist): dagger, dart, knife, staff, sling
+const WIZARD_ALLOWED = new Set([
+  "we_dagger","we_stiletto","we_jambiya","we_main_gauche","we_parry_dagger","we_knife","we_katar",
+  "ws_dagger_sw","ws_main_gauche_f","ws_parry_dag_f",
+  "wh_dart",
+  "wm_staff",
+  "wm_sling",
+]);
+
+/** Returns { label, allowed: Set } for the class, or null if unrestricted. */
+export function getClassWeaponRestriction(selectedClass, classGroup) {
+  if (selectedClass === "cleric" || selectedClass === "shaman")
+    return { label:"Clerics may only use bludgeoning weapons (clubs, maces, flails, hammers, staff).", allowed: CLERIC_ALLOWED };
+  if (selectedClass === "druid")
+    return { label:"Druids may only use: club, dagger, dart, scimitar, sickle, sling, spear, staff.", allowed: DRUID_ALLOWED };
+  if (classGroup === "wizard")
+    return { label:"Wizards may only use: dagger, dart, knife, staff, sling.", allowed: WIZARD_ALLOWED };
+  return null;
+}
+
+/** True if the given weapon ID is allowed for this class. Shield/armor profs always pass. */
+export function isWeaponAllowed(weapId, selectedClass, classGroup) {
+  if (weapId.startsWith("wsp_")) return true; // shield/armor profs — always OK
+  const r = getClassWeaponRestriction(selectedClass, classGroup);
+  if (!r) return true;
+  return r.allowed.has(weapId);
+}
+
+/** Returns true if at least one weapon in the group is restricted. */
+export function isGroupRestricted(groupWeapIds, selectedClass, classGroup) {
+  const r = getClassWeaponRestriction(selectedClass, classGroup);
+  if (!r) return false;
+  return groupWeapIds.some(id => !r.allowed.has(id));
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  CHAPTER 8 — SPECIALIZATION & MASTERY (Combat & Tactics + S&P)
 // ═══════════════════════════════════════════════════════════════════

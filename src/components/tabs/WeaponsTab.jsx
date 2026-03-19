@@ -3,6 +3,7 @@ import {
   WEAPON_GROUPS_49, getWeaponSiblings, getWeapCost, weapSlotCost, WEAP_COSTS,
   getWeapTier, getWeapSingleCostByTier, getGroupMaxTier,
   getWeapBadgeColor, getWeapCostTooltip,
+  getClassWeaponRestriction, isWeaponAllowed, isGroupRestricted,
 } from "../../data/weapons.js";
 import { ChHead, GroupLabel } from "../ui/index.js";
 
@@ -26,11 +27,24 @@ function CpBadge({ cost, color }) {
 
 export function WeaponsTab(props) {
   const {
-    weapPicked, remainCP, classGroup,
+    weapPicked, remainCP, classGroup, selectedClass,
     weapCPSp, wSlotCost,
     ruleBreaker, setInfoModal, setConfirmBox,
     toggleWeap,
   } = props;
+
+  const classRestriction = getClassWeaponRestriction(selectedClass, classGroup);
+
+  function warnAndToggle(weapId, name, level) {
+    if (!isWeaponAllowed(weapId, selectedClass, classGroup)) {
+      setInfoModal({
+        title: "⚠ Weapon Restriction",
+        body: `${classRestriction?.label ?? "This class has weapon restrictions."}\n\n"${name}" is outside the allowed list. You may still select it (Rule-Breaker).`,
+      });
+      return; // block unless ruleBreaker allows
+    }
+    toggleWeap(weapId, name, level);
+  }
 
   return (
     <div>
@@ -72,6 +86,16 @@ export function WeaponsTab(props) {
           </div>
         ))}
       </div>
+
+      {/* ── Class restriction banner ── */}
+      {classRestriction && (
+        <div style={{ marginBottom:14, padding:"8px 14px",
+          background:"rgba(180,80,20,.1)", border:`1px solid rgba(200,100,30,.4)`,
+          borderRadius:8, fontSize:12, color:C.amber }}>
+          ⚠ <strong>Weapon restriction:</strong> {classRestriction.label}
+          {" "}Forbidden weapons are marked with ⊘.
+        </div>
+      )}
 
       {(() => {
         // ── Covered weapons (fully proficient) ───────────────────────────────
@@ -226,34 +250,40 @@ export function WeaponsTab(props) {
                         const canAfford      = remainCP >= singleCost;
                         const unaffordable   = !anyPicked && !familiar && !groupCovered && !siblingCovered && !canAfford && !ruleBreaker;
                         const clickable      = !groupCovered && !siblingCovered && !familiar && !unaffordable;
+                        const restricted     = !isWeaponAllowed(w.id, selectedClass, classGroup);
                         return (
                           <div key={w.id}
                             title={
+                              restricted ? (classRestriction?.label ?? "Restricted for this class") :
                               siblingCovered ? "Covered via same weapon in another group" :
                               familiar ? "Familiar — half non-proficiency penalty" :
                               unaffordable ? `Not enough CP (need ${singleCost}, have ${remainCP})` :
                               !anyPicked ? tooltip : ""
                             }
-                            onClick={()=>{ if(clickable) toggleWeap(w.id, w.name, "single"); }}
+                            onClick={()=>{ if(clickable) warnAndToggle(w.id, w.name, "single"); }}
                             style={{
                               background: groupCovered?"rgba(60,160,60,.18)":
                                           siblingCovered?"rgba(100,160,220,.12)":
                                           familiar?"rgba(200,140,40,.14)":
-                                          directPicked?"rgba(212,160,53,.18)":"rgba(0,0,0,.3)",
+                                          directPicked?"rgba(212,160,53,.18)":
+                                          restricted?"rgba(180,50,50,.08)":"rgba(0,0,0,.3)",
                               border:`1px solid ${
                                 groupCovered?"rgba(60,180,60,.4)":
                                 siblingCovered?"rgba(80,130,200,.4)":
                                 familiar?"rgba(200,140,40,.45)":
+                                restricted?"rgba(180,60,60,.4)":
                                 directPicked?C.borderHi:C.border}`,
                               borderRadius:6, padding:"5px 11px", fontSize:11,
                               color: anyPicked ? (siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri) :
-                                     familiar ? "#d4a040" : unaffordable ? "#444" : C.textDim,
+                                     familiar ? "#d4a040" : unaffordable ? "#444" :
+                                     restricted ? "#c06060" : C.textDim,
                               cursor: clickable ? "pointer" : "default",
                               opacity: unaffordable ? 0.45 : 1,
                               transition:"all .12s",
                               display:"flex", alignItems:"center", gap:5,
                             }}>
                             {directPicked && "✓ "}{w.name}
+                            {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }} title={classRestriction?.label}>⊘</span>}
                             {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
                             {familiar && <span style={{ fontSize:9, color:"#b08030" }}>~</span>}
                             {!anyPicked && !familiar && (
@@ -292,30 +322,35 @@ export function WeaponsTab(props) {
                       const canAfford      = remainCP >= singleCost;
                       const unaffordable   = !anyPicked && !groupCovered && !siblingCovered && !canAfford && !ruleBreaker;
                       const clickable      = !groupCovered && !siblingCovered && !unaffordable;
+                      const restricted     = !isWeaponAllowed(w.id, selectedClass, classGroup);
                       return (
                         <div key={w.id}
                           title={
+                            restricted ? (classRestriction?.label ?? "Restricted for this class") :
                             siblingCovered ? "Covered via same weapon in another group" :
                             unaffordable ? `Not enough CP (need ${singleCost}, have ${remainCP})` :
                             !anyPicked ? tooltip : ""
                           }
-                          onClick={()=>{ if(clickable) toggleWeap(w.id, w.name, wLevel); }}
+                          onClick={()=>{ if(clickable) warnAndToggle(w.id, w.name, wLevel); }}
                           style={{
                             background: groupCovered?"rgba(60,160,60,.18)":
                                         siblingCovered?"rgba(100,160,220,.12)":
-                                        directPicked?"rgba(212,160,53,.18)":"rgba(0,0,0,.3)",
+                                        directPicked?"rgba(212,160,53,.18)":
+                                        restricted?"rgba(180,50,50,.08)":"rgba(0,0,0,.3)",
                             border:`1px solid ${groupCovered?"rgba(60,180,60,.4)":
                                                  siblingCovered?"rgba(80,130,200,.4)":
+                                                 restricted?"rgba(180,60,60,.4)":
                                                  directPicked?C.borderHi:C.border}`,
                             borderRadius:6, padding:"5px 11px", fontSize:11,
                             color: anyPicked?(siblingCovered?"#90b8e0":groupCovered?"#90d080":C.textBri):
-                                   unaffordable?"#444":C.textDim,
+                                   unaffordable?"#444":restricted?"#c06060":C.textDim,
                             cursor: clickable?"pointer":"default",
                             opacity: unaffordable ? 0.45 : 1,
                             transition:"all .12s",
                             display:"flex", alignItems:"center", gap:5,
                           }}>
                           {directPicked && "✓ "}{w.name}
+                          {restricted && !anyPicked && <span style={{ fontSize:9, color:"#c06060" }}>⊘</span>}
                           {siblingCovered && <span style={{ fontSize:9, color:"#6090c0" }}>↔</span>}
                           {!anyPicked && (
                             <CpBadge cost={singleCost} color={unaffordable ? "green" : badgeColor} />

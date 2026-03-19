@@ -22,12 +22,33 @@ function sgn(n) {
 }
 
 // Classes that show this tab
-const THIEF_CLASSES = new Set(["thief", "bard", "ranger"]);
+const THIEF_CLASSES   = new Set(["thief", "bard", "ranger"]);
+const TURNING_CLASSES = new Set(["cleric", "paladin", "shaman"]);
+
+// ── Turn Undead table (S&P Table 36) ─────────────────────────────────────────
+// '-' = cannot turn, 'T' = automatic turn, 'D' = automatic destroy, number = d20 roll needed
+const TURN_TABLE = [
+  { name:"Skeleton", vals:[10,7,4,"T","T","D","D","D","D","D","D","D","D"] },
+  { name:"Zombie",   vals:[13,10,7,4,"T","T","D","D","D","D","D","D","D"] },
+  { name:"Ghoul",    vals:[16,13,10,7,4,"T","T","D","D","D","D","D","D"] },
+  { name:"Shadow",   vals:[19,16,13,10,7,4,"T","T","D","D","D","D","D"] },
+  { name:"Wight",    vals:[20,19,16,13,10,7,4,"T","T","D","D","D","D"] },
+  { name:"Ghast",    vals:["-",20,19,16,13,10,7,4,"T","T","D","D","D"] },
+  { name:"Wraith",   vals:["-","-",20,19,16,13,10,7,4,"T","T","D","D"] },
+  { name:"Mummy",    vals:["-","-","-",20,19,16,13,10,7,4,"T","T","D"] },
+  { name:"Spectre",  vals:["-","-","-","-",20,19,16,13,10,7,4,"T","T"] },
+  { name:"Vampire",  vals:["-","-","-","-","-",20,19,16,13,10,7,4,"T"] },
+  { name:"Ghost",    vals:["-","-","-","-","-","-",20,19,16,13,10,7,4] },
+  { name:"Lich",     vals:["-","-","-","-","-","-","-",20,19,16,13,10,7] },
+  { name:"Special",  vals:["-","-","-","-","-","-","-","-",20,19,16,13,10] },
+];
+const TURN_COLS = ["1","2","3","4","5","6","7","8","9","10","11","12","13+"];
 
 export function ThiefTab(props) {
   const {
     selectedClass,
     selectedRace,
+    charLevel,
     effSub,
     thiefDiscPoints,
     thiefArmorType, setThiefArmorType,
@@ -41,17 +62,133 @@ export function ThiefTab(props) {
     ruleBreaker,
   } = props;
 
+  // ── Turn Undead section for Clerics and Paladins ──────────────────────────
+  if (TURNING_CLASSES.has(selectedClass)) {
+    const hasTurnAbil  = !!(classAbilPicked?.cl11 || classAbilPicked?.pa12);
+    const isPaladin    = selectedClass === "paladin";
+    const lvl          = Math.max(1, charLevel ?? 1);
+    // Paladins turn as a cleric 2 levels lower (minimum 1)
+    const effLvl       = isPaladin ? Math.max(1, lvl - 2) : lvl;
+    const colIdx       = Math.min(effLvl - 1, 12); // 0-based index into TURN_COLS
+
+    function cellColor(v) {
+      if (v === "-") return C.textDim;
+      if (v === "D") return "#a8ff78";
+      if (v === "T") return C.green;
+      if (typeof v === "number" && v <= 7)  return C.green;
+      if (typeof v === "number" && v <= 13) return C.amber;
+      return C.red;
+    }
+
+    return (
+      <div>
+        <ChHead icon="✝️" num="Chapter 9" title="Turn Undead"
+          sub={isPaladin
+            ? `Paladins turn as a cleric 2 levels lower. Your level: ${lvl} → effective cleric level: ${effLvl}. Purchase "Turn Undead" in the Classes tab to unlock.`
+            : `Turn or destroy undead per Table 36 (S&P p.86). Purchase "Turn Undead" in the Classes tab to unlock.`}
+        />
+
+        {!hasTurnAbil && (
+          <div style={{ marginBottom:16, padding:"8px 14px",
+            background:"rgba(180,120,20,.1)", border:`1px solid rgba(180,120,20,.35)`,
+            borderRadius:8, fontSize:12, color:C.amber }}>
+            ⚠ Turn Undead is not yet purchased — buy it in the <strong>Classes tab</strong> to confirm access.
+          </div>
+        )}
+
+        {isPaladin && (
+          <div style={{ marginBottom:14, padding:"8px 14px",
+            background:"rgba(80,80,160,.12)", border:`1px solid rgba(120,120,200,.3)`,
+            borderRadius:8, fontSize:12, color:"#a0a8e0" }}>
+            🛡 Paladin: turns as Cleric level <strong>{effLvl}</strong> (character level {lvl} − 2)
+          </div>
+        )}
+
+        <div style={{ overflowX:"auto", marginBottom:24 }}>
+          <table style={{ borderCollapse:"collapse", fontSize:11, minWidth:600 }}>
+            <thead>
+              <tr style={{ borderBottom:`2px solid ${C.borderHi}` }}>
+                <th style={{ padding:"6px 12px", textAlign:"left",
+                  fontSize:10, letterSpacing:1.5, color:C.textDim,
+                  textTransform:"uppercase", whiteSpace:"nowrap" }}>
+                  Undead Type
+                </th>
+                {TURN_COLS.map((col, ci) => (
+                  <th key={ci} style={{
+                    padding:"6px 10px", textAlign:"center", minWidth:36,
+                    fontSize:10, letterSpacing:1, color: ci === colIdx ? C.gold : C.textDim,
+                    textTransform:"uppercase", whiteSpace:"nowrap",
+                    background: ci === colIdx ? "rgba(212,160,53,.15)" : "transparent",
+                    borderRadius: ci === colIdx ? "6px 6px 0 0" : 0,
+                    fontWeight: ci === colIdx ? "bold" : "normal",
+                  }}>
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TURN_TABLE.map((row, ri) => (
+                <tr key={ri} style={{
+                  background: ri % 2 === 0 ? "rgba(0,0,0,.15)" : "transparent",
+                  opacity: hasTurnAbil ? 1 : 0.5,
+                }}>
+                  <td style={{ padding:"5px 12px", color:C.textBri, fontWeight:"bold", whiteSpace:"nowrap" }}>
+                    {row.name}
+                  </td>
+                  {row.vals.map((v, ci) => {
+                    const isActive = ci === colIdx;
+                    return (
+                      <td key={ci} style={{
+                        padding:"5px 10px", textAlign:"center",
+                        background: isActive ? "rgba(212,160,53,.12)" : "transparent",
+                        fontWeight: isActive ? "bold" : "normal",
+                        fontSize: isActive ? 13 : 12,
+                      }}>
+                        <span style={{
+                          color: isActive ? (v === "-" ? C.textDim : cellColor(v)) : cellColor(v),
+                          textShadow: isActive && v !== "-" ? `0 0 8px ${cellColor(v)}60` : "none",
+                        }}>
+                          {v}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display:"flex", gap:20, flexWrap:"wrap", fontSize:11, color:C.textDim, marginBottom:12 }}>
+          <span>Legend:</span>
+          <span style={{ color:C.textDim }}>— = Cannot turn</span>
+          <span style={{ color:C.red }}>20/19/16 = Hard (high d20 roll needed)</span>
+          <span style={{ color:C.amber }}>13/10/7 = Moderate</span>
+          <span style={{ color:C.green }}>4 / T = Easy / Auto-Turn</span>
+          <span style={{ color:"#a8ff78" }}>D = Auto-Destroy</span>
+        </div>
+        <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic" }}>
+          Roll d20 equal to or above the listed number to turn. T = automatic turn, D = automatic destroy.
+        </div>
+      </div>
+    );
+  }
+
   const isThiefClass = THIEF_CLASSES.has(selectedClass);
 
   if (!isThiefClass) {
     return (
       <div>
-        <ChHead icon="🗝️" num="Chapter 9" title="Thieving Abilities"
-          sub="Thieving skills are available to Thieves, Bards, and Rangers. Select one of those classes to access this section." />
+        <ChHead icon="🗝️" num="Chapter 9" title="Class Skills"
+          sub="Class-specific skills are available to Thieves, Bards, Rangers, Clerics, and Paladins." />
         <div style={{ padding:"40px 0", textAlign:"center", color:C.textDim, fontStyle:"italic" }}>
           Select <strong style={{ color:C.gold }}>Thief</strong>,{" "}
-          <strong style={{ color:C.gold }}>Bard</strong>, or{" "}
-          <strong style={{ color:C.gold }}>Ranger</strong> in the Classes tab to unlock thieving abilities.
+          <strong style={{ color:C.gold }}>Bard</strong>,{" "}
+          <strong style={{ color:C.gold }}>Ranger</strong>,{" "}
+          <strong style={{ color:C.gold }}>Cleric</strong>, or{" "}
+          <strong style={{ color:C.gold }}>Paladin</strong> in the Classes tab to unlock this section.
         </div>
       </div>
     );
