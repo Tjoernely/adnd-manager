@@ -26,6 +26,7 @@ import { NPCManager }        from "./components/npcs/NPCManager.jsx";
 import SpellLibrary           from "./components/spells/SpellLibrary.jsx";
 import MonsterLibrary         from "./components/monsters/MonsterLibrary.jsx";
 import MagicalItemLibrary     from "./components/items/MagicalItemLibrary.jsx";
+import PartyHub               from "./components/partyhub/PartyHub.jsx";
 import "./styles/adnd-theme.css";
 
 export default function App() {
@@ -48,7 +49,7 @@ export default function App() {
   const [showMaps,     setShowMaps]     = useState(false);
   const [screen,       setScreen]       = useState(() => {
     try { return sessionStorage.getItem('adnd_screen') || 'dashboard'; } catch { return 'dashboard'; }
-  }); // 'dashboard' | 'characters' | 'npcs' | 'spells' | 'magical-items'
+  }); // 'dashboard' | 'characters' | 'npcs' | 'spells' | 'magical-items' | 'monsters' | 'party-hub'
 
   // ── Sync navigation state to sessionStorage ──────────────────────
   useEffect(() => {
@@ -173,6 +174,7 @@ export default function App() {
             if (modId === 'spells')        setScreen('spells');
             if (modId === 'magical-items') setScreen('magical-items');
             if (modId === 'monsters')      setScreen('monsters');
+            if (modId === 'party-hub')     setScreen('party-hub');
           }}
           onOpenMaps={() => setShowMaps(true)}
           onBack={() => { setActiveCampaign(null); setDbCharId(null); setScreen('dashboard'); }}
@@ -192,6 +194,17 @@ export default function App() {
   if (screen === 'monsters') {
     return (
       <MonsterLibrary campaignId={activeCampaign?.id} onBack={() => setScreen('dashboard')} />
+    );
+  }
+
+  // ── Party Hub screen ─────────────────────────────────────────
+  if (screen === 'party-hub') {
+    return (
+      <PartyHub
+        campaign={activeCampaign}
+        user={user}
+        onBack={() => setScreen('dashboard')}
+      />
     );
   }
 

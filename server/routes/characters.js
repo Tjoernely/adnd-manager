@@ -130,16 +130,19 @@ router.put('/:id', auth, async (req, res) => {
       : false;
     if (!isOwn && !isDM) return res.status(403).json({ error: 'Access denied' });
 
-    const { character_data, data, name, campaign_id } = req.body ?? {};
-    const newData    = character_data ?? data ?? row.character_data;
-    const newName    = (name ?? newData?.charName ?? row.name).trim();
+    const { character_data, data, name, campaign_id, visibility, dm_notes } = req.body ?? {};
+    const newData     = character_data ?? data ?? row.character_data;
+    const newName     = (name ?? newData?.charName ?? row.name).trim();
     const newCampaign = campaign_id !== undefined ? campaign_id : row.campaign_id;
+    // Only DM can set visibility and dm_notes
+    const newVisibility = isDM && visibility !== undefined ? visibility : (row.visibility ?? 'party');
+    const newDmNotes    = isDM && dm_notes    !== undefined ? dm_notes    : row.dm_notes;
 
     const updated = await db.one(
       `UPDATE characters
-       SET name=$1, campaign_id=$2, character_data=$3, updated_at=NOW()
-       WHERE id=$4 RETURNING *`,
-      [newName, newCampaign, JSON.stringify(newData), req.params.id],
+       SET name=$1, campaign_id=$2, character_data=$3, visibility=$4, dm_notes=$5, updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [newName, newCampaign, JSON.stringify(newData), newVisibility, newDmNotes, req.params.id],
     );
     res.json(fmt(updated));
   } catch (e) { next500(e, res); }

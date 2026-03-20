@@ -220,4 +220,20 @@ export const api = {
   createKnowledge: (data)            => apiFetch('/party-knowledge',       { method: 'POST',   body: JSON.stringify(data) }),
   updateKnowledge: (id, data)        => apiFetch(`/party-knowledge/${id}`,  { method: 'PUT',   body: JSON.stringify(data) }),
   deleteKnowledge: (id)              => apiFetch(`/party-knowledge/${id}`,  { method: 'DELETE' }),
+
+  // ── Party Hub ─────────────────────────────────────────────────────
+  getPartyHub: (campaignId) => apiFetch(`/party-hub?campaign_id=${campaignId}`),
+
+  // ── Party Inventory ───────────────────────────────────────────────
+  getPartyInventory:   (campaignId) => apiFetch(`/party-inventory?campaign_id=${campaignId}`),
+  createInventoryItem: (data)       => apiFetch('/party-inventory',        { method: 'POST',   body: JSON.stringify(data) }),
+  updateInventoryItem: (id, data)   => apiFetch(`/party-inventory/${id}`,   { method: 'PUT',    body: JSON.stringify(data) }),
+  deleteInventoryItem: (id)         => apiFetch(`/party-inventory/${id}`,   { method: 'DELETE' }),
+
+  // ── Visibility toggles (DM only) ──────────────────────────────────
+  setQuestVisibility:     (id, v) => apiFetch(`/quests/${id}`,          { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
+  setEncounterVisibility: (id, v) => apiFetch(`/encounters/${id}`,      { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
+  setCharacterVisibility: (id, v) => apiFetch(`/characters/${id}`,      { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
+  setCharacterDmNotes:    (id, n) => apiFetch(`/characters/${id}`,      { method: 'PUT', body: JSON.stringify({ dm_notes: n }) }),
+  setKnowledgeVisibility: (id, vt)=> apiFetch(`/party-knowledge/${id}`, { method: 'PUT', body: JSON.stringify({ visible_to: vt }) }),
 };

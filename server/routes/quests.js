@@ -20,13 +20,13 @@ router.get('/', auth, async (req, res) => {
     const { campaign_id } = req.query;
     if (!campaign_id) return res.status(400).json({ error: 'campaign_id required' });
 
-    if (!(await hasAccess(campaign_id, req.user.id)))
-      return res.status(403).json({ error: 'Access denied' });
+    const access = await campaignAccess(campaign_id, req.user.id);
+    if (!access) return res.status(403).json({ error: 'Access denied' });
 
-    const rows = await db.all(
-      'SELECT * FROM quests WHERE campaign_id=$1 ORDER BY created_at DESC',
-      [campaign_id],
-    );
+    const rows = access.isDM
+      ? await db.all('SELECT * FROM quests WHERE campaign_id=$1 ORDER BY created_at DESC', [campaign_id])
+      : await db.all("SELECT * FROM quests WHERE campaign_id=$1 AND visibility='party' ORDER BY created_at DESC", [campaign_id]);
+
     res.json(rows);
   } catch (e) { next500(e, res); }
 });
@@ -68,10 +68,14 @@ router.put('/:id', auth, async (req, res) => {
     if (!(await isDM(quest.campaign_id, req.user.id)))
       return res.status(403).json({ error: 'DM only' });
 
-    const { title = quest.title, data = quest.data } = req.body ?? {};
+    const {
+      title      = quest.title,
+      data       = quest.data,
+      visibility = quest.visibility ?? 'dm_only',
+    } = req.body ?? {};
     const updated = await db.one(
-      `UPDATE quests SET title=$1, data=$2, updated_at=NOW() WHERE id=$3 RETURNING *`,
-      [title.trim(), JSON.stringify(data), req.params.id],
+      `UPDATE quests SET title=$1, data=$2, visibility=$3, updated_at=NOW() WHERE id=$4 RETURNING *`,
+      [title.trim(), JSON.stringify(data), visibility, req.params.id],
     );
     res.json(updated);
   } catch (e) { next500(e, res); }
@@ -100,6 +104,16 @@ function hasAccess(campaignId, userId) {
      WHERE c.id=$1 AND (c.dm_user_id=$2 OR cm.user_id=$2)`,
     [campaignId, userId],
   );
+}
+async function campaignAccess(campaignId, userId) {
+  const row = await db.one(
+    `SELECT (c.dm_user_id=$2) AS is_dm,
+            EXISTS(SELECT 1 FROM campaign_members cm WHERE cm.campaign_id=$1 AND cm.user_id=$2) AS is_member
+     FROM campaigns c WHERE c.id=$1`,
+    [campaignId, userId],
+  );
+  if (!row || (!row.is_dm && !row.is_member)) return null;
+  return { isDM: row.is_dm, isMember: row.is_member };
 }
 function next500(e, res) {
   console.error('[quests]', e.message);
