@@ -96,15 +96,31 @@ export function MonsterDetail({ monsterId, onClose }) {
         }}>✕</button>
       </div>
 
-      {monster.source && (
-        <span style={{
-          fontSize: 9, letterSpacing: 2, color: C.textDim,
-          background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`,
-          borderRadius: 10, padding: '1px 8px', textTransform: 'uppercase',
-        }}>
-          {monster.source}
-        </span>
-      )}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {monster.source && (
+          <span style={{
+            fontSize: 9, letterSpacing: 2, color: C.textDim,
+            background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`,
+            borderRadius: 10, padding: '1px 8px', textTransform: 'uppercase',
+          }}>
+            {monster.source}
+          </span>
+        )}
+        {monster.wiki_url && (
+          <a
+            href={monster.wiki_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 9, letterSpacing: 1, color: C.blue,
+              background: 'rgba(0,0,0,.4)', border: `1px solid rgba(104,168,208,.3)`,
+              borderRadius: 10, padding: '1px 8px', textDecoration: 'none',
+            }}
+          >
+            ↗ Wiki
+          </a>
+        )}
+      </div>
 
       {sectionHdr('Combat Stats')}
       {statRow('Armor Class', monster.armor_class, monster.armor_class <= 2 ? C.green : monster.armor_class >= 7 ? C.amber : C.text)}
@@ -127,6 +143,11 @@ export function MonsterDetail({ monsterId, onClose }) {
       {monster.special_defenses && (
         <div style={{ fontSize: 11, color: C.purple, marginTop: 4, lineHeight: 1.5 }}>
           <span style={{ color: C.textDim }}>Special Defenses: </span>{monster.special_defenses}
+        </div>
+      )}
+      {monster.magic_resistance && (
+        <div style={{ fontSize: 11, color: C.purple, marginTop: 4, lineHeight: 1.5 }}>
+          <span style={{ color: C.textDim }}>Magic Resistance: </span>{monster.magic_resistance}
         </div>
       )}
       {monster.save_as && statRow('Save As', monster.save_as)}

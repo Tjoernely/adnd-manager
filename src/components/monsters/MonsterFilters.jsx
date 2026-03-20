@@ -1,13 +1,33 @@
 import { C } from '../../data/constants.js';
 
 const MONSTER_TYPES = [
-  'humanoid','undead','giant','dragon','animal','monstrous','ooze',
-  'construct','lycanthrope','fey','elemental','outsider','plant',
+  'Humanoid', 'Undead', 'Beast/Animal', 'Dragon', 'Giant',
+  'Construct/Golem', 'Elemental', 'Monstrous', 'Aberration',
+  'Lycanthrope', 'Planar', 'Demi-human',
 ];
 
-const MONSTER_SIZES = ['tiny','small','medium','large','huge','gargantuan'];
+const SIZE_OPTIONS = [
+  { label: 'T', value: 'tiny',        title: 'Tiny' },
+  { label: 'S', value: 'small',       title: 'Small' },
+  { label: 'M', value: 'medium',      title: 'Medium' },
+  { label: 'L', value: 'large',       title: 'Large' },
+  { label: 'H', value: 'huge',        title: 'Huge' },
+  { label: 'G', value: 'gargantuan',  title: 'Gargantuan' },
+];
 
-const FREQUENCIES = ['Common','Uncommon','Rare','Very Rare'];
+const FREQUENCIES = ['Common', 'Uncommon', 'Rare', 'Very Rare', 'Unique'];
+
+const ALIGNMENTS = ['Good', 'Neutral', 'Evil', 'Lawful', 'Chaotic', 'Any'];
+
+const SORT_OPTIONS = [
+  { value: 'name_asc',  label: 'Name (A–Z)' },
+  { value: 'name_desc', label: 'Name (Z–A)' },
+  { value: 'hd_asc',   label: 'Hit Dice (low–high)' },
+  { value: 'hd_desc',  label: 'Hit Dice (high–low)' },
+  { value: 'ac_asc',   label: 'AC (best–worst)' },
+  { value: 'xp_asc',   label: 'XP (low–high)' },
+  { value: 'xp_desc',  label: 'XP (high–low)' },
+];
 
 export function MonsterFilters({ filters, onChange, meta }) {
   const types = meta?.types?.map(t => t.type) ?? MONSTER_TYPES;
@@ -26,43 +46,43 @@ export function MonsterFilters({ filters, onChange, meta }) {
     fontSize: 12,
     outline: 'none',
     width: '100%',
+    boxSizing: 'border-box',
   };
 
-  const chipBase = {
-    display: 'inline-block',
-    padding: '3px 10px',
-    borderRadius: 12,
-    fontSize: 11,
-    cursor: 'pointer',
-    border: `1px solid ${C.border}`,
-    background: 'rgba(0,0,0,.3)',
-    color: C.textDim,
-    transition: 'all .12s',
-    userSelect: 'none',
+  const labelStyle = {
+    fontSize: 10, letterSpacing: 2, color: C.textDim,
+    textTransform: 'uppercase', display: 'block', marginBottom: 5,
   };
 
-  const chipActive = {
-    ...chipBase,
-    border: `1px solid ${C.gold}`,
-    background: 'rgba(212,160,53,.15)',
-    color: C.gold,
-  };
+  const chipStyle = (active) => ({
+    display: 'inline-block', padding: '3px 9px', borderRadius: 10,
+    fontSize: 11, cursor: 'pointer', userSelect: 'none', transition: 'all .1s',
+    border: `1px solid ${active ? C.gold : C.border}`,
+    background: active ? 'rgba(212,160,53,.15)' : 'rgba(0,0,0,.3)',
+    color: active ? C.gold : C.textDim,
+  });
+
+  const btnStyle = (active) => ({
+    padding: '4px 10px', fontSize: 11, borderRadius: 5, cursor: 'pointer',
+    border: `1px solid ${active ? C.gold : C.border}`,
+    background: active ? 'rgba(212,160,53,.15)' : 'rgba(0,0,0,.3)',
+    color: active ? C.gold : C.textDim,
+    fontFamily: 'inherit', transition: 'all .1s',
+  });
+
+  const hasFilters = filters.search || filters.type || filters.size || filters.frequency
+    || filters.hd_min || filters.hd_max || filters.alignment || filters.min_ac || filters.max_ac;
 
   return (
     <div style={{
-      background: 'rgba(0,0,0,.3)',
-      border: `1px solid ${C.border}`,
-      borderRadius: 8,
-      padding: '14px 16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12,
+      background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+      borderRadius: 8, padding: '14px 14px',
+      display: 'flex', flexDirection: 'column', gap: 14,
     }}>
+
       {/* Search */}
       <div>
-        <label style={{ fontSize: 10, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
-          Search
-        </label>
+        <label style={labelStyle}>Search</label>
         <input
           type="text"
           placeholder="Monster name…"
@@ -72,16 +92,28 @@ export function MonsterFilters({ filters, onChange, meta }) {
         />
       </div>
 
+      {/* Sort */}
+      <div>
+        <label style={labelStyle}>Sort By</label>
+        <select
+          value={filters.sort ?? 'name_asc'}
+          onChange={e => set('sort', e.target.value)}
+          style={{ ...inputStyle, cursor: 'pointer' }}
+        >
+          {SORT_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Type */}
       <div>
-        <label style={{ fontSize: 10, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-          Type
-        </label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        <label style={labelStyle}>Type</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {types.map(t => (
             <span
               key={t}
-              style={filters.type === t ? chipActive : chipBase}
+              style={chipStyle(filters.type === t)}
               onClick={() => set('type', filters.type === t ? '' : t)}
             >
               {t}
@@ -92,68 +124,110 @@ export function MonsterFilters({ filters, onChange, meta }) {
 
       {/* Size */}
       <div>
-        <label style={{ fontSize: 10, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-          Size
-        </label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          {MONSTER_SIZES.map(s => (
-            <span
-              key={s}
-              style={filters.size === s ? chipActive : chipBase}
-              onClick={() => set('size', filters.size === s ? '' : s)}
+        <label style={labelStyle}>Size</label>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {SIZE_OPTIONS.map(s => (
+            <button
+              key={s.value}
+              title={s.title}
+              style={btnStyle(filters.size === s.value)}
+              onClick={() => set('size', filters.size === s.value ? '' : s.value)}
             >
-              {s}
-            </span>
+              {s.label}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* HD range */}
-      <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: 10, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
-            Min HD
-          </label>
-          <input
-            type="number" min={0} max={30}
-            placeholder="—"
-            value={filters.hd_min ?? ''}
-            onChange={e => set('hd_min', e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: 10, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
-            Max HD
-          </label>
-          <input
-            type="number" min={0} max={30}
-            placeholder="—"
-            value={filters.hd_max ?? ''}
-            onChange={e => set('hd_max', e.target.value)}
-            style={inputStyle}
-          />
+      {/* Frequency */}
+      <div>
+        <label style={labelStyle}>Frequency</label>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {FREQUENCIES.map(f => (
+            <button
+              key={f}
+              style={btnStyle(filters.frequency === f)}
+              onClick={() => set('frequency', filters.frequency === f ? '' : f)}
+            >
+              {f}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Habitat */}
+      {/* HD Range */}
       <div>
-        <label style={{ fontSize: 10, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
-          Habitat
-        </label>
-        <input
-          type="text"
-          placeholder="Forest, Underground…"
-          value={filters.habitat ?? ''}
-          onChange={e => set('habitat', e.target.value)}
-          style={inputStyle}
-        />
+        <label style={labelStyle}>Hit Dice Range</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <input
+              type="number" min={0} max={30}
+              placeholder="Min"
+              value={filters.hd_min ?? ''}
+              onChange={e => set('hd_min', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <input
+              type="number" min={0} max={30}
+              placeholder="Max"
+              value={filters.hd_max ?? ''}
+              onChange={e => set('hd_max', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Alignment */}
+      <div>
+        <label style={labelStyle}>Alignment</label>
+        <select
+          value={filters.alignment ?? ''}
+          onChange={e => set('alignment', e.target.value)}
+          style={{ ...inputStyle, cursor: 'pointer' }}
+        >
+          <option value="">All</option>
+          {ALIGNMENTS.map(a => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* AC Range */}
+      <div>
+        <label style={labelStyle}>Armor Class Range</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <input
+              type="number" min={-10} max={20}
+              placeholder="Min AC"
+              value={filters.min_ac ?? ''}
+              onChange={e => set('min_ac', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <input
+              type="number" min={-10} max={20}
+              placeholder="Max AC"
+              value={filters.max_ac ?? ''}
+              onChange={e => set('max_ac', e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Clear */}
-      {(filters.search || filters.type || filters.size || filters.hd_min || filters.hd_max || filters.habitat) && (
+      {hasFilters && (
         <button
-          onClick={() => onChange({ search: '', type: '', size: '', hd_min: '', hd_max: '', habitat: '' })}
+          onClick={() => onChange({
+            search: '', type: '', size: '', frequency: '',
+            hd_min: '', hd_max: '', alignment: '', min_ac: '', max_ac: '',
+            sort: filters.sort ?? 'name_asc',
+          })}
           style={{
             background: 'rgba(200,50,50,.15)', border: `1px solid rgba(200,50,50,.4)`,
             borderRadius: 5, padding: '6px 12px', cursor: 'pointer',
