@@ -137,7 +137,7 @@ export default function MagicalItemLibrary({ onBack }) {
     <div className="mi-screen">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="mi-header">
-        <button className="mi-back-btn" onClick={onBack} aria-label="Back">← Back</button>
+        <button className="mi-back-btn" onClick={onBack} aria-label="Back">← Dashboard</button>
         <h1 className="mi-title">⚗️ Magical Items</h1>
 
         {meta && (

@@ -1,24 +1,79 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
-import { getArmorProfile, describeHitLogic, computeGeneratedHp, applyGraceDamage } from '../../rules-engine/monsterEngine.js';
+import { getArmorProfile, describeHitLogic, applyGraceDamage } from '../../rules-engine/monsterEngine.js';
+import { computeGeneratedHp, rerollHp } from '../../rules-engine/monsterHp.js';
 
 const DAMAGE_TYPES = ['slashing','piercing','bludgeoning','fire','cold','lightning','acid','poison'];
 
 export function MonsterDetail({ monsterId, onClose }) {
-  const [monster, setMonster] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
-  const [dmgType, setDmgType] = useState('slashing');
-  const [rawDmg,  setRawDmg]  = useState(8);
+  const [monster,   setMonster]   = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState(null);
+  const [dmgType,   setDmgType]   = useState('slashing');
+  const [rawDmg,    setRawDmg]    = useState(8);
+
+  // Live HP state — initialized from DB data or freshly computed
+  const [hpData, setHpData] = useState(null);
+  const [savingRoll, setSavingRoll] = useState(false);
+  const [savedRoll,  setSavedRoll]  = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     api.getMonster(monsterId)
-      .then(m => { setMonster(m); setLoading(false); })
+      .then(m => {
+        setMonster(m);
+        // Initialise HP display from DB columns if present, else compute fresh
+        if (m.generated_hp_base != null && m.random_roll != null) {
+          setHpData({
+            generatedHpBase:  m.generated_hp_base,
+            randomRoll:       m.random_roll,
+            randomModifier:   m.random_modifier ?? 1.0,
+            generatedHpFinal: m.generated_hp ?? m.generated_hp_base,
+          });
+        } else {
+          // Compute on the fly (DB columns not yet filled)
+          const computed = computeGeneratedHp(m);
+          setHpData({
+            generatedHpBase:  computed.generatedHpBase,
+            randomRoll:       computed.randomRoll,
+            randomModifier:   computed.randomModifier,
+            generatedHpFinal: computed.generatedHpFinal,
+          });
+        }
+        setLoading(false);
+      })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [monsterId]);
+
+  // Re-roll the random modifier; keep base HP fixed
+  function handleReroll() {
+    if (!hpData) return;
+    const rolled = rerollHp(hpData.generatedHpBase);
+    setHpData(prev => ({ ...prev, ...rolled }));
+    setSavedRoll(false);
+  }
+
+  // Save the current roll to DB
+  async function handleSaveRoll() {
+    if (!monster || !hpData) return;
+    setSavingRoll(true);
+    try {
+      await api.updateMonster(monster.id, {
+        generated_hp:      hpData.generatedHpFinal,
+        generated_hp_base: hpData.generatedHpBase,
+        random_roll:       hpData.randomRoll,
+        random_modifier:   hpData.randomModifier,
+      });
+      setSavedRoll(true);
+      setTimeout(() => setSavedRoll(false), 2000);
+    } catch (e) {
+      console.error('Save roll:', e);
+    } finally {
+      setSavingRoll(false);
+    }
+  }
 
   if (loading) return (
     <div style={{
@@ -40,10 +95,9 @@ export function MonsterDetail({ monsterId, onClose }) {
 
   if (!monster) return null;
 
-  const profile   = getArmorProfile(monster.armor_profile_id);
-  const genHp     = computeGeneratedHp(monster);
-  const graceSim  = applyGraceDamage(rawDmg, monster.armor_profile_id, dmgType);
-  const hitDesc   = describeHitLogic(monster, dmgType);
+  const profile  = getArmorProfile(monster.armor_profile_id);
+  const graceSim = applyGraceDamage(rawDmg, monster.armor_profile_id, dmgType);
+  const hitDesc  = describeHitLogic(monster, dmgType);
 
   const sectionHdr = (label) => (
     <div style={{
@@ -68,6 +122,10 @@ export function MonsterDetail({ monsterId, onClose }) {
     color: active ? C.gold : C.textDim, fontFamily: 'inherit',
     transition: 'all .1s',
   });
+
+  // Format the random modifier as a +/- percentage
+  const pct = hpData ? Math.round((hpData.randomModifier - 1) * 100) : 0;
+  const pctStr = pct >= 0 ? `+${pct}%` : `${pct}%`;
 
   return (
     <div style={{
@@ -106,6 +164,15 @@ export function MonsterDetail({ monsterId, onClose }) {
             {monster.source}
           </span>
         )}
+        {monster.role && monster.role !== 'normal' && (
+          <span style={{
+            fontSize: 9, letterSpacing: 2, color: C.amber,
+            background: 'rgba(0,0,0,.4)', border: `1px solid rgba(200,160,50,.3)`,
+            borderRadius: 10, padding: '1px 8px', textTransform: 'uppercase',
+          }}>
+            {monster.role}
+          </span>
+        )}
         {monster.wiki_url && (
           <a
             href={monster.wiki_url}
@@ -122,16 +189,105 @@ export function MonsterDetail({ monsterId, onClose }) {
         )}
       </div>
 
+      {/* ── Combat Stats ── */}
       {sectionHdr('Combat Stats')}
       {statRow('Armor Class', monster.armor_class, monster.armor_class <= 2 ? C.green : monster.armor_class >= 7 ? C.amber : C.text)}
       {statRow('Hit Dice', monster.hit_dice)}
-      {statRow('HP (raw)', monster.hit_points)}
-      {statRow('HP (generated)', `~${genHp}`, C.textDim)}
       {statRow('THAC0', monster.thac0)}
       {statRow('Movement', monster.movement)}
       {statRow('Morale', monster.morale)}
       {statRow('XP Value', monster.xp_value?.toLocaleString(), C.gold)}
 
+      {/* ── HP Section ── */}
+      {sectionHdr('Hit Points')}
+      <div style={{
+        background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+        borderRadius: 8, padding: '12px 14px',
+      }}>
+        {/* Row: raw vs generated */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{
+            textAlign: 'center', padding: '8px 10px',
+            background: 'rgba(0,0,0,.25)', borderRadius: 6,
+            border: `1px solid ${C.border}`,
+          }}>
+            <div style={{ fontSize: 22, color: C.textDim, fontWeight: 'bold', lineHeight: 1 }}>
+              {monster.hit_points ?? '—'}
+            </div>
+            <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, marginTop: 3, textTransform: 'uppercase' }}>
+              Vanilla HP
+            </div>
+            <div style={{ fontSize: 9, color: C.textDim, marginTop: 1, fontStyle: 'italic' }}>
+              (raw from source)
+            </div>
+          </div>
+          <div style={{
+            textAlign: 'center', padding: '8px 10px',
+            background: 'rgba(200,50,50,.08)', borderRadius: 6,
+            border: `1px solid rgba(200,80,50,.3)`,
+          }}>
+            <div style={{ fontSize: 22, color: C.red, fontWeight: 'bold', lineHeight: 1 }}>
+              {hpData?.generatedHpFinal ?? '…'}
+            </div>
+            <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, marginTop: 3, textTransform: 'uppercase' }}>
+              Generated HP
+            </div>
+            <div style={{ fontSize: 9, color: C.textDim, marginTop: 1 }}>
+              size × type × role × roll
+            </div>
+          </div>
+        </div>
+
+        {/* Breakdown row */}
+        {hpData && (
+          <div style={{
+            display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
+            fontSize: 11, color: C.textDim, marginBottom: 10,
+            paddingTop: 8, borderTop: `1px solid ${C.border}`,
+          }}>
+            <span>Base: <strong style={{ color: C.text }}>{hpData.generatedHpBase}</strong></span>
+            <span style={{ color: C.textDim }}>·</span>
+            <span>
+              Roll: <strong style={{ color: C.gold }}>{hpData.randomRoll}</strong>/20
+              {' '}
+              <span style={{
+                fontSize: 10,
+                color: pct >= 0 ? C.green : C.red,
+              }}>({pctStr})</span>
+            </span>
+            <span style={{ color: C.textDim }}>·</span>
+            <span>Final: <strong style={{ color: C.red }}>{hpData.generatedHpFinal}</strong></span>
+          </div>
+        )}
+
+        {/* Reroll buttons */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleReroll}
+            style={{
+              background: 'rgba(212,160,53,.15)', border: `1px solid ${C.gold}`,
+              borderRadius: 5, padding: '5px 14px', cursor: 'pointer',
+              color: C.gold, fontFamily: 'inherit', fontSize: 11,
+            }}
+          >
+            🎲 Re-roll HP
+          </button>
+          <button
+            onClick={handleSaveRoll}
+            disabled={savingRoll}
+            style={{
+              background: savedRoll ? 'rgba(60,180,60,.2)' : 'rgba(0,0,0,.3)',
+              border: `1px solid ${savedRoll ? C.green : C.border}`,
+              borderRadius: 5, padding: '5px 14px', cursor: savingRoll ? 'not-allowed' : 'pointer',
+              color: savedRoll ? C.green : C.textDim, fontFamily: 'inherit', fontSize: 11,
+            }}
+          >
+            {savingRoll ? 'Saving…' : savedRoll ? '✓ Saved' : '💾 Save Roll'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Attacks ── */}
       {sectionHdr('Attacks')}
       {statRow('Attacks', monster.attacks)}
       {statRow('Damage', monster.damage)}
@@ -152,7 +308,7 @@ export function MonsterDetail({ monsterId, onClose }) {
       )}
       {monster.save_as && statRow('Save As', monster.save_as)}
 
-      {/* Armor Profile */}
+      {/* ── Armor Profile ── */}
       {sectionHdr('Armor Profile')}
       <div style={{
         background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
@@ -169,10 +325,7 @@ export function MonsterDetail({ monsterId, onClose }) {
           {profile.notes}
         </div>
 
-        {/* Damage reduction table */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4,
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
           {DAMAGE_TYPES.map(dt => {
             const r = profile.reductionByType[dt] ?? 0;
             const col = r > 0 ? C.green : r < 0 ? C.red : C.textDim;
@@ -194,7 +347,7 @@ export function MonsterDetail({ monsterId, onClose }) {
         </div>
       </div>
 
-      {/* Grace Damage Simulator */}
+      {/* ── Damage Simulator ── */}
       {sectionHdr('Damage Simulator')}
       <div style={{
         background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
@@ -204,7 +357,6 @@ export function MonsterDetail({ monsterId, onClose }) {
           Simulate damage against this armor profile:
         </div>
 
-        {/* Damage type selector */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
           {DAMAGE_TYPES.map(dt => (
             <button key={dt} style={btnStyle(dmgType === dt)} onClick={() => setDmgType(dt)}>
@@ -213,7 +365,6 @@ export function MonsterDetail({ monsterId, onClose }) {
           ))}
         </div>
 
-        {/* Raw damage input */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: C.textDim }}>Raw damage:</span>
           <input
@@ -227,7 +378,6 @@ export function MonsterDetail({ monsterId, onClose }) {
           />
         </div>
 
-        {/* Result */}
         <div style={{
           background: 'rgba(0,0,0,.4)', borderRadius: 6, padding: '10px 12px',
           display: 'flex', gap: 16, flexWrap: 'wrap',
@@ -250,7 +400,7 @@ export function MonsterDetail({ monsterId, onClose }) {
         </div>
       </div>
 
-      {/* Description */}
+      {/* ── Description ── */}
       {monster.description && (
         <>
           {sectionHdr('Description')}
@@ -260,7 +410,7 @@ export function MonsterDetail({ monsterId, onClose }) {
         </>
       )}
 
-      {/* Habitat / tags */}
+      {/* ── Ecology ── */}
       {(monster.habitat || monster.frequency || (monster.tags?.length > 0)) && (
         <>
           {sectionHdr('Ecology')}

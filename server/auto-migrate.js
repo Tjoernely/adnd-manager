@@ -42,6 +42,15 @@ async function autoMigrate() {
       );
     `);
 
+    // Monster HP system columns
+    await db.query(`
+      ALTER TABLE monsters
+        ADD COLUMN IF NOT EXISTS generated_hp_base INTEGER,
+        ADD COLUMN IF NOT EXISTS random_roll       INTEGER,
+        ADD COLUMN IF NOT EXISTS random_modifier   FLOAT,
+        ADD COLUMN IF NOT EXISTS role              VARCHAR(20) DEFAULT 'normal';
+    `);
+
     // Grant access — best-effort, may fail on managed DBs
     try {
       const u = process.env.DB_USER || 'adnduser';

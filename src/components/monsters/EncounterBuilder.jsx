@@ -12,22 +12,19 @@ const TERRAIN_OPTIONS = [
 
 const TERRAIN_HABITAT_MAP = {
   'Underground/Dungeon': 'underground',
-  'Forest':             'forest',
-  'Mountains':          'mountain',
-  'Urban':              'urban',
-  'Aquatic':            'aquatic',
-  'Desert':             'desert',
-  'Plains':             'plains',
-  'Swamp':              'swamp',
+  'Forest':              'forest',
+  'Mountains':           'mountain',
+  'Urban':               'urban',
+  'Aquatic':             'aquatic',
+  'Desert':              'desert',
+  'Plains':              'plains',
+  'Swamp':               'swamp',
 };
 
 const ENCOUNTER_TYPES = ['Random', 'Single Monster', 'Group', 'Mixed', 'Boss + Minions'];
+const DIFFICULTIES    = ['Easy', 'Medium', 'Hard', 'Deadly'];
+const DIFF_COLOR      = { Easy: C.green, Medium: C.gold, Hard: C.amber, Deadly: C.red };
 
-const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Deadly'];
-
-const DIFF_COLOR = { Easy: C.green, Medium: C.gold, Hard: C.amber, Deadly: C.red };
-
-// HD multiplier ranges per difficulty
 const HD_RANGES = {
   Easy:   { min: 0.50, max: 0.75 },
   Medium: { min: 0.75, max: 1.25 },
@@ -35,8 +32,75 @@ const HD_RANGES = {
   Deadly: { min: 1.50, max: 2.50 },
 };
 
-// XP per player-level to determine encounter difficulty after the fact
 const XP_THRESHOLD = { Easy: 100, Medium: 250, Hard: 500 };
+
+// ── Lore Grouping ──────────────────────────────────────────────────────────
+//
+// Monsters are assigned to a lore group based on type/name keywords.
+// COMPATIBLE_GROUPS maps each group to the set of groups that can
+// appear alongside it in the same encounter.
+
+const UNDEAD_NAMES    = ['skeleton','zombie','ghoul','ghast','wight','wraith','spectre','ghost','vampire','lich','mummy','revenant','banshee','shadow','spawn'];
+const EVIL_HUM_NAMES  = ['goblin','orc','hobgoblin','gnoll','bugbear','ogre','giant','troll','kobold','lizard man','lizardman','troglodyte','yuan-ti','gnoll','drow'];
+const GOOD_HUM_NAMES  = ['elf','dwarf','halfling','gnome','half-elf'];
+const BEAST_NAMES     = ['wolf','bear','spider','insect','ant','rat','bat','snake','lizard','hawk','eagle','crocodile','boar','tiger','lion','panther','scorpion','beetle','wasp'];
+const CONSTRUCT_NAMES = ['golem','automaton','animated'];
+const DEMON_NAMES     = ['demon','balor','nalfeshnee','glabrezu','marilith','vrock','hezrou'];
+const DEVIL_NAMES     = ['devil','baatezu','erinyes','cornugon','pit fiend','lemure','barbazu'];
+
+function getMonsterGroup(monster) {
+  const type = (monster.type ?? '').toLowerCase();
+  const name = (monster.name ?? '').toLowerCase();
+
+  if (type.includes('dragon') || name.includes('dragon'))                 return 'dragon';
+  if (type.includes('undead')  || UNDEAD_NAMES.some(n => name.includes(n))) return 'undead';
+
+  if (type.includes('elemental')) {
+    if (name.includes('fire'))                          return 'elemental_fire';
+    if (name.includes('water') || name.includes('ice')) return 'elemental_water';
+    if (name.includes('earth') || name.includes('stone')) return 'elemental_earth';
+    if (name.includes('air')   || name.includes('wind')) return 'elemental_air';
+    return 'elemental_any';
+  }
+
+  if (type.includes('construct') || CONSTRUCT_NAMES.some(n => name.includes(n))) return 'construct';
+
+  if (DEMON_NAMES.some(n => name.includes(n)))  return 'fiend_demon';
+  if (DEVIL_NAMES.some(n => name.includes(n)))  return 'fiend_devil';
+
+  if (EVIL_HUM_NAMES.some(n => name.includes(n)))                          return 'humanoid_evil';
+  if (GOOD_HUM_NAMES.some(n => name.includes(n)))                          return 'humanoid_good';
+  if (type.includes('humanoid'))                                            return 'humanoid_evil'; // default
+
+  if (type.includes('animal') || type.includes('beast') ||
+      BEAST_NAMES.some(n => name.includes(n)))                             return 'beast';
+
+  return 'any';
+}
+
+// Groups that may appear in the same encounter.
+// construct = [] means golems always fight alone.
+const COMPATIBLE_GROUPS = {
+  dragon:          ['dragon', 'humanoid_evil'],
+  undead:          ['undead'],
+  humanoid_evil:   ['humanoid_evil'],
+  humanoid_good:   ['humanoid_good'],
+  beast:           ['beast'],
+  elemental_fire:  ['elemental_fire'],
+  elemental_water: ['elemental_water'],
+  elemental_earth: ['elemental_earth'],
+  elemental_air:   ['elemental_air'],
+  elemental_any:   ['elemental_any'],
+  construct:       [],                 // fights alone
+  fiend_demon:     ['fiend_demon'],
+  fiend_devil:     ['fiend_devil'],
+  any:             ['any', 'humanoid_evil', 'humanoid_good', 'beast'],
+};
+
+function isCompatible(g1, g2) {
+  if (g1 === g2) return true;
+  return (COMPATIBLE_GROUPS[g1] ?? []).includes(g2);
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -70,26 +134,20 @@ function rateDifficulty(totalXp, level, partySize) {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function EncounterBuilder({ campaignId }) {
-  // Party settings
   const [partySize,  setPartySize]  = useState(4);
   const [level,      setLevel]      = useState(5);
   const [difficulty, setDifficulty] = useState('Medium');
+  const [terrain,    setTerrain]    = useState('Any');
+  const [encType,    setEncType]    = useState('Random');
 
-  // Encounter settings
-  const [terrain,  setTerrain]  = useState('Any');
-  const [encType,  setEncType]  = useState('Random');
-
-  // Generation state
   const [generating, setGenerating] = useState(false);
-  const [groups,     setGroups]     = useState(null);  // null = not generated yet
+  const [groups,     setGroups]     = useState(null);
   const [genError,   setGenError]   = useState(null);
 
-  // Save state
   const [encName, setEncName] = useState('');
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
 
-  // Detail overlay
   const [detailId, setDetailId] = useState(null);
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -105,6 +163,11 @@ export default function EncounterBuilder({ campaignId }) {
     textTransform: 'uppercase', display: 'block', marginBottom: 5,
   };
 
+  function hexToRgb(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : '212,160,53';
+  }
+
   function btnGroup(options, value, onChange, colorFn) {
     return (
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -115,7 +178,7 @@ export default function EncounterBuilder({ campaignId }) {
             <button key={o} onClick={() => onChange(o)} style={{
               padding: '5px 11px', fontSize: 11, borderRadius: 5, cursor: 'pointer',
               border: `1px solid ${active ? (col || C.gold) : C.border}`,
-              background: active ? `rgba(${col ? hexToRgb(col || C.gold) : '212,160,53'},.18)` : 'rgba(0,0,0,.3)',
+              background: active ? `rgba(${hexToRgb(col || C.gold)},.18)` : 'rgba(0,0,0,.3)',
               color: active ? (col || C.gold) : C.textDim,
               fontFamily: 'inherit', transition: 'all .1s',
             }}>
@@ -127,18 +190,13 @@ export default function EncounterBuilder({ campaignId }) {
     );
   }
 
-  function hexToRgb(hex) {
-    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : '212,160,53';
-  }
-
   // ── API helpers ───────────────────────────────────────────────────────────
 
   async function fetchPool(hdMin, hdMax, habitatTerm) {
     const params = {
       hd_min: Math.max(0, Math.floor(hdMin)),
       hd_max: Math.ceil(Math.max(hdMin + 0.5, hdMax)),
-      limit: 50,
+      limit: 80,
       sort: 'name_asc',
     };
     if (habitatTerm) params.habitat = habitatTerm;
@@ -164,12 +222,13 @@ export default function EncounterBuilder({ campaignId }) {
       let newGroups = [];
 
       if (encType === 'Boss + Minions') {
+        // Boss is significantly harder than party level
         const bossMin = Math.max(0.5, level * 1.5);
         const bossMax = level * 2.5;
         const minionMin = Math.max(0.25, level * 0.25);
-        const minionMax = Math.max(0.5, level * 0.5);
+        const minionMax = Math.max(0.5, level * 0.75);
 
-        const [bosses, minions] = await Promise.all([
+        const [bosses, minionPool] = await Promise.all([
           fetchPool(bossMin, bossMax, habitatTerm),
           fetchPool(minionMin, minionMax, habitatTerm),
         ]);
@@ -177,8 +236,14 @@ export default function EncounterBuilder({ campaignId }) {
         const boss = pickRandom(bosses);
         if (!boss) { setGenError('No suitable boss monsters found for these settings.'); return; }
 
-        const minion = pickRandom(minions.filter(m => m.id !== boss.id));
-        const minionCount = Math.floor(Math.random() * 5) + 2; // 2–6
+        // Minions must be lore-compatible with the boss
+        const bossGroup    = getMonsterGroup(boss);
+        const compatMinions = minionPool.filter(m =>
+          m.id !== boss.id && isCompatible(bossGroup, getMonsterGroup(m))
+        );
+        const minionSource = compatMinions.length ? compatMinions : minionPool.filter(m => m.id !== boss.id);
+        const minion       = pickRandom(minionSource);
+        const minionCount  = Math.floor(Math.random() * 5) + 2; // 2–6
 
         newGroups = [makeGroup(boss, 1)];
         if (minion) newGroups.push(makeGroup(minion, minionCount));
@@ -198,17 +263,32 @@ export default function EncounterBuilder({ campaignId }) {
           newGroups = [makeGroup(pickRandom(pool), count)];
 
         } else if (encType === 'Mixed') {
-          const n = Math.floor(Math.random() * 2) + 2; // 2–3 monster types
-          newGroups = pickRandomN(pool, n).map(m =>
-            makeGroup(m, Math.floor(Math.random() * 3) + 1)
+          // Pick first monster, then filter pool to lore-compatible only
+          const first = pickRandom(pool);
+          if (!first) { setGenError('No monsters found.'); return; }
+
+          const firstGroup  = getMonsterGroup(first);
+          const compatPool  = pool.filter(m =>
+            m.id !== first.id && isCompatible(firstGroup, getMonsterGroup(m))
           );
 
+          const n    = Math.floor(Math.random() * 2) + 2; // 2–3 types
+          const rest = pickRandomN(compatPool, n - 1);
+          newGroups  = [first, ...rest].map(m => makeGroup(m, Math.floor(Math.random() * 3) + 1));
+
         } else {
-          // Random: 1–3 groups, 1–4 each
-          const n = Math.floor(Math.random() * 3) + 1;
-          newGroups = pickRandomN(pool, n).map(m =>
-            makeGroup(m, Math.floor(Math.random() * 4) + 1)
+          // Random: 1–3 groups, lore-compatible
+          const first = pickRandom(pool);
+          if (!first) { setGenError('No monsters found.'); return; }
+
+          const firstGroup  = getMonsterGroup(first);
+          const compatPool  = pool.filter(m =>
+            m.id !== first.id && isCompatible(firstGroup, getMonsterGroup(m))
           );
+
+          const n    = Math.floor(Math.random() * 3) + 1;
+          const rest = pickRandomN(compatPool, n - 1);
+          newGroups  = [first, ...rest].map(m => makeGroup(m, Math.floor(Math.random() * 4) + 1));
         }
       }
 
@@ -257,7 +337,7 @@ export default function EncounterBuilder({ campaignId }) {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const totalXp = groups ? groups.reduce((s, g) => s + g.xpEach * g.count, 0) : 0;
+  const totalXp  = groups ? groups.reduce((s, g) => s + g.xpEach * g.count, 0) : 0;
   const ratedDiff = groups ? rateDifficulty(totalXp, level, partySize) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -265,7 +345,7 @@ export default function EncounterBuilder({ campaignId }) {
   return (
     <div style={{ fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif" }}>
 
-      {/* ── Settings panel ─────────────────────────────────────── */}
+      {/* ── Settings ────────────────────────────────────────────── */}
       <div style={{
         background: 'rgba(0,0,0,.25)', border: `1px solid ${C.borderHi}`,
         borderRadius: 10, padding: '20px 24px', marginBottom: 20,
@@ -274,7 +354,7 @@ export default function EncounterBuilder({ campaignId }) {
           ⚔️ Encounter Generator
         </div>
 
-        {/* Party settings row */}
+        {/* Party settings */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 18 }}>
           <div>
             <label style={labelStyle}>Party Size</label>
@@ -298,7 +378,7 @@ export default function EncounterBuilder({ campaignId }) {
           </div>
         </div>
 
-        {/* Terrain row */}
+        {/* Terrain */}
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Terrain / Environment</label>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -319,10 +399,17 @@ export default function EncounterBuilder({ campaignId }) {
           </div>
         </div>
 
-        {/* Encounter type row */}
-        <div style={{ marginBottom: 20 }}>
+        {/* Encounter type */}
+        <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Encounter Type</label>
           {btnGroup(ENCOUNTER_TYPES, encType, setEncType, null)}
+          <div style={{ fontSize: 10, color: C.textDim, marginTop: 6, fontStyle: 'italic' }}>
+            {encType === 'Mixed'         && 'Mixes lore-compatible monster types (undead with undead, humanoids with humanoids, etc.)'}
+            {encType === 'Boss + Minions'&& 'Boss type determines valid minion groups — no undead + living-animal mixes'}
+            {encType === 'Random'        && '1–3 groups of lore-compatible monsters'}
+            {encType === 'Group'         && 'Multiple of the same monster type'}
+            {encType === 'Single Monster'&& 'One monster — ideal for ambushes or rare encounters'}
+          </div>
         </div>
 
         {/* Generate button */}
@@ -341,7 +428,7 @@ export default function EncounterBuilder({ campaignId }) {
         </button>
       </div>
 
-      {/* ── Error ──────────────────────────────────────────────── */}
+      {/* ── Error ── */}
       {genError && (
         <div style={{
           background: 'rgba(200,50,50,.15)', border: `1px solid rgba(200,50,50,.4)`,
@@ -352,7 +439,7 @@ export default function EncounterBuilder({ campaignId }) {
         </div>
       )}
 
-      {/* ── Encounter output ────────────────────────────────────── */}
+      {/* ── Encounter output ── */}
       {groups && (
         <div style={{
           background: 'rgba(0,0,0,.25)', border: `1px solid ${C.borderHi}`,
@@ -365,7 +452,20 @@ export default function EncounterBuilder({ campaignId }) {
             <div style={{ fontSize: 14, color: C.gold, fontWeight: 'bold' }}>
               Generated Encounter
             </div>
+            {/* Lore group labels */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {[...new Set(groups.map(g => getMonsterGroup(g.monster)))].map(grp => (
+                <span key={grp} style={{
+                  fontSize: 9, letterSpacing: 1, padding: '1px 8px', borderRadius: 10,
+                  background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`,
+                  color: C.textDim, textTransform: 'uppercase',
+                }}>
+                  {grp.replace('_', ' ')}
+                </span>
+              ))}
+            </div>
             <button onClick={generate} disabled={generating} style={{
+              marginLeft: 'auto',
               background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
               borderRadius: 5, padding: '4px 14px', cursor: 'pointer',
               color: C.textDim, fontFamily: 'inherit', fontSize: 11,
@@ -398,18 +498,27 @@ export default function EncounterBuilder({ campaignId }) {
 
                   {/* Monster info */}
                   <div style={{ flex: 1, minWidth: 160 }}>
-                    <button
-                      onClick={() => setDetailId(prev => prev === g.monster.id ? null : g.monster.id)}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: C.gold, fontFamily: 'inherit', fontSize: 15,
-                        fontWeight: 'bold', padding: 0, textAlign: 'left',
-                        textDecoration: 'underline dotted',
-                      }}
-                    >
-                      {g.count > 1 ? `${g.count}× ` : ''}{g.monster.name}
-                    </button>
-                    <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <button
+                        onClick={() => setDetailId(prev => prev === g.monster.id ? null : g.monster.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: C.gold, fontFamily: 'inherit', fontSize: 15,
+                          fontWeight: 'bold', padding: 0, textAlign: 'left',
+                          textDecoration: 'underline dotted',
+                        }}
+                      >
+                        {g.count > 1 ? `${g.count}× ` : ''}{g.monster.name}
+                      </button>
+                      <span style={{
+                        fontSize: 9, letterSpacing: 1, color: C.textDim,
+                        background: 'rgba(0,0,0,.35)', border: `1px solid ${C.border}`,
+                        borderRadius: 8, padding: '1px 6px', textTransform: 'uppercase',
+                      }}>
+                        {getMonsterGroup(g.monster).replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>
                       {[g.monster.size, g.monster.type, g.monster.alignment].filter(Boolean).join(' · ')}
                       {g.monster.hit_dice && ` · HD ${g.monster.hit_dice}`}
                       {g.monster.armor_class != null && ` · AC ${g.monster.armor_class}`}
@@ -426,7 +535,7 @@ export default function EncounterBuilder({ campaignId }) {
                     )}
                   </div>
 
-                  {/* Stats */}
+                  {/* HP / XP stats */}
                   <div style={{ display: 'flex', gap: 20, flexShrink: 0 }}>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 16, color: C.red, fontWeight: 'bold' }}>
@@ -452,7 +561,7 @@ export default function EncounterBuilder({ campaignId }) {
             })}
           </div>
 
-          {/* Totals + difficulty rating */}
+          {/* Totals + difficulty */}
           <div style={{
             background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
             borderRadius: 8, padding: '12px 16px',
@@ -460,21 +569,12 @@ export default function EncounterBuilder({ campaignId }) {
             marginBottom: 20,
           }}>
             <div>
-              <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase' }}>
-                Total XP
-              </div>
-              <div style={{ fontSize: 22, color: C.gold, fontWeight: 'bold' }}>
-                {totalXp.toLocaleString()}
-              </div>
+              <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase' }}>Total XP</div>
+              <div style={{ fontSize: 22, color: C.gold, fontWeight: 'bold' }}>{totalXp.toLocaleString()}</div>
             </div>
             <div>
-              <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase' }}>
-                Difficulty Rating
-              </div>
-              <div style={{
-                fontSize: 18, fontWeight: 'bold', letterSpacing: 1,
-                color: DIFF_COLOR[ratedDiff] ?? C.text,
-              }}>
+              <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, textTransform: 'uppercase' }}>Difficulty Rating</div>
+              <div style={{ fontSize: 18, fontWeight: 'bold', letterSpacing: 1, color: DIFF_COLOR[ratedDiff] ?? C.text }}>
                 {ratedDiff?.toUpperCase()}
               </div>
             </div>
@@ -485,7 +585,7 @@ export default function EncounterBuilder({ campaignId }) {
             </div>
           </div>
 
-          {/* Save section */}
+          {/* Save */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               value={encName}
@@ -497,9 +597,7 @@ export default function EncounterBuilder({ campaignId }) {
               onClick={saveEncounter}
               disabled={saving || !encName.trim() || !campaignId}
               style={{
-                background: saved
-                  ? 'rgba(60,180,60,.2)'
-                  : 'linear-gradient(135deg,#7a5a10,#c8a84b)',
+                background: saved ? 'rgba(60,180,60,.2)' : 'linear-gradient(135deg,#7a5a10,#c8a84b)',
                 border: 'none', borderRadius: 6, padding: '8px 20px',
                 color: saved ? '#80e080' : '#1a0f00',
                 cursor: (saving || !encName.trim() || !campaignId) ? 'not-allowed' : 'pointer',
@@ -509,26 +607,24 @@ export default function EncounterBuilder({ campaignId }) {
               {saving ? 'Saving…' : saved ? '✓ Saved!' : '💾 Save Encounter'}
             </button>
             {!campaignId && (
-              <span style={{ fontSize: 11, color: C.textDim }}>(campaign required)</span>
+              <span style={{ fontSize: 11, color: C.textDim }}>(campaign required to save)</span>
             )}
           </div>
         </div>
       )}
 
-      {/* ── Monster detail overlay ──────────────────────────────── */}
+      {/* ── Monster detail overlay ── */}
       {detailId && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: 20,
-        }}
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 20,
+          }}
           onClick={e => { if (e.target === e.currentTarget) setDetailId(null); }}
         >
           <div style={{ width: '100%', maxWidth: 480, maxHeight: '90vh' }}>
-            <MonsterDetail
-              monsterId={detailId}
-              onClose={() => setDetailId(null)}
-            />
+            <MonsterDetail monsterId={detailId} onClose={() => setDetailId(null)} />
           </div>
         </div>
       )}

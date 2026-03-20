@@ -1,8 +1,12 @@
 /**
  * monsterEngine.js
  * AD&D 2E monster rules: armor profiles, HP generation, grace damage.
+ *
+ * HP generation is delegated to monsterHp.js (ChatGPT formula).
+ * computeGeneratedHp() is re-exported here for backward compatibility.
  */
 import armorProfiles from '../rulesets/monsters/armorProfiles.json';
+import { computeGeneratedHp as _computeGeneratedHp } from './monsterHp.js';
 
 // ── Lookup helpers ────────────────────────────────────────────────────────
 
@@ -16,65 +20,18 @@ export function getAllArmorProfiles() {
 }
 
 // ── HP generation ─────────────────────────────────────────────────────────
-
-const SIZE_BASE = {
-  tiny:        20,
-  small:       40,
-  medium:      80,
-  large:      180,
-  huge:       400,
-  gargantuan: 900,
-};
-
-const KIND_MOD = {
-  humanoid:   1.0,
-  beast:      1.2,
-  monstrous:  1.4,
-  undead:     1.6,
-  construct:  2.0,
-  dragon:     2.2,
-};
+//
+// Delegated to monsterHp.js (ChatGPT formula).
+// Returns a plain number for backward compatibility with callers
+// that do not need the full breakdown object.
 
 /**
- * Parse hit dice string like "2+2", "10", "3d8" → numeric value.
- */
-function parseHitDice(hdStr) {
-  if (!hdStr) return 1;
-  const s = String(hdStr).trim().toLowerCase();
-  // "3d8" → 3; "2+2" → 2; "10" → 10; "1/2" → 0.5
-  const dMatch = s.match(/^(\d+(?:\.\d+)?)d/);
-  if (dMatch) return parseFloat(dMatch[1]);
-  const plusMatch = s.match(/^(\d+(?:\.\d+)?)/);
-  if (plusMatch) return parseFloat(plusMatch[1]);
-  return 1;
-}
-
-/**
- * Derive a monster "kind" from its type string for HP generation.
- */
-function deriveKind(type) {
-  if (!type) return 'monstrous';
-  const t = type.toLowerCase();
-  if (t.includes('dragon'))    return 'dragon';
-  if (t.includes('construct') || t.includes('golem')) return 'construct';
-  if (t.includes('undead'))    return 'undead';
-  if (t.includes('humanoid'))  return 'humanoid';
-  if (t.includes('animal') || t.includes('beast')) return 'beast';
-  return 'monstrous';
-}
-
-/**
- * Compute generated (estimated) HP for a monster.
- * @param {object} monster — { size, type, hit_dice }
+ * Compute generated HP for a monster.
+ * @param {object} monster — { size, type, hit_dice, role? }
  * @returns {number}
  */
 export function computeGeneratedHp(monster) {
-  const sizeKey = (monster.size ?? 'medium').toLowerCase();
-  const base    = SIZE_BASE[sizeKey] ?? SIZE_BASE.medium;
-  const kind    = deriveKind(monster.type);
-  const kindM   = KIND_MOD[kind] ?? 1.0;
-  const hd      = parseHitDice(monster.hit_dice);
-  return Math.round(base * kindM * (1 + hd * 0.12));
+  return _computeGeneratedHp(monster).generatedHpFinal;
 }
 
 // ── Grace damage ──────────────────────────────────────────────────────────

@@ -208,7 +208,7 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
     <div className="sl-screen">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sl-header">
-        <button className="sl-back-btn" onClick={onBack} aria-label="Back">← Back</button>
+        <button className="sl-back-btn" onClick={onBack} aria-label="Back">← Dashboard</button>
         <h1 className="sl-title">Spell Library</h1>
 
         {meta && (

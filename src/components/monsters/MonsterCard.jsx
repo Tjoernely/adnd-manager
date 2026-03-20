@@ -99,16 +99,23 @@ export function MonsterCard({ monster: m, selected, onClick }) {
           {[
             { l: 'AC',   v: acLabel(m.armor_class) },
             { l: 'HD',   v: hdLabel(m.hit_dice) },
+            { l: 'HP',   v: m.generated_hp != null ? String(m.generated_hp) : '?', c: '#e07060' },
             { l: 'MV',   v: m.movement ?? '—' },
             { l: 'THAC0',v: m.thac0 != null ? String(m.thac0) : '—' },
             { l: 'XP',   v: m.xp_value != null ? m.xp_value.toLocaleString() : '—' },
           ].map(s => (
             <div key={s.l} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: C.gold, fontWeight: 'bold', lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 12, color: s.c ?? C.gold, fontWeight: 'bold', lineHeight: 1 }}>{s.v}</div>
               <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>{s.l}</div>
             </div>
           ))}
         </div>
+        {/* Vanilla HP secondary label */}
+        {m.hit_points != null && (
+          <div style={{ fontSize: 9, color: C.textDim, marginTop: 3 }}>
+            Vanilla: {m.hit_points} HP
+          </div>
+        )}
 
         {/* Attacks */}
         {(m.attacks || m.damage) && (
@@ -118,9 +125,7 @@ export function MonsterCard({ monster: m, selected, onClick }) {
         )}
 
         {/* Armor profile badge */}
-        <div style={{
-          marginTop: 7, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-        }}>
+        <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{
             fontSize: 10, background: 'rgba(0,0,0,.4)',
             border: `1px solid ${C.border}`, borderRadius: 10,
@@ -128,13 +133,13 @@ export function MonsterCard({ monster: m, selected, onClick }) {
           }}>
             {profile.icon} {profile.name}
           </span>
-          {m.generated_hp && (
+          {m.role && m.role !== 'normal' && (
             <span style={{
-              fontSize: 10, background: 'rgba(0,0,0,.4)',
-              border: `1px solid ${C.border}`, borderRadius: 10,
-              padding: '1px 8px', color: C.textDim,
+              fontSize: 9, background: 'rgba(200,100,30,.1)',
+              border: `1px solid rgba(200,100,30,.3)`, borderRadius: 10,
+              padding: '1px 8px', color: C.amber, textTransform: 'capitalize',
             }}>
-              ~{m.generated_hp} est. HP
+              {m.role}
             </span>
           )}
         </div>

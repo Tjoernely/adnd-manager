@@ -117,7 +117,9 @@ router.get('/', async (req, res) => {
         `SELECT id, name, source, hit_dice, hit_points, armor_class, thac0,
                 movement, size, type, alignment, attacks, damage, xp_value,
                 special_attacks, special_defenses, magic_resistance,
-                armor_profile_id, generated_hp, frequency, habitat, tags
+                armor_profile_id, generated_hp, generated_hp_base,
+                random_roll, random_modifier, role,
+                frequency, habitat, tags
          FROM monsters ${where}
          ORDER BY ${orderBy}
          LIMIT $${p} OFFSET $${p+1}`,
@@ -197,7 +199,8 @@ router.put('/:id', auth, async (req, res) => {
       'name','source','hit_dice','hit_points','armor_class','thac0','movement',
       'size','type','alignment','attacks','damage','special_attacks','special_defenses',
       'magic_resistance','save_as','morale','xp_value','description','habitat','frequency',
-      'armor_profile_id','generated_hp','tags',
+      'armor_profile_id','generated_hp','generated_hp_base','random_roll','random_modifier',
+      'role','tags',
     ];
     const updates = [];
     const values  = [];

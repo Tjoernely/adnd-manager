@@ -200,11 +200,27 @@ export default function App() {
   // ── Party Hub screen ─────────────────────────────────────────
   if (screen === 'party-hub') {
     return (
-      <PartyHub
-        campaign={activeCampaign}
-        user={user}
-        onBack={() => setScreen('dashboard')}
-      />
+      <>
+        <PartyHub
+          campaign={activeCampaign}
+          user={user}
+          onBack={() => setScreen('dashboard')}
+          onNavigate={(modId) => {
+            if (modId === 'maps') { setShowMaps(true); return; }
+            if (['characters','npcs','spells','magical-items','monsters'].includes(modId)) {
+              setScreen(modId);
+            } else {
+              setScreen('dashboard');
+            }
+          }}
+        />
+        <MapManager
+          campaignId={activeCampaign.id}
+          isDM={activeCampaign.dm_user_id === user.id}
+          isOpen={showMaps}
+          onClose={() => setShowMaps(false)}
+        />
+      </>
     );
   }
 
