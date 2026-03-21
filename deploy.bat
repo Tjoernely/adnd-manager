@@ -37,7 +37,9 @@ echo       Pushed to GitHub OK
 REM ── 3. SSH into server and run deploy.sh ─────────────────────────────────
 echo.
 echo [3/4] Connecting to server and running deploy.sh...
-ssh ubuntu@158.180.63.20 "bash /var/www/adnd-manager/deploy.sh"
+REM Force-reset any diverged/dirty server repo before running deploy.sh.
+REM This handles the case where files were edited directly on the server.
+ssh ubuntu@158.180.63.20 "cd /var/www/adnd-manager && git fetch --all && git reset --hard origin/main && bash /var/www/adnd-manager/deploy.sh"
 if %ERRORLEVEL% neq 0 (
   echo ERROR: Remote deploy failed. Check server logs with: ssh ubuntu@158.180.63.20
   exit /b 1
