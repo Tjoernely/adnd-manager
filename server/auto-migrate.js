@@ -42,15 +42,21 @@ async function autoMigrate() {
       );
     `);
 
-    // Monster HP system columns
-    await db.query(`
-      ALTER TABLE monsters
-        ADD COLUMN IF NOT EXISTS generated_hp_base INTEGER,
-        ADD COLUMN IF NOT EXISTS random_roll       INTEGER,
-        ADD COLUMN IF NOT EXISTS random_modifier   FLOAT,
-        ADD COLUMN IF NOT EXISTS role              VARCHAR(20) DEFAULT 'normal',
-        ADD COLUMN IF NOT EXISTS treasure          VARCHAR(10);
-    `);
+    // Monster HP system columns — each in its own try/catch so one existing
+    // column doesn't block the others from being added.
+    for (const stmt of [
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS generated_hp_base INTEGER`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS random_roll       INTEGER`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS random_modifier   FLOAT`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS role              VARCHAR(20) DEFAULT 'normal'`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS treasure          VARCHAR(10)`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS armor_profile_id  VARCHAR(50)`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS generated_hp      INTEGER`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS tags              TEXT`,
+    ]) {
+      try { await db.query(stmt); }
+      catch (e) { console.warn('[auto-migrate] skipped:', stmt.slice(0, 60), '—', e.message); }
+    }
 
     // Saved encounters (fight-tracked, with per-creature HP)
     await db.query(`

@@ -145,9 +145,15 @@ router.get('/', async (req, res) => {
                 (${THAC0_EXPR}) AS thac0,
                 movement, size, type, alignment, attacks, damage, xp_value,
                 special_attacks, special_defenses, magic_resistance,
-                armor_profile_id, generated_hp, generated_hp_base,
-                random_roll, random_modifier, role,
-                frequency, habitat, treasure, tags
+                COALESCE(armor_profile_id, NULL)  AS armor_profile_id,
+                COALESCE(generated_hp, NULL)      AS generated_hp,
+                COALESCE(generated_hp_base, NULL) AS generated_hp_base,
+                COALESCE(random_roll, NULL)        AS random_roll,
+                COALESCE(random_modifier, NULL)    AS random_modifier,
+                COALESCE(role, 'normal')           AS role,
+                frequency, habitat,
+                COALESCE(treasure, NULL)           AS treasure,
+                COALESCE(tags, NULL)               AS tags
          FROM monsters ${where}
          ORDER BY ${orderBy}
          LIMIT $${p} OFFSET $${p+1}`,

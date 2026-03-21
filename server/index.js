@@ -26,7 +26,13 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ─────────────────────────────────────────────────────────────────
-app.use(cors());
+// Explicitly allow Authorization header so JWT tokens pass through all routes
+app.use(cors({
+  origin: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 app.use(express.json());
 
 // ── API routes ─────────────────────────────────────────────────────────────────
