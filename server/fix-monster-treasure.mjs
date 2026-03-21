@@ -54,8 +54,9 @@ function titleFromUrl(url) {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-async function fetchWikiPage(pageTitle) {
-  const url = `https://adnd2e.fandom.com/api.php?action=query&titles=${encodeURIComponent(pageTitle)}&prop=revisions&rvprop=content&format=json&origin=*`;
+async function fetchWikiContent(pageTitle) {
+  // &redirects=1 tells the Fandom API to follow redirects automatically
+  const url = `https://adnd2e.fandom.com/api.php?action=query&titles=${encodeURIComponent(pageTitle)}&prop=revisions&rvprop=content&format=json&origin=*&redirects=1`;
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'ADnD-Manager-TreasureFix/1.0' },
@@ -111,7 +112,8 @@ async function main() {
 
   const { rows } = await pool.query(
     `SELECT id, name, wiki_url FROM monsters
-     WHERE treasure IS NULL AND wiki_url IS NOT NULL
+     WHERE (treasure IS NULL OR treasure = '' OR treasure = 'Nil')
+       AND wiki_url IS NOT NULL
      ORDER BY name
      LIMIT $1`,
     [LIMIT === Infinity ? 99999 : LIMIT],
@@ -130,7 +132,7 @@ async function main() {
       const pageTitle = titleFromUrl(wiki_url);
       if (!pageTitle) { noTreasure++; continue; }
 
-      const raw      = await fetchWikiPage(pageTitle);
+      const raw      = await fetchWikiContent(pageTitle);
       if (!raw) { notFound++; await sleep(DELAY_MS); continue; }
 
       const treasure = parseTreasure(raw);
