@@ -241,6 +241,8 @@ export const api = {
   getEncounterCreatures:(encId)      => apiFetch(`/saved-encounters/${encId}/creatures`),
   updateCreatureHp:     (encId, cId, current_hp) =>
     apiFetch(`/saved-encounters/${encId}/creatures/${cId}`, { method: 'PUT', body: JSON.stringify({ current_hp }) }),
+  updateCreature: (encId, cId, data) =>
+    apiFetch(`/saved-encounters/${encId}/creatures/${cId}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // ── AI Loot ───────────────────────────────────────────────────────
   generateAiLoot: (data) => apiFetch('/ai/loot', { method: 'POST', body: JSON.stringify(data) }),

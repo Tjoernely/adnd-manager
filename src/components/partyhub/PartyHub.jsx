@@ -441,10 +441,10 @@ function QuestsTab({ quests, isDM, onOpenModule, sectionCard }) {
 // ── Encounters Tab ────────────────────────────────────────────────────────────
 
 function hpColor(pct) {
-  if (pct <= 0)   return '#555';       // dead — grey
-  if (pct <= 0.25) return C.red;       // critical
-  if (pct <= 0.5)  return C.amber;     // bloodied
-  return C.green;                       // healthy
+  if (pct <= 0)    return '#555';
+  if (pct <= 0.25) return C.red;
+  if (pct <= 0.5)  return C.amber;
+  return C.green;
 }
 
 function hpLabel(pct) {
@@ -454,212 +454,354 @@ function hpLabel(pct) {
   return 'Alive';
 }
 
-function FightManager({ enc, onEncounterUpdate }) {
-  const [creatures,    setCreatures]    = useState(null);
-  const [loading,      setLoading]      = useState(false);
-  const [adjusting,    setAdjusting]    = useState({});  // cId → true while saving
-  const [expanded,     setExpanded]     = useState(false);
-
-  async function load() {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const list = await api.getEncounterCreatures(enc.id);
-      setCreatures(list ?? []);
-    } catch (e) {
-      console.error('Load creatures:', e);
-      setCreatures([]);
+// ── Sort creatures: alive sorted by chosen key, dead always last ─────────────
+function sortCreatures(list, by) {
+  const alive = list.filter(c => c.current_hp > 0);
+  const dead  = list.filter(c => c.current_hp <= 0);
+  alive.sort((a, b) => {
+    if (by === 'initiative') return (b.initiative ?? 0) - (a.initiative ?? 0);
+    if (by === 'hp_pct') {
+      const pa = a.max_hp > 0 ? a.current_hp / a.max_hp : 0;
+      const pb = b.max_hp > 0 ? b.current_hp / b.max_hp : 0;
+      return pb - pa;
     }
-    setLoading(false);
-  }
+    if (by === 'name')   return (a.monster_name ?? '').localeCompare(b.monster_name ?? '');
+    if (by === 'status') {
+      const o = { alive: 0, bloodied: 1, critical: 2 };
+      return (o[a.status] ?? 0) - (o[b.status] ?? 0);
+    }
+    return 0;
+  });
+  return [...alive, ...dead];
+}
 
-  function toggle() {
-    if (!expanded && creatures === null) load();
-    setExpanded(v => !v);
-  }
+// ── Full Combat Manager (right pane) ─────────────────────────────────────────
+function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
+  const [creatures,  setCreatures]  = useState(enc.creatures ?? []);
+  const [round,      setRound]      = useState(enc.current_round ?? 1);
+  const [sortBy,     setSortBy]     = useState('initiative');
+  const [savingMap,  setSavingMap]  = useState({});
+  const [editHpId,   setEditHpId]   = useState(null);
+  const [editHpVal,  setEditHpVal]  = useState('');
+  const [roundMsg,   setRoundMsg]   = useState(null);
 
-  async function adjustHp(creature, delta) {
-    const newHp = Math.max(0, Math.min(creature.max_hp, creature.current_hp + delta));
-    if (newHp === creature.current_hp) return;
-    setAdjusting(a => ({ ...a, [creature.id]: true }));
+  // Re-sync when a different encounter is selected
+  useEffect(() => {
+    setCreatures(enc.creatures ?? []);
+    setRound(enc.current_round ?? 1);
+    setEditHpId(null);
+    setRoundMsg(null);
+  }, [enc.id]);
+
+  const computeStatus = (hp, max) =>
+    hp <= 0                            ? 'dead'
+    : hp <= Math.ceil(max * 0.25)     ? 'critical'
+    : hp <= Math.ceil(max * 0.50)     ? 'bloodied'
+    : 'alive';
+
+  async function saveCreature(updated) {
+    setSavingMap(m => ({ ...m, [updated.id]: 'saving' }));
     try {
-      await api.updateCreatureHp(enc.id, creature.id, newHp);
-      setCreatures(cs => cs.map(c => c.id === creature.id
-        ? { ...c, current_hp: newHp, status: newHp <= 0 ? 'dead'
-            : newHp <= Math.ceil(c.max_hp * 0.25) ? 'critical'
-            : newHp <= Math.ceil(c.max_hp * 0.50) ? 'bloodied' : 'alive' }
-        : c));
-    } catch (e) { console.error('HP update:', e); }
-    setAdjusting(a => ({ ...a, [creature.id]: false }));
+      await api.updateCreature(enc.id, updated.id, {
+        current_hp: updated.current_hp,
+        initiative: updated.initiative,
+        status:     updated.status,
+      });
+      setSavingMap(m => ({ ...m, [updated.id]: 'saved' }));
+      setTimeout(() => setSavingMap(m => ({ ...m, [updated.id]: null })), 1500);
+    } catch {
+      setSavingMap(m => ({ ...m, [updated.id]: null }));
+    }
   }
 
-  async function killAll() {
-    if (!creatures) return;
-    const alive = creatures.filter(c => c.current_hp > 0);
-    await Promise.all(alive.map(c => adjustHp(c, -c.current_hp)));
+  function applyHpChange(creature, newHp) {
+    const clamped = Math.max(0, Math.min(creature.max_hp, newHp));
+    const updated = { ...creature, current_hp: clamped, status: computeStatus(clamped, creature.max_hp) };
+    const next    = creatures.map(c => c.id === creature.id ? updated : c);
+    setCreatures(next);
+    onCreaturesUpdate(enc.id, next);
+    saveCreature(updated);
   }
 
-  async function resetAll() {
-    if (!creatures) return;
-    const notFull = creatures.filter(c => c.current_hp < c.max_hp);
-    await Promise.all(notFull.map(c => adjustHp(c, c.max_hp - c.current_hp)));
+  async function nextRound() {
+    const newRound = round + 1;
+    const next = creatures.map(c => ({
+      ...c,
+      initiative: c.current_hp > 0 ? Math.floor(Math.random() * 10) + 1 : 0,
+    }));
+    setCreatures(next);
+    onCreaturesUpdate(enc.id, next);
+    setRound(newRound);
+    setSortBy('initiative');
+    setRoundMsg(`Round ${newRound} begins — Initiative rolled!`);
+    setTimeout(() => setRoundMsg(null), 3500);
+    try { await api.updateSavedEncounter(enc.id, { current_round: newRound }); } catch { /* */ }
+    onEncounterUpdate(enc.id, { current_round: newRound });
+    for (const c of next) {
+      if (c.current_hp > 0) {
+        try { await api.updateCreature(enc.id, c.id, { current_hp: c.current_hp, initiative: c.initiative, status: c.status }); } catch { /* */ }
+      }
+    }
   }
 
-  async function markDone() {
+  async function prevRound() {
+    const newRound = Math.max(1, round - 1);
+    setRound(newRound);
+    try { await api.updateSavedEncounter(enc.id, { current_round: newRound }); } catch { /* */ }
+    onEncounterUpdate(enc.id, { current_round: newRound });
+  }
+
+  async function markComplete() {
     try {
       await api.updateSavedEncounter(enc.id, { status: 'completed' });
       onEncounterUpdate(enc.id, { status: 'completed' });
-    } catch (e) { console.error('Mark done:', e); }
+    } catch { /* */ }
   }
 
-  const isActive    = enc.status !== 'completed';
-  const aliveCount  = creatures ? creatures.filter(c => c.current_hp > 0).length : '?';
-  const totalCount  = creatures ? creatures.length : '?';
+  const isActive      = enc.status !== 'completed';
+  const sorted        = sortCreatures(creatures, sortBy);
+  const deadXpEarned  = creatures.filter(c => c.current_hp <= 0).reduce((s, c) => s + (c.xp_value ?? 0), 0);
+
+  const sortBtnSt = id => ({
+    fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontFamily: ff,
+    border:     `1px solid ${sortBy === id ? C.borderHi : C.border}`,
+    background: sortBy === id ? 'rgba(212,160,53,.15)' : 'rgba(0,0,0,.2)',
+    color:      sortBy === id ? C.gold : C.textDim,
+  });
 
   return (
-    <div style={{
-      background: 'rgba(0,0,0,.35)',
-      border: `1px solid ${isActive ? C.borderHi : C.border}`,
-      borderRadius: 8, overflow: 'hidden',
-    }}>
-      {/* Header row — always visible */}
-      <div
-        onClick={toggle}
-        style={{
-          padding: '10px 14px', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: isActive ? 'rgba(212,160,53,.07)' : 'rgba(0,0,0,.2)',
-        }}
-      >
-        <span style={{ fontSize: 13, color: C.gold, fontWeight: 'bold', flex: 1 }}>
-          {isActive ? '⚔ ' : '✅ '}{enc.title}
-        </span>
-        {enc.difficulty && (
-          <span style={{
-            fontSize: 9, letterSpacing: 1, padding: '1px 8px', borderRadius: 10,
-            border: `1px solid ${DIFF_COLOR[enc.difficulty] ?? C.border}`,
-            color: DIFF_COLOR[enc.difficulty] ?? C.textDim, textTransform: 'uppercase',
-          }}>{enc.difficulty}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+      {/* ── Header ── */}
+      <div style={{
+        background: 'rgba(0,0,0,.35)',
+        border: `1px solid ${isActive ? C.borderHi : C.border}`,
+        borderRadius: 8, padding: '12px 16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span style={{ fontSize: 15, color: C.gold, fontWeight: 'bold', flex: 1, fontFamily: ff }}>
+            {isActive ? '⚔ ' : '✅ '}{enc.title}
+          </span>
+          {enc.difficulty && (
+            <span style={{
+              fontSize: 9, letterSpacing: 1, padding: '2px 10px', borderRadius: 10,
+              border: `1px solid ${DIFF_COLOR[enc.difficulty] ?? C.border}`,
+              color:  DIFF_COLOR[enc.difficulty] ?? C.textDim, textTransform: 'uppercase',
+            }}>{enc.difficulty}</span>
+          )}
+          {enc.terrain && (
+            <span style={{ fontSize: 10, color: C.textDim }}>📍 {enc.terrain}</span>
+          )}
+        </div>
+
+        {/* Round controls */}
+        {isActive && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={prevRound} disabled={round <= 1} style={{
+              background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`, borderRadius: 5,
+              padding: '4px 10px', cursor: round <= 1 ? 'not-allowed' : 'pointer',
+              color: round <= 1 ? C.textDim : C.text, fontFamily: ff, fontSize: 11,
+              opacity: round <= 1 ? 0.4 : 1,
+            }}>◀ Prev</button>
+
+            <span style={{ fontSize: 14, color: C.gold, fontWeight: 'bold', fontFamily: ff, minWidth: 80, textAlign: 'center' }}>
+              Round {round}
+            </span>
+
+            <button onClick={nextRound} style={{
+              background: 'rgba(212,160,53,.15)', border: `1px solid ${C.borderHi}`,
+              borderRadius: 5, padding: '4px 10px', cursor: 'pointer',
+              color: C.gold, fontFamily: ff, fontSize: 11, fontWeight: 'bold',
+            }}>Next Round ▶</button>
+
+            {(enc.total_xp ?? 0) > 0 && (
+              <span style={{ fontSize: 10, color: C.gold, marginLeft: 'auto' }}>
+                {deadXpEarned > 0
+                  ? `${deadXpEarned.toLocaleString()} / ${(enc.total_xp ?? 0).toLocaleString()} XP earned`
+                  : `${(enc.total_xp ?? 0).toLocaleString()} XP total`}
+              </span>
+            )}
+          </div>
         )}
-        {enc.total_xp > 0 && (
-          <span style={{ fontSize: 10, color: C.gold }}>{enc.total_xp.toLocaleString()} XP</span>
+
+        {roundMsg && (
+          <div style={{
+            marginTop: 8, padding: '6px 12px',
+            background: 'rgba(212,160,53,.12)', border: `1px solid ${C.borderHi}`,
+            borderRadius: 6, fontSize: 12, color: C.gold, fontFamily: ff, fontStyle: 'italic',
+          }}>🎲 {roundMsg}</div>
         )}
-        <span style={{ fontSize: 10, color: C.textDim }}>
-          {creatures !== null ? `${aliveCount}/${totalCount} alive` : ''}
-        </span>
-        <span style={{ fontSize: 12, color: C.textDim }}>{expanded ? '▲' : '▼'}</span>
       </div>
 
-      {/* Fight manager body */}
-      {expanded && (
-        <div style={{ padding: '12px 14px', borderTop: `1px solid ${C.border}` }}>
-          {loading && (
-            <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: 20 }}>
-              Loading creatures…
-            </div>
-          )}
+      {/* ── Sort controls ── */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: C.textDim, marginRight: 4 }}>Sort:</span>
+        {[['initiative','Initiative'],['hp_pct','HP %'],['name','Name'],['status','Status']].map(([id, lbl]) => (
+          <button key={id} onClick={() => setSortBy(id)} style={sortBtnSt(id)}>{lbl}</button>
+        ))}
+      </div>
 
-          {!loading && creatures !== null && (
-            <>
-              {/* Control buttons */}
-              {isActive && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-                  <button onClick={killAll} style={{
-                    fontSize: 11, padding: '4px 14px', borderRadius: 5, cursor: 'pointer',
-                    background: 'rgba(180,50,50,.15)', border: `1px solid rgba(180,50,50,.4)`,
-                    color: C.red, fontFamily: ff,
-                  }}>💀 Kill All</button>
-                  <button onClick={resetAll} style={{
-                    fontSize: 11, padding: '4px 14px', borderRadius: 5, cursor: 'pointer',
-                    background: 'rgba(80,160,80,.1)', border: `1px solid rgba(80,160,80,.3)`,
-                    color: C.green, fontFamily: ff,
-                  }}>❤ Reset All HP</button>
-                  <button onClick={markDone} style={{
-                    fontSize: 11, padding: '4px 14px', borderRadius: 5, cursor: 'pointer',
-                    background: 'rgba(212,160,53,.1)', border: `1px solid ${C.border}`,
-                    color: C.gold, fontFamily: ff,
-                  }}>✅ Mark Completed</button>
-                </div>
-              )}
+      {/* ── Creature list ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {sorted.map(c => {
+          const hpPct   = c.max_hp > 0 ? c.current_hp / c.max_hp : 0;
+          const col     = hpColor(hpPct);
+          const lbl     = hpLabel(hpPct);
+          const isDead  = c.current_hp <= 0;
+          const saving  = savingMap[c.id];
+          const editing = editHpId === c.id;
 
-              {/* Creature rows */}
-              {creatures.length === 0 && (
-                <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: 16 }}>
-                  No creatures found.
-                </div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {creatures.map(c => {
-                  const pct  = c.max_hp > 0 ? c.current_hp / c.max_hp : 0;
-                  const col  = hpColor(pct);
-                  const lbl  = hpLabel(pct);
-                  const busy = adjusting[c.id];
-                  return (
-                    <div key={c.id} style={{
-                      background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
-                      borderRadius: 6, padding: '8px 12px',
-                      opacity: c.current_hp <= 0 ? 0.5 : 1,
-                      transition: 'opacity .2s',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 12, color: c.current_hp > 0 ? C.text : C.textDim, flex: 1, fontWeight: 'bold' }}>
-                          {c.monster_name}
-                        </span>
-                        <span style={{
-                          fontSize: 9, letterSpacing: 1, padding: '1px 7px', borderRadius: 10,
-                          border: `1px solid ${col}`, color: col, textTransform: 'uppercase',
-                        }}>{lbl}</span>
-                        <span style={{ fontSize: 11, color: col, minWidth: 52, textAlign: 'right' }}>
-                          {c.current_hp} / {c.max_hp}
-                        </span>
-                        {/* HP buttons */}
-                        {isActive && (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            {[-10,-5,-1].map(d => (
-                              <button key={d} disabled={busy || c.current_hp <= 0} onClick={() => adjustHp(c, d)}
-                                style={{
-                                  width: 28, height: 22, borderRadius: 4, cursor: busy ? 'wait' : 'pointer',
-                                  background: 'rgba(180,50,50,.15)', border: `1px solid rgba(180,50,50,.35)`,
-                                  color: C.red, fontSize: 10, fontWeight: 'bold',
-                                  opacity: busy || c.current_hp <= 0 ? 0.4 : 1,
-                                }}>{d}</button>
-                            ))}
-                            {[1,5,10].map(d => (
-                              <button key={d} disabled={busy || c.current_hp >= c.max_hp} onClick={() => adjustHp(c, d)}
-                                style={{
-                                  width: 28, height: 22, borderRadius: 4, cursor: busy ? 'wait' : 'pointer',
-                                  background: 'rgba(80,160,80,.1)', border: `1px solid rgba(80,160,80,.3)`,
-                                  color: C.green, fontSize: 10, fontWeight: 'bold',
-                                  opacity: busy || c.current_hp >= c.max_hp ? 0.4 : 1,
-                                }}>+{d}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+          return (
+            <div key={c.id} style={{
+              background: isDead ? 'rgba(0,0,0,.15)' : 'rgba(0,0,0,.3)',
+              border: `1px solid ${isDead ? '#333' : C.border}`,
+              borderRadius: 7, padding: '10px 12px',
+              opacity: isDead ? 0.55 : 1, transition: 'opacity .2s',
+            }}>
+              {/* Row 1: initiative + name + status badge + save indicator */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 'bold', color: C.gold, minWidth: 24,
+                  textAlign: 'center', fontFamily: ff,
+                  opacity: c.initiative > 0 ? 1 : 0.3,
+                }}>🎲{c.initiative > 0 ? c.initiative : '—'}</span>
 
-                      {/* HP bar */}
-                      <div style={{
-                        height: 6, background: 'rgba(0,0,0,.4)',
-                        borderRadius: 3, overflow: 'hidden',
-                      }}>
-                        <div style={{
-                          height: '100%', width: `${Math.max(0, pct * 100)}%`,
-                          background: col, borderRadius: 3, transition: 'width .25s, background .25s',
-                        }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                <span style={{ fontSize: 13, color: isDead ? C.textDim : C.text, flex: 1, fontFamily: ff, fontWeight: 'bold' }}>
+                  {c.monster_name}
+                </span>
+
+                <span style={{
+                  fontSize: 9, letterSpacing: 1, padding: '1px 7px', borderRadius: 10,
+                  border: `1px solid ${col}`, color: col, textTransform: 'uppercase',
+                }}>{lbl}</span>
+
+                {saving === 'saving' && <span style={{ fontSize: 9, color: C.textDim }}>⏳</span>}
+                {saving === 'saved'  && <span style={{ fontSize: 9, color: C.green  }}>✓</span>}
               </div>
 
-              {/* AI / Official loot if completed */}
-              {enc.loot_ai && (
-                <div style={{ marginTop: 12, background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>AI Loot</div>
-                  <pre style={{ fontSize: 11, color: C.text, margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{enc.loot_ai}</pre>
-                </div>
-              )}
-            </>
+              {/* Row 2: HP bar */}
+              <div style={{ height: 6, background: 'rgba(0,0,0,.4)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+                <div style={{
+                  height: '100%', width: `${Math.max(0, hpPct * 100)}%`,
+                  background: col, borderRadius: 3, transition: 'width .25s, background .25s',
+                }} />
+              </div>
+
+              {/* Row 3: stat chips + HP controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {[
+                  c.ac    != null && `AC ${c.ac}`,
+                  c.thac0 != null && `THAC0 ${c.thac0}`,
+                  c.attacks       && `Atk: ${c.attacks}`,
+                  c.damage        && `Dmg: ${c.damage}`,
+                ].filter(Boolean).map(s => (
+                  <span key={s} style={{
+                    fontSize: 10, color: C.textDim, background: 'rgba(0,0,0,.25)',
+                    borderRadius: 4, padding: '1px 6px',
+                  }}>{s}</span>
+                ))}
+
+                {isActive && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                    {[-5, -1].map(d => (
+                      <button key={d} disabled={isDead}
+                        onClick={() => applyHpChange(c, c.current_hp + d)}
+                        style={{
+                          width: 30, height: 22, borderRadius: 4,
+                          cursor: isDead ? 'not-allowed' : 'pointer',
+                          background: 'rgba(180,50,50,.18)', border: '1px solid rgba(180,50,50,.4)',
+                          color: C.red, fontSize: 10, fontWeight: 'bold',
+                          opacity: isDead ? 0.3 : 1,
+                        }}>{d}</button>
+                    ))}
+
+                    {/* HP value — click to type exact value */}
+                    {editing ? (
+                      <input
+                        autoFocus type="number" min={0} max={c.max_hp}
+                        value={editHpVal}
+                        onChange={e => setEditHpVal(e.target.value)}
+                        onBlur={() => { applyHpChange(c, parseInt(editHpVal, 10) || 0); setEditHpId(null); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter')  { applyHpChange(c, parseInt(editHpVal, 10) || 0); setEditHpId(null); }
+                          if (e.key === 'Escape') { setEditHpId(null); }
+                        }}
+                        style={{
+                          width: 50, textAlign: 'center', background: '#0d0903',
+                          border: `1px solid ${C.borderHi}`, borderRadius: 4,
+                          color: col, fontSize: 11, fontWeight: 'bold', padding: '1px 4px',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        title="Click to type exact HP"
+                        onClick={() => { if (!isDead) { setEditHpId(c.id); setEditHpVal(String(c.current_hp)); } }}
+                        style={{
+                          fontSize: 11, fontWeight: 'bold', color: col,
+                          minWidth: 54, textAlign: 'center', fontFamily: ff,
+                          cursor: isDead ? 'default' : 'pointer',
+                          borderBottom: isDead ? 'none' : `1px dashed ${col}`,
+                        }}
+                      >{c.current_hp}/{c.max_hp}</span>
+                    )}
+
+                    {[1, 5].map(d => (
+                      <button key={d} disabled={c.current_hp >= c.max_hp}
+                        onClick={() => applyHpChange(c, c.current_hp + d)}
+                        style={{
+                          width: 30, height: 22, borderRadius: 4,
+                          cursor: c.current_hp >= c.max_hp ? 'not-allowed' : 'pointer',
+                          background: 'rgba(80,160,80,.12)', border: '1px solid rgba(80,160,80,.35)',
+                          color: C.green, fontSize: 10, fontWeight: 'bold',
+                          opacity: c.current_hp >= c.max_hp ? 0.3 : 1,
+                        }}>+{d}</button>
+                    ))}
+
+                    <button onClick={() => applyHpChange(c, 0)} disabled={isDead}
+                      style={{
+                        padding: '2px 8px', borderRadius: 4,
+                        cursor: isDead ? 'not-allowed' : 'pointer',
+                        background: 'rgba(180,50,50,.12)', border: '1px solid rgba(180,50,50,.35)',
+                        color: C.red, fontSize: 10, opacity: isDead ? 0.3 : 1,
+                      }}>💀</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Saved loot ── */}
+      {(enc.loot_ai || enc.loot_official) && (
+        <div style={{
+          background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+          borderRadius: 8, padding: '12px 14px',
+        }}>
+          <div style={{ fontSize: 10, color: C.gold, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>
+            💰 Loot
+          </div>
+          {enc.loot_ai && (
+            <pre style={{
+              fontSize: 11, color: C.text, margin: 0,
+              whiteSpace: 'pre-wrap', lineHeight: 1.7, fontStyle: 'italic', fontFamily: ff,
+            }}>{enc.loot_ai}</pre>
+          )}
+        </div>
+      )}
+
+      {/* ── Complete encounter button ── */}
+      {isActive && isDM && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+          <button onClick={markComplete} style={{
+            padding: '8px 20px', borderRadius: 6, cursor: 'pointer', fontFamily: ff, fontSize: 12,
+            background: 'rgba(109,190,136,.12)', border: `1px solid rgba(109,190,136,.4)`,
+            color: C.green, fontWeight: 'bold',
+          }}>✅ Complete Encounter</button>
+          {deadXpEarned > 0 && (
+            <span style={{ fontSize: 11, color: C.gold, fontFamily: ff }}>
+              ⚔ {deadXpEarned.toLocaleString()} XP earned so far
+            </span>
           )}
         </div>
       )}
@@ -667,97 +809,142 @@ function FightManager({ enc, onEncounterUpdate }) {
   );
 }
 
+// ── EncountersTab: left list + right Combat Manager ───────────────────────────
 function EncountersTab({ encounters, savedEncs, setSavedEncs, isDM, onOpenModule, sectionCard }) {
+  const [selectedEncId, setSelectedEncId] = useState(null);
+  const [collapsedIds,  setCollapsedIds]  = useState(new Set());
+
   function handleEncUpdate(id, patch) {
     setSavedEncs(list => list.map(e => e.id === id ? { ...e, ...patch } : e));
   }
+  function handleCreaturesUpdate(encId, creatures) {
+    setSavedEncs(list => list.map(e => e.id === encId ? { ...e, creatures } : e));
+  }
+  function toggleCollapse(id) {
+    setCollapsedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
 
+  const selectedEnc   = savedEncs.find(e => e.id === selectedEncId) ?? null;
   const activeEncs    = savedEncs.filter(e => e.status !== 'completed');
   const completedEncs = savedEncs.filter(e => e.status === 'completed');
 
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: C.textDim }}>
-          {encounters.length} planned · {savedEncs.length} fight{savedEncs.length !== 1 ? 's' : ''}
-          {activeEncs.length > 0 && (
-            <span style={{ marginLeft: 8, color: C.amber }}>· {activeEncs.length} active</span>
-          )}
-        </div>
-        <NavBtn onClick={onOpenModule}>Open Monsters & Encounters →</NavBtn>
-      </div>
+  function EncListItem({ enc }) {
+    const collapsed  = collapsedIds.has(enc.id);
+    const isSelected = selectedEncId === enc.id;
+    const isActive   = enc.status !== 'completed';
+    const creatures  = enc.creatures ?? [];
 
-      {/* ── Active Fight Managers ── */}
-      {activeEncs.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, color: C.amber, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
-            ⚔ Active Encounters
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {activeEncs.map(enc => (
-              <FightManager key={enc.id} enc={enc} onEncounterUpdate={handleEncUpdate} />
-            ))}
-          </div>
-        </div>
-      )}
+    return (
+      <div style={{
+        border: `1px solid ${isSelected ? C.borderHi : C.border}`,
+        borderRadius: 7, overflow: 'hidden', marginBottom: 6,
+        background: isSelected ? 'rgba(212,160,53,.07)' : 'rgba(0,0,0,.25)',
+      }}>
+        <div
+          onClick={() => setSelectedEncId(isSelected ? null : enc.id)}
+          style={{ padding: '9px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <span
+            onClick={e => { e.stopPropagation(); toggleCollapse(enc.id); }}
+            style={{ fontSize: 11, color: C.textDim, userSelect: 'none', minWidth: 14 }}
+          >{collapsed ? '▶' : '▼'}</span>
 
-      {/* ── Completed Saved Encounters ── */}
-      {completedEncs.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
-            ✅ Completed Encounters
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {completedEncs.map(enc => (
-              <FightManager key={enc.id} enc={enc} onEncounterUpdate={handleEncUpdate} />
-            ))}
-          </div>
-        </div>
-      )}
+          <span style={{ fontSize: 12, color: isSelected ? C.gold : C.text, fontWeight: 'bold', flex: 1, fontFamily: ff }}>
+            {isActive ? '⚔ ' : '✅ '}{enc.title}
+          </span>
 
-      {/* ── Planned (general) Encounters ── */}
-      {encounters.length > 0 && (
-        <div>
-          <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
-            📋 Planned Encounters
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {encounters.map(enc => {
-              const monsters = Array.isArray(enc.monsters)
-                ? enc.monsters
-                : (() => { try { return JSON.parse(enc.monsters ?? '[]'); } catch { return []; } })();
+          <span style={{
+            fontSize: 9, padding: '1px 7px', borderRadius: 10,
+            border: `1px solid ${isActive ? C.borderHi : C.border}`,
+            color: isActive ? C.amber : C.textDim,
+          }}>{isActive ? 'Active' : 'Done'}</span>
+        </div>
+
+        {!collapsed && creatures.length > 0 && (
+          <div style={{ padding: '4px 12px 8px 34px', borderTop: `1px solid ${C.border}` }}>
+            {creatures.map(c => {
+              const pct = c.max_hp > 0 ? c.current_hp / c.max_hp : 0;
+              const col = hpColor(pct);
               return (
-                <div key={enc.id} style={sectionCard}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: monsters.length ? 6 : 0 }}>
-                    <span style={{ fontSize: 14, color: C.gold, fontWeight: 'bold', flex: 1 }}>{enc.name}</span>
-                    {enc.difficulty && (
-                      <span style={{
-                        fontSize: 9, letterSpacing: 1, padding: '1px 8px', borderRadius: 10,
-                        border: `1px solid ${DIFF_COLOR[enc.difficulty] ?? C.border}`,
-                        color: DIFF_COLOR[enc.difficulty] ?? C.textDim, textTransform: 'uppercase',
-                      }}>{enc.difficulty}</span>
-                    )}
-                    {enc.total_xp > 0 && (
-                      <span style={{ fontSize: 10, color: C.gold }}>{enc.total_xp.toLocaleString()} XP</span>
-                    )}
-                  </div>
-                  {monsters.length > 0 && (
-                    <div style={{ fontSize: 11, color: C.textDim }}>
-                      {monsters.map(m => `${(m.count ?? 1) > 1 ? `${m.count}× ` : ''}${m.name}`).join(', ')}
-                    </div>
-                  )}
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0', fontSize: 11 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, flexShrink: 0 }} />
+                  <span style={{ color: c.current_hp <= 0 ? C.textDim : C.text, flex: 1 }}>{c.monster_name}</span>
+                  <span style={{ color: col, fontFamily: ff }}>{c.current_hp}/{c.max_hp}</span>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    );
+  }
 
-      {!encounters.length && !savedEncs.length && (
+  // Empty state
+  if (!savedEncs.length && !encounters.length) {
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+          <NavBtn onClick={onOpenModule}>Open Monsters & Encounters →</NavBtn>
+        </div>
         <EmptyState icon="👹" msg={isDM
           ? 'No fight encounters yet. Build one in Monsters & Encounters, then click "Save Encounter" to track it here.'
           : 'No encounters have been started yet.'} />
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+
+      {/* ── Left pane: encounter list ── */}
+      <div style={{ width: 256, flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 10, color: C.textDim }}>
+            {activeEncs.length} active · {completedEncs.length} done
+          </span>
+          <NavBtn onClick={onOpenModule}>+ New →</NavBtn>
+        </div>
+
+        {activeEncs.length > 0 && (
+          <>
+            <div style={{ fontSize: 9, color: C.amber, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
+              ⚔ Active
+            </div>
+            {activeEncs.map(enc => <EncListItem key={enc.id} enc={enc} />)}
+          </>
+        )}
+
+        {completedEncs.length > 0 && (
+          <>
+            <div style={{
+              fontSize: 9, color: C.textDim, letterSpacing: 2, textTransform: 'uppercase',
+              marginBottom: 6, marginTop: activeEncs.length ? 12 : 0,
+            }}>✅ Completed</div>
+            {completedEncs.map(enc => <EncListItem key={enc.id} enc={enc} />)}
+          </>
+        )}
+      </div>
+
+      {/* ── Right pane: Combat Manager or prompt ── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {selectedEnc ? (
+          <CombatManager
+            key={selectedEnc.id}
+            enc={selectedEnc}
+            onEncounterUpdate={handleEncUpdate}
+            onCreaturesUpdate={handleCreaturesUpdate}
+            isDM={isDM}
+          />
+        ) : (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            height: 200, color: C.textDim, fontSize: 13, fontStyle: 'italic', fontFamily: ff,
+            border: `1px dashed ${C.border}`, borderRadius: 8,
+          }}>
+            ← Select an encounter to open Combat Manager
+          </div>
+        )}
+      </div>
     </div>
   );
 }

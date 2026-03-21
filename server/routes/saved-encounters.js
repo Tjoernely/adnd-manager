@@ -1,11 +1,11 @@
 /**
  * /api/saved-encounters
- *   GET  /                     — list saved encounters for campaign
+ *   GET  /                     — list saved encounters for campaign (creatures nested)
  *   POST /                     — create encounter + creature rows (DM only)
- *   PUT  /:id                  — update title/status/loot (DM only)
+ *   PUT  /:id                  — update title/status/loot/current_round (DM only)
  *   DELETE /:id                — delete encounter + creatures (DM only)
  *   GET  /:id/creatures        — list creatures for an encounter
- *   PUT  /:id/creatures/:cid   — update creature HP/status
+ *   PUT  /:id/creatures/:cid   — update creature HP/initiative/status
  */
 const express = require('express');
 const db      = require('../db');
@@ -13,7 +13,7 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ── List saved encounters ──────────────────────────────────────────────────
+// ── List saved encounters (creatures nested) ───────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
     const { campaign_id } = req.query;
@@ -26,9 +26,19 @@ router.get('/', auth, async (req, res) => {
       'SELECT * FROM saved_encounters WHERE campaign_id=$1 ORDER BY created_at DESC',
       [campaign_id],
     );
-    res.json({ encounters: rows });
+
+    // Nest creatures under each encounter so the client needs only one request
+    const encounters = await Promise.all(rows.map(async enc => {
+      const creatures = await db.all(
+        'SELECT * FROM encounter_creatures WHERE encounter_id=$1 ORDER BY initiative DESC, id ASC',
+        [enc.id],
+      );
+      return { ...enc, creatures };
+    }));
+
+    res.json({ encounters });
   } catch (e) {
-    // Table may not exist yet (first deploy) — return empty rather than 500
+    // Table may not exist yet on first deploy — return empty rather than 500
     console.error('[saved-encounters GET]', e.message);
     res.json({ encounters: [] });
   }
@@ -37,7 +47,13 @@ router.get('/', auth, async (req, res) => {
 // ── Create saved encounter with creatures ──────────────────────────────────
 router.post('/', auth, async (req, res) => {
   try {
-    const { campaign_id, title, terrain, difficulty, party_level, party_size, total_xp, groups = [] } = req.body ?? {};
+    const {
+      campaign_id, title, terrain, difficulty,
+      party_level, party_size, total_xp,
+      creatures: creaturesInput = [],   // new format: one row per creature
+      groups    = [],                   // legacy format: count-based
+    } = req.body ?? {};
+
     if (!campaign_id) return res.status(400).json({ error: 'campaign_id required' });
     if (!title)       return res.status(400).json({ error: 'title required' });
 
@@ -53,27 +69,46 @@ router.post('/', auth, async (req, res) => {
        party_level ?? null, party_size ?? null, total_xp ?? 0],
     );
 
-    // Create individual creature rows (one per creature instance)
-    const creatures = [];
-    for (const g of groups) {
-      const count = Math.max(1, g.count ?? 1);
-      for (let i = 0; i < count; i++) {
+    const savedCreatures = [];
+
+    if (creaturesInput.length) {
+      // New format: each element is already one creature instance
+      for (const cr of creaturesInput) {
         const c = await db.one(
           `INSERT INTO encounter_creatures
-             (encounter_id, monster_id, monster_name, max_hp, current_hp, initiative)
-           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [enc.id, g.monster_id ?? null, g.monster_name ?? 'Unknown',
-           g.hp_each ?? 8, g.hp_each ?? 8, g.initiative ?? 0],
+             (encounter_id, monster_id, monster_name, max_hp, current_hp,
+              initiative, ac, thac0, attacks, damage, xp_value)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+          [enc.id, cr.monster_id ?? null, cr.monster_name ?? 'Unknown',
+           cr.max_hp ?? 8, cr.current_hp ?? cr.max_hp ?? 8,
+           cr.initiative ?? 0,
+           cr.ac ?? null, cr.thac0 ?? null,
+           cr.attacks ?? null, cr.damage ?? null, cr.xp_value ?? 0],
         );
-        creatures.push(c);
+        savedCreatures.push(c);
+      }
+    } else {
+      // Legacy groups format: expand count into individual rows
+      for (const g of groups) {
+        const count = Math.max(1, g.count ?? 1);
+        for (let i = 0; i < count; i++) {
+          const c = await db.one(
+            `INSERT INTO encounter_creatures
+               (encounter_id, monster_id, monster_name, max_hp, current_hp, initiative)
+             VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+            [enc.id, g.monster_id ?? null, g.monster_name ?? 'Unknown',
+             g.hp_each ?? 8, g.hp_each ?? 8, g.initiative ?? 0],
+          );
+          savedCreatures.push(c);
+        }
       }
     }
 
-    res.status(201).json({ ...enc, creatures });
+    res.status(201).json({ ...enc, creatures: savedCreatures });
   } catch (e) { next500(e, res); }
 });
 
-// ── Update encounter metadata ──────────────────────────────────────────────
+// ── Update encounter metadata / round ─────────────────────────────────────
 router.put('/:id', auth, async (req, res) => {
   try {
     const enc = await db.one('SELECT * FROM saved_encounters WHERE id=$1', [req.params.id]);
@@ -81,12 +116,22 @@ router.put('/:id', auth, async (req, res) => {
     if (!(await isDM(enc.campaign_id, req.user.id)))
       return res.status(403).json({ error: 'DM only' });
 
-    const { title = enc.title, status = enc.status, loot_official = enc.loot_official, loot_ai = enc.loot_ai } = req.body ?? {};
+    const {
+      title         = enc.title,
+      status        = enc.status,
+      loot_official = enc.loot_official,
+      loot_ai       = enc.loot_ai,
+      current_round = enc.current_round ?? 1,
+    } = req.body ?? {};
+
     const updated = await db.one(
       `UPDATE saved_encounters
-       SET title=$1, status=$2, loot_official=$3, loot_ai=$4, updated_at=NOW()
-       WHERE id=$5 RETURNING *`,
-      [title, status, loot_official ? JSON.stringify(loot_official) : null, loot_ai, req.params.id],
+       SET title=$1, status=$2, loot_official=$3, loot_ai=$4, current_round=$5, updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [title, status,
+       loot_official ? JSON.stringify(loot_official) : null,
+       loot_ai, current_round,
+       req.params.id],
     );
     res.json(updated);
   } catch (e) { next500(e, res); }
@@ -121,7 +166,7 @@ router.get('/:id/creatures', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
-// ── Update creature HP / status ────────────────────────────────────────────
+// ── Update creature HP / initiative / status ───────────────────────────────
 router.put('/:id/creatures/:cid', auth, async (req, res) => {
   try {
     const creature = await db.one(
@@ -135,19 +180,21 @@ router.put('/:id/creatures/:cid', auth, async (req, res) => {
     const access = await campaignAccess(creature.campaign_id, req.user.id);
     if (!access) return res.status(403).json({ error: 'Access denied' });
 
-    const { current_hp, status, notes } = req.body ?? {};
-    const newHp     = current_hp !== undefined ? Math.max(0, Number(current_hp)) : creature.current_hp;
-    const newStatus = status !== undefined ? status
-      : newHp <= 0 ? 'dead'
-      : newHp <= Math.ceil(creature.max_hp * 0.25) ? 'critical'
-      : newHp <= Math.ceil(creature.max_hp * 0.50) ? 'bloodied'
+    const { current_hp, initiative, status, notes } = req.body ?? {};
+
+    const newHp         = current_hp  !== undefined ? Math.max(0, Number(current_hp))  : creature.current_hp;
+    const newInitiative = initiative  !== undefined ? Number(initiative)                : (creature.initiative ?? 0);
+    const newStatus     = status      !== undefined ? status
+      : newHp <= 0                                  ? 'dead'
+      : newHp <= Math.ceil(creature.max_hp * 0.25)  ? 'critical'
+      : newHp <= Math.ceil(creature.max_hp * 0.50)  ? 'bloodied'
       : 'alive';
 
     const updated = await db.one(
       `UPDATE encounter_creatures
-       SET current_hp=$1, status=$2, notes=COALESCE($3, notes)
-       WHERE id=$4 RETURNING *`,
-      [newHp, newStatus, notes ?? null, req.params.cid],
+       SET current_hp=$1, initiative=$2, status=$3, notes=COALESCE($4, notes)
+       WHERE id=$5 RETURNING *`,
+      [newHp, newInitiative, newStatus, notes ?? null, req.params.cid],
     );
     res.json(updated);
   } catch (e) { next500(e, res); }

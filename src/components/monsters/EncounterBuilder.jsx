@@ -304,12 +304,41 @@ export default function EncounterBuilder({ campaignId }) {
   // ── Save ──────────────────────────────────────────────────────────────────
   // Saves to saved_encounters with per-creature HP tracking rows
 
+  // Parse first valid integer from a raw stat value (handles "610" → 6, "6 10" → 6)
+  function parseStat(v, lo = -10, hi = 30) {
+    if (v == null) return null;
+    const n = Number(v);
+    if (Number.isInteger(n) && n >= lo && n <= hi) return n;
+    const m = String(v).match(/-?\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  }
+
   async function saveEncounter() {
     if (!campaignId || !encName.trim() || !groups?.length) return;
     setSaving(true);
     try {
       const totalXp = groups.reduce((s, g) => s + g.xpEach * g.count, 0);
       const rated   = rateDifficulty(totalXp, level, partySize);
+
+      // Expand each group into individual creature rows with full combat stats
+      const creatures = [];
+      for (const g of groups) {
+        for (let i = 0; i < g.count; i++) {
+          creatures.push({
+            monster_id:   g.monster.id,
+            monster_name: g.monster.name,
+            max_hp:       g.hpEach,
+            current_hp:   g.hpEach,
+            initiative:   0,
+            ac:           parseStat(g.monster.armor_class),
+            thac0:        parseStat(g.monster.thac0, -5, 25),
+            attacks:      g.monster.attacks ?? null,
+            damage:       g.monster.damage  ?? null,
+            xp_value:     g.monster.xp_value ?? 0,
+          });
+        }
+      }
+
       await api.createSavedEncounter({
         campaign_id: campaignId,
         title:       encName.trim(),
@@ -318,13 +347,7 @@ export default function EncounterBuilder({ campaignId }) {
         party_level: level,
         party_size:  partySize,
         total_xp:    totalXp,
-        groups:      groups.map(g => ({
-          monster_id:   g.monster.id,
-          monster_name: g.monster.name,
-          hp_each:      g.hpEach,
-          count:        g.count,
-          initiative:   g.initiative,
-        })),
+        creatures,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

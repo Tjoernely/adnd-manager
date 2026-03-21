@@ -101,6 +101,16 @@ async function autoMigrate() {
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE party_inventory_id_seq TO ${u};`);
     } catch (_) { /* ignore */ }
 
+    // New combat columns — idempotent, safe to run repeatedly
+    try {
+      await db.query(`ALTER TABLE saved_encounters ADD COLUMN IF NOT EXISTS current_round INTEGER DEFAULT 1;`);
+      await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS ac INTEGER;`);
+      await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS thac0 INTEGER;`);
+      await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS attacks VARCHAR(20);`);
+      await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS damage VARCHAR(50);`);
+      await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS xp_value INTEGER DEFAULT 0;`);
+    } catch (e) { console.warn('[auto-migrate] combat columns skipped:', e.message); }
+
     // Fix concatenated AC/THAC0 values (e.g. 610 → 6, 1520 → 15)
     // These arise when parseIntSafe strips whitespace from "6 10" → 610
     try {
