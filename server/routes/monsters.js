@@ -22,6 +22,32 @@ const router = express.Router();
 // Computed expression for numeric hit dice value
 const HD_EXPR = `COALESCE(NULLIF(regexp_replace(hit_dice, '[^0-9].*', '', 'g'), '')::int, 0)`;
 
+// Safe AC: strip concatenated digits (e.g. 610→6, stored when "6 10" was parsed)
+const AC_EXPR = `
+  CASE
+    WHEN armor_class IS NULL THEN NULL
+    WHEN armor_class BETWEEN -10 AND 30 THEN armor_class
+    WHEN LEFT(armor_class::text, 1) ~ '^[0-9]$'
+      AND LEFT(armor_class::text, 1)::int BETWEEN -10 AND 30
+      THEN LEFT(armor_class::text, 1)::int
+    ELSE armor_class
+  END`;
+
+// Safe THAC0: try 2 digits first (e.g. 15), then 1
+const THAC0_EXPR = `
+  CASE
+    WHEN thac0 IS NULL THEN NULL
+    WHEN thac0 BETWEEN -5 AND 20 THEN thac0
+    WHEN LENGTH(thac0::text) >= 2
+      AND LEFT(thac0::text, 2) ~ '^-?[0-9]+$'
+      AND LEFT(thac0::text, 2)::int BETWEEN -5 AND 20
+      THEN LEFT(thac0::text, 2)::int
+    WHEN LEFT(thac0::text, 1) ~ '^[0-9]$'
+      AND LEFT(thac0::text, 1)::int BETWEEN -5 AND 20
+      THEN LEFT(thac0::text, 1)::int
+    ELSE thac0
+  END`;
+
 const SORT_MAP = {
   name_asc:  'name ASC',
   name_desc: 'name DESC',
@@ -114,12 +140,14 @@ router.get('/', async (req, res) => {
 
     const [rows, countRow] = await Promise.all([
       db.all(
-        `SELECT id, name, source, hit_dice, hit_points, armor_class, thac0,
+        `SELECT id, name, source, hit_dice, hit_points,
+                (${AC_EXPR})    AS armor_class,
+                (${THAC0_EXPR}) AS thac0,
                 movement, size, type, alignment, attacks, damage, xp_value,
                 special_attacks, special_defenses, magic_resistance,
                 armor_profile_id, generated_hp, generated_hp_base,
                 random_roll, random_modifier, role,
-                frequency, habitat, tags
+                frequency, habitat, treasure, tags
          FROM monsters ${where}
          ORDER BY ${orderBy}
          LIMIT $${p} OFFSET $${p+1}`,
@@ -135,7 +163,11 @@ router.get('/', async (req, res) => {
 // ── GET /:id ───────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const monster = await db.one('SELECT * FROM monsters WHERE id=$1', [req.params.id]);
+    const monster = await db.one(
+      `SELECT *, (${AC_EXPR}) AS armor_class, (${THAC0_EXPR}) AS thac0
+       FROM monsters WHERE id=$1`,
+      [req.params.id],
+    );
     if (!monster) return res.status(404).json({ error: 'Monster not found' });
     res.json(monster);
   } catch (e) { next500(e, res); }

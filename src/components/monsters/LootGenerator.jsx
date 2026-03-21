@@ -4,7 +4,6 @@
  * Used in MonsterDetail and EncounterBuilder.
  */
 import { useState } from 'react';
-import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
 
 // ── Dice helpers ──────────────────────────────────────────────────────────────
@@ -64,17 +63,7 @@ async function rollTable(tableKey) {
   if (table.magic && pct(table.magic.p)) {
     const count = table.magic.c ?? 1;
     const restr = table.magic.r !== 'any' ? ` (${table.magic.r})` : '';
-    try {
-      const data = await api.randomMagicalItems({ count });
-      const items = Array.isArray(data) ? data : (data?.items ?? []);
-      if (items.length) {
-        items.forEach(item => lines.push(`✨ ${item.name ?? 'Magic Item'}`));
-      } else {
-        lines.push(`✨ ${count} magic item${count !== 1 ? 's' : ''}${restr}`);
-      }
-    } catch {
-      lines.push(`✨ ${count} magic item${count !== 1 ? 's' : ''}${restr}`);
-    }
+    lines.push(`✨ ${count} magic item${count !== 1 ? 's' : ''}${restr}`);
     if (table.magic.bonus) {
       lines.push(`📜 Bonus: ${table.magic.bonus}`);
     }
@@ -149,26 +138,44 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
     }
   }
 
-  // AI loot
+  // AI loot — direct Anthropic API call (proxy injects auth automatically)
   async function handleAiLoot() {
     setAiLoading(true);
     setAiError(null);
     setAiText(null);
     try {
       const monsterList = groups
-        ? groups.map(g => ({ name: g.monster?.name ?? 'Monster', count: g.count }))
-        : monster ? [{ name: monster.name, count: 1 }] : [];
+        ? groups.map(g => `${g.count > 1 ? `${g.count}× ` : ''}${g.monster?.name ?? 'Monster'}`).join(', ')
+        : monster ? monster.name : 'unknown monsters';
 
-      const data = await api.generateAiLoot({
-        monsters:    monsterList,
-        terrain,
-        difficulty,
-        party_level: partyLevel,
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model:      'claude-sonnet-4-20250514',
+          max_tokens: 300,
+          messages: [{
+            role: 'user',
+            content: `You are a witty Dungeon Master for AD&D 2nd Edition.
+The party (level ${partyLevel}) defeated: ${monsterList} in a ${terrain} environment. Difficulty: ${difficulty}.
+Generate fun, lore-appropriate loot with a twist.
+Include coins (cp/sp/gp amounts), 1-2 interesting items with brief flavor text (funny or mysterious).
+Max 100 words. Use bullet points only — no intro sentence, no closing remark.`,
+          }],
+        }),
       });
-      setAiText(data.text ?? '(No response)');
+
+      if (!response.ok) {
+        throw new Error(`AI unavailable (${response.status})`);
+      }
+
+      const data = await response.json();
+      const text = data?.content?.[0]?.text ?? '';
+      if (!text) throw new Error('Empty response from AI');
+      setAiText(text);
       setActiveTab('ai');
     } catch (e) {
-      setAiError(e.message ?? 'AI generation failed');
+      setAiError('AI unavailable — use Official Loot instead');
     } finally {
       setAiLoading(false);
     }

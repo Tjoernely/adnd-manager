@@ -13,7 +13,8 @@
     "import:s3items":    "node ../scripts/import-s3-items.mjs",
     "import:items-all":  "node ../scripts/import-item-descriptions.mjs",
     "import:monsters":   "node ../scripts/import-monsters.mjs",
-    "recalc:hp":         "node recalculate-monster-hp.mjs"
+    "recalc:hp":         "node recalculate-monster-hp.mjs",
+    "fix:treasure":      "node fix-monster-treasure.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

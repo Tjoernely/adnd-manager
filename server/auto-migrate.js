@@ -101,6 +101,37 @@ async function autoMigrate() {
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE party_inventory_id_seq TO ${u};`);
     } catch (_) { /* ignore */ }
 
+    // Fix concatenated AC/THAC0 values (e.g. 610 → 6, 1520 → 15)
+    // These arise when parseIntSafe strips whitespace from "6 10" → 610
+    try {
+      await db.query(`
+        UPDATE monsters SET armor_class =
+          CASE
+            WHEN LEFT(armor_class::text, 1)::integer BETWEEN -10 AND 30
+              THEN LEFT(armor_class::text, 1)::integer
+            WHEN LENGTH(armor_class::text) >= 2
+              AND LEFT(armor_class::text, 2) ~ '^-?[0-9]+$'
+              AND LEFT(armor_class::text, 2)::integer BETWEEN -10 AND 30
+              THEN LEFT(armor_class::text, 2)::integer
+            ELSE armor_class
+          END
+        WHERE armor_class > 30 OR armor_class < -10;
+      `);
+      await db.query(`
+        UPDATE monsters SET thac0 =
+          CASE
+            WHEN LEFT(thac0::text, 2) ~ '^[0-9]+$'
+              AND LEFT(thac0::text, 2)::integer BETWEEN -5 AND 20
+              THEN LEFT(thac0::text, 2)::integer
+            WHEN LEFT(thac0::text, 1) ~ '^[0-9]$'
+              AND LEFT(thac0::text, 1)::integer BETWEEN -5 AND 20
+              THEN LEFT(thac0::text, 1)::integer
+            ELSE thac0
+          END
+        WHERE thac0 > 20 OR thac0 < -5;
+      `);
+    } catch (e) { console.warn('[auto-migrate] AC/THAC0 fix skipped:', e.message); }
+
     console.log('[auto-migrate] done');
   } catch (e) {
     console.error('[auto-migrate] error:', e.message);
