@@ -146,8 +146,9 @@ export default function EncounterBuilder({ campaignId }) {
   const [genError,   setGenError]   = useState(null);
 
   const [encName, setEncName] = useState('');
-  const [saving,  setSaving]  = useState(false);
-  const [saved,   setSaved]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const [detailId, setDetailId] = useState(null);
 
@@ -349,11 +350,13 @@ export default function EncounterBuilder({ campaignId }) {
         total_xp:    totalXp,
         creatures,
       });
+      setSaveError(null);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       setEncName('');
     } catch (e) {
       console.error('Save encounter:', e);
+      setSaveError(e.message ?? 'Failed to save encounter');
     } finally {
       setSaving(false);
     }
@@ -640,6 +643,9 @@ export default function EncounterBuilder({ campaignId }) {
             </button>
             {!campaignId && (
               <span style={{ fontSize: 11, color: C.textDim }}>(campaign required to save)</span>
+            )}
+            {saveError && (
+              <span style={{ fontSize: 12, color: C.red }}>⚠ {saveError}</span>
             )}
           </div>
         </div>
