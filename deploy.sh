@@ -83,7 +83,7 @@ sleep 1
 
 # Start the backend using the ecosystem config (cwd, env, name all fixed)
 cd "$APP_DIR"
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 
 pm2 save
 pm2 startup | tail -1 | sudo bash || true   # persist across reboots
