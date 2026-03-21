@@ -1,105 +1,100 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# deploy.sh  –  Kør dette script på din Oracle Ubuntu VM
-# Hvad det gør:
-#   1. Installerer Node.js 20 + npm + pm2
-#   2. Henter seneste kode fra GitHub
-#   3. Installerer dependencies (frontend + backend)
-#   4. Bygger React frontend ind i server/public/
-#   5. Starter/genstarter serveren med pm2 på port 3000
+# deploy.sh  –  Run on the Oracle Ubuntu VM (as ubuntu user)
+# What it does:
+#   1. Install Node.js 20 + PM2 if missing
+#   2. Clone repo to /var/www/adnd-manager, or pull latest
+#   3. Install frontend + backend dependencies
+#   4. Build React app → server/public/
+#   5. Copy build to nginx public folder
+#   6. Start/restart backend via ecosystem.config.js (single PM2 process)
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
-APP_DIR="$HOME/dnd-manager"
+APP_DIR="/var/www/adnd-manager"
 REPO="https://github.com/Tjoernely/adnd-manager.git"
 
 echo "──────────────────────────────────────────"
 echo " AD&D Manager – Deploy"
 echo "──────────────────────────────────────────"
 
-# ── 1. Node.js 20 (spring over hvis allerede installeret) ──────────────────
+# ── 1. Node.js 20 ─────────────────────────────────────────────────────────
 if ! command -v node &>/dev/null; then
-  echo "→ Installerer Node.js 20..."
+  echo "→ Installing Node.js 20..."
   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
   sudo apt-get install -y nodejs
 else
-  echo "✓ Node $(node -v) allerede installeret"
+  echo "✓ Node $(node -v) already installed"
 fi
 
 # ── 2. PM2 ────────────────────────────────────────────────────────────────
 if ! command -v pm2 &>/dev/null; then
-  echo "→ Installerer pm2..."
+  echo "→ Installing PM2..."
   sudo npm install -g pm2
 else
-  echo "✓ PM2 allerede installeret"
+  echo "✓ PM2 $(pm2 --version) already installed"
 fi
 
-# ── 3. Klon eller opdater repo ─────────────────────────────────────────────
+# ── 3. Ensure /var/www/adnd-manager exists and is owned by this user ──────
+sudo mkdir -p "$APP_DIR"
+sudo chown -R "$USER":"$USER" "$APP_DIR"
+
+# ── 4. Clone or pull repo ─────────────────────────────────────────────────
 if [ -d "$APP_DIR/.git" ]; then
-  echo "→ Henter seneste kode..."
+  echo "→ Pulling latest code..."
   cd "$APP_DIR"
-  # Remove npm-generated files that would block git pull
-  rm -f "$APP_DIR/server/package-lock.json"
-  git pull
+  git fetch --all
+  git reset --hard origin/main
 else
-  echo "→ Kloner repository..."
+  echo "→ Cloning repository..."
   git clone "$REPO" "$APP_DIR"
   cd "$APP_DIR"
 fi
 
-# ── 4. Installer frontend dependencies & byg ──────────────────────────────
-echo "→ Installerer frontend dependencies..."
+# ── 5. Frontend dependencies + build ──────────────────────────────────────
+echo "→ Installing frontend dependencies..."
+cd "$APP_DIR"
 npm install
 
-echo "→ Bygger React app..."
+echo "→ Building React app..."
 npm run build
 
-# Copy build output to nginx public folder
-cp -r /var/www/adnd-manager/server/public/* /var/server/public/
+# Copy built assets to the nginx-served public folder
+echo "→ Copying build to /var/server/public..."
+sudo mkdir -p /var/server/public
+sudo cp -r "$APP_DIR/server/public/." /var/server/public/
+sudo chown -R www-data:www-data /var/server/public 2>/dev/null || true
 
-# ── 5. Installer backend dependencies ─────────────────────────────────────
-echo "→ Installerer backend dependencies..."
+# ── 6. Backend dependencies ───────────────────────────────────────────────
+echo "→ Installing backend dependencies..."
 cd "$APP_DIR/server"
 npm install
 
-# ── 6. Start / genstart med PM2 ───────────────────────────────────────────
-echo "→ Starter server med PM2..."
+# ── 7. PM2 — clean slate via ecosystem.config.js ─────────────────────────
+echo "→ Restarting backend with PM2..."
 
-# Kill any stale process on port 3001 first
+# Tear down any old/conflicting processes
+pm2 delete adnd-backend 2>/dev/null || true
+pm2 delete dnd-manager  2>/dev/null || true
+
+# Free the port if anything is still holding it
 fuser -k 3001/tcp 2>/dev/null || true
 sleep 1
 
-# Ensure dotenv is available
-cd /var/www/adnd-manager/server
-npm install dotenv --save --silent
-
-# Ensure PORT=3001 in .env
-sed -i 's/^PORT=3000$/PORT=3001/' /var/www/adnd-manager/server/.env 2>/dev/null || true
-
-# Restart or start backend with correct cwd
-if pm2 describe adnd-backend > /dev/null 2>&1; then
-  pm2 restart adnd-backend --update-env
-else
-  pm2 start /var/www/adnd-manager/server/index.js \
-    --name adnd-backend \
-    --cwd /var/www/adnd-manager/server
-fi
-
-# Ensure frontend static server is running
-if ! pm2 describe dnd-manager > /dev/null 2>&1; then
-  pm2 start "npx serve -s /var/server/public -l 3000" --name dnd-manager
-fi
+# Start the backend using the ecosystem config (cwd, env, name all fixed)
+cd "$APP_DIR"
+pm2 start ecosystem.config.js
 
 pm2 save
-pm2 startup | tail -1 | sudo bash || true   # auto-start ved reboot
+pm2 startup | tail -1 | sudo bash || true   # persist across reboots
 
 echo ""
-echo "✅ Deploy færdig!"
-echo "   Backend kører på port 3001 (adnd-backend)"
-echo "   Frontend kører på port 3000 (dnd-manager)"
-echo "   App tilgængelig på http://$(hostname -I | awk '{print $1}')"
+echo "✅ Deploy complete!"
+echo "   Backend : port 3001 (PM2 name: adnd-backend)"
+echo "   Frontend: served by nginx from /var/server/public"
+echo "   App URL : http://$(hostname -I | awk '{print $1}')"
 echo ""
-echo "   Nyttige kommandoer:"
-echo "   pm2 logs adnd-backend  – se server logs"
-echo "   pm2 status             – se status"
-echo "   pm2 restart adnd-backend – genstart backend"
+echo "   Useful commands:"
+echo "   pm2 logs adnd-backend    – live logs"
+echo "   pm2 status               – process list"
+echo "   pm2 restart adnd-backend – restart backend"
