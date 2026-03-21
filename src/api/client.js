@@ -230,6 +230,18 @@ export const api = {
   updateInventoryItem: (id, data)   => apiFetch(`/party-inventory/${id}`,   { method: 'PUT',    body: JSON.stringify(data) }),
   deleteInventoryItem: (id)         => apiFetch(`/party-inventory/${id}`,   { method: 'DELETE' }),
 
+  // ── Saved Encounters (fight-tracked) ──────────────────────────────
+  getSavedEncounters:   (campaignId) => apiFetch(`/saved-encounters?campaign_id=${campaignId}`),
+  createSavedEncounter: (data)       => apiFetch('/saved-encounters', { method: 'POST', body: JSON.stringify(data) }),
+  updateSavedEncounter: (id, data)   => apiFetch(`/saved-encounters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSavedEncounter: (id)         => apiFetch(`/saved-encounters/${id}`, { method: 'DELETE' }),
+  getEncounterCreatures:(encId)      => apiFetch(`/saved-encounters/${encId}/creatures`),
+  updateCreatureHp:     (encId, cId, current_hp) =>
+    apiFetch(`/saved-encounters/${encId}/creatures/${cId}`, { method: 'PUT', body: JSON.stringify({ current_hp }) }),
+
+  // ── AI Loot ───────────────────────────────────────────────────────
+  generateAiLoot: (data) => apiFetch('/ai/loot', { method: 'POST', body: JSON.stringify(data) }),
+
   // ── Visibility toggles (DM only) ──────────────────────────────────
   setQuestVisibility:     (id, v) => apiFetch(`/quests/${id}`,          { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
   setEncounterVisibility: (id, v) => apiFetch(`/encounters/${id}`,      { method: 'PUT', body: JSON.stringify({ visibility: v }) }),

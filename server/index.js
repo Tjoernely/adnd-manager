@@ -19,6 +19,7 @@ const mapRouter              = require('./routes/maps');
 const partyKnowledgeRouter   = require('./routes/party-knowledge');
 const partyHubRouter         = require('./routes/party-hub');
 const partyInventoryRouter   = require('./routes/party-inventory');
+const savedEncountersRouter  = require('./routes/saved-encounters');
 const aiRouter               = require('./routes/ai');
 
 const app  = express();
@@ -42,8 +43,9 @@ app.use('/api/monsters',        monstersRouter);
 app.use('/api/maps',            mapRouter);
 app.use('/api/party-knowledge', partyKnowledgeRouter);
 app.use('/api/party-hub',       partyHubRouter);
-app.use('/api/party-inventory', partyInventoryRouter);
-app.use('/api/ai',             aiRouter);
+app.use('/api/party-inventory',  partyInventoryRouter);
+app.use('/api/saved-encounters', savedEncountersRouter);
+app.use('/api/ai',               aiRouter);
 
 // ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');

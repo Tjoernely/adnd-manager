@@ -48,8 +48,51 @@ async function autoMigrate() {
         ADD COLUMN IF NOT EXISTS generated_hp_base INTEGER,
         ADD COLUMN IF NOT EXISTS random_roll       INTEGER,
         ADD COLUMN IF NOT EXISTS random_modifier   FLOAT,
-        ADD COLUMN IF NOT EXISTS role              VARCHAR(20) DEFAULT 'normal';
+        ADD COLUMN IF NOT EXISTS role              VARCHAR(20) DEFAULT 'normal',
+        ADD COLUMN IF NOT EXISTS treasure          VARCHAR(10);
     `);
+
+    // Saved encounters (fight-tracked, with per-creature HP)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS saved_encounters (
+        id           SERIAL PRIMARY KEY,
+        campaign_id  INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
+        title        VARCHAR(200) NOT NULL,
+        terrain      VARCHAR(100),
+        difficulty   VARCHAR(20),
+        party_level  INTEGER,
+        party_size   INTEGER,
+        status       VARCHAR(20) DEFAULT 'active',
+        total_xp     INTEGER DEFAULT 0,
+        loot_official JSONB,
+        loot_ai      TEXT,
+        created_at   TIMESTAMP DEFAULT NOW(),
+        updated_at   TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS encounter_creatures (
+        id            SERIAL PRIMARY KEY,
+        encounter_id  INTEGER REFERENCES saved_encounters(id) ON DELETE CASCADE,
+        monster_id    INTEGER,
+        monster_name  VARCHAR(200),
+        max_hp        INTEGER DEFAULT 1,
+        current_hp    INTEGER DEFAULT 1,
+        initiative    INTEGER DEFAULT 0,
+        status        VARCHAR(20) DEFAULT 'alive',
+        loot          JSONB,
+        notes         TEXT
+      );
+    `);
+
+    try {
+      const u = process.env.DB_USER || 'adnduser';
+      await db.query(`GRANT ALL ON saved_encounters TO ${u};`);
+      await db.query(`GRANT ALL ON encounter_creatures TO ${u};`);
+      await db.query(`GRANT USAGE, SELECT ON SEQUENCE saved_encounters_id_seq TO ${u};`);
+      await db.query(`GRANT USAGE, SELECT ON SEQUENCE encounter_creatures_id_seq TO ${u};`);
+    } catch (_) { /* ignore */ }
 
     // Grant access — best-effort, may fail on managed DBs
     try {

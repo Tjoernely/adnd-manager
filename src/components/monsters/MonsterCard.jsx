@@ -21,6 +21,20 @@ function typeColor(type) {
   return TYPE_COLORS[type?.toLowerCase()] ?? '#707070';
 }
 
+// Parse concatenated stat values (e.g. 610 → 6, "6 10" → 6)
+function parseStat(v, lo = -10, hi = 30) {
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : parseInt(String(v));
+  if (isNaN(n)) return null;
+  if (n >= lo && n <= hi) return n;
+  const s = String(Math.abs(n));
+  for (let len = 1; len < s.length; len++) {
+    const t = parseInt(s.slice(0, len)) * (n < 0 ? -1 : 1);
+    if (t >= lo && t <= hi) return t;
+  }
+  return null;
+}
+
 function acLabel(ac) {
   if (ac == null) return '—';
   if (ac <= -5)   return `${ac} ✦✦✦`;
@@ -36,7 +50,9 @@ function hdLabel(hd) {
 
 export function MonsterCard({ monster: m, selected, onClick }) {
   const profile = getArmorProfile(m.armor_profile_id);
-  const tc = typeColor(m.type);
+  const tc  = typeColor(m.type);
+  const ac  = parseStat(m.armor_class);
+  const th0 = parseStat(m.thac0, -5, 20);
 
   return (
     <div
@@ -97,11 +113,11 @@ export function MonsterCard({ monster: m, selected, onClick }) {
         {/* Stat row */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {[
-            { l: 'AC',   v: acLabel(m.armor_class) },
+            { l: 'AC',   v: acLabel(ac), c: ac != null && ac <= 2 ? C.green : ac != null && ac >= 7 ? C.amber : C.gold },
             { l: 'HD',   v: hdLabel(m.hit_dice) },
             { l: 'HP',   v: m.generated_hp != null ? String(m.generated_hp) : '?', c: '#e07060' },
             { l: 'MV',   v: m.movement ?? '—' },
-            { l: 'THAC0',v: m.thac0 != null ? String(m.thac0) : '—' },
+            { l: 'THAC0',v: th0 != null ? String(th0) : (m.thac0 != null ? String(m.thac0) : '—') },
             { l: 'XP',   v: m.xp_value != null ? m.xp_value.toLocaleString() : '—' },
           ].map(s => (
             <div key={s.l} style={{ textAlign: 'center' }}>

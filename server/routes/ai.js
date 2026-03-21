@@ -28,6 +28,50 @@ function getClient() {
   return _client;
 }
 
+// ── POST /api/ai/loot ─────────────────────────────────────────────────────────
+// Returns plain-text lore-friendly loot description (no DM gate, just auth).
+router.post('/loot', auth, async (req, res) => {
+  try {
+    const { monsters = [], terrain = 'dungeon', difficulty = 'Medium', party_level = 5 } = req.body ?? {};
+
+    const monsterDesc = monsters.length
+      ? monsters.map(m => `${m.count > 1 ? `${m.count}× ` : ''}${m.name}`).join(', ')
+      : 'some monsters';
+
+    const client = getClient();
+    const message = await client.messages.create({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 350,
+      system: `You are a witty Dungeon Master for AD&D 2nd Edition.
+Generate treasure that is lore-appropriate but with a fun twist.
+Respond with ONLY bullet points — no intro sentence, no closing remarks.`,
+      messages: [{
+        role: 'user',
+        content: `The party defeated ${monsterDesc} in a ${terrain} environment.
+Party level: ${party_level}. Difficulty: ${difficulty}.
+Generate interesting loot with:
+- Appropriate coins (cp/sp/gp amounts)
+- 1-2 unique items with brief flavor text (funny or mysterious)
+- Lore-friendly but memorable
+Keep it under 120 words, use bullet points.`,
+      }],
+    });
+
+    const text = message.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('');
+
+    res.json({ text });
+  } catch (e) {
+    console.error('[ai/loot]', e.message);
+    if (e.message?.includes('ANTHROPIC_API_KEY')) {
+      return res.status(503).json({ error: 'AI not configured on this server' });
+    }
+    res.status(500).json({ error: 'AI loot generation failed', detail: e.message });
+  }
+});
+
 // ── POST /api/ai/generate ──────────────────────────────────────────────────────
 router.post('/generate', auth, async (req, res) => {
   try {

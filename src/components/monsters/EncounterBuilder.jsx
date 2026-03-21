@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
 import { MonsterDetail } from './MonsterDetail.jsx';
+import LootGenerator from './LootGenerator.jsx';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -301,6 +302,7 @@ export default function EncounterBuilder({ campaignId }) {
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  // Saves to saved_encounters with per-creature HP tracking rows
 
   async function saveEncounter() {
     if (!campaignId || !encName.trim() || !groups?.length) return;
@@ -308,22 +310,21 @@ export default function EncounterBuilder({ campaignId }) {
     try {
       const totalXp = groups.reduce((s, g) => s + g.xpEach * g.count, 0);
       const rated   = rateDifficulty(totalXp, level, partySize);
-      await api.createEncounter({
+      await api.createSavedEncounter({
         campaign_id: campaignId,
-        data: {
-          name:        encName.trim(),
-          description: `${rated} encounter — ${partySize} players level ${level} — ${terrain}`,
-          monsters:    groups.map(g => ({
-            id:         g.monster.id,
-            name:       g.monster.name,
-            count:      g.count,
-            xp:         g.xpEach,
-            hp_each:    g.hpEach,
-            initiative: g.initiative,
-          })),
-          total_xp:   totalXp,
-          difficulty:  rated,
-        },
+        title:       encName.trim(),
+        terrain,
+        difficulty:  rated,
+        party_level: level,
+        party_size:  partySize,
+        total_xp:    totalXp,
+        groups:      groups.map(g => ({
+          monster_id:   g.monster.id,
+          monster_name: g.monster.name,
+          hp_each:      g.hpEach,
+          count:        g.count,
+          initiative:   g.initiative,
+        })),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -585,8 +586,16 @@ export default function EncounterBuilder({ campaignId }) {
             </div>
           </div>
 
+          {/* Loot Generator */}
+          <LootGenerator
+            groups={groups}
+            terrain={terrain}
+            difficulty={ratedDiff ?? difficulty}
+            partyLevel={level}
+          />
+
           {/* Save */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 16 }}>
             <input
               value={encName}
               onChange={e => setEncName(e.target.value)}
