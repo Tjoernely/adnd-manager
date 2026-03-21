@@ -231,7 +231,10 @@ export const api = {
   deleteInventoryItem: (id)         => apiFetch(`/party-inventory/${id}`,   { method: 'DELETE' }),
 
   // ── Saved Encounters (fight-tracked) ──────────────────────────────
-  getSavedEncounters:   (campaignId) => apiFetch(`/saved-encounters?campaign_id=${campaignId}`),
+  getSavedEncounters:   async (campaignId) => {
+    const data = await apiFetch(`/saved-encounters?campaign_id=${campaignId}`);
+    return Array.isArray(data) ? data : (data?.encounters ?? []);
+  },
   createSavedEncounter: (data)       => apiFetch('/saved-encounters', { method: 'POST', body: JSON.stringify(data) }),
   updateSavedEncounter: (id, data)   => apiFetch(`/saved-encounters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSavedEncounter: (id)         => apiFetch(`/saved-encounters/${id}`, { method: 'DELETE' }),

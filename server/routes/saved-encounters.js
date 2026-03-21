@@ -26,8 +26,12 @@ router.get('/', auth, async (req, res) => {
       'SELECT * FROM saved_encounters WHERE campaign_id=$1 ORDER BY created_at DESC',
       [campaign_id],
     );
-    res.json(rows);
-  } catch (e) { next500(e, res); }
+    res.json({ encounters: rows });
+  } catch (e) {
+    // Table may not exist yet (first deploy) — return empty rather than 500
+    console.error('[saved-encounters GET]', e.message);
+    res.json({ encounters: [] });
+  }
 });
 
 // ── Create saved encounter with creatures ──────────────────────────────────
