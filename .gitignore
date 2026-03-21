@@ -46,3 +46,5 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+ecosystem.config.cjs
