@@ -54,6 +54,9 @@ npm install
 echo "→ Bygger React app..."
 npm run build
 
+# Copy build output to nginx public folder
+cp -r /var/www/adnd-manager/server/public/* /var/server/public/
+
 # ── 5. Installer backend dependencies ─────────────────────────────────────
 echo "→ Installerer backend dependencies..."
 cd "$APP_DIR/server"
@@ -61,12 +64,30 @@ npm install
 
 # ── 6. Start / genstart med PM2 ───────────────────────────────────────────
 echo "→ Starter server med PM2..."
-cd "$APP_DIR/server"
 
-if pm2 describe dnd-manager &>/dev/null; then
-  pm2 restart dnd-manager
+# Kill any stale process on port 3001 first
+fuser -k 3001/tcp 2>/dev/null || true
+sleep 1
+
+# Ensure dotenv is available
+cd /var/www/adnd-manager/server
+npm install dotenv --save --silent
+
+# Ensure PORT=3001 in .env
+sed -i 's/^PORT=3000$/PORT=3001/' /var/www/adnd-manager/server/.env 2>/dev/null || true
+
+# Restart or start backend with correct cwd
+if pm2 describe adnd-backend > /dev/null 2>&1; then
+  pm2 restart adnd-backend --update-env
 else
-  pm2 start index.js --name dnd-manager
+  pm2 start /var/www/adnd-manager/server/index.js \
+    --name adnd-backend \
+    --cwd /var/www/adnd-manager/server
+fi
+
+# Ensure frontend static server is running
+if ! pm2 describe dnd-manager > /dev/null 2>&1; then
+  pm2 start "npx serve -s /var/server/public -l 3000" --name dnd-manager
 fi
 
 pm2 save
@@ -74,9 +95,11 @@ pm2 startup | tail -1 | sudo bash || true   # auto-start ved reboot
 
 echo ""
 echo "✅ Deploy færdig!"
-echo "   App kører på http://$(hostname -I | awk '{print $1}'):3000"
+echo "   Backend kører på port 3001 (adnd-backend)"
+echo "   Frontend kører på port 3000 (dnd-manager)"
+echo "   App tilgængelig på http://$(hostname -I | awk '{print $1}')"
 echo ""
 echo "   Nyttige kommandoer:"
-echo "   pm2 logs dnd-manager   – se server logs"
+echo "   pm2 logs adnd-backend  – se server logs"
 echo "   pm2 status             – se status"
-echo "   pm2 restart dnd-manager – genstart"
+echo "   pm2 restart adnd-backend – genstart backend"
