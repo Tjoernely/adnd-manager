@@ -87,10 +87,36 @@ async function rollTable(tableKey) {
 // Hard / Deadly → bump treasure type one tier up
 const TIER_UP = { A:'B', B:'C', C:'D', D:'E', E:'F', F:'G', G:'H' };
 
-function effectiveTable(treasureType, difficulty) {
-  const t = (treasureType ?? '').trim().toUpperCase().charAt(0);
-  if (!T[t]) return null;
-  if (['Hard','Deadly'].includes(difficulty)) return TIER_UP[t] ?? t;
+// Map monster frequency words → closest AD&D treasure table letter
+const FREQ_TABLE = {
+  common:    'C',
+  uncommon:  'D',
+  rare:      'F',
+  very:      'G',   // "Very Rare" — first word
+  unique:    'H',
+  legendary: 'H',
+};
+
+// Level-based fallback when no treasure type at all
+function levelTable(level) {
+  if (level <= 3)  return 'C';
+  if (level <= 6)  return 'D';
+  if (level <= 9)  return 'F';
+  if (level <= 12) return 'G';
+  return 'H';
+}
+
+function effectiveTable(treasureType, difficulty, partyLevel = 5) {
+  // 1. Try explicit treasure column (single letter A-O)
+  let t = (treasureType ?? '').trim().toUpperCase().charAt(0);
+  if (!T[t]) {
+    // 2. Try mapping frequency word to a table
+    const word = (treasureType ?? '').trim().toLowerCase().split(/\s+/)[0];
+    t = FREQ_TABLE[word] ?? '';
+  }
+  // 3. Level fallback
+  if (!T[t]) t = levelTable(partyLevel);
+  if (['Hard','Deadly'].includes(difficulty)) t = TIER_UP[t] ?? t;
   return t;
 }
 
@@ -113,12 +139,10 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
     try {
       // Determine treasure type from monster or first group monster
       const treasureSource = monster ?? groups?.[0]?.monster;
-      const tType = effectiveTable(
-        treasureSource?.treasure ?? treasureSource?.frequency?.charAt(0),
-        difficulty,
-      );
-      const lines = tType ? await rollTable(tType) : ['(No treasure type set for this monster)'];
-      setLootLines(lines);
+      const rawType = treasureSource?.treasure ?? treasureSource?.frequency ?? null;
+      const tType = effectiveTable(rawType, difficulty, partyLevel);
+      const lines = await rollTable(tType);
+      setLootLines(lines ?? ['(Nothing of value was found)']);
       setActiveTab('official');
     } finally {
       setRolling(false);
@@ -217,9 +241,9 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
           <div style={{ fontSize: 11, color: C.gold, fontWeight: 'bold', marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
             <span>💰 Treasure Found</span>
             <span style={{ fontSize: 9, color: C.textDim, fontWeight: 'normal' }}>
-              {difficulty} difficulty · Treasure type: {(() => {
+              {difficulty} difficulty · Table: {(() => {
                 const src = monster ?? groups?.[0]?.monster;
-                return effectiveTable(src?.treasure ?? src?.frequency?.charAt(0), difficulty) ?? '?';
+                return effectiveTable(src?.treasure ?? src?.frequency ?? null, difficulty, partyLevel);
               })()}
             </span>
           </div>

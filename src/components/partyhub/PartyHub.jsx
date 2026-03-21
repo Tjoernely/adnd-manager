@@ -754,7 +754,9 @@ function EncountersTab({ encounters, savedEncs, setSavedEncs, isDM, onOpenModule
       )}
 
       {!encounters.length && !savedEncs.length && (
-        <EmptyState icon="👹" msg={isDM ? 'No encounters yet. Build them in Monsters & Encounters.' : 'No encounters have been shared yet.'} />
+        <EmptyState icon="👹" msg={isDM
+          ? 'No fight encounters yet. Build one in Monsters & Encounters, then click "Save Encounter" to track it here.'
+          : 'No encounters have been started yet.'} />
       )}
     </div>
   );
