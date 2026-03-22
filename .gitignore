@@ -35,6 +35,13 @@ server/dnd.db
 # Claude Code local config
 .claude/
 
+# PM2 ecosystem config (contains credentials — never commit)
+ecosystem.config.cjs
+ecosystem.config.js
+
+# One-time secrets setup script (contains credentials — never commit)
+server/setup-secrets.sh
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
