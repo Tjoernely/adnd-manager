@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: `role must be 'dm' or 'player'` });
 
   try {
-    const hash = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 10);
     const uname = (username ?? email.split('@')[0]).trim().slice(0, 100);
     const user = await db.one(
       `INSERT INTO users (email, password_hash, username, role)
