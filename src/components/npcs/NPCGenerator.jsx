@@ -167,7 +167,7 @@ export function NPCGenerator({ campaignId, onClose, onSaved }) {
       setResolved(res);
       console.log('[NPCGenerator] Resolved params:', res);
       console.log('[NPCGenerator] Calling Claude...');
-      const npc = await callClaude({ systemPrompt: SYS, userPrompt: buildPrompt(res), maxTokens: 2048 });
+      const npc = await callClaude({ systemPrompt: SYS, userPrompt: buildPrompt(res), maxTokens: 4096 });
       console.log('[NPCGenerator] Claude returned NPC:', npc?.name);
       setResult(npc);
     } catch(e) {
