@@ -122,6 +122,7 @@ export function NPCManager({ campaign, user, onBack }) {
 
   const [npcs,        setNpcs]        = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [loadError,   setLoadError]   = useState('');
   const [searchText,  setSearchText]  = useState('');
   const [filterPower, setFilterPower] = useState('');
   const [filterAlign, setFilterAlign] = useState('');
@@ -131,9 +132,11 @@ export function NPCManager({ campaign, user, onBack }) {
 
   const loadNpcs = useCallback(() => {
     setLoading(true);
+    setLoadError('');
     api.getNpcs(campaign.id)
-      .then(r => { setNpcs(Array.isArray(r) ? r : []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(r => { setNpcs(Array.isArray(r) ? r : []); })
+      .catch(e => { setLoadError(e.message ?? 'Failed to load NPCs'); })
+      .finally(() => setLoading(false));
   }, [campaign.id]);
 
   useEffect(() => { loadNpcs(); }, [loadNpcs]);
@@ -147,21 +150,27 @@ export function NPCManager({ campaign, user, onBack }) {
   });
 
   const handleSaveNpc = useCallback(async (npc, updates) => {
-    const updated = await api.updateNpc(npc.id, updates);
-    setNpcs(prev => prev.map(n => n.id === npc.id ? updated : n));
-    setSelectedNpc(updated);
+    try {
+      const updated = await api.updateNpc(npc.id, updates);
+      setNpcs(prev => prev.map(n => n.id === npc.id ? updated : n));
+      setSelectedNpc(updated);
+    } catch (e) { alert('Save failed: ' + (e.message ?? 'Unknown error')); }
   }, []);
 
   const handleDeleteNpc = useCallback(async (npc) => {
-    await api.deleteNpc(npc.id);
-    setNpcs(prev => prev.filter(n => n.id !== npc.id));
-    setSelectedNpc(null);
+    try {
+      await api.deleteNpc(npc.id);
+      setNpcs(prev => prev.filter(n => n.id !== npc.id));
+      setSelectedNpc(null);
+    } catch (e) { alert('Delete failed: ' + (e.message ?? 'Unknown error')); }
   }, []);
 
   const handleRevealToggle = useCallback(async (npc) => {
-    const updated = npc.is_hidden ? await api.revealNpc(npc.id) : await api.hideNpc(npc.id);
-    setNpcs(prev => prev.map(n => n.id === npc.id ? updated : n));
-    setSelectedNpc(updated);
+    try {
+      const updated = npc.is_hidden ? await api.revealNpc(npc.id) : await api.hideNpc(npc.id);
+      setNpcs(prev => prev.map(n => n.id === npc.id ? updated : n));
+      setSelectedNpc(updated);
+    } catch (e) { alert('Toggle failed: ' + (e.message ?? 'Unknown error')); }
   }, []);
 
   const handleCreated = useCallback((newNpc) => {
@@ -219,6 +228,11 @@ export function NPCManager({ campaign, user, onBack }) {
       <main className="nm-main">
         {loading ? (
           <div className="nm-empty">Loading NPCs…</div>
+        ) : loadError ? (
+          <div className="nm-empty" style={{ color: '#e05050' }}>
+            ⚠ {loadError}
+            <br /><button className="nm-add-btn" style={{ marginTop: '1rem' }} onClick={loadNpcs}>Retry</button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="nm-empty">
             {npcs.length === 0
