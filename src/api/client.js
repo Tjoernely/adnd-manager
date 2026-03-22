@@ -29,11 +29,11 @@ async function apiFetch(path, options = {}) {
   if (!res.ok) {
     const err = new Error(body?.error ?? `HTTP ${res.status}`);
     err.status = res.status;
-    // 401 means the token is missing or expired — clear it so the login
-    // screen appears on next render instead of silently failing every call
+    // 401 — clear stored credentials and notify useAuth to update React state
     if (res.status === 401) {
       localStorage.removeItem('dnd_token');
       localStorage.removeItem('dnd_user');
+      window.dispatchEvent(new Event('auth:expired'));
     }
     throw err;
   }

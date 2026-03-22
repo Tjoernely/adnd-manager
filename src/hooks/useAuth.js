@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '../api/client.js';
 
 function readStoredUser() {
@@ -11,14 +11,47 @@ function readStoredUser() {
 }
 
 export function useAuth() {
-  const [user,    setUser]    = useState(readStoredUser);
-  const [loading, setLoading] = useState(false);
+  // Start null — we verify the token before trusting the stored user
+  const [user,    setUser]    = useState(null);
+  // loading:true while we verify; keeps the login screen from flashing
+  const [loading, setLoading] = useState(!!localStorage.getItem('dnd_token'));
   const [error,   setError]   = useState(null);
 
-  const _persist = (token, user) => {
+  // ── Verify stored token on every mount ────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem('dnd_token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    api.me()
+      .then(({ user: u }) => {
+        localStorage.setItem('dnd_user', JSON.stringify(u));
+        setUser(u);
+      })
+      .catch(() => {
+        // Token invalid or expired — force login
+        localStorage.removeItem('dnd_token');
+        localStorage.removeItem('dnd_user');
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // ── Listen for 401s fired by apiFetch mid-session ─────────────────
+  useEffect(() => {
+    const handleExpired = () => {
+      setUser(null);
+      setError('Session expired — please log in again.');
+    };
+    window.addEventListener('auth:expired', handleExpired);
+    return () => window.removeEventListener('auth:expired', handleExpired);
+  }, []);
+
+  const _persist = (token, u) => {
     localStorage.setItem('dnd_token', token);
-    localStorage.setItem('dnd_user',  JSON.stringify(user));
-    setUser(user);
+    localStorage.setItem('dnd_user',  JSON.stringify(u));
+    setUser(u);
   };
 
   const login = useCallback(async (email, password) => {
@@ -53,6 +86,7 @@ export function useAuth() {
     localStorage.removeItem('dnd_token');
     localStorage.removeItem('dnd_user');
     setUser(null);
+    setError(null);
   }, []);
 
   return { user, loading, error, login, register, logout };
