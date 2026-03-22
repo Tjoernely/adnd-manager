@@ -124,6 +124,7 @@ async function autoMigrate() {
       `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS armor_profile_id  VARCHAR(50)`,
       `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS generated_hp      INTEGER`,
       `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS tags              TEXT`,
+      `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS variants          JSONB DEFAULT NULL`,
     ]) {
       try { await db.query(stmt); }
       catch (e) { console.warn('[auto-migrate] skipped:', stmt.slice(0, 60), '—', e.message); }

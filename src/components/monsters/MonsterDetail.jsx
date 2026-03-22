@@ -21,6 +21,21 @@ function parseStat(v, lo = -10, hi = 30) {
   return null;
 }
 
+// ── Dragon / variant age-category parser ──────────────────────────────────────
+function parseVariants(monster) {
+  if (monster.variants) {
+    try {
+      return typeof monster.variants === 'string'
+        ? JSON.parse(monster.variants)
+        : monster.variants;
+    } catch (_) {}
+  }
+  // Try to parse age table from description heuristic
+  const desc = monster.description ?? '';
+  if (!desc.includes('Age Category') && !desc.includes('age category')) return null;
+  return null; // parsed by fix-monster-variants.mjs; show nothing if not yet populated
+}
+
 export function MonsterDetail({ monsterId, onClose }) {
   const [monster,   setMonster]   = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -35,6 +50,9 @@ export function MonsterDetail({ monsterId, onClose }) {
   const [profileId,     setProfileId]     = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile,  setSavedProfile]  = useState(false);
+
+  // Variant / age-category selector
+  const [variantIdx,  setVariantIdx]  = useState(0); // 0 = base stats
 
   const allProfiles = getAllArmorProfiles();
 
@@ -114,6 +132,12 @@ export function MonsterDetail({ monsterId, onClose }) {
   const pct = hpData ? Math.round((hpData.randomModifier - 1) * 100) : 0;
   const pctStr = pct >= 0 ? `+${pct}%` : `${pct}%`;
 
+  const variants  = parseVariants(monster);
+  const variant   = variants && variantIdx > 0 ? variants[variantIdx - 1] : null;
+
+  // Merge variant overrides onto base stats for display
+  const disp = variant ? { ...monster, ...variant } : monster;
+
   const sectionHdr = (label) => (
     <div style={{
       fontSize: 10, letterSpacing: 3, color: C.textDim, textTransform: 'uppercase',
@@ -123,12 +147,15 @@ export function MonsterDetail({ monsterId, onClose }) {
     </div>
   );
 
-  const statRow = (label, value, color) => value != null && value !== '' ? (
+  // Always renders — shows "—" when value is null/undefined/empty
+  const statRow = (label, value, color) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
       <span style={{ color: C.textDim }}>{label}</span>
-      <span style={{ color: color ?? C.text, fontWeight: 'bold' }}>{value}</span>
+      <span style={{ color: color ?? C.text, fontWeight: 'bold' }}>
+        {value != null && value !== '' ? value : '—'}
+      </span>
     </div>
-  ) : null;
+  );
 
   const inputStyle = {
     background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`, borderRadius: 4,
@@ -147,7 +174,7 @@ export function MonsterDetail({ monsterId, onClose }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 18, color: C.gold, fontWeight: 'bold', lineHeight: 1.2 }}>{monster.name}</div>
           <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
-            {[monster.size, monster.type, monster.alignment].filter(Boolean).join(' · ')}
+            {[monster.size, monster.type, monster.alignment].filter(Boolean).join(' · ') || '—'}
           </div>
         </div>
         <button onClick={onClose} style={{
@@ -177,14 +204,43 @@ export function MonsterDetail({ monsterId, onClose }) {
         )}
       </div>
 
+      {/* ── Variant / Age-Category Selector ── */}
+      {variants && variants.length > 0 && (
+        <div style={{ marginBottom: 10, background: 'rgba(212,160,53,.08)', border: `1px solid rgba(212,160,53,.3)`, borderRadius: 7, padding: '8px 10px' }}>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: C.gold, textTransform: 'uppercase', marginBottom: 6 }}>
+            Age / Variant Category
+          </div>
+          <select
+            value={variantIdx}
+            onChange={e => setVariantIdx(Number(e.target.value))}
+            style={{ width: '100%', background: 'rgba(0,0,0,.5)', border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 8px', color: C.text, fontFamily: 'inherit', fontSize: 12, outline: 'none' }}
+          >
+            <option value={0}>Base Stats</option>
+            {variants.map((v, i) => (
+              <option key={i} value={i + 1}>{v.label ?? `Variant ${i + 1}`}</option>
+            ))}
+          </select>
+          {variant && (
+            <div style={{ fontSize: 10, color: C.amber, marginTop: 4 }}>
+              Viewing: {variant.label} stats
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Combat Stats ── */}
       {sectionHdr('Combat Stats')}
-      {statRow('Armor Class', ac != null ? ac : monster.armor_class, ac != null && ac <= 2 ? C.green : ac != null && ac >= 7 ? C.amber : C.text)}
-      {statRow('Hit Dice', monster.hit_dice)}
-      {statRow('THAC0', thac0 != null ? thac0 : monster.thac0)}
-      {statRow('Movement', monster.movement)}
-      {statRow('Morale', monster.morale)}
-      {statRow('XP Value', monster.xp_value?.toLocaleString(), C.gold)}
+      {statRow('Armor Class', parseStat(disp.armor_class) != null ? parseStat(disp.armor_class) : disp.armor_class,
+        parseStat(disp.armor_class) != null && parseStat(disp.armor_class) <= 2 ? C.green
+        : parseStat(disp.armor_class) != null && parseStat(disp.armor_class) >= 7 ? C.amber : C.text)}
+      {statRow('Hit Dice', disp.hit_dice)}
+      {statRow('THAC0', parseStat(disp.thac0, -5, 20) != null ? parseStat(disp.thac0, -5, 20) : disp.thac0)}
+      {statRow('Movement', disp.movement)}
+      {statRow('No. Appearing', disp.no_appearing ?? disp.number_appearing)}
+      {statRow('Size', disp.size)}
+      {statRow('Morale', disp.morale)}
+      {statRow('XP Value', disp.xp_value != null ? Number(disp.xp_value).toLocaleString() : null, C.gold)}
+      {statRow('Treasure Type', disp.treasure ?? disp.treasure_type)}
 
       {/* ── HP Section ── */}
       {sectionHdr('Hit Points')}
@@ -222,24 +278,12 @@ export function MonsterDetail({ monsterId, onClose }) {
 
       {/* ── Attacks ── */}
       {sectionHdr('Attacks')}
-      {statRow('Attacks', monster.attacks)}
-      {statRow('Damage', monster.damage)}
-      {monster.special_attacks && (
-        <div style={{ fontSize: 11, color: C.amber, marginTop: 4, lineHeight: 1.5 }}>
-          <span style={{ color: C.textDim }}>Special Attacks: </span>{monster.special_attacks}
-        </div>
-      )}
-      {monster.special_defenses && (
-        <div style={{ fontSize: 11, color: C.purple, marginTop: 4, lineHeight: 1.5 }}>
-          <span style={{ color: C.textDim }}>Special Defenses: </span>{monster.special_defenses}
-        </div>
-      )}
-      {monster.magic_resistance && (
-        <div style={{ fontSize: 11, color: C.purple, marginTop: 4, lineHeight: 1.5 }}>
-          <span style={{ color: C.textDim }}>Magic Resistance: </span>{monster.magic_resistance}
-        </div>
-      )}
-      {monster.save_as && statRow('Save As', monster.save_as)}
+      {statRow('Attacks', disp.attacks)}
+      {statRow('Damage', disp.damage)}
+      {statRow('Special Attacks',  disp.special_attacks,  disp.special_attacks  ? C.amber  : undefined)}
+      {statRow('Special Defenses', disp.special_defenses, disp.special_defenses ? C.purple : undefined)}
+      {statRow('Magic Resistance', disp.magic_resistance, disp.magic_resistance ? C.purple : undefined)}
+      {statRow('Save As', disp.save_as)}
 
       {/* ── Armor Profile (editable dropdown) ── */}
       {sectionHdr('Armor Profile')}
@@ -304,22 +348,30 @@ export function MonsterDetail({ monsterId, onClose }) {
       )}
 
       {/* ── Ecology ── */}
-      {(monster.habitat || monster.frequency || monster.tags?.length > 0) && (
-        <>
-          {sectionHdr('Ecology')}
-          {monster.habitat   && statRow('Habitat',   monster.habitat)}
-          {monster.frequency && statRow('Frequency', monster.frequency)}
-          {monster.tags?.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-              {monster.tags.map(t => (
-                <span key={t} style={{ fontSize: 10, background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`, borderRadius: 10, padding: '1px 8px', color: C.textDim }}>
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      {sectionHdr('Ecology')}
+      {statRow('Habitat',   disp.habitat)}
+      {statRow('Frequency', disp.frequency)}
+      {(() => {
+        const tags = Array.isArray(disp.tags)
+          ? disp.tags
+          : typeof disp.tags === 'string' && disp.tags
+            ? disp.tags.split(',').map(t => t.trim()).filter(Boolean)
+            : [];
+        return tags.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+            {tags.map(t => (
+              <span key={t} style={{ fontSize: 10, background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`, borderRadius: 10, padding: '1px 8px', color: C.textDim }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+            <span style={{ color: C.textDim }}>Tags</span>
+            <span style={{ color: C.text, fontWeight: 'bold' }}>—</span>
+          </div>
+        );
+      })()}
     </div>
   );
 }

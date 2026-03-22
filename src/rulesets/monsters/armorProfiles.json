@@ -1,5 +1,17 @@
 [
   {
+    "id": "feather",
+    "name": "Feather / No Armor",
+    "desc": "Birds, insects, and unarmored creatures with no meaningful natural protection.",
+    "icon": "🪶",
+    "reductionByType": {
+      "slashing": 0, "piercing": 0, "bludgeoning": 0,
+      "fire": 0, "cold": 0, "lightning": 0, "acid": 0, "poison": 0
+    },
+    "gracePct": 1.0,
+    "notes": "No protection whatsoever. Full damage from all sources."
+  },
+  {
     "id": "none",
     "name": "Unarmored / Bare Flesh",
     "desc": "No significant protection. Skin or light covering only.",
