@@ -41,5 +41,6 @@ pm2 start /var/www/adnd-manager/ecosystem.config.cjs
 pm2 save
 
 # Copy build to nginx
+sudo chown -R ubuntu:ubuntu /var/server/public/ 2>/dev/null || true
 cp -r /var/www/adnd-manager/server/public/* /var/server/public/
 echo "Deploy complete"
