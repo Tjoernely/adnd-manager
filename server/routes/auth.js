@@ -57,7 +57,12 @@ router.post('/login', async (req, res) => {
   );
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
-  const ok = await bcrypt.compare(password, user.password_hash);
+  console.log('[login] bcrypt.compare start', new Date().toISOString());
+  const ok = await Promise.race([
+    bcrypt.compare(password, user.password_hash),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+  ]).catch(() => false);
+  console.log('[login] bcrypt.compare done', new Date().toISOString(), 'ok:', ok);
   if (!ok)  return res.status(401).json({ error: 'Invalid email or password' });
 
   const { password_hash: _ph, ...safeUser } = user;
