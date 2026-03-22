@@ -9,22 +9,23 @@
     "migrate": "node migrate.js",
     "import-spells": "node scripts/import-spells.js",
     "import:spells": "node ../scripts/import-spells.mjs",
-    "import:items":   "node ../scripts/import-magical-items.mjs",
-    "import:s3items":    "node ../scripts/import-s3-items.mjs",
-    "import:items-all":  "node ../scripts/import-item-descriptions.mjs",
-    "import:monsters":   "node ../scripts/import-monsters.mjs",
-    "recalc:hp":         "node recalculate-monster-hp.mjs",
-    "fix:treasure":      "node fix-monster-treasure.mjs"
+    "import:items": "node ../scripts/import-magical-items.mjs",
+    "import:s3items": "node ../scripts/import-s3-items.mjs",
+    "import:items-all": "node ../scripts/import-item-descriptions.mjs",
+    "import:monsters": "node ../scripts/import-monsters.mjs",
+    "recalc:hp": "node recalculate-monster-hp.mjs",
+    "fix:treasure": "node fix-monster-treasure.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
     "axios": "^1.6.7",
-    "multer": "^1.4.5-lts.1",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
     "pg": "^8.11.3"
   }
 }
