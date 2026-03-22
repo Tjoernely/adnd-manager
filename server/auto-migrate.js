@@ -7,6 +7,77 @@ const db = require('./db');
 async function autoMigrate() {
   console.log('[auto-migrate] checking incremental schema…');
   try {
+    // Core tables — idempotent, safe to run on every start
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS npcs (
+        id          SERIAL PRIMARY KEY,
+        campaign_id INTEGER      NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        name        VARCHAR(255) NOT NULL,
+        data        JSONB        NOT NULL DEFAULT '{}',
+        is_hidden   BOOLEAN      NOT NULL DEFAULT true,
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS maps (
+        id          SERIAL PRIMARY KEY,
+        campaign_id INTEGER      NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        name        VARCHAR(255) NOT NULL,
+        type        VARCHAR(50)  NOT NULL DEFAULT 'dungeon',
+        image_url   TEXT,
+        parent_map_id INTEGER REFERENCES maps(id) ON DELETE SET NULL,
+        data        JSONB        NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS quests (
+        id          SERIAL PRIMARY KEY,
+        campaign_id INTEGER      NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        title       VARCHAR(255) NOT NULL,
+        data        JSONB        NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS encounters (
+        id          SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        data        JSONB   NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS party_knowledge (
+        id          SERIAL PRIMARY KEY,
+        campaign_id INTEGER      NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        title       VARCHAR(255) NOT NULL,
+        content     TEXT,
+        category    VARCHAR(100),
+        visible_to  JSONB        NOT NULL DEFAULT '["all"]',
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS loot (
+        id          SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        data        JSONB   NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
     await db.query(`
       ALTER TABLE characters
         ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'party',
