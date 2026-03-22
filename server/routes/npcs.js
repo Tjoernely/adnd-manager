@@ -26,7 +26,7 @@ router.get('/', auth, async (req, res) => {
     const access = await campaignAccess(campaign_id, req.user.id);
     if (!access) return res.status(403).json({ error: 'Access denied' });
 
-    const rows = access.isDM
+    const rows = access.is_dm
       ? await db.all(
           'SELECT * FROM npcs WHERE campaign_id=$1 ORDER BY name',
           [campaign_id],
@@ -47,7 +47,7 @@ router.get('/:id', auth, async (req, res) => {
 
     const access = await campaignAccess(npc.campaign_id, req.user.id);
     if (!access)            return res.status(403).json({ error: 'Access denied' });
-    if (!access.isDM && npc.is_hidden)
+    if (!access.is_dm && npc.is_hidden)
       return res.status(403).json({ error: 'NPC is hidden' });
 
     res.json(npc);
