@@ -2,6 +2,11 @@
  * PostgreSQL connection pool.
  * Replaces the old better-sqlite3 synchronous DB.
  */
+
+// Load server/.env first so DB_PASSWORD is always available,
+// regardless of import order or PM2 env injection timing.
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
 const { Pool } = require('pg');
 
 const pool = new Pool({
