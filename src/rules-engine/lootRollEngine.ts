@@ -7,6 +7,14 @@ import type { LootItem, LootRollInput, LootRollResult } from '../rulesets/loot/l
 import { computeXpBudget }                              from './lootXpEngine';
 import { filterByTerrain, buildWeightMap }              from './lootFilterEngine';
 
+// ── Default XP by table letter (for items with null xp_value) ─────────────────
+const DEFAULT_XP_BY_TABLE: Record<string, number> = {
+  A: 1000, B:  300, C:  200, D: 2000, E: 2500,
+  F: 3000, G: 4000, H: 5000, I: 1500, J:   50,
+  K:  100, L:  500, M:  800, N:  200, O:  150,
+  P: 1000, Q:10000, R:  500, S: 2000, T:  500,
+};
+
 // ── Fetch loot pool from our API ──────────────────────────────────────────────
 
 export async function fetchLootPool(opts: {
@@ -23,7 +31,14 @@ export async function fetchLootPool(opts: {
 
   const res = await fetch(`/api/magical-items/loot-pool?${p}`);
   if (!res.ok) throw new Error(`Loot pool fetch failed: HTTP ${res.status}`);
-  return res.json() as Promise<LootItem[]>;
+  const rows = await res.json() as Array<LootItem & { table_letter?: string }>;
+  // Apply XP defaults for items with no listed xp
+  return rows.map(item => ({
+    ...item,
+    listedXp: item.listedXp > 0
+      ? item.listedXp
+      : DEFAULT_XP_BY_TABLE[item.table_letter?.toUpperCase() ?? ''] ?? 500,
+  }));
 }
 
 // ── Weighted random pick ───────────────────────────────────────────────────────
@@ -55,9 +70,9 @@ export async function rollLoot(input: LootRollInput): Promise<LootRollResult> {
     ` → Budget: ${budget.toLocaleString()} XP`,
   );
 
-  // 2. Fetch pool — items up to 2× budget (allows a single big item to eat the budget)
-  const poolCap = Math.max(budget * 2, 500);
-  const raw     = await fetchLootPool({ minXp: 1, maxXp: poolCap, limit: 300 });
+  // 2. Fetch pool — no minXp filter; XP defaults applied inside fetchLootPool
+  const poolCap = Math.max(budget * 2, 1000);
+  const raw     = await fetchLootPool({ maxXp: poolCap, limit: 300 });
   log.push(`Fetched ${raw.length} candidate items (max XP per item: ${poolCap.toLocaleString()})`);
 
   // 3. Exclude cursed unless explicitly included
@@ -83,7 +98,7 @@ export async function rollLoot(input: LootRollInput): Promise<LootRollResult> {
 
   for (let i = 0; i < maxItems && remaining > 0; i++) {
     const candidates = pool.filter(
-      item => !used.has(item.id) && item.listedXp > 0 && item.listedXp <= remaining,
+      item => !used.has(item.id) && item.listedXp <= remaining,
     );
     if (!candidates.length) {
       log.push(`No items fit remaining budget (${remaining.toLocaleString()} XP)`);

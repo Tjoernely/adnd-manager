@@ -311,6 +311,7 @@ router.get('/loot-pool', async (req, res) => {
     res.json(rows.map(r => ({
       id:                String(r.id),
       name:              r.name,
+      table_letter:      r.table_letter ?? null,
       category:          TABLE_TO_LOOT_CATEGORY[r.table_letter?.toUpperCase()] ?? 'misc',
       listedXp:          r.xp_value ?? 0,
       gpValue:           r.value_gp ?? 0,

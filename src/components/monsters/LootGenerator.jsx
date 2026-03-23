@@ -9,6 +9,23 @@ import { useState } from 'react';
 import { C }        from '../../data/constants.js';
 import { rollLoot } from '../../rules-engine/lootRollEngine.js';
 
+// ── Smart Loot helpers ────────────────────────────────────────────────────────
+
+const DEFAULT_XP_BY_TABLE = {
+  A:1000, B:300,  C:200,  D:2000, E:2500,
+  F:3000, G:4000, H:5000, I:1500, J:50,
+  K:100,  L:500,  M:800,  N:200,  O:150,
+  P:1000, Q:10000,R:500,  S:2000, T:500,
+};
+
+function smartBudget(level) {
+  if (level <= 3)  return 500;
+  if (level <= 6)  return 1500;
+  if (level <= 9)  return 3000;
+  if (level <= 12) return 5000;
+  return 8000;
+}
+
 // ── Dice helpers ──────────────────────────────────────────────────────────────
 
 function d(sides) { return Math.floor(Math.random() * sides) + 1; }
@@ -111,19 +128,57 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
     } finally { setRolling(false); }
   }
 
-  // ── Smart Loot (lootRollEngine → real DB items) ─────────────────────────────
+  // ── Smart Loot (direct API call with auth + XP defaults) ───────────────────
   async function handleSmartLoot() {
     setSmartLoading(true);
     setSmartResult(null);
     setSmartError(null);
     try {
-      const result = await rollLoot({
-        partyLevel,
-        difficulty,
-        terrain,
-        maxItems: 4,
-      });
-      setSmartResult(result);
+      const token   = localStorage.getItem('dnd_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/magical-items/loot-pool?limit=300', { headers });
+      if (!res.ok) throw new Error(`Loot pool fetch failed: HTTP ${res.status}`);
+      let pool = await res.json();
+
+      // Apply XP defaults for items whose xp_value is null/0
+      pool = pool.map(item => ({
+        ...item,
+        listedXp: item.listedXp > 0
+          ? item.listedXp
+          : DEFAULT_XP_BY_TABLE[item.table_letter?.toUpperCase()] ?? 500,
+      }));
+
+      // Exclude cursed items
+      pool = pool.filter(item => !item.excludedByDefault);
+
+      const budget = smartBudget(partyLevel);
+      const log = [
+        `Party Lv${partyLevel} → Budget: ${budget.toLocaleString()} XP`,
+        `Pool: ${pool.length} items after filtering`,
+      ];
+
+      // Greedy random selection within budget
+      const results   = [];
+      const used      = new Set();
+      let   remaining = budget;
+
+      for (let i = 0; i < 4 && remaining > 0; i++) {
+        const candidates = pool.filter(it => !used.has(it.id) && it.listedXp <= remaining);
+        if (!candidates.length) { log.push(`No items fit remaining budget (${remaining.toLocaleString()} XP)`); break; }
+        const picked = candidates[Math.floor(Math.random() * candidates.length)];
+        results.push(picked);
+        used.add(picked.id);
+        remaining -= picked.listedXp;
+        log.push(`  [${i + 1}] ${picked.name} — ${picked.listedXp.toLocaleString()} XP · ${picked.gpValue.toLocaleString()} gp`);
+      }
+
+      const totalXp = results.reduce((s, it) => s + it.listedXp, 0);
+      const totalGp = results.reduce((s, it) => s + it.gpValue,  0);
+      log.push(`Done: ${results.length} item${results.length !== 1 ? 's' : ''} · ${totalXp.toLocaleString()} XP · ${totalGp.toLocaleString()} gp`);
+
+      setSmartResult({ items: results, totalXp, totalGp, budget, log });
       setActiveTab('smart');
     } catch (e) {
       setSmartError(e.message ?? 'Failed to fetch loot pool — is the server running?');

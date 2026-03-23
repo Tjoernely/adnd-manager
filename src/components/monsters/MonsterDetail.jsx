@@ -63,13 +63,13 @@ export function MonsterDetail({ monsterId, onClose }) {
       .then(m => {
         setMonster(m);
         setProfileId(m.armor_profile_id ?? 'none');
-        // Init HP from DB columns if present, else compute fresh
-        if (m.generated_hp_base != null && m.random_roll != null) {
+        // Init HP from DB columns if generated_hp is present, else compute fresh
+        if (m.generated_hp != null) {
           setHpData({
-            generatedHpBase:  m.generated_hp_base,
-            randomRoll:       m.random_roll,
-            randomModifier:   m.random_modifier ?? 1.0,
-            generatedHpFinal: m.generated_hp ?? m.generated_hp_base,
+            generatedHpBase:  m.generated_hp_base  ?? m.generated_hp,
+            randomRoll:       m.random_roll         ?? 10,
+            randomModifier:   m.random_modifier     ?? 1.0,
+            generatedHpFinal: m.generated_hp,
           });
         } else {
           const c = computeGeneratedHp(m);
@@ -242,6 +242,7 @@ export function MonsterDetail({ monsterId, onClose }) {
       {statRow('Size', disp.size)}
       {statRow('Type', disp.type)}
       {statRow('Alignment', disp.alignment)}
+      {statRow('Intelligence', disp.intelligence)}
       {statRow('Morale', disp.morale)}
       {statRow('XP Value', disp.xp_value != null ? Number(disp.xp_value).toLocaleString() : null, C.gold)}
       {statRow('Treasure Type', disp.treasure ?? disp.treasure_type)}
@@ -351,9 +352,12 @@ export function MonsterDetail({ monsterId, onClose }) {
 
       {/* ── Ecology ── */}
       {sectionHdr('Ecology')}
-      {statRow('Source',    disp.source)}
-      {statRow('Habitat',   disp.habitat)}
-      {statRow('Frequency', disp.frequency)}
+      {statRow('Source',         disp.source)}
+      {statRow('Habitat',        disp.habitat)}
+      {statRow('Frequency',      disp.frequency)}
+      {statRow('Organization',   disp.organization)}
+      {statRow('Activity Cycle', disp.activity_cycle)}
+      {statRow('Diet',           disp.diet)}
       {(() => {
         const tags = Array.isArray(disp.tags)
           ? disp.tags
