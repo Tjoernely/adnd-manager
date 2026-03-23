@@ -46,14 +46,10 @@ export function computeGeneratedHp(monster) {
 export function applyGraceDamage(rawDamage, armorProfileId, damageType = 'slashing') {
   const profile    = getArmorProfile(armorProfileId);
   const flatReduce = profile.reductionByType[damageType] ?? 0;
-  const graceFloor = Math.ceil(rawDamage * profile.gracePct);
-  const afterFlat  = Math.max(0, rawDamage - flatReduce);
-  // Effective = max of grace floor or flat-reduced value
-  const effective  = Math.max(graceFloor, afterFlat);
+  const effective  = Math.max(0, rawDamage - flatReduce);
   return {
     effective,
-    reduced:    rawDamage - effective,
-    graceFloor,
+    reduced: rawDamage - effective,
   };
 }
 
@@ -67,8 +63,7 @@ export function describeHitLogic(monster, damageType = 'slashing') {
 
   if (flat > 0) parts.push(`${flat} flat reduction vs ${damageType}`);
   if (flat < 0) parts.push(`+${Math.abs(flat)} bonus damage vs ${damageType}`);
-
-  parts.push(`≥${Math.round(profile.gracePct * 100)}% of raw damage always gets through`);
+  if (parts.length === 0) parts.push('no reduction');
 
   return `${profile.name}: ${parts.join(', ')}.`;
 }

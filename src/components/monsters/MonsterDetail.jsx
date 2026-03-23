@@ -217,7 +217,9 @@ export function MonsterDetail({ monsterId, onClose }) {
           >
             <option value={0}>Base Stats</option>
             {variants.map((v, i) => (
-              <option key={i} value={i + 1}>{v.label ?? `Variant ${i + 1}`}</option>
+              <option key={i} value={i + 1}>
+                {v.label ?? `Variant ${i + 1}`}{v.body_length ? ` – ${v.body_length}` : ''}
+              </option>
             ))}
           </select>
           {variant && (
@@ -238,6 +240,8 @@ export function MonsterDetail({ monsterId, onClose }) {
       {statRow('Movement', disp.movement)}
       {statRow('No. Appearing', disp.no_appearing ?? disp.number_appearing)}
       {statRow('Size', disp.size)}
+      {statRow('Type', disp.type)}
+      {statRow('Alignment', disp.alignment)}
       {statRow('Morale', disp.morale)}
       {statRow('XP Value', disp.xp_value != null ? Number(disp.xp_value).toLocaleString() : null, C.gold)}
       {statRow('Treasure Type', disp.treasure ?? disp.treasure_type)}
@@ -280,6 +284,7 @@ export function MonsterDetail({ monsterId, onClose }) {
       {sectionHdr('Attacks')}
       {statRow('Attacks', disp.attacks)}
       {statRow('Damage', disp.damage)}
+      {disp.breath_weapon != null && statRow('Breath Weapon', disp.breath_weapon, C.amber)}
       {statRow('Special Attacks',  disp.special_attacks,  disp.special_attacks  ? C.amber  : undefined)}
       {statRow('Special Defenses', disp.special_defenses, disp.special_defenses ? C.purple : undefined)}
       {statRow('Magic Resistance', disp.magic_resistance, disp.magic_resistance ? C.purple : undefined)}
@@ -319,8 +324,8 @@ export function MonsterDetail({ monsterId, onClose }) {
         <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginBottom: 8 }}>{profile.notes}</div>
 
         {/* Damage reduction mini-grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 3 }}>
-          {['slashing','piercing','bludgeoning','fire','cold','lightning','acid','poison'].map(dt => {
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 3 }}>
+          {['slashing','piercing','bludgeoning','fire','cold','lightning','magic','acid','poison'].map(dt => {
             const r = profile.reductionByType[dt] ?? 0;
             const col = r > 0 ? C.green : r < 0 ? C.red : C.textDim;
             return (
@@ -330,9 +335,6 @@ export function MonsterDetail({ monsterId, onClose }) {
               </div>
             );
           })}
-        </div>
-        <div style={{ fontSize: 10, color: C.textDim, marginTop: 6 }}>
-          Grace floor: {Math.round(profile.gracePct * 100)}% of raw damage always passes through
         </div>
       </div>
 
@@ -349,6 +351,7 @@ export function MonsterDetail({ monsterId, onClose }) {
 
       {/* ── Ecology ── */}
       {sectionHdr('Ecology')}
+      {statRow('Source',    disp.source)}
       {statRow('Habitat',   disp.habitat)}
       {statRow('Frequency', disp.frequency)}
       {(() => {

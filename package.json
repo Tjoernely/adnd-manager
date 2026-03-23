@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "fix:variants": "node server/fix-monster-variants.mjs"
+    "fix:variants": "node server/fix-monster-variants.mjs",
+    "import:variants": "node server/scripts/import-variants.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

@@ -1,27 +1,25 @@
 [
   {
-    "id": "feather",
-    "name": "Feather / No Armor",
-    "desc": "Birds, insects, and unarmored creatures with no meaningful natural protection.",
-    "icon": "🪶",
-    "reductionByType": {
-      "slashing": 0, "piercing": 0, "bludgeoning": 0,
-      "fire": 0, "cold": 0, "lightning": 0, "acid": 0, "poison": 0
-    },
-    "gracePct": 1.0,
-    "notes": "No protection whatsoever. Full damage from all sources."
-  },
-  {
     "id": "none",
     "name": "Unarmored / Bare Flesh",
     "desc": "No significant protection. Skin or light covering only.",
     "icon": "🩸",
     "reductionByType": {
       "slashing": 0, "piercing": 0, "bludgeoning": 0,
-      "fire": 0, "cold": 0, "lightning": 0, "acid": 0, "poison": 0
+      "fire": 0, "cold": 0, "lightning": 0, "magic": 0, "acid": 0, "poison": 0
     },
-    "gracePct": 1.0,
     "notes": "All damage passes through fully."
+  },
+  {
+    "id": "feather",
+    "name": "Feathers",
+    "desc": "Light feather covering. Modest protection against physical and cold.",
+    "icon": "🪶",
+    "reductionByType": {
+      "slashing": 2, "piercing": 2, "bludgeoning": 2,
+      "fire": 0, "cold": 2, "lightning": 0, "magic": 2, "acid": 1, "poison": 2
+    },
+    "notes": "Soft feathers cushion physical blows and insulate against cold."
   },
   {
     "id": "padded_cloth",
@@ -29,10 +27,9 @@
     "desc": "Light fabric padding provides minimal protection.",
     "icon": "🧥",
     "reductionByType": {
-      "slashing": 1, "piercing": 0, "bludgeoning": 1,
-      "fire": 0, "cold": 1, "lightning": 0, "acid": 0, "poison": 0
+      "slashing": 3, "piercing": 2, "bludgeoning": 3,
+      "fire": 2, "cold": 3, "lightning": 0, "magic": 2, "acid": 2, "poison": 2
     },
-    "gracePct": 0.90,
     "notes": "Minor padding reduces cutting and cold damage slightly."
   },
   {
@@ -41,10 +38,9 @@
     "desc": "Cured hide or leather armor providing moderate protection.",
     "icon": "🥋",
     "reductionByType": {
-      "slashing": 2, "piercing": 1, "bludgeoning": 0,
-      "fire": 1, "cold": 1, "lightning": 0, "acid": 0, "poison": 0
+      "slashing": 4, "piercing": 3, "bludgeoning": 2,
+      "fire": 2, "cold": 3, "lightning": 0, "magic": 2, "acid": 2, "poison": 2
     },
-    "gracePct": 0.85,
     "notes": "Good vs slashing. Poor vs bludgeoning and energy."
   },
   {
@@ -53,11 +49,10 @@
     "desc": "Interlocking metal rings. Excellent vs slashing and piercing.",
     "icon": "⛓️",
     "reductionByType": {
-      "slashing": 3, "piercing": 3, "bludgeoning": 0,
-      "fire": 1, "cold": 1, "lightning": 1, "acid": 1, "poison": 0
+      "slashing": 5, "piercing": 5, "bludgeoning": 2,
+      "fire": 3, "cold": 3, "lightning": 2, "magic": 2, "acid": 2, "poison": 3
     },
-    "gracePct": 0.80,
-    "notes": "Strong vs weapons. Weak vs blunt and electricity."
+    "notes": "Strong vs weapons. Weaker vs blunt and energy."
   },
   {
     "id": "plate",
@@ -65,11 +60,10 @@
     "desc": "Solid metal plate offering superior protection in most categories.",
     "icon": "🛡️",
     "reductionByType": {
-      "slashing": 5, "piercing": 4, "bludgeoning": 2,
-      "fire": 2, "cold": 2, "lightning": 2, "acid": 2, "poison": 0
+      "slashing": 7, "piercing": 6, "bludgeoning": 4,
+      "fire": 4, "cold": 3, "lightning": 3, "magic": 3, "acid": 3, "poison": 4
     },
-    "gracePct": 0.70,
-    "notes": "Best physical protection. Still vulnerable to poison and extreme elements."
+    "notes": "Best physical protection. Still somewhat vulnerable to poison."
   },
   {
     "id": "dense_flesh",
@@ -77,11 +71,10 @@
     "desc": "Thick, tough musculature typical of most large monsters.",
     "icon": "💪",
     "reductionByType": {
-      "slashing": 1, "piercing": 1, "bludgeoning": 2,
-      "fire": 0, "cold": 0, "lightning": 0, "acid": 0, "poison": 0
+      "slashing": 3, "piercing": 3, "bludgeoning": 4,
+      "fire": 0, "cold": 0, "lightning": 0, "magic": 0, "acid": 0, "poison": 3
     },
-    "gracePct": 0.88,
-    "notes": "Default for most creatures. Slightly better vs blunt."
+    "notes": "Broad physical toughness, no elemental resistance."
   },
   {
     "id": "thick_hide",
@@ -89,10 +82,9 @@
     "desc": "Rhinoceros-thick skin found on giants, ogres, large beasts.",
     "icon": "🦏",
     "reductionByType": {
-      "slashing": 3, "piercing": 2, "bludgeoning": 2,
-      "fire": 1, "cold": 1, "lightning": 0, "acid": 1, "poison": 0
+      "slashing": 5, "piercing": 4, "bludgeoning": 4,
+      "fire": 3, "cold": 3, "lightning": 1, "magic": 1, "acid": 2, "poison": 4
     },
-    "gracePct": 0.80,
     "notes": "Broad physical resistance. Balanced profile."
   },
   {
@@ -101,23 +93,21 @@
     "desc": "Hard insect or crustacean shell. Excellent vs piercing and slashing.",
     "icon": "🦀",
     "reductionByType": {
-      "slashing": 4, "piercing": 4, "bludgeoning": -1,
-      "fire": 0, "cold": 0, "lightning": 0, "acid": 2, "poison": 2
+      "slashing": 6, "piercing": 6, "bludgeoning": 2,
+      "fire": 0, "cold": 2, "lightning": 0, "magic": 2, "acid": 3, "poison": 5
     },
-    "gracePct": 0.75,
-    "notes": "Very hard shell. Weak spot: bludgeoning (+1 extra damage)."
+    "notes": "Very hard shell. Weaker against bludgeoning."
   },
   {
     "id": "stone_body",
-    "name": "Stone / Construct Body",
+    "name": "Stone / Construct",
     "desc": "Rock, iron, or animated stone golem-like construction.",
     "icon": "🗿",
     "reductionByType": {
-      "slashing": 6, "piercing": 6, "bludgeoning": 3,
-      "fire": 4, "cold": 4, "lightning": 4, "acid": 2, "poison": 10
+      "slashing": 8, "piercing": 8, "bludgeoning": 5,
+      "fire": 10, "cold": 10, "lightning": 10, "magic": 10, "acid": 5, "poison": 10
     },
-    "gracePct": 0.55,
-    "notes": "Near-immune to most physical and energy attacks. High flat reductions."
+    "notes": "Near-immune to most physical and energy attacks."
   },
   {
     "id": "dragon_scales",
@@ -125,10 +115,9 @@
     "desc": "Overlapping magical scales with elemental affinity.",
     "icon": "🐉",
     "reductionByType": {
-      "slashing": 5, "piercing": 4, "bludgeoning": 4,
-      "fire": 8, "cold": 8, "lightning": 8, "acid": 8, "poison": 5
+      "slashing": 7, "piercing": 6, "bludgeoning": 6,
+      "fire": 8, "cold": 8, "lightning": 8, "magic": 8, "acid": 8, "poison": 8
     },
-    "gracePct": 0.60,
     "notes": "Extraordinarily resilient. Elemental affinity may grant immunity."
   }
 ]
