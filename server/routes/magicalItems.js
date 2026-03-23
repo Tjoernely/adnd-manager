@@ -273,6 +273,67 @@ router.get('/table-entries', async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
+// ── Table-letter → LootItem category mapping ──────────────────────────────────
+// Used by /loot-pool to produce LootItem-compatible JSON for the XP engine.
+const TABLE_TO_LOOT_CATEGORY = {
+  A: 'misc',   B: 'potion', C: 'scroll', D: 'ring',
+  E: 'rod',    F: 'staff',  G: 'wand',   H: 'gem',
+  I: 'jewelry', J: 'boots_gloves_accessories',
+  K: 'misc',   L: 'armor_shield', M: 'weapon',
+  N: 'potion', O: 'scroll', P: 'misc',
+  Q: 'artifact_relic', R: 'misc', S: 'weapon', T: 'misc',
+};
+
+// ── Loot pool for the XP engine (/loot-pool before /:id) ─────────────────────
+// Query params: table_letter (comma-sep), min_xp, max_xp, limit (default 200, max 500)
+// Returns items in LootItem-compatible format.
+router.get('/loot-pool', async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit ?? 200, 10) || 200, 500);
+    const minXp  = req.query.min_xp  != null ? parseInt(req.query.min_xp,  10) : null;
+    const maxXp  = req.query.max_xp  != null ? parseInt(req.query.max_xp,  10) : null;
+    const letter = req.query.table_letter ? String(req.query.table_letter).toUpperCase() : null;
+
+    const conditions = ['xp_value IS NOT NULL', 'xp_value > 0'];
+    const params     = [];
+
+    if (letter) {
+      const letters = letter.split(',').map(l => l.trim()).filter(Boolean);
+      params.push(letters.length === 1 ? letters[0] : letters);
+      conditions.push(letters.length === 1
+        ? `UPPER(table_letter) = $${params.length}`
+        : `UPPER(table_letter) = ANY($${params.length})`);
+    }
+    if (minXp != null && !isNaN(minXp)) {
+      params.push(minXp);
+      conditions.push(`xp_value >= $${params.length}`);
+    }
+    if (maxXp != null && !isNaN(maxXp)) {
+      params.push(maxXp);
+      conditions.push(`xp_value <= $${params.length}`);
+    }
+
+    params.push(limit);
+    const rows = await db.all(
+      `SELECT id, name, table_letter, xp_value, value_gp, cursed
+       FROM   magical_items
+       WHERE  ${conditions.join(' AND ')}
+       ORDER  BY RANDOM()
+       LIMIT  $${params.length}`,
+      params,
+    );
+
+    res.json(rows.map(r => ({
+      id:               String(r.id),
+      name:             r.name,
+      category:         TABLE_TO_LOOT_CATEGORY[r.table_letter?.toUpperCase()] ?? 'misc',
+      listedXp:         r.xp_value  ?? 0,
+      gpValue:          r.value_gp  ?? 0,
+      excludedByDefault: r.cursed   === true,
+    })));
+  } catch (e) { next500(e, res); }
+});
+
 // ── Search / list items ───────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {

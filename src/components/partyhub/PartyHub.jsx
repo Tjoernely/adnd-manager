@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
+import { rollLoot } from '../../rules-engine/lootRollEngine.js';
 
 const TABS = [
   { id: 'characters', icon: '👥', label: 'Characters' },
@@ -253,6 +254,8 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
                 savedEncs={savedEncs}
                 setSavedEncs={setSavedEncs}
                 isDM={isDM}
+                characters={data.characters}
+                campaignId={campaignId}
                 onOpenModule={() => onNavigate?.('monsters')}
                 sectionCard={sectionCard}
               />
@@ -476,7 +479,7 @@ function sortCreatures(list, by) {
 }
 
 // ── Full Combat Manager (right pane) ─────────────────────────────────────────
-function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
+function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, characters, campaignId }) {
   const [creatures,  setCreatures]  = useState(enc.creatures ?? []);
   const [round,      setRound]      = useState(enc.current_round ?? 1);
   const [sortBy,     setSortBy]     = useState('initiative');
@@ -484,6 +487,14 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
   const [editHpId,   setEditHpId]   = useState(null);
   const [editHpVal,  setEditHpVal]  = useState('');
   const [roundMsg,   setRoundMsg]   = useState(null);
+
+  // ── Smart Loot state ──────────────────────────────────────────────────────
+  const [lootItems,    setLootItems]    = useState([]);
+  const [lootLoading,  setLootLoading]  = useState(false);
+  const [lootError,    setLootError]    = useState(null);
+  const [assignments,  setAssignments]  = useState({}); // itemId → charId|'pool'
+  const [assigned,     setAssigned]     = useState({}); // itemId → true (done)
+  const [assigning,    setAssigning]    = useState({}); // itemId → true (in flight)
 
   // Re-sync when a different encounter is selected
   useEffect(() => {
@@ -556,6 +567,56 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
       await api.updateSavedEncounter(enc.id, { status: 'completed' });
       onEncounterUpdate(enc.id, { status: 'completed' });
     } catch { /* */ }
+  }
+
+  async function rollSmartLoot() {
+    setLootLoading(true);
+    setLootError(null);
+    setLootItems([]);
+    setAssignments({});
+    setAssigned({});
+    setAssigning({});
+    try {
+      // derive party level from characters average, fallback 5
+      const levels = (characters ?? []).map(c => c.level ?? 1).filter(Boolean);
+      const avgLevel = levels.length ? Math.round(levels.reduce((a, b) => a + b, 0) / levels.length) : 5;
+      const res = await rollLoot({
+        partyLevel:  avgLevel,
+        difficulty:  enc.difficulty ?? 'Medium',
+        terrain:     enc.terrain ?? undefined,
+        partySize:   (characters ?? []).length || 4,
+        maxItems:    4,
+      });
+      setLootItems(res.items);
+    } catch (e) {
+      setLootError(e.message ?? 'Loot roll failed');
+    } finally {
+      setLootLoading(false);
+    }
+  }
+
+  async function assignItem(item, charIdOrPool) {
+    setAssigning(m => ({ ...m, [item.id]: true }));
+    try {
+      const char = charIdOrPool !== 'pool'
+        ? (characters ?? []).find(c => c.id === charIdOrPool)
+        : null;
+      await api.createInventoryItem({
+        campaign_id:               campaignId,
+        name:                      item.name,
+        description:               `${item.category} — ${item.listedXp.toLocaleString()} XP · ${item.gpValue.toLocaleString()} gp`,
+        value_gp:                  item.gpValue,
+        item_type:                 'magic_item',
+        awarded_to_character_id:   char ? char.id : null,
+        source:                    'encounter',
+        source_id:                 enc.id,
+      });
+      setAssigned(m => ({ ...m, [item.id]: true }));
+    } catch (e) {
+      setLootError(`Assign failed: ${e.message}`);
+    } finally {
+      setAssigning(m => ({ ...m, [item.id]: false }));
+    }
   }
 
   const isActive      = enc.status !== 'completed';
@@ -772,7 +833,7 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
         })}
       </div>
 
-      {/* ── Saved loot ── */}
+      {/* ── Saved loot (text) ── */}
       {(enc.loot_ai || enc.loot_official) && (
         <div style={{
           background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
@@ -786,6 +847,120 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
               fontSize: 11, color: C.text, margin: 0,
               whiteSpace: 'pre-wrap', lineHeight: 1.7, fontStyle: 'italic', fontFamily: ff,
             }}>{enc.loot_ai}</pre>
+          )}
+        </div>
+      )}
+
+      {/* ── Smart Loot Distribution (DM only, completed encounter) ── */}
+      {isDM && enc.status === 'completed' && (
+        <div style={{
+          background: 'rgba(0,0,0,.3)', border: `1px solid rgba(212,160,53,.3)`,
+          borderRadius: 8, padding: '14px 16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 10, color: C.gold, letterSpacing: 2, textTransform: 'uppercase' }}>
+              ⚗️ Smart Loot Distribution
+            </div>
+            <button
+              onClick={rollSmartLoot}
+              disabled={lootLoading}
+              style={{
+                marginLeft: 'auto', padding: '5px 14px', borderRadius: 5, cursor: lootLoading ? 'not-allowed' : 'pointer',
+                background: 'rgba(212,160,53,.14)', border: `1px solid rgba(212,160,53,.4)`,
+                color: C.gold, fontSize: 11, fontFamily: ff, fontWeight: 'bold',
+                opacity: lootLoading ? 0.5 : 1,
+              }}
+            >
+              {lootLoading ? '⏳ Rolling…' : '🎲 Roll Smart Loot'}
+            </button>
+          </div>
+
+          {lootError && (
+            <div style={{
+              fontSize: 11, color: '#e08080',
+              background: 'rgba(200,50,50,.12)', border: '1px solid rgba(200,50,50,.3)',
+              borderRadius: 5, padding: '6px 10px', marginBottom: 10,
+            }}>⚠ {lootError}</div>
+          )}
+
+          {lootItems.length === 0 && !lootLoading && !lootError && (
+            <div style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic' }}>
+              Click "Roll Smart Loot" to generate magical items based on party level and encounter difficulty.
+            </div>
+          )}
+
+          {lootItems.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {lootItems.map(item => {
+                const isDone     = assigned[item.id];
+                const isWorking  = assigning[item.id];
+                const charChoice = assignments[item.id] ?? '';
+                return (
+                  <div key={item.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                    padding: '8px 12px',
+                    background: isDone ? 'rgba(109,190,136,.06)' : 'rgba(0,0,0,.25)',
+                    border: `1px solid ${isDone ? 'rgba(109,190,136,.3)' : C.border}`,
+                    borderRadius: 6, opacity: isDone ? 0.75 : 1,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: isDone ? C.textDim : C.text, fontWeight: 'bold', fontFamily: ff }}>
+                        {item.name}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.textDim }}>
+                        {item.category} · {item.listedXp.toLocaleString()} XP · {item.gpValue.toLocaleString()} gp
+                      </div>
+                    </div>
+
+                    {isDone ? (
+                      <span style={{ fontSize: 11, color: C.green, fontFamily: ff }}>✓ Distributed</span>
+                    ) : (
+                      <>
+                        <select
+                          value={charChoice}
+                          onChange={e => setAssignments(m => ({ ...m, [item.id]: e.target.value }))}
+                          disabled={isWorking}
+                          style={{
+                            fontSize: 11, padding: '3px 7px', borderRadius: 4,
+                            background: '#0d0903', border: `1px solid rgba(212,160,53,.3)`,
+                            color: C.text, fontFamily: ff, maxWidth: 160,
+                          }}
+                        >
+                          <option value="">— assign to —</option>
+                          {(characters ?? []).map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          disabled={!charChoice || isWorking}
+                          onClick={() => assignItem(item, charChoice)}
+                          style={{
+                            fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: (!charChoice || isWorking) ? 'not-allowed' : 'pointer',
+                            background: 'rgba(212,160,53,.12)', border: `1px solid rgba(212,160,53,.35)`,
+                            color: C.gold, fontFamily: ff,
+                            opacity: !charChoice || isWorking ? 0.4 : 1,
+                          }}
+                        >
+                          {isWorking ? '⏳' : 'Assign'}
+                        </button>
+                        <button
+                          disabled={isWorking}
+                          onClick={() => assignItem(item, 'pool')}
+                          style={{
+                            fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: isWorking ? 'not-allowed' : 'pointer',
+                            background: 'rgba(0,0,0,.2)', border: `1px solid ${C.border}`,
+                            color: C.textDim, fontFamily: ff,
+                            opacity: isWorking ? 0.4 : 1,
+                          }}
+                        >
+                          Party Pool
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -810,7 +985,7 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM }) {
 }
 
 // ── EncountersTab: left list + right Combat Manager ───────────────────────────
-function EncountersTab({ encounters, savedEncs, setSavedEncs, isDM, onOpenModule, sectionCard }) {
+function EncountersTab({ encounters, savedEncs, setSavedEncs, isDM, characters, campaignId, onOpenModule, sectionCard }) {
   const [selectedEncId, setSelectedEncId] = useState(null);
   const [collapsedIds,  setCollapsedIds]  = useState(new Set());
 
@@ -934,6 +1109,8 @@ function EncountersTab({ encounters, savedEncs, setSavedEncs, isDM, onOpenModule
             onEncounterUpdate={handleEncUpdate}
             onCreaturesUpdate={handleCreaturesUpdate}
             isDM={isDM}
+            characters={characters}
+            campaignId={campaignId}
           />
         ) : (
           <div style={{

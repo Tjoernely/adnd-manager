@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/client.js';
-import ItemCard   from './ItemCard.jsx';
-import ItemDetail from './ItemDetail.jsx';
-import DrillDown  from './DrillDown.jsx';
+import ItemCard       from './ItemCard.jsx';
+import ItemDetail     from './ItemDetail.jsx';
+import DrillDown      from './DrillDown.jsx';
+import LootDebugPanel from './LootDebugPanel.jsx';
 import './Items.css';
 
 const PAGE_SIZE = 50;
@@ -155,6 +156,10 @@ export default function MagicalItemLibrary({ onBack }) {
             className={`mi-tab${tab === 'roller' ? ' mi-tab--active' : ''}`}
             onClick={() => setTab('roller')}
           >🎲 Drill-Down Tables</button>
+          <button
+            className={`mi-tab${tab === 'lootdebug' ? ' mi-tab--active' : ''}`}
+            onClick={() => setTab('lootdebug')}
+          >🔧 Loot Debug</button>
         </div>
       </header>
 
@@ -349,6 +354,9 @@ export default function MagicalItemLibrary({ onBack }) {
 
         {/* ── Drill-Down Tables Tab ────────────────────────────────────────────── */}
         {tab === 'roller' && <DrillDown />}
+
+        {/* ── Loot Debug Tab ───────────────────────────────────────────────────── */}
+        {tab === 'lootdebug' && <LootDebugPanel />}
 
       </div>
     </div>
