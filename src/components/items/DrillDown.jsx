@@ -880,7 +880,14 @@ export default function DrillDown() {
               subtitle={pane.tableRow.dice}
               extra={!pane.loading && pane.entries.length > 0 && (
                 <DiceRoller sides={parseSides(pane.tableRow.dice)} label={pane.tableRow.dice}
-                  onRoll={n => { const e = findRow(pane.entries, n); if (e) selectTableEntry(i, e, pane.tableRow.table); }} />
+                  onRoll={n => {
+                    // Scale d1000 roll to match the actual entry range (e.g. 1-20 in DB)
+                    const sides    = parseSides(pane.tableRow.dice);
+                    const maxEntry = pane.entries.reduce((m, e) => Math.max(m, e.roll_max ?? 0), 0);
+                    const scaled   = (sides > maxEntry && maxEntry > 0) ? Math.ceil(n * maxEntry / sides) : n;
+                    const e = findRow(pane.entries, scaled);
+                    if (e) selectTableEntry(i, e, pane.tableRow.table);
+                  }} />
               )}
             />
             <div className="mi-pane-body">

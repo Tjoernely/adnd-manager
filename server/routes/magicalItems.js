@@ -45,26 +45,26 @@ const R2_BONUS = [
 
 // ── Table metadata (for roll-table endpoint) ──────────────────────────────────
 const TABLE_META = {
-  A: { name: 'Magical Liquids',             dice: 'd20',  category: 'liquid'       },
-  B: { name: 'Scrolls',                     dice: 'd20',  category: 'scroll'       },
-  C: { name: 'Rings',                       dice: 'd20',  category: 'ring'         },
-  D: { name: 'Rods',                        dice: 'd20',  category: 'rod'          },
-  E: { name: 'Staves',                      dice: 'd20',  category: 'staff'        },
-  F: { name: 'Wands',                       dice: 'd20',  category: 'wand'         },
-  G: { name: 'Books & Tomes',               dice: 'd20',  category: 'book'         },
-  H: { name: 'Gems & Jewelry',              dice: 'd20',  category: 'gem'          },
-  I: { name: 'Clothing',                    dice: 'd20',  category: 'clothing'     },
-  J: { name: 'Boots, Gloves & Accessories', dice: 'd20',  category: 'boots_gloves' },
-  K: { name: 'Girdles & Helmets',           dice: 'd20',  category: 'girdle_helm'  },
-  L: { name: 'Bags, Bands & Bottles',       dice: 'd20',  category: 'bag_bottle'   },
-  M: { name: 'Dusts & Stones',              dice: 'd20',  category: 'dust_stone'   },
-  N: { name: 'Household Items',             dice: 'd20',  category: 'household'    },
-  O: { name: 'Musical Instruments',         dice: 'd20',  category: 'instrument'   },
-  P: { name: 'Weird Stuff',                 dice: 'd20',  category: 'weird'        },
-  Q: { name: 'Humorous Items',              dice: 'd20',  category: 'humorous'     },
-  R: { name: 'Armor & Shields',             dice: 'd100', category: 'armor'        },
-  S: { name: 'Weapons',                     dice: 'd100', category: 'weapon'       },
-  T: { name: 'Artifacts & Relics',          dice: 'd20',  category: 'artifact'     },
+  A: { name: 'Magical Liquids',             dice: 'd1000', category: 'liquid'       },
+  B: { name: 'Scrolls',                     dice: 'd1000', category: 'scroll'       },
+  C: { name: 'Rings',                       dice: 'd1000', category: 'ring'         },
+  D: { name: 'Rods',                        dice: 'd1000', category: 'rod'          },
+  E: { name: 'Staves',                      dice: 'd1000', category: 'staff'        },
+  F: { name: 'Wands',                       dice: 'd1000', category: 'wand'         },
+  G: { name: 'Books & Tomes',               dice: 'd1000', category: 'book'         },
+  H: { name: 'Gems & Jewelry',              dice: 'd1000', category: 'gem'          },
+  I: { name: 'Clothing',                    dice: 'd1000', category: 'clothing'     },
+  J: { name: 'Boots, Gloves & Accessories', dice: 'd1000', category: 'boots_gloves' },
+  K: { name: 'Girdles & Helmets',           dice: 'd1000', category: 'girdle_helm'  },
+  L: { name: 'Bags, Bands & Bottles',       dice: 'd1000', category: 'bag_bottle'   },
+  M: { name: 'Dusts & Stones',              dice: 'd1000', category: 'dust_stone'   },
+  N: { name: 'Household Items',             dice: 'd1000', category: 'household'    },
+  O: { name: 'Musical Instruments',         dice: 'd1000', category: 'instrument'   },
+  P: { name: 'Weird Stuff',                 dice: 'd1000', category: 'weird'        },
+  Q: { name: 'Humorous Items',              dice: 'd1000', category: 'humorous'     },
+  R: { name: 'Armor & Shields',             dice: 'd1000', category: 'armor'        },
+  S: { name: 'Weapons',                     dice: 'd1000', category: 'weapon'       },
+  T: { name: 'Artifacts & Relics',          dice: 'd1000', category: 'artifact'     },
 };
 
 function rollDie(sides) {
@@ -285,50 +285,35 @@ const TABLE_TO_LOOT_CATEGORY = {
 };
 
 // ── Loot pool for the XP engine (/loot-pool before /:id) ─────────────────────
-// Query params: table_letter (comma-sep), min_xp, max_xp, limit (default 200, max 500)
+// Query params: table_letter (single letter), min_xp, max_xp, limit (default 200, max 500)
 // Returns items in LootItem-compatible format.
+// Uses nullable params so omitting min_xp/max_xp returns all items (no mandatory xp filter).
 router.get('/loot-pool', async (req, res) => {
   try {
+    const tableLetter = req.query.table_letter
+      ? String(req.query.table_letter).trim().toUpperCase()
+      : null;
+    const minXp  = req.query.min_xp  != null && req.query.min_xp  !== '' ? parseInt(req.query.min_xp,  10) : null;
+    const maxXp  = req.query.max_xp  != null && req.query.max_xp  !== '' ? parseInt(req.query.max_xp,  10) : null;
     const limit  = Math.min(parseInt(req.query.limit ?? 200, 10) || 200, 500);
-    const minXp  = req.query.min_xp  != null ? parseInt(req.query.min_xp,  10) : null;
-    const maxXp  = req.query.max_xp  != null ? parseInt(req.query.max_xp,  10) : null;
-    const letter = req.query.table_letter ? String(req.query.table_letter).toUpperCase() : null;
 
-    const conditions = ['xp_value IS NOT NULL', 'xp_value > 0'];
-    const params     = [];
-
-    if (letter) {
-      const letters = letter.split(',').map(l => l.trim()).filter(Boolean);
-      params.push(letters.length === 1 ? letters[0] : letters);
-      conditions.push(letters.length === 1
-        ? `UPPER(table_letter) = $${params.length}`
-        : `UPPER(table_letter) = ANY($${params.length})`);
-    }
-    if (minXp != null && !isNaN(minXp)) {
-      params.push(minXp);
-      conditions.push(`xp_value >= $${params.length}`);
-    }
-    if (maxXp != null && !isNaN(maxXp)) {
-      params.push(maxXp);
-      conditions.push(`xp_value <= $${params.length}`);
-    }
-
-    params.push(limit);
     const rows = await db.all(
       `SELECT id, name, table_letter, xp_value, value_gp, cursed
        FROM   magical_items
-       WHERE  ${conditions.join(' AND ')}
+       WHERE  ($1::text IS NULL OR UPPER(table_letter) = $1)
+         AND  ($2::int  IS NULL OR xp_value >= $2)
+         AND  ($3::int  IS NULL OR xp_value <= $3)
        ORDER  BY RANDOM()
-       LIMIT  $${params.length}`,
-      params,
+       LIMIT  $4`,
+      [tableLetter, minXp, maxXp, limit],
     );
 
     res.json(rows.map(r => ({
-      id:               String(r.id),
-      name:             r.name,
-      category:         TABLE_TO_LOOT_CATEGORY[r.table_letter?.toUpperCase()] ?? 'misc',
-      listedXp:         r.xp_value  ?? 0,
-      gpValue:          r.value_gp  ?? 0,
+      id:                String(r.id),
+      name:              r.name,
+      category:          TABLE_TO_LOOT_CATEGORY[r.table_letter?.toUpperCase()] ?? 'misc',
+      listedXp:          r.xp_value ?? 0,
+      gpValue:           r.value_gp ?? 0,
       excludedByDefault: r.cursed   === true,
     })));
   } catch (e) { next500(e, res); }

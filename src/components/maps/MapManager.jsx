@@ -392,9 +392,9 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const ancestors   = useMemo(() => getAncestors(maps, activeMapId), [maps, activeMapId]);
   const { roots, children } = useMemo(() => buildTree(maps), [maps]);
 
-  // ── Load ────────────────────────────────────────────────────────────────────
+  // ── Load maps on mount (and whenever campaignId changes) ────────────────────
   useEffect(() => {
-    if (!isOpen || !campaignId) return;
+    if (!campaignId) return;
     setLoading(true);
     setError('');
     api.getMaps(campaignId)
@@ -408,7 +408,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isOpen, campaignId]);
+  }, [campaignId]); // load on mount regardless of overlay open state
 
   // ── Patch helper ─────────────────────────────────────────────────────────────
   const patchMap = useCallback((updated) => {
