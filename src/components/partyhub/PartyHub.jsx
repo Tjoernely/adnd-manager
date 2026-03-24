@@ -11,6 +11,29 @@ import { C } from '../../data/constants.js';
 import { rollLoot } from '../../rules-engine/lootRollEngine.js';
 import { SUB_ABILITIES, PARENT_STAT_LABELS } from '../../data/abilities.js';
 import { SLOT_LABELS } from '../../constants/equipmentSlots.js';
+import { ALL_NWP } from '../../data/proficiencies.js';
+import { WEAPON_GROUPS_49 } from '../../data/weapons.js';
+
+// ── Build weapon / NWP name lookup maps (module-level, computed once) ──────────
+const _weapNameMap = {};
+WEAPON_GROUPS_49.forEach(bg => {
+  _weapNameMap[bg.id] = bg.broad;
+  bg.tightGroups.forEach(tg => {
+    _weapNameMap[tg.id] = tg.name;
+    (tg.weapons  ?? []).forEach(w => { _weapNameMap[w.id] = w.name; });
+  });
+  (bg.unrelated ?? []).forEach(w => { _weapNameMap[w.id] = w.name; });
+});
+const _nwpNameMap = {};
+ALL_NWP.forEach(p => { _nwpNameMap[p.id] = p.name; });
+
+function formatWeapProf(id) {
+  const name = _weapNameMap[id];
+  if (!name) return id;                               // unknown id — show raw
+  if (id.startsWith('tg_')) return `${name} (Tight)`;
+  if (id.startsWith('wg_')) return `${name} (Broad)`;
+  return name;
+}
 
 const TABS = [
   { id: 'characters', icon: '👥', label: 'Characters' },
@@ -208,17 +231,6 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
         ))}
       </div>
 
-      {/* ── Character Panel overlay ── */}
-      {selectedChar && (
-        <CharacterPanel
-          char={selectedChar}
-          campaignId={campaignId}
-          isDM={isDM}
-          onClose={() => setSelectedChar(null)}
-          onNavigate={onNavigate}
-        />
-      )}
-
       {/* ── Content ── */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px' }}>
         {loading && (
@@ -244,7 +256,10 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
                 isDM={isDM}
                 onToggleVis={toggleCharVis}
                 onOpenModule={() => onNavigate?.('characters')}
+                selectedChar={selectedChar}
                 onSelectChar={setSelectedChar}
+                campaignId={campaignId}
+                onNavigate={onNavigate}
                 sectionCard={sectionCard}
               />
             )}
@@ -292,7 +307,10 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
 
 // ── Characters Tab ─────────────────────────────────────────────────────────────
 
-function CharactersTab({ characters, allChars, isDM, onToggleVis, onOpenModule, onSelectChar, sectionCard }) {
+function CharactersTab({
+  characters, allChars, isDM, onToggleVis, onOpenModule,
+  selectedChar, onSelectChar, campaignId, onNavigate, sectionCard,
+}) {
   const hiddenCount = isDM
     ? allChars.filter(c => (c.visibility ?? 'party') !== 'party').length
     : 0;
@@ -310,6 +328,7 @@ function CharactersTab({ characters, allChars, isDM, onToggleVis, onOpenModule, 
 
   return (
     <div>
+      {/* ── Toolbar ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 11, color: C.textDim }}>
           {characters.length} character{characters.length !== 1 ? 's' : ''}
@@ -320,59 +339,97 @@ function CharactersTab({ characters, allChars, isDM, onToggleVis, onOpenModule, 
         <NavBtn onClick={onOpenModule}>Open Character Builder →</NavBtn>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {characters.map(char => {
-          const cd        = char.character_data ?? {};
-          const portrait  = cd.portraitUrl ?? cd.portrait_url ?? null;
-          const raceName  = cd.selectedRace  ? capitalize(String(cd.selectedRace))  : null;
-          const className = cd.selectedClass ? capitalize(String(cd.selectedClass)) : null;
-          const level     = cd.charLevel ?? null;
-          const isHidden  = (char.visibility ?? 'party') !== 'party';
+      {/* ── Two-column layout: list (left) + detail (right) ── */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
 
-          return (
-            <div
-              key={char.id}
-              onClick={() => onSelectChar?.(char)}
-              style={{
-                ...sectionCard,
-                border: `1px solid ${isHidden && isDM ? 'rgba(200,80,30,.4)' : C.border}`,
-                opacity: isHidden && isDM ? 0.72 : 1,
-                cursor: 'pointer', transition: 'border-color .12s, background .12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = C.borderHi; e.currentTarget.style.background = 'rgba(212,160,53,.07)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = isHidden && isDM ? 'rgba(200,80,30,.4)' : C.border; e.currentTarget.style.background = 'rgba(0,0,0,.3)'; }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                {portrait ? (
-                  <img src={portrait} alt="" style={{
-                    width: 52, height: 52, borderRadius: 6, objectFit: 'cover',
-                    border: `1px solid ${C.border}`, flexShrink: 0,
-                  }} />
-                ) : (
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 6, flexShrink: 0,
-                    background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-                  }}>🧙</div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, color: C.gold, fontWeight: 'bold', marginBottom: 2 }}>
-                    {char.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.textDim }}>
-                    {[raceName, className, level ? `Level ${level}` : null].filter(Boolean).join(' · ')}
+        {/* LEFT: character list */}
+        <div style={{ width: 250, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {characters.map(char => {
+            const cd       = char.character_data ?? {};
+            const portrait = cd.portraitUrl ?? cd.portrait_url ?? null;
+            const raceName = cd.selectedRace  ? capitalize(String(cd.selectedRace))  : null;
+            const clsName  = cd.selectedClass ? capitalize(String(cd.selectedClass)) : null;
+            const level    = cd.charLevel ?? null;
+            const isHidden = (char.visibility ?? 'party') !== 'party';
+            const isSelected = selectedChar?.id === char.id;
+
+            return (
+              <div
+                key={char.id}
+                onClick={() => onSelectChar?.(isSelected ? null : char)}
+                style={{
+                  background: isSelected ? 'rgba(212,160,53,.12)' : 'rgba(0,0,0,.3)',
+                  border: `1px solid ${
+                    isSelected ? C.borderHi
+                    : isHidden && isDM ? 'rgba(200,80,30,.4)'
+                    : C.border
+                  }`,
+                  borderRadius: 7, padding: '9px 11px',
+                  cursor: 'pointer', transition: 'all .12s',
+                  opacity: isHidden && isDM ? 0.75 : 1,
+                }}
+                onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor = C.borderHi; e.currentTarget.style.background = 'rgba(212,160,53,.07)'; } }}
+                onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor = isHidden && isDM ? 'rgba(200,80,30,.4)' : C.border; e.currentTarget.style.background = 'rgba(0,0,0,.3)'; } }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  {portrait ? (
+                    <img src={portrait} alt="" style={{
+                      width: 36, height: 36, borderRadius: 5, objectFit: 'cover',
+                      border: `1px solid ${C.border}`, flexShrink: 0,
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 5, flexShrink: 0,
+                      background: 'rgba(0,0,0,.45)', border: `1px solid ${C.border}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                    }}>🧙</div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: 'bold',
+                      color: isSelected ? C.gold : C.text,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {char.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.textDim, marginTop: 1 }}>
+                      {[raceName, clsName, level ? `Lv ${level}` : null].filter(Boolean).join(' · ')}
+                    </div>
                   </div>
                 </div>
                 {isDM && (
-                  <VisibilityBadge
-                    visibility={char.visibility ?? 'party'}
-                    onToggle={() => onToggleVis(char.id, char.visibility ?? 'party')}
-                  />
+                  <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                    <VisibilityBadge
+                      visibility={char.visibility ?? 'party'}
+                      onToggle={() => onToggleVis(char.id, char.visibility ?? 'party')}
+                    />
+                  </div>
                 )}
               </div>
+            );
+          })}
+        </div>
+
+        {/* RIGHT: character detail or prompt */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {selectedChar ? (
+            <CharacterPanel
+              char={selectedChar}
+              campaignId={campaignId}
+              isDM={isDM}
+              onClose={() => onSelectChar(null)}
+              onNavigate={onNavigate}
+            />
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: 220, color: C.textDim, fontSize: 13, fontStyle: 'italic',
+              border: `1px dashed ${C.border}`, borderRadius: 8, fontFamily: ff,
+            }}>
+              ← Select a character to view their sheet &amp; equipment
             </div>
-          );
-        })}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1219,7 +1276,7 @@ function NpcsTab({ npcs, isDM, onOpenModule, sectionCard }) {
   );
 }
 
-// ── Character Panel (side-drawer overlay) ─────────────────────────────────────
+// ── Character Panel (inline detail pane) ─────────────────────────────────────
 
 const ID_STATES = ['unknown', 'suspected', 'identified'];
 const ID_ICONS  = { unknown: '❓', suspected: '✨', identified: '🔍' };
@@ -1364,26 +1421,15 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const level     = cd.charLevel ?? '—';
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,.55)',
-          zIndex: 199,
-        }}
-      />
-
-      {/* Panel */}
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 540,
-        background: 'linear-gradient(180deg,#1c1408,#0d0a06)',
-        borderLeft: `2px solid ${C.borderHi}`,
-        zIndex: 200, display: 'flex', flexDirection: 'column',
-        fontFamily: ff, color: C.text,
-        overflowY: 'hidden',
-      }}>
+    <div style={{
+      background: 'linear-gradient(180deg,#1c1408 0%,#0d0a06 100%)',
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      display: 'flex', flexDirection: 'column',
+      fontFamily: ff, color: C.text,
+      maxHeight: 'calc(100vh - 200px)',
+      overflow: 'hidden',
+    }}>
 
         {/* ── Panel header ── */}
         <div style={{
@@ -1458,7 +1504,7 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                 <PanelSectionLabel>Ability Scores</PanelSectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {Object.entries(SUB_ABILITIES).map(([parentKey, subs]) => {
-                    const parentScore = base[parentKey.toLowerCase()] ?? 0;
+                    const parentScore = base[parentKey] ?? 0;
                     return (
                       <div key={parentKey} style={{
                         background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
@@ -1501,12 +1547,17 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                     borderRadius: 6, padding: '8px 12px',
                     display: 'flex', flexWrap: 'wrap', gap: 6,
                   }}>
-                    {Object.entries(cd.weapPicked).map(([wid, wdata]) => (
+                    {Object.entries(cd.weapPicked).map(([wid, level]) => (
                       <span key={wid} style={{
                         fontSize: 10, color: C.text, background: 'rgba(0,0,0,.3)',
                         border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px',
                       }}>
-                        {typeof wdata === 'object' ? (wdata.name ?? wid) : wid}
+                        {formatWeapProf(wid)}
+                        {level && level !== 'single' && (
+                          <span style={{ color: C.textDim, marginLeft: 3 }}>
+                            ({level})
+                          </span>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -1522,12 +1573,12 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                     borderRadius: 6, padding: '8px 12px',
                     display: 'flex', flexWrap: 'wrap', gap: 6,
                   }}>
-                    {Object.entries(cd.profsPicked).map(([pid, pdata]) => (
+                    {Object.keys(cd.profsPicked).filter(pid => cd.profsPicked[pid]).map(pid => (
                       <span key={pid} style={{
                         fontSize: 10, color: C.text, background: 'rgba(0,0,0,.3)',
                         border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px',
                       }}>
-                        {typeof pdata === 'object' ? (pdata.name ?? pdata.label ?? pid) : pid}
+                        {_nwpNameMap[pid] ?? pid}
                       </span>
                     ))}
                   </div>
@@ -1777,8 +1828,7 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
             </div>
           )}
         </div>
-      </div>
-    </>
+    </div>
   );
 }
 
