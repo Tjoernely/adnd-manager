@@ -80,7 +80,21 @@ export function computeBaseHp(hitDice) {
 // ── Modifier accessors ────────────────────────────────────────────────────────
 
 export function getSizeModifier(size) {
-  return SIZE_MODIFIERS[(size ?? 'medium').toLowerCase()] ?? 1.0;
+  if (!size) return 1.0;
+  const s = String(size).trim().toLowerCase();
+
+  // Full word match first (handles "medium", "large", "M (20' Wingspan)", etc.)
+  const wordMap = {
+    tiny: 0.7, small: 0.9, medium: 1.0,
+    large: 2.0, huge: 2.7, gargantuan: 3.6, colossal: 5.5,
+  };
+  for (const [key, val] of Object.entries(wordMap)) {
+    if (s.startsWith(key)) return val;
+  }
+
+  // Single letter: T, S, M, L, H, G, C  (handles "M (20' Wingspan)", "L (9'+ tall)")
+  const letterMap = { t: 0.7, s: 0.9, m: 1.0, l: 2.0, h: 2.7, g: 3.6, c: 5.5 };
+  return letterMap[s[0]] ?? 1.0;
 }
 
 export function getTypeModifier(kind) {
