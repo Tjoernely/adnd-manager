@@ -76,16 +76,23 @@ function getSizeModifier(size) {
   return SIZE_MODIFIERS[(size ?? 'medium').toLowerCase()] ?? 1.0;
 }
 
-function deriveKind(type) {
-  if (!type) return 'monstrous';
-  const t = type.toLowerCase();
-  if (t.includes('dragon'))                             return 'dragon';
-  if (t.includes('construct') || t.includes('golem'))  return 'construct';
-  if (t.includes('undead'))                             return 'undead';
-  if (t.includes('elemental'))                          return 'elemental';
-  if (t.includes('humanoid'))                           return 'humanoid';
-  if (t.includes('animal') || t.includes('beast'))     return 'beast';
-  return 'monstrous';
+function detectType(monster) {
+  const name = (monster.name || '').toLowerCase();
+  const type = (monster.type || '').toLowerCase();
+
+  // Name-based detection takes priority over the type field
+  if (name.includes('dragon') || name.includes('draco') ||
+      name.includes('wyvern') || name.includes('wyrm'))  return 'dragon';
+  if (type.includes('dragon'))                            return 'dragon';
+  if (name.includes('golem') || type.includes('construct')) return 'construct';
+  if (name.includes('zombie') || name.includes('skeleton') ||
+      name.includes('vampire') || name.includes('lich') ||
+      name.includes('undead') || type.includes('undead')) return 'undead';
+  if (name.includes('elemental') || type.includes('elemental')) return 'elemental';
+  if (type.includes('humanoid') || type.includes('human')) return 'humanoid';
+  if (type.includes('beast') || type.includes('animal'))  return 'beast';
+
+  return type || 'monstrous';
 }
 
 function getTypeModifier(kind) {
@@ -111,7 +118,7 @@ function roundHp(v) {
 function computeGeneratedHp(monster) {
   const baseHp       = computeBaseHp(monster.hit_dice);
   const sizeModifier = getSizeModifier(monster.size);
-  const typeModifier = getTypeModifier(deriveKind(monster.type));
+  const typeModifier = getTypeModifier(detectType(monster));
   const roleModifier = getRoleModifier(monster.role ?? 'normal');
   const generatedHpBase  = baseHp * sizeModifier * typeModifier * roleModifier;
   const randomRoll       = rollD20();
@@ -157,8 +164,9 @@ async function main() {
       if (updated < 10) {
         console.log(
           `  [${String(m.id).padStart(5)}] ${(m.name ?? '?').padEnd(36)} ` +
-          `HD=${String(m.hit_dice ?? '?').padEnd(6)} ` +
+          `HD=${String(m.hit_dice ?? '?').padEnd(8)} ` +
           `size=${String(m.size ?? '?').padEnd(10)} ` +
+          `type=${detectType(m).padEnd(10)} ` +
           `→ base=${hp.generatedHpBase}, roll=${hp.randomRoll}/20, final=${hp.generatedHpFinal}`
         );
       }

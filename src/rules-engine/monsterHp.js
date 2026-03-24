@@ -124,6 +124,28 @@ export function deriveKind(type) {
   return 'monstrous';
 }
 
+/**
+ * Name-aware type detection — checks monster.name before monster.type
+ * so dragons with type=null are still classified correctly.
+ */
+export function detectType(monster) {
+  const name = (monster.name || '').toLowerCase();
+  const type = (monster.type || '').toLowerCase();
+
+  if (name.includes('dragon') || name.includes('draco') ||
+      name.includes('wyvern') || name.includes('wyrm'))    return 'dragon';
+  if (type.includes('dragon'))                              return 'dragon';
+  if (name.includes('golem') || type.includes('construct')) return 'construct';
+  if (name.includes('zombie') || name.includes('skeleton') ||
+      name.includes('vampire') || name.includes('lich')   ||
+      name.includes('undead') || type.includes('undead'))  return 'undead';
+  if (name.includes('elemental') || type.includes('elemental')) return 'elemental';
+  if (type.includes('humanoid') || type.includes('human')) return 'humanoid';
+  if (type.includes('beast')    || type.includes('animal')) return 'beast';
+
+  return type || 'monstrous';
+}
+
 // ── Random modifier ───────────────────────────────────────────────────────────
 
 /** Returns integer 1–20. */
@@ -165,7 +187,7 @@ export function roundHp(value) {
 export function computeGeneratedHp(monster) {
   const baseHp       = computeBaseHp(monster.hit_dice);
   const sizeModifier = getSizeModifier(monster.size);
-  const typeModifier = getTypeModifier(monster.kind ?? deriveKind(monster.type));
+  const typeModifier = getTypeModifier(monster.kind ?? detectType(monster));
   const roleModifier = getRoleModifier(monster.role ?? 'normal');
 
   const generatedHpBase  = baseHp * sizeModifier * typeModifier * roleModifier;
