@@ -182,6 +182,31 @@ export function computeGeneratedHp(monster) {
 }
 
 /**
+ * Format a hit_dice string as a vanilla HP range: "min–max HP"
+ * Uses d8 (1–8 per die). Minimum result is 1.
+ *   "3+3"  → 6–27 HP
+ *   "1-1"  → 1–7 HP
+ *   "13"   → 13–104 HP
+ */
+export function formatVanillaHp(hit_dice) {
+  if (!hit_dice) return '—';
+  const s = String(hit_dice).trim();
+  const match = s.match(/^(\d+(?:\.\d+)?)([+-])(\d+(?:\.\d+)?)$/);
+  let hdBase, bonus;
+  if (match) {
+    hdBase = parseFloat(match[1]);
+    bonus  = parseFloat(match[3]) * (match[2] === '+' ? 1 : -1);
+  } else {
+    hdBase = parseFloat(s) || 1;
+    bonus  = 0;
+  }
+  const dice = Math.ceil(hdBase);
+  const min  = Math.max(1, dice * 1 + bonus);
+  const max  = dice * 8 + bonus;
+  return `${min}–${max} HP`;
+}
+
+/**
  * Re-roll only the random component, keeping the existing base HP fixed.
  *
  * @param {number} generatedHpBase — stored base (before random)

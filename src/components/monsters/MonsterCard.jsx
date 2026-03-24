@@ -1,5 +1,6 @@
 import { C } from '../../data/constants.js';
 import { getArmorProfile } from '../../rules-engine/monsterEngine.js';
+import { formatVanillaHp } from '../../rules-engine/monsterHp.js';
 
 const TYPE_COLORS = {
   humanoid:   '#a07040',
@@ -127,9 +128,9 @@ export function MonsterCard({ monster: m, selected, onClick }) {
           ))}
         </div>
         {/* Vanilla HP secondary label */}
-        {m.hit_points != null && (
+        {m.hit_dice && (
           <div style={{ fontSize: 9, color: C.textDim, marginTop: 3 }}>
-            Vanilla: {m.hit_points} HP
+            Vanilla: {formatVanillaHp(m.hit_dice)}
           </div>
         )}
 

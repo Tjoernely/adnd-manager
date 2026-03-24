@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
 import { getArmorProfile, getAllArmorProfiles } from '../../rules-engine/monsterEngine.js';
-import { computeGeneratedHp, rerollHp } from '../../rules-engine/monsterHp.js';
+import { computeGeneratedHp, rerollHp, formatVanillaHp } from '../../rules-engine/monsterHp.js';
 import LootGenerator from './LootGenerator.jsx';
 
 // ── Stat parsing ──────────────────────────────────────────────────────────────
@@ -252,9 +252,9 @@ export function MonsterDetail({ monsterId, onClose }) {
       <div style={{ background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div style={{ textAlign: 'center', padding: '8px 10px', background: 'rgba(0,0,0,.25)', borderRadius: 6, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 22, color: C.textDim, fontWeight: 'bold', lineHeight: 1 }}>{monster.hit_points ?? '—'}</div>
+            <div style={{ fontSize: 18, color: C.textDim, fontWeight: 'bold', lineHeight: 1 }}>{formatVanillaHp(monster.hit_dice)}</div>
             <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, marginTop: 3, textTransform: 'uppercase' }}>Vanilla HP</div>
-            <div style={{ fontSize: 9, color: C.textDim, marginTop: 1, fontStyle: 'italic' }}>(raw from source)</div>
+            <div style={{ fontSize: 9, color: C.textDim, marginTop: 1, fontStyle: 'italic' }}>(range per hit dice)</div>
           </div>
           <div style={{ textAlign: 'center', padding: '8px 10px', background: 'rgba(200,50,50,.08)', borderRadius: 6, border: `1px solid rgba(200,80,50,.3)` }}>
             <div style={{ fontSize: 22, color: C.red, fontWeight: 'bold', lineHeight: 1 }}>{hpData?.generatedHpFinal ?? '…'}</div>
