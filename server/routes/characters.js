@@ -133,10 +133,6 @@ router.put('/:id', auth, async (req, res) => {
     if (!isOwn && !isDM) return res.status(403).json({ error: 'Access denied' });
 
     const { character_data, data, name, campaign_id, visibility, dm_notes } = req.body ?? {};
-    // Diagnostic: log what was received to help trace save issues
-    console.log(`[PUT /characters/${req.params.id}] keys=${Object.keys(req.body ?? {}).join(',')}`
-      + ` cd=${character_data != null ? 'present(' + JSON.stringify(character_data).length + 'B)' : 'absent'}`
-      + ` data=${data != null ? 'present' : 'absent'}`);
     const newData     = character_data ?? data ?? row.character_data;
     const newName     = (name ?? newData?.charName ?? row.name).trim();
     const newCampaign = campaign_id !== undefined ? campaign_id : row.campaign_id;

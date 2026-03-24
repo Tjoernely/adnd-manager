@@ -13,6 +13,8 @@ import { SUB_ABILITIES, PARENT_STAT_LABELS } from '../../data/abilities.js';
 import { SLOT_LABELS } from '../../constants/equipmentSlots.js';
 import { ALL_NWP } from '../../data/proficiencies.js';
 import { WEAPON_GROUPS_49 } from '../../data/weapons.js';
+import { RACES } from '../../data/races.js';
+import { ALL_CLASSES } from '../../data/classes.js';
 
 // ── Build weapon / NWP name lookup maps (module-level, computed once) ──────────
 const _weapNameMap = {};
@@ -26,6 +28,12 @@ WEAPON_GROUPS_49.forEach(bg => {
 });
 const _nwpNameMap = {};
 ALL_NWP.forEach(p => { _nwpNameMap[p.id] = p.name; });
+
+// ── Race / class ID → display name lookup maps ─────────────────────────────
+const _raceNameMap  = {};
+RACES.forEach(r => { _raceNameMap[r.id] = r.label; });
+const _classNameMap = {};
+ALL_CLASSES.forEach(c => { _classNameMap[c.id] = c.label; });
 
 function formatWeapProf(id) {
   const name = _weapNameMap[id];
@@ -347,8 +355,8 @@ function CharactersTab({
           {characters.map(char => {
             const cd       = char.character_data ?? {};
             const portrait = cd.portraitUrl ?? cd.portrait_url ?? null;
-            const raceName = cd.selectedRace  ? capitalize(String(cd.selectedRace))  : null;
-            const clsName  = cd.selectedClass ? capitalize(String(cd.selectedClass)) : null;
+            const raceName = cd.selectedRace  ? (_raceNameMap[cd.selectedRace]  ?? capitalize(String(cd.selectedRace)))  : null;
+            const clsName  = cd.selectedClass ? (_classNameMap[cd.selectedClass] ?? capitalize(String(cd.selectedClass))) : null;
             const level    = cd.charLevel ?? null;
             const isHidden = (char.visibility ?? 'party') !== 'party';
             const isSelected = selectedChar?.id === char.id;
@@ -1330,16 +1338,6 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const base = cd.baseScores ?? cd.base ?? {};
   const mods = cd.splitMods  ?? {};
 
-  // ── Diagnostic: log the raw character data so field names can be verified ──
-  useEffect(() => {
-    console.log('[PartyHub] selected char id=%s name=%s', char.id, char.name);
-    console.log('[PartyHub] character_data:', char.character_data);
-    console.log('[PartyHub] baseScores:', char.character_data?.baseScores);
-    console.log('[PartyHub] splitMods:', char.character_data?.splitMods);
-    console.log('[PartyHub] weapPicked:', char.character_data?.weapPicked);
-    console.log('[PartyHub] profsPicked:', char.character_data?.profsPicked);
-  }, [char.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     let cancelled = false;
     setEquipLoading(true);
@@ -1442,8 +1440,8 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   };
 
   const portrait  = cd.portraitUrl ?? cd.portrait_url ?? null;
-  const raceName  = cd.selectedRace  ? capitalize(String(cd.selectedRace))  : '—';
-  const className = cd.selectedClass ? capitalize(String(cd.selectedClass)) : '—';
+  const raceName  = cd.selectedRace  ? (_raceNameMap[cd.selectedRace]  ?? capitalize(String(cd.selectedRace)))  : '—';
+  const className = cd.selectedClass ? (_classNameMap[cd.selectedClass] ?? capitalize(String(cd.selectedClass))) : '—';
   const kitName   = cd.selectedKit   ? capitalize(String(cd.selectedKit))   : null;
   const level     = cd.charLevel ?? '—';
 
