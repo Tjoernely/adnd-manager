@@ -36,7 +36,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));   // 5 MB — covers portrait URLs + large character state
 
 // ── API routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',            authRouter);

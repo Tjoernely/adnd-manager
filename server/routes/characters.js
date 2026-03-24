@@ -133,6 +133,10 @@ router.put('/:id', auth, async (req, res) => {
     if (!isOwn && !isDM) return res.status(403).json({ error: 'Access denied' });
 
     const { character_data, data, name, campaign_id, visibility, dm_notes } = req.body ?? {};
+    // Diagnostic: log what was received to help trace save issues
+    console.log(`[PUT /characters/${req.params.id}] keys=${Object.keys(req.body ?? {}).join(',')}`
+      + ` cd=${character_data != null ? 'present(' + JSON.stringify(character_data).length + 'B)' : 'absent'}`
+      + ` data=${data != null ? 'present' : 'absent'}`);
     const newData     = character_data ?? data ?? row.character_data;
     const newName     = (name ?? newData?.charName ?? row.name).trim();
     const newCampaign = campaign_id !== undefined ? campaign_id : row.campaign_id;
@@ -174,9 +178,16 @@ router.delete('/:id', auth, async (req, res) => {
 function fmt(row) {
   if (!row) return null;
   const { character_data, data, ...rest } = row;
-  const parsed = typeof character_data === 'object'
-    ? character_data
-    : JSON.parse(character_data ?? data ?? '{}');
+  // typeof null === 'object' in JS — guard against null explicitly
+  const raw = character_data ?? data;
+  let parsed;
+  if (raw !== null && raw !== undefined && typeof raw === 'object') {
+    parsed = raw;                                  // already a JS object (pg JSONB)
+  } else if (typeof raw === 'string') {
+    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+  } else {
+    parsed = {};                                   // null / undefined → empty object
+  }
   return { ...rest, character_data: parsed };
 }
 async function campaignAccess(campaignId, userId) {

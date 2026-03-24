@@ -1326,7 +1326,8 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const [addWorking, setAddWorking] = useState(false);
 
   const cd   = char.character_data ?? {};
-  const base = cd.baseScores ?? {};
+  // Support both key names: modern 'baseScores' and any legacy 'base' alias
+  const base = cd.baseScores ?? cd.base ?? {};
   const mods = cd.splitMods  ?? {};
 
   // ── Diagnostic: log the raw character data so field names can be verified ──

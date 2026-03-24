@@ -96,6 +96,11 @@ export default function App() {
     try {
       const character_data = serializeCharacter();
       const name = char.charName;
+      // Diagnostic: confirm what is being sent to the API
+      console.log('[saveCharacter] name=%s dbCharId=%s keys=%s baseScores=%o',
+        name, dbCharId,
+        Object.keys(character_data).join(','),
+        character_data.baseScores);
       if (dbCharId) {
         const updated = await api.saveCharacter(dbCharId, { name, character_data });
         setCharacters(prev => prev.map(c => c.id === dbCharId ? updated : c));
