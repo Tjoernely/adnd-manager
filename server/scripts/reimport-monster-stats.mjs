@@ -1,41 +1,24 @@
 /**
- * reimport-monster-stats.mjs
+ * reimport-monster-stats.mjs  (v2)
  *
- * For monsters with a wiki_url but null hit_dice AND null armor_class, fetches
- * the wiki page, parses the {{Creature}} template, and writes all known fields
- * back to the DB.
+ * For monsters whose stats are missing, fetches the wiki page and writes all
+ * known Creature template fields back to the DB.
  *
- * Field mapping (wiki template param → DB column):
- *   armorclass       → armor_class
- *   hitdice          → hit_dice
- *   thac0            → thac0
- *   movement         → movement
- *   numberofattacks  → attacks
- *   damageattack     → damage
- *   alignment        → alignment
- *   numberappearing  → no_appearing
- *   size             → size
- *   magicalresistance→ magic_resistance
- *   specialattack    → special_attacks
- *   specialdefenses  → special_defenses
- *   moral            → morale
- *   intelligence     → intelligence
- *   terrain          → habitat
- *   frequency        → frequency
- *   organization     → organization
- *   activitycycle    → activity_cycle
- *   diet             → diet
- *   xp               → xp_value  ("32,000" → 32000)
- *   treasure         → treasure
- *   saveas           → save_as
+ * Fix log (v2):
+ *   • Integer fields (armor_class, thac0, xp_value, morale) are now parsed
+ *     with parseIntField() to handle "7 (base)", "32,000", "−10", etc.
+ *   • Template detection now tries {{Creature}}, {{Monster}}, plus a raw
+ *     key=value line-scan fallback for pages that use non-standard templates.
+ *   • Query changed to OR: monsters missing ANY of hit_dice / armor_class /
+ *     thac0 / attacks are now included.
  *
- * Usage (from project root or server/):
- *   node server/scripts/reimport-monster-stats.mjs
- *   node server/scripts/reimport-monster-stats.mjs --dry-run
- *   node server/scripts/reimport-monster-stats.mjs --limit 50
- *   node server/scripts/reimport-monster-stats.mjs --name "Goblin"
+ * Usage:
+ *   node scripts/reimport-monster-stats.mjs
+ *   node scripts/reimport-monster-stats.mjs --dry-run
+ *   node scripts/reimport-monster-stats.mjs --limit 20
+ *   node scripts/reimport-monster-stats.mjs --name "Goblin"
  *
- * Env vars: DB_HOST  DB_PORT  DB_NAME  DB_USER  DB_PASSWORD
+ * Env vars: DB_HOST  DB_PORT  DB_NAME  DB_USER  DB_PASSWORD  DB_SSL
  */
 
 import pg from 'pg';
@@ -73,34 +56,83 @@ const pool = new pg.Pool({
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ── Wiki field → DB column mapping ───────────────────────────────────────────
+// ── Field maps ────────────────────────────────────────────────────────────────
+
+// Wiki template key (lower-case, no spaces/dashes) → DB column name
 const FIELD_MAP = {
   armorclass:        'armor_class',
   hitdice:           'hit_dice',
   thac0:             'thac0',
   movement:          'movement',
+  move:              'movement',
   numberofattacks:   'attacks',
+  noattacks:         'attacks',
+  attacks:           'attacks',
   damageattack:      'damage',
+  damageperhit:      'damage',
+  damage:            'damage',
   alignment:         'alignment',
   numberappearing:   'no_appearing',
+  noappearing:       'no_appearing',
   size:              'size',
   magicalresistance: 'magic_resistance',
+  mr:                'magic_resistance',
   specialattack:     'special_attacks',
+  specialattacks:    'special_attacks',
   specialdefense:    'special_defenses',
   specialdefenses:   'special_defenses',
   moral:             'morale',
   morale:            'morale',
   intelligence:      'intelligence',
   terrain:           'habitat',
+  habitat:           'habitat',
   frequency:         'frequency',
   organization:      'organization',
   activitycycle:     'activity_cycle',
   diet:              'diet',
   xp:                'xp_value',
   xpvalue:           'xp_value',
+  experience:        'xp_value',
   treasure:          'treasure',
+  treasuretype:      'treasure',
   saveas:            'save_as',
+  saves:             'save_as',
 };
+
+// DB columns that must be stored as integers
+const INT_COLS = new Set(['armor_class', 'thac0', 'xp_value', 'morale']);
+
+// ── Value parsers ─────────────────────────────────────────────────────────────
+
+/**
+ * Parse an integer from messy wiki values like:
+ *   "7 (base)", "32,000", "−10", "-10", "5 or 10", "As fighter"
+ * Returns null if no integer can be found.
+ */
+function parseIntField(val) {
+  if (val == null) return null;
+  const s = String(val)
+    .replace(/\u2212/g, '-')   // Unicode minus sign → hyphen
+    .replace(/&minus;/g, '-')  // HTML entity
+    .replace(/,/g, '');        // thousands separator
+  const m = s.match(/-?\d+/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
+/** Strip wiki markup: links, templates, HTML, bold/italic, refs */
+function cleanValue(s) {
+  if (!s) return null;
+  const v = s
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\{\{[^}]*\}\}/g, '')
+    .replace(/<br\s*\/?>/gi, ' / ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/'{2,}/g, '')
+    .replace(/\[\d+\]/g, '')
+    .trim();
+  return v || null;
+}
 
 // ── Wiki fetch ────────────────────────────────────────────────────────────────
 function titleFromUrl(url) {
@@ -110,10 +142,13 @@ function titleFromUrl(url) {
 }
 
 async function fetchWikiContent(pageTitle) {
-  const url = `https://adnd2e.fandom.com/api.php?action=query&titles=${encodeURIComponent(pageTitle)}&prop=revisions&rvprop=content&format=json&origin=*&redirects=1`;
+  const url =
+    `https://adnd2e.fandom.com/api.php?action=query` +
+    `&titles=${encodeURIComponent(pageTitle)}` +
+    `&prop=revisions&rvprop=content&format=json&origin=*&redirects=1`;
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'ADnD-Manager-StatsImport/1.0' },
+      headers: { 'User-Agent': 'ADnD-Manager-StatsImport/2.0' },
       signal:  AbortSignal.timeout(12_000),
     });
     if (!res.ok) return null;
@@ -149,14 +184,15 @@ function splitParams(content) {
 }
 
 /**
- * Parse a {{Creature|...}} template from raw wikitext.
- * Returns a plain object of { wikiKey: rawValue } or null if not found.
+ * Parse a named template (e.g. "Creature") from raw wikitext.
+ * Returns { wikiKey: rawValue } or null if the template isn't present.
  */
-function parseCreatureTemplate(wikitext) {
-  const startMatch = wikitext.match(/\{\{Creature\s*\|/i);
+function parseTemplate(wikitext, templateName) {
+  const rx = new RegExp(`\\{\\{${templateName}\\s*\\|`, 'i');
+  const startMatch = wikitext.match(rx);
   if (!startMatch) return null;
 
-  let startIdx = wikitext.indexOf(startMatch[0]);
+  const startIdx = wikitext.indexOf(startMatch[0]);
   let depth = 0;
   let i     = startIdx;
   let end   = -1;
@@ -169,7 +205,6 @@ function parseCreatureTemplate(wikitext) {
       i += 2;
     } else { i++; }
   }
-
   if (end === -1) return null;
 
   const templateContent = wikitext.slice(startIdx + 2, end - 2);
@@ -177,56 +212,75 @@ function parseCreatureTemplate(wikitext) {
   if (firstPipe === -1) return null;
 
   const fields = {};
-  const params = splitParams(templateContent.slice(firstPipe + 1));
-  for (const param of params) {
+  for (const param of splitParams(templateContent.slice(firstPipe + 1))) {
     const eqIdx = param.indexOf('=');
     if (eqIdx === -1) continue;
     const key = param.slice(0, eqIdx).trim().toLowerCase().replace(/[\s_-]/g, '');
     const val = param.slice(eqIdx + 1).trim();
     if (key && val !== '') fields[key] = val;
   }
-
-  return fields;
-}
-
-/** Strip wiki markup: links, templates, HTML, bold/italic, refs */
-function cleanValue(s) {
-  if (!s) return null;
-  let v = s
-    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')   // [[Page|Text]] → Text
-    .replace(/\[\[([^\]]+)\]\]/g, '$1')                // [[Page]] → Page
-    .replace(/\{\{[^}]*\}\}/g, '')                     // {{template}} → ''
-    .replace(/<br\s*\/?>/gi, ' / ')                    // <br> → ' / '
-    .replace(/<[^>]+>/g, '')                           // other HTML
-    .replace(/'{2,}/g, '')                             // bold/italic
-    .replace(/\[\d+\]/g, '')                           // footnotes
-    .trim();
-  return v || null;
-}
-
-/** Parse XP: "32,000" → 32000, "320" → 320 */
-function parseXp(s) {
-  if (!s) return null;
-  const n = parseInt(String(s).replace(/[^0-9-]/g, ''));
-  return isNaN(n) ? null : n;
+  return Object.keys(fields).length > 0 ? fields : null;
 }
 
 /**
- * Map raw wiki fields to { dbColumn: cleanedValue } pairs.
- * Returns only entries where the value is non-null.
+ * Fallback: scan raw wikitext for lines containing "| key = value".
+ * Catches pages with non-standard or undocumented infobox template names.
+ */
+function scanKeyValueLines(wikitext) {
+  const fields = {};
+  // Matches:  | armorclass = 5   OR   |armorclass=5
+  const lineRx = /^\s*\|\s*([a-z][a-z0-9 _-]*?)\s*=\s*(.+)$/gim;
+  let m;
+  while ((m = lineRx.exec(wikitext)) !== null) {
+    const key = m[1].trim().toLowerCase().replace(/[\s_-]/g, '');
+    const val = m[2].trim();
+    // Only keep keys that are in our field map (avoids noise)
+    if (FIELD_MAP[key] && val) fields[key] = val;
+  }
+  return fields;
+}
+
+/**
+ * Try multiple strategies to extract creature stats from wikitext.
+ * Returns { wikiKey: rawValue } or null if nothing useful found.
+ */
+function extractWikiFields(wikitext) {
+  // Strategy 1: known infobox template names (case-insensitive)
+  const candidates = [
+    'Creature', 'Monster', 'CreatureTemplate',
+    'Infobox Creature', 'Infobox Monster', 'MonsterBox',
+  ];
+  for (const name of candidates) {
+    const result = parseTemplate(wikitext, name);
+    if (result) return result;
+  }
+
+  // Strategy 2: raw | key = value line scan
+  const fields = scanKeyValueLines(wikitext);
+  if (Object.keys(fields).length >= 2) return fields;
+
+  return null;
+}
+
+// ── Field value mapper ────────────────────────────────────────────────────────
+
+/**
+ * Convert raw wiki fields to { dbColumn: typedValue } pairs.
+ * Integer columns are coerced; others are cleaned text strings.
  */
 function mapFields(wikiFields) {
   const updates = {};
   for (const [wikiKey, rawVal] of Object.entries(wikiFields)) {
     const col = FIELD_MAP[wikiKey];
     if (!col) continue;
-    let val = cleanValue(rawVal);
-    if (val == null) continue;
-    if (col === 'xp_value') {
-      val = parseXp(rawVal);
-      if (val == null) continue;
+
+    if (INT_COLS.has(col)) {
+      const n = parseIntField(rawVal);
+      if (n != null) updates[col] = n;
+    } else {
+      const v = cleanValue(rawVal);
+      if (v != null) updates[col] = v;
     }
-    updates[col] = val;
   }
   return updates;
 }
@@ -234,7 +288,7 @@ function mapFields(wikiFields) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('╔══════════════════════════════════════════════════════╗');
-  console.log('║  Monster Stats Re-Importer (from wiki Creature tmpl) ║');
+  console.log('║  Monster Stats Re-Importer v2 (wiki template parser) ║');
   console.log('╚══════════════════════════════════════════════════════╝');
   console.log(`  Mode   : ${DRY_RUN ? 'DRY RUN (no DB writes)' : 'LIVE'}`);
   console.log(`  Limit  : ${LIMIT === Infinity ? 'all' : LIMIT}`);
@@ -243,15 +297,19 @@ async function main() {
 
   let query, params;
   if (NAME_FILTER) {
+    // When filtering by name, process regardless of existing stats
     query  = `SELECT id, name, wiki_url FROM monsters
                WHERE wiki_url IS NOT NULL AND name ILIKE $1
                ORDER BY name LIMIT $2`;
     params = [`%${NAME_FILTER}%`, LIMIT === Infinity ? 99999 : LIMIT];
   } else {
+    // Include monsters missing ANY key stat (not just those missing all)
     query  = `SELECT id, name, wiki_url FROM monsters
                WHERE wiki_url IS NOT NULL
-                 AND hit_dice IS NULL
-                 AND armor_class IS NULL
+                 AND (   hit_dice   IS NULL
+                      OR armor_class IS NULL
+                      OR thac0       IS NULL
+                      OR attacks     IS NULL )
                ORDER BY name LIMIT $1`;
     params = [LIMIT === Infinity ? 99999 : LIMIT];
   }
@@ -265,7 +323,9 @@ async function main() {
     const { id, name, wiki_url } = rows[i];
 
     if (i > 0 && i % 50 === 0) {
-      console.log(`\n  ── Progress: ${i}/${rows.length} — updated=${updated} noTemplate=${noTemplate} ──`);
+      console.log(
+        `\n  ── [${i}/${rows.length}]  updated=${updated}  noTemplate=${noTemplate}  errors=${errors} ──`
+      );
     }
 
     process.stdout.write(
@@ -279,17 +339,17 @@ async function main() {
       const raw = await fetchWikiContent(pageTitle);
       if (!raw) { notFound++; await sleep(DELAY_MS); continue; }
 
-      const wikiFields = parseCreatureTemplate(raw);
+      const wikiFields = extractWikiFields(raw);
       if (!wikiFields) { noTemplate++; await sleep(DELAY_MS); continue; }
 
       const updates = mapFields(wikiFields);
       if (Object.keys(updates).length === 0) { noFields++; await sleep(DELAY_MS); continue; }
 
-      const cols   = Object.keys(updates);
-      const vals   = Object.values(updates);
+      const cols       = Object.keys(updates);
+      const vals       = Object.values(updates);
       const setClauses = cols.map((c, idx) => `${c} = $${idx + 1}`).join(', ');
 
-      process.stdout.write(`  → ${cols.length} fields`);
+      process.stdout.write(`  → ${cols.join(', ')}`);
 
       if (!DRY_RUN) {
         await pool.query(
@@ -300,7 +360,7 @@ async function main() {
       updated++;
     } catch (e) {
       errors++;
-      process.stdout.write(`  ✗ ${e.message?.slice(0, 40)}`);
+      process.stdout.write(`  ✗ ${e.message?.slice(0, 50)}`);
     }
 
     await sleep(DELAY_MS);
