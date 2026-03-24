@@ -21,6 +21,9 @@ const partyHubRouter         = require('./routes/party-hub');
 const partyInventoryRouter   = require('./routes/party-inventory');
 const savedEncountersRouter  = require('./routes/saved-encounters');
 const aiRouter               = require('./routes/ai');
+const partyEquipmentRouter   = require('./routes/party-equipment');
+const characterEquipmentRouter = require('./routes/character-equipment');
+const characterSpellsRouter  = require('./routes/character-spells');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -52,6 +55,9 @@ app.use('/api/party-hub',       partyHubRouter);
 app.use('/api/party-inventory',  partyInventoryRouter);
 app.use('/api/saved-encounters', savedEncountersRouter);
 app.use('/api/ai',               aiRouter);
+app.use('/api/party-equipment',      partyEquipmentRouter);
+app.use('/api/character-equipment',  characterEquipmentRouter);
+app.use('/api/character-spells',     characterSpellsRouter);
 
 // ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');

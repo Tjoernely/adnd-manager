@@ -234,6 +234,83 @@ async function autoMigrate() {
       `);
     } catch (e) { console.warn('[auto-migrate] AC/THAC0 fix skipped:', e.message); }
 
+    // ── Equipment & Spells tables ──────────────────────────────────────────────
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS party_equipment (
+        id               SERIAL PRIMARY KEY,
+        campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        name             VARCHAR(200) NOT NULL,
+        description      TEXT,
+        item_type        VARCHAR(50)  DEFAULT 'mundane',
+        identify_state   VARCHAR(20)  DEFAULT 'unknown',
+        weight_lbs       NUMERIC(6,2),
+        value_gp         NUMERIC(10,2),
+        magical_item_id  INTEGER,
+        notes            TEXT,
+        is_removed       BOOLEAN      NOT NULL DEFAULT FALSE,
+        created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS character_equipment (
+        id               SERIAL PRIMARY KEY,
+        character_id     INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        name             VARCHAR(200) NOT NULL,
+        description      TEXT,
+        item_type        VARCHAR(50)  DEFAULT 'mundane',
+        identify_state   VARCHAR(20)  DEFAULT 'identified',
+        slot             VARCHAR(30),
+        is_equipped      BOOLEAN      NOT NULL DEFAULT FALSE,
+        weapon_type      VARCHAR(20),
+        damage_s_m       VARCHAR(30),
+        damage_l         VARCHAR(30),
+        range_str        VARCHAR(30),
+        armor_ac         INTEGER,
+        magic_bonus      INTEGER      DEFAULT 0,
+        is_cursed        BOOLEAN      NOT NULL DEFAULT FALSE,
+        weight_lbs       NUMERIC(6,2),
+        value_gp         NUMERIC(10,2),
+        magical_item_id  INTEGER,
+        notes            TEXT,
+        source_pool_id   INTEGER REFERENCES party_equipment(id) ON DELETE SET NULL,
+        created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS character_spells (
+        id              SERIAL PRIMARY KEY,
+        character_id    INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        campaign_id     INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        name            VARCHAR(200) NOT NULL,
+        spell_level     INTEGER      DEFAULT 1,
+        spell_type      VARCHAR(20)  DEFAULT 'wizard',
+        description     TEXT,
+        status          VARCHAR(20)  DEFAULT 'memorized',
+        uses_per_day    INTEGER,
+        uses_remaining  INTEGER,
+        is_special      BOOLEAN      NOT NULL DEFAULT FALSE,
+        notes           TEXT,
+        spell_db_id     INTEGER,
+        created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    try {
+      const u = process.env.DB_USER || 'adnduser';
+      await db.query(`GRANT ALL ON party_equipment    TO ${u};`);
+      await db.query(`GRANT ALL ON character_equipment TO ${u};`);
+      await db.query(`GRANT ALL ON character_spells    TO ${u};`);
+      await db.query(`GRANT USAGE, SELECT ON SEQUENCE party_equipment_id_seq     TO ${u};`);
+      await db.query(`GRANT USAGE, SELECT ON SEQUENCE character_equipment_id_seq TO ${u};`);
+      await db.query(`GRANT USAGE, SELECT ON SEQUENCE character_spells_id_seq    TO ${u};`);
+    } catch (_) { /* ignore on managed DBs */ }
+
     console.log('[auto-migrate] done');
   } catch (e) {
     console.error('[auto-migrate] error:', e.message);

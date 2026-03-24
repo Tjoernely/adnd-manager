@@ -9,6 +9,8 @@ import { useState, useEffect } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
 import { rollLoot } from '../../rules-engine/lootRollEngine.js';
+import { SUB_ABILITIES, PARENT_STAT_LABELS } from '../../data/abilities.js';
+import { SLOT_LABELS } from '../../constants/equipmentSlots.js';
 
 const TABS = [
   { id: 'characters', icon: '👥', label: 'Characters' },
@@ -81,6 +83,7 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
   const [savedEncs,   setSavedEncs]   = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
+  const [selectedChar, setSelectedChar] = useState(null);
 
   const isDM       = campaign.dm_user_id === user.id;
   const campaignId = campaign.id;
@@ -205,6 +208,17 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
         ))}
       </div>
 
+      {/* ── Character Panel overlay ── */}
+      {selectedChar && (
+        <CharacterPanel
+          char={selectedChar}
+          campaignId={campaignId}
+          isDM={isDM}
+          onClose={() => setSelectedChar(null)}
+          onNavigate={onNavigate}
+        />
+      )}
+
       {/* ── Content ── */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px' }}>
         {loading && (
@@ -230,6 +244,7 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
                 isDM={isDM}
                 onToggleVis={toggleCharVis}
                 onOpenModule={() => onNavigate?.('characters')}
+                onSelectChar={setSelectedChar}
                 sectionCard={sectionCard}
               />
             )}
@@ -277,7 +292,7 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
 
 // ── Characters Tab ─────────────────────────────────────────────────────────────
 
-function CharactersTab({ characters, allChars, isDM, onToggleVis, onOpenModule, sectionCard }) {
+function CharactersTab({ characters, allChars, isDM, onToggleVis, onOpenModule, onSelectChar, sectionCard }) {
   const hiddenCount = isDM
     ? allChars.filter(c => (c.visibility ?? 'party') !== 'party').length
     : 0;
@@ -307,19 +322,26 @@ function CharactersTab({ characters, allChars, isDM, onToggleVis, onOpenModule, 
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
         {characters.map(char => {
-          const cd      = char.character_data ?? {};
-          const portrait  = cd.portrait_url ?? null;
-          const raceName  = cd.raceId  ? capitalize(String(cd.raceId))  : null;
-          const className = cd.classId ? capitalize(String(cd.classId)) : null;
+          const cd        = char.character_data ?? {};
+          const portrait  = cd.portraitUrl ?? cd.portrait_url ?? null;
+          const raceName  = cd.selectedRace  ? capitalize(String(cd.selectedRace))  : null;
+          const className = cd.selectedClass ? capitalize(String(cd.selectedClass)) : null;
           const level     = cd.charLevel ?? null;
           const isHidden  = (char.visibility ?? 'party') !== 'party';
 
           return (
-            <div key={char.id} style={{
-              ...sectionCard,
-              border: `1px solid ${isHidden && isDM ? 'rgba(200,80,30,.4)' : C.border}`,
-              opacity: isHidden && isDM ? 0.72 : 1,
-            }}>
+            <div
+              key={char.id}
+              onClick={() => onSelectChar?.(char)}
+              style={{
+                ...sectionCard,
+                border: `1px solid ${isHidden && isDM ? 'rgba(200,80,30,.4)' : C.border}`,
+                opacity: isHidden && isDM ? 0.72 : 1,
+                cursor: 'pointer', transition: 'border-color .12s, background .12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.borderHi; e.currentTarget.style.background = 'rgba(212,160,53,.07)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = isHidden && isDM ? 'rgba(200,80,30,.4)' : C.border; e.currentTarget.style.background = 'rgba(0,0,0,.3)'; }}
+            >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 {portrait ? (
                   <img src={portrait} alt="" style={{
@@ -1194,5 +1216,612 @@ function NpcsTab({ npcs, isDM, onOpenModule, sectionCard }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Character Panel (side-drawer overlay) ─────────────────────────────────────
+
+const ID_STATES = ['unknown', 'suspected', 'identified'];
+const ID_ICONS  = { unknown: '❓', suspected: '✨', identified: '🔍' };
+const ID_LABELS = { unknown: 'Unknown', suspected: 'Suspected', identified: 'Identified' };
+
+function idBadgeStyle(state) {
+  const color = state === 'identified' ? C.green
+              : state === 'suspected'  ? C.amber
+              : C.textDim;
+  return {
+    fontSize: 10, borderRadius: 10, padding: '2px 8px', display: 'inline-flex',
+    alignItems: 'center', gap: 3,
+    border: `1px solid ${color}33`,
+    background: `${color}11`,
+    color,
+  };
+}
+
+function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
+  const [panelTab,     setPanelTab]     = useState('sheet');
+  const [partyEquip,   setPartyEquip]   = useState([]);
+  const [charEquip,    setCharEquip]    = useState([]);
+  const [equipLoading, setEquipLoading] = useState(false);
+  const [equipError,   setEquipError]   = useState(null);
+
+  // Add-to-pool form (DM only)
+  const [addOpen,    setAddOpen]    = useState(false);
+  const [addName,    setAddName]    = useState('');
+  const [addType,    setAddType]    = useState('mundane');
+  const [addNotes,   setAddNotes]   = useState('');
+  const [addWorking, setAddWorking] = useState(false);
+
+  const cd   = char.character_data ?? {};
+  const base = cd.baseScores ?? {};
+  const mods = cd.splitMods  ?? {};
+
+  useEffect(() => {
+    let cancelled = false;
+    setEquipLoading(true);
+    setEquipError(null);
+    Promise.all([
+      api.getPartyEquipment(campaignId).catch(() => []),
+      api.getCharacterEquipment(char.id).catch(() => []),
+    ]).then(([pool, eq]) => {
+      if (cancelled) return;
+      setPartyEquip(Array.isArray(pool) ? pool : []);
+      setCharEquip(Array.isArray(eq)   ? eq   : []);
+      setEquipLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [char.id, campaignId]);
+
+  async function refreshEquip() {
+    const [pool, eq] = await Promise.all([
+      api.getPartyEquipment(campaignId).catch(() => []),
+      api.getCharacterEquipment(char.id).catch(() => []),
+    ]);
+    setPartyEquip(Array.isArray(pool) ? pool : []);
+    setCharEquip(Array.isArray(eq)   ? eq   : []);
+  }
+
+  async function handleAssign(itemId) {
+    setEquipError(null);
+    try {
+      await api.assignPartyEquipment(itemId, char.id);
+      await refreshEquip();
+    } catch (e) { setEquipError(e.message); }
+  }
+
+  async function cycleIdentify(item) {
+    if (!isDM) return;
+    const next = ID_STATES[(ID_STATES.indexOf(item.identify_state ?? 'unknown') + 1) % ID_STATES.length];
+    try {
+      await api.updatePartyEquipment(item.id, { identify_state: next });
+      setPartyEquip(p => p.map(x => x.id === item.id ? { ...x, identify_state: next } : x));
+    } catch (e) { setEquipError(e.message); }
+  }
+
+  async function cycleIdentifyChar(item) {
+    if (!isDM) return;
+    const next = ID_STATES[(ID_STATES.indexOf(item.identify_state ?? 'identified') + 1) % ID_STATES.length];
+    try {
+      await api.updateCharacterEquipment(item.id, { identify_state: next });
+      setCharEquip(p => p.map(x => x.id === item.id ? { ...x, identify_state: next } : x));
+    } catch (e) { setEquipError(e.message); }
+  }
+
+  async function toggleEquip(item) {
+    setEquipError(null);
+    try {
+      await api.equipCharacterItem(item.id, { is_equipped: !item.is_equipped });
+      await refreshEquip();
+    } catch (e) { setEquipError(e.message); }
+  }
+
+  async function removeCharItem(itemId) {
+    setEquipError(null);
+    try {
+      await api.deleteCharacterEquipment(itemId);
+      setCharEquip(p => p.filter(x => x.id !== itemId));
+    } catch (e) { setEquipError(e.message); }
+  }
+
+  async function handleAddToPool(e) {
+    e.preventDefault();
+    if (!addName.trim()) return;
+    setAddWorking(true);
+    setEquipError(null);
+    try {
+      await api.createPartyEquipment({
+        campaign_id: campaignId,
+        name: addName.trim(),
+        item_type: addType,
+        notes: addNotes,
+      });
+      setAddName(''); setAddType('mundane'); setAddNotes('');
+      setAddOpen(false);
+      await refreshEquip();
+    } catch (e) { setEquipError(e.message); }
+    finally { setAddWorking(false); }
+  }
+
+  const totalWeight = charEquip.reduce((s, x) => s + (parseFloat(x.weight_lbs) || 0), 0);
+
+  const panelTabSt = (active) => ({
+    fontSize: 12, padding: '6px 16px', cursor: 'pointer', fontFamily: ff,
+    border: `1px solid ${active ? C.borderHi : C.border}`,
+    borderRadius: 5,
+    background: active ? 'rgba(212,160,53,.14)' : 'transparent',
+    color: active ? C.gold : C.textDim,
+  });
+
+  const inputSt = {
+    background: '#0d0903', border: `1px solid ${C.border}`, borderRadius: 4,
+    color: C.text, fontFamily: ff, fontSize: 11, padding: '4px 8px',
+  };
+
+  const portrait  = cd.portraitUrl ?? cd.portrait_url ?? null;
+  const raceName  = cd.selectedRace  ? capitalize(String(cd.selectedRace))  : '—';
+  const className = cd.selectedClass ? capitalize(String(cd.selectedClass)) : '—';
+  const kitName   = cd.selectedKit   ? capitalize(String(cd.selectedKit))   : null;
+  const level     = cd.charLevel ?? '—';
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,.55)',
+          zIndex: 199,
+        }}
+      />
+
+      {/* Panel */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 540,
+        background: 'linear-gradient(180deg,#1c1408,#0d0a06)',
+        borderLeft: `2px solid ${C.borderHi}`,
+        zIndex: 200, display: 'flex', flexDirection: 'column',
+        fontFamily: ff, color: C.text,
+        overflowY: 'hidden',
+      }}>
+
+        {/* ── Panel header ── */}
+        <div style={{
+          padding: '14px 18px', borderBottom: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+        }}>
+          {portrait ? (
+            <img src={portrait} alt="" style={{
+              width: 42, height: 42, borderRadius: 5, objectFit: 'cover',
+              border: `1px solid ${C.border}`, flexShrink: 0,
+            }} />
+          ) : (
+            <div style={{
+              width: 42, height: 42, borderRadius: 5, flexShrink: 0,
+              background: 'rgba(0,0,0,.5)', border: `1px solid ${C.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            }}>🧙</div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, color: C.gold, fontWeight: 'bold' }}>
+              {cd.charName ?? char.name}
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+              {[raceName, className, kitName, level !== '—' ? `Level ${level}` : null]
+                .filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: `1px solid ${C.border}`, borderRadius: 5,
+              color: C.textDim, fontSize: 12, cursor: 'pointer', padding: '4px 10px',
+            }}
+          >✕</button>
+        </div>
+
+        {/* ── Tab bar ── */}
+        <div style={{
+          padding: '8px 18px', borderBottom: `1px solid ${C.border}`,
+          display: 'flex', gap: 8, flexShrink: 0,
+        }}>
+          <button style={panelTabSt(panelTab === 'sheet')}     onClick={() => setPanelTab('sheet')}>📜 Character Sheet</button>
+          <button style={panelTabSt(panelTab === 'equipment')} onClick={() => setPanelTab('equipment')}>🎒 Equipment</button>
+        </div>
+
+        {/* ── Tab content ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
+
+          {/* ════════════════════════ CHARACTER SHEET ════════════════════════ */}
+          {panelTab === 'sheet' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+              {/* Identity block */}
+              <div style={{
+                background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+                borderRadius: 7, padding: '10px 14px',
+              }}>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                  <SheetField label="Race"      value={raceName} />
+                  <SheetField label="Class"     value={className} />
+                  {kitName && <SheetField label="Kit" value={kitName} />}
+                  <SheetField label="Level"     value={level} />
+                  <SheetField label="Alignment" value={cd.alignment ?? '—'} />
+                  <SheetField label="HP"        value="—" />
+                  <SheetField label="THAC0"     value="—" />
+                  <SheetField label="Base AC"   value="—" />
+                </div>
+              </div>
+
+              {/* Ability scores */}
+              <div>
+                <PanelSectionLabel>Ability Scores</PanelSectionLabel>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Object.entries(SUB_ABILITIES).map(([parentKey, subs]) => {
+                    const parentScore = base[parentKey.toLowerCase()] ?? 0;
+                    return (
+                      <div key={parentKey} style={{
+                        background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
+                        borderRadius: 6, padding: '8px 12px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 10, color: C.textDim, width: 90, textTransform: 'uppercase', letterSpacing: 1 }}>
+                            {PARENT_STAT_LABELS[parentKey]}
+                          </span>
+                          <StatBadge value={parentScore} />
+                        </div>
+                        {subs.map(sub => {
+                          const subVal = parentScore + (mods[sub.id] ?? 0);
+                          return (
+                            <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                              <span style={{ fontSize: 10, color: C.textDim, width: 90, paddingLeft: 12 }}>
+                                {sub.label}
+                              </span>
+                              <StatBadge value={subVal} small />
+                              {mods[sub.id] ? (
+                                <span style={{ fontSize: 9, color: mods[sub.id] > 0 ? C.green : C.red }}>
+                                  {mods[sub.id] > 0 ? `+${mods[sub.id]}` : mods[sub.id]}
+                                </span>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Weapon proficiencies */}
+              {cd.weapPicked && Object.keys(cd.weapPicked).length > 0 && (
+                <div>
+                  <PanelSectionLabel>Weapon Proficiencies</PanelSectionLabel>
+                  <div style={{
+                    background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
+                    borderRadius: 6, padding: '8px 12px',
+                    display: 'flex', flexWrap: 'wrap', gap: 6,
+                  }}>
+                    {Object.entries(cd.weapPicked).map(([wid, wdata]) => (
+                      <span key={wid} style={{
+                        fontSize: 10, color: C.text, background: 'rgba(0,0,0,.3)',
+                        border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px',
+                      }}>
+                        {typeof wdata === 'object' ? (wdata.name ?? wid) : wid}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* NWPs */}
+              {cd.profsPicked && Object.keys(cd.profsPicked).length > 0 && (
+                <div>
+                  <PanelSectionLabel>Nonweapon Proficiencies</PanelSectionLabel>
+                  <div style={{
+                    background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
+                    borderRadius: 6, padding: '8px 12px',
+                    display: 'flex', flexWrap: 'wrap', gap: 6,
+                  }}>
+                    {Object.entries(cd.profsPicked).map(([pid, pdata]) => (
+                      <span key={pid} style={{
+                        fontSize: 10, color: C.text, background: 'rgba(0,0,0,.3)',
+                        border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px',
+                      }}>
+                        {typeof pdata === 'object' ? (pdata.name ?? pdata.label ?? pid) : pid}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Open in Builder */}
+              <div style={{ paddingTop: 4 }}>
+                <button
+                  onClick={() => { onClose(); onNavigate?.('characters'); }}
+                  style={{
+                    fontSize: 11, padding: '6px 16px', borderRadius: 5, cursor: 'pointer',
+                    background: 'rgba(212,160,53,.1)', border: `1px solid ${C.border}`,
+                    color: C.gold, fontFamily: ff,
+                  }}
+                >Open in Builder →</button>
+              </div>
+            </div>
+          )}
+
+          {/* ════════════════════════ EQUIPMENT ════════════════════════ */}
+          {panelTab === 'equipment' && (
+            <div>
+              {equipError && (
+                <div style={{
+                  fontSize: 11, color: '#e08080', marginBottom: 10,
+                  background: 'rgba(200,50,50,.12)', border: '1px solid rgba(200,50,50,.3)',
+                  borderRadius: 5, padding: '6px 10px',
+                }}>⚠ {equipError}</div>
+              )}
+              {equipLoading ? (
+                <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: 40 }}>
+                  Loading equipment…
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 14 }}>
+
+                  {/* LEFT: Party Pool */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ fontSize: 9, color: C.gold, letterSpacing: 2, textTransform: 'uppercase' }}>
+                        Party Pool
+                      </span>
+                      <span style={{ fontSize: 10, color: C.textDim }}>({partyEquip.length})</span>
+                      {isDM && (
+                        <button
+                          onClick={() => setAddOpen(o => !o)}
+                          style={{
+                            marginLeft: 'auto', fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                            background: 'rgba(212,160,53,.1)', border: `1px solid ${C.border}`,
+                            color: C.gold, cursor: 'pointer', fontFamily: ff,
+                          }}
+                        >{addOpen ? '✕' : '+ Add'}</button>
+                      )}
+                    </div>
+
+                    {/* Add-to-pool form */}
+                    {addOpen && isDM && (
+                      <form onSubmit={handleAddToPool} style={{
+                        background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+                        borderRadius: 6, padding: '10px 10px', marginBottom: 10,
+                        display: 'flex', flexDirection: 'column', gap: 6,
+                      }}>
+                        <input
+                          required
+                          placeholder="Item name"
+                          value={addName}
+                          onChange={e => setAddName(e.target.value)}
+                          style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}
+                        />
+                        <select
+                          value={addType}
+                          onChange={e => setAddType(e.target.value)}
+                          style={inputSt}
+                        >
+                          {['mundane','magic_item','weapon','armor','potion','scroll','wand','ring','misc'].map(t => (
+                            <option key={t} value={t}>{capitalize(t.replace('_', ' '))}</option>
+                          ))}
+                        </select>
+                        <input
+                          placeholder="Notes (optional)"
+                          value={addNotes}
+                          onChange={e => setAddNotes(e.target.value)}
+                          style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={addWorking}
+                          style={{
+                            fontSize: 11, padding: '4px 10px', borderRadius: 4, cursor: addWorking ? 'not-allowed' : 'pointer',
+                            background: 'rgba(212,160,53,.15)', border: `1px solid ${C.borderHi}`,
+                            color: C.gold, fontFamily: ff, opacity: addWorking ? 0.5 : 1,
+                          }}
+                        >{addWorking ? '…' : 'Add to Pool'}</button>
+                      </form>
+                    )}
+
+                    {!partyEquip.length ? (
+                      <div style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic', textAlign: 'center', padding: '18px 0' }}>
+                        Pool is empty
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {partyEquip.map(item => (
+                          <div key={item.id} style={{
+                            background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+                            borderRadius: 6, padding: '7px 9px',
+                          }}>
+                            <div style={{ fontSize: 11, color: C.text, fontWeight: 'bold', marginBottom: 4 }}>
+                              {item.name}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                              <span style={idBadgeStyle(item.identify_state ?? 'unknown')}>
+                                {ID_ICONS[item.identify_state ?? 'unknown']} {ID_LABELS[item.identify_state ?? 'unknown']}
+                              </span>
+                              {isDM && (
+                                <button
+                                  onClick={() => cycleIdentify(item)}
+                                  title="Cycle identification (DM)"
+                                  style={{
+                                    fontSize: 9, padding: '1px 5px', borderRadius: 4, cursor: 'pointer',
+                                    background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+                                    color: C.textDim, fontFamily: ff,
+                                  }}
+                                >🔄</button>
+                              )}
+                              <button
+                                onClick={() => handleAssign(item.id)}
+                                style={{
+                                  marginLeft: 'auto', fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                                  cursor: 'pointer', fontFamily: ff,
+                                  background: 'rgba(109,190,136,.1)', border: `1px solid rgba(109,190,136,.35)`,
+                                  color: C.green,
+                                }}
+                              >→ Assign</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* RIGHT: Character Equipment */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ fontSize: 9, color: C.gold, letterSpacing: 2, textTransform: 'uppercase' }}>
+                        On Character
+                      </span>
+                      <span style={{ fontSize: 10, color: C.textDim }}>({charEquip.length})</span>
+                    </div>
+
+                    {!charEquip.length ? (
+                      <div style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic', textAlign: 'center', padding: '18px 0' }}>
+                        No items
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {charEquip.map(item => (
+                          <div key={item.id} style={{
+                            background: item.is_equipped ? 'rgba(109,190,136,.06)' : 'rgba(0,0,0,.3)',
+                            border: `1px solid ${item.is_equipped ? 'rgba(109,190,136,.3)' : C.border}`,
+                            borderRadius: 6, padding: '7px 9px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, color: C.text, fontWeight: 'bold', flex: 1 }}>
+                                {item.name}
+                                {item.magic_bonus > 0 && (
+                                  <span style={{ fontSize: 9, color: C.purple, marginLeft: 4 }}>+{item.magic_bonus}</span>
+                                )}
+                                {item.is_cursed && (
+                                  <span style={{ fontSize: 9, color: C.red, marginLeft: 4 }}>☠</span>
+                                )}
+                              </span>
+                              <button
+                                onClick={() => removeCharItem(item.id)}
+                                disabled={item.is_cursed && item.is_equipped}
+                                title="Remove"
+                                style={{
+                                  fontSize: 9, padding: '1px 5px', borderRadius: 4,
+                                  cursor: item.is_cursed && item.is_equipped ? 'not-allowed' : 'pointer',
+                                  background: 'rgba(180,50,50,.1)', border: '1px solid rgba(180,50,50,.3)',
+                                  color: C.red, opacity: item.is_cursed && item.is_equipped ? 0.3 : 1,
+                                }}
+                              >✕</button>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                              {item.slot && (
+                                <span style={{
+                                  fontSize: 9, color: C.textDim, background: 'rgba(0,0,0,.3)',
+                                  borderRadius: 4, padding: '1px 5px',
+                                }}>{SLOT_LABELS[item.slot] ?? item.slot}</span>
+                              )}
+                              <span style={idBadgeStyle(item.identify_state ?? 'identified')}>
+                                {ID_ICONS[item.identify_state ?? 'identified']} {ID_LABELS[item.identify_state ?? 'identified']}
+                              </span>
+                              {isDM && (
+                                <button
+                                  onClick={() => cycleIdentifyChar(item)}
+                                  title="Cycle ID (DM)"
+                                  style={{
+                                    fontSize: 9, padding: '1px 4px', borderRadius: 4, cursor: 'pointer',
+                                    background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+                                    color: C.textDim,
+                                  }}
+                                >🔄</button>
+                              )}
+                              {item.slot && (
+                                <button
+                                  onClick={() => toggleEquip(item)}
+                                  style={{
+                                    marginLeft: 'auto', fontSize: 9, padding: '2px 7px', borderRadius: 4,
+                                    cursor: 'pointer', fontFamily: ff,
+                                    background: item.is_equipped ? 'rgba(212,160,53,.1)' : 'rgba(0,0,0,.3)',
+                                    border: `1px solid ${item.is_equipped ? C.borderHi : C.border}`,
+                                    color: item.is_equipped ? C.gold : C.textDim,
+                                  }}
+                                >{item.is_equipped ? '⚔ On' : 'Equip'}</button>
+                              )}
+                            </div>
+                            {(item.damage_s_m || item.armor_ac != null || item.range_str) && (
+                              <div style={{ marginTop: 3, fontSize: 10, color: C.textDim, display: 'flex', gap: 8 }}>
+                                {item.damage_s_m && <span>Dmg: {item.damage_s_m}</span>}
+                                {item.damage_l   && <span>L: {item.damage_l}</span>}
+                                {item.armor_ac != null && <span>AC: {item.armor_ac}</span>}
+                                {item.range_str  && <span>Rng: {item.range_str}</span>}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Weight footer */}
+                    {charEquip.length > 0 && (
+                      <div style={{
+                        marginTop: 10, fontSize: 10, color: C.textDim,
+                        borderTop: `1px solid ${C.border}`, paddingTop: 7,
+                        display: 'flex', justifyContent: 'space-between',
+                      }}>
+                        <span>Total weight</span>
+                        <span style={{ color: C.text }}>{totalWeight.toFixed(1)} lbs</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Sheet sub-components ──────────────────────────────────────────────────────
+
+function PanelSectionLabel({ children }) {
+  return (
+    <div style={{
+      fontSize: 9, letterSpacing: 2, textTransform: 'uppercase',
+      color: C.gold, marginBottom: 6, paddingBottom: 4,
+      borderBottom: `1px solid ${C.border}`,
+    }}>{children}</div>
+  );
+}
+
+function SheetField({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 13, color: C.text, fontWeight: 'bold' }}>{value ?? '—'}</div>
+    </div>
+  );
+}
+
+function StatBadge({ value, small }) {
+  const color = !value ? C.textDim
+    : value >= 17 ? '#ffd700'
+    : value >= 14 ? C.green
+    : value >= 10 ? C.text
+    : value >=  7 ? C.amber
+    : C.red;
+  return (
+    <span style={{
+      display: 'inline-block',
+      minWidth: small ? 26 : 30,
+      textAlign: 'center',
+      fontSize: small ? 11 : 13,
+      fontWeight: 'bold',
+      color,
+      background: 'rgba(0,0,0,.3)',
+      border: `1px solid ${color}44`,
+      borderRadius: 4,
+      padding: small ? '1px 4px' : '2px 6px',
+    }}>{value || '—'}</span>
   );
 }

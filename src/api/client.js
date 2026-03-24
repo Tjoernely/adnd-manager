@@ -253,6 +253,26 @@ export const api = {
   // ── AI Loot ───────────────────────────────────────────────────────
   generateAiLoot: (data) => apiFetch('/ai/loot', { method: 'POST', body: JSON.stringify(data) }),
 
+  // ── Party Equipment (campaign-level pool) ────────────────────────────────────
+  getPartyEquipment:    (campaignId)       => apiFetch(`/party-equipment?campaign_id=${campaignId}`),
+  createPartyEquipment: (data)             => apiFetch('/party-equipment',        { method: 'POST',   body: JSON.stringify(data) }),
+  updatePartyEquipment: (id, data)         => apiFetch(`/party-equipment/${id}`,   { method: 'PUT',    body: JSON.stringify(data) }),
+  deletePartyEquipment: (id)               => apiFetch(`/party-equipment/${id}`,   { method: 'DELETE' }),
+  assignPartyEquipment: (id, character_id) => apiFetch(`/party-equipment/${id}/assign`, { method: 'POST', body: JSON.stringify({ character_id }) }),
+
+  // ── Character Equipment ───────────────────────────────────────────────────────
+  getCharacterEquipment:    (characterId)  => apiFetch(`/character-equipment?character_id=${characterId}`),
+  createCharacterEquipment: (data)         => apiFetch('/character-equipment',       { method: 'POST',   body: JSON.stringify(data) }),
+  updateCharacterEquipment: (id, data)     => apiFetch(`/character-equipment/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
+  deleteCharacterEquipment: (id)           => apiFetch(`/character-equipment/${id}`, { method: 'DELETE' }),
+  equipCharacterItem:       (id, data)     => apiFetch(`/character-equipment/${id}/equip`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // ── Character Spells ──────────────────────────────────────────────────────────
+  getCharacterSpells:    (characterId)     => apiFetch(`/character-spells?character_id=${characterId}`),
+  createCharacterSpell:  (data)            => apiFetch('/character-spells',       { method: 'POST',   body: JSON.stringify(data) }),
+  updateCharacterSpell:  (id, data)        => apiFetch(`/character-spells/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
+  deleteCharacterSpell:  (id)              => apiFetch(`/character-spells/${id}`, { method: 'DELETE' }),
+
   // ── Visibility toggles (DM only) ──────────────────────────────────
   setQuestVisibility:     (id, v) => apiFetch(`/quests/${id}`,          { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
   setEncounterVisibility: (id, v) => apiFetch(`/encounters/${id}`,      { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
