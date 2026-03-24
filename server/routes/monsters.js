@@ -156,7 +156,8 @@ router.get('/', async (req, res) => {
                 COALESCE(role, 'normal')           AS role,
                 frequency, habitat,
                 COALESCE(treasure, NULL)           AS treasure,
-                COALESCE(tags, NULL)               AS tags
+                COALESCE(tags, NULL)               AS tags,
+                COALESCE(variants, NULL)           AS variants
          FROM monsters ${where}
          ORDER BY ${orderBy}
          LIMIT $${p} OFFSET $${p+1}`,
