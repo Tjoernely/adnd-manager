@@ -130,6 +130,20 @@ async function autoMigrate() {
       catch (e) { console.warn('[auto-migrate] skipped:', stmt.slice(0, 60), '—', e.message); }
     }
 
+    // Widen monster columns that were too narrow for full wiki text values.
+    // VARCHAR(20) for size and VARCHAR(50) for hit_dice / magic_resistance /
+    // save_as caused "value too long" errors during wiki re-import.
+    for (const stmt of [
+      `ALTER TABLE monsters ALTER COLUMN size             TYPE VARCHAR(100)`,
+      `ALTER TABLE monsters ALTER COLUMN hit_dice         TYPE TEXT`,
+      `ALTER TABLE monsters ALTER COLUMN magic_resistance TYPE VARCHAR(200)`,
+      `ALTER TABLE monsters ALTER COLUMN save_as          TYPE VARCHAR(100)`,
+      `ALTER TABLE monsters ALTER COLUMN treasure         TYPE VARCHAR(100)`,
+    ]) {
+      try { await db.query(stmt); }
+      catch (e) { console.warn('[auto-migrate] widen col skipped:', stmt.slice(0, 60), '—', e.message); }
+    }
+
     // Saved encounters (fight-tracked, with per-creature HP)
     await db.query(`
       CREATE TABLE IF NOT EXISTS saved_encounters (

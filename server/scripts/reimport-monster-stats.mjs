@@ -221,6 +221,29 @@ const FIELD_MAP = {
 
 const INT_COLS = new Set(['armor_class', 'thac0', 'xp_value', 'morale']);
 
+// Max character lengths for text columns (matches widened schema).
+// Values exceeding these limits are silently truncated rather than erroring.
+const COL_MAX_LEN = {
+  hit_dice:         500,   // TEXT in widened schema, but cap runaway values
+  size:             100,
+  magic_resistance: 200,
+  save_as:          100,
+  treasure:         100,
+  movement:         100,
+  alignment:        100,
+  no_appearing:     100,
+  special_attacks:  2000,
+  special_defenses: 2000,
+  attacks:          200,
+  damage:           500,
+  habitat:          300,
+  frequency:        100,
+  organization:     200,
+  activity_cycle:   100,
+  diet:             200,
+  intelligence:     100,
+};
+
 // ── Value parsers ─────────────────────────────────────────────────────────────
 
 function parseIntField(val) {
@@ -556,8 +579,12 @@ function mapFields(wikiFields) {
       const n = parseIntField(rawVal);
       if (n != null) updates[col] = n;
     } else {
-      const v = cleanValue(rawVal);
-      if (v != null) updates[col] = v;
+      let v = cleanValue(rawVal);
+      if (v == null) continue;
+      // Truncate to column limit to prevent "value too long" errors
+      const maxLen = COL_MAX_LEN[col];
+      if (maxLen && v.length > maxLen) v = v.slice(0, maxLen);
+      updates[col] = v;
     }
   }
   return updates;
