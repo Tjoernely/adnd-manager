@@ -1,22 +1,27 @@
 /**
- * reimport-monster-stats.mjs  (v2)
+ * reimport-monster-stats.mjs  (v3)
  *
  * For monsters whose stats are missing, fetches the wiki page and writes all
  * known Creature template fields back to the DB.
  *
+ * Fix log (v3):
+ *   • URL fallbacks: when the stored wiki_url returns 404, tries alternative
+ *     title formats ("Base, Sub" → "Base_(Sub)", "Sub_(Base)") and updates
+ *     wiki_url in the DB when a working URL is found.
+ *   • Multi-template support: pages with multiple {{Creature}} blocks (e.g.
+ *     "Aartuk") are parsed to find the template nearest to the matching
+ *     section header (e.g. "== Elder ==" for "Aartuk, Elder").
+ *
  * Fix log (v2):
- *   • Integer fields (armor_class, thac0, xp_value, morale) are now parsed
- *     with parseIntField() to handle "7 (base)", "32,000", "−10", etc.
- *   • Template detection now tries {{Creature}}, {{Monster}}, plus a raw
- *     key=value line-scan fallback for pages that use non-standard templates.
- *   • Query changed to OR: monsters missing ANY of hit_dice / armor_class /
- *     thac0 / attacks are now included.
+ *   • Integer fields parsed with parseIntField() ("7 (base)", "32,000", etc.)
+ *   • Template detection tries {{Creature}}, {{Monster}}, fallback key=value scan
+ *   • Query uses OR across hit_dice / armor_class / thac0 / attacks
  *
  * Usage:
  *   node scripts/reimport-monster-stats.mjs
  *   node scripts/reimport-monster-stats.mjs --dry-run
  *   node scripts/reimport-monster-stats.mjs --limit 20
- *   node scripts/reimport-monster-stats.mjs --name "Goblin"
+ *   node scripts/reimport-monster-stats.mjs --name "Aarakocra, Athasian"
  *
  * Env vars: DB_HOST  DB_PORT  DB_NAME  DB_USER  DB_PASSWORD  DB_SSL
  */
@@ -58,7 +63,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── Field maps ────────────────────────────────────────────────────────────────
 
-// Wiki template key (lower-case, no spaces/dashes) → DB column name
 const FIELD_MAP = {
   armorclass:        'armor_class',
   hitdice:           'hit_dice',
@@ -99,27 +103,20 @@ const FIELD_MAP = {
   saves:             'save_as',
 };
 
-// DB columns that must be stored as integers
 const INT_COLS = new Set(['armor_class', 'thac0', 'xp_value', 'morale']);
 
 // ── Value parsers ─────────────────────────────────────────────────────────────
 
-/**
- * Parse an integer from messy wiki values like:
- *   "7 (base)", "32,000", "−10", "-10", "5 or 10", "As fighter"
- * Returns null if no integer can be found.
- */
 function parseIntField(val) {
   if (val == null) return null;
   const s = String(val)
-    .replace(/\u2212/g, '-')   // Unicode minus sign → hyphen
-    .replace(/&minus;/g, '-')  // HTML entity
-    .replace(/,/g, '');        // thousands separator
+    .replace(/\u2212/g, '-')
+    .replace(/&minus;/g, '-')
+    .replace(/,/g, '');
   const m = s.match(/-?\d+/);
   return m ? parseInt(m[0], 10) : null;
 }
 
-/** Strip wiki markup: links, templates, HTML, bold/italic, refs */
 function cleanValue(s) {
   if (!s) return null;
   const v = s
@@ -135,20 +132,25 @@ function cleanValue(s) {
 }
 
 // ── Wiki fetch ────────────────────────────────────────────────────────────────
+
 function titleFromUrl(url) {
   if (!url) return null;
   const m = url.match(/\/wiki\/(.+)$/);
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-async function fetchWikiContent(pageTitle) {
+/**
+ * Fetch a single wiki page by title.
+ * Returns { raw: string, resolvedTitle: string } or null if missing/error.
+ */
+async function fetchOnePage(pageTitle) {
   const url =
     `https://adnd2e.fandom.com/api.php?action=query` +
     `&titles=${encodeURIComponent(pageTitle)}` +
     `&prop=revisions&rvprop=content&format=json&origin=*&redirects=1`;
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'ADnD-Manager-StatsImport/2.0' },
+      headers: { 'User-Agent': 'ADnD-Manager-StatsImport/3.0' },
       signal:  AbortSignal.timeout(12_000),
     });
     if (!res.ok) return null;
@@ -157,15 +159,75 @@ async function fetchWikiContent(pageTitle) {
     if (!pages) return null;
     const page = Object.values(pages)[0];
     if (page.missing !== undefined) return null;
-    return page?.revisions?.[0]?.['*'] ?? null;
+    const raw = page?.revisions?.[0]?.['*'] ?? null;
+    if (!raw) return null;
+    // Fandom API echoes back the resolved (post-redirect) title
+    const resolvedTitle = page.title ?? pageTitle;
+    return { raw, resolvedTitle };
   } catch {
     return null;
   }
 }
 
+/**
+ * Generate alternative wiki title candidates when the stored URL 404s.
+ *
+ *   "Aarakocra, Athasian" → stored as Aarakocra,_Athasian (missing)
+ *     → try: Aarakocra_(Athasian)
+ *     → try: Athasian_(Aarakocra)   ← Aasimon-style inversion
+ *   "Aasimon, Light"      → try: Light_(Aasimon)
+ */
+function alternativeTitles(originalTitle, monsterName) {
+  const alts = [];
+  const name = monsterName ?? originalTitle.replace(/_/g, ' ');
+
+  if (name.includes(',')) {
+    const parts = name.split(',').map(p => p.trim());
+    if (parts.length >= 2) {
+      const base = parts[0].replace(/ /g, '_');
+      const sub  = parts.slice(1).join(',').trim().replace(/ /g, '_');
+      // "Base_(Sub)"
+      alts.push(`${base}_(${sub})`);
+      // "Sub_(Base)"  — inversion used for e.g. Aasimon, Light → Light_(Aasimon)
+      alts.push(`${sub}_(${base})`);
+      // Plain sub-type, sometimes the sub-type is the main page
+      alts.push(sub);
+    }
+  }
+
+  // Ensure spaces are underscores (already handled by encodeURIComponent, but
+  // having it explicit helps avoid duplicates)
+  const underscored = originalTitle.replace(/ /g, '_');
+  if (underscored !== originalTitle) alts.push(underscored);
+
+  return [...new Set(alts)];
+}
+
+/**
+ * Fetch a wiki page, falling back to alternative title formats on 404.
+ * Returns { raw, resolvedTitle, fixedUrl } or null.
+ *   fixedUrl — the new canonical URL to write back to the DB (or null if unchanged)
+ */
+async function fetchWithFallbacks(originalTitle, monsterName) {
+  // Primary attempt
+  const primary = await fetchOnePage(originalTitle);
+  if (primary) return { ...primary, fixedUrl: null };
+
+  // Try alternatives
+  for (const alt of alternativeTitles(originalTitle, monsterName)) {
+    await sleep(150); // be kind to the wiki API
+    const result = await fetchOnePage(alt);
+    if (result) {
+      const fixedUrl = `https://adnd2e.fandom.com/wiki/${encodeURIComponent(result.resolvedTitle)}`;
+      return { ...result, fixedUrl };
+    }
+  }
+
+  return null;
+}
+
 // ── Template parser ───────────────────────────────────────────────────────────
 
-/** Split template params on `|` while respecting nested {{ }} and [[ ]] */
 function splitParams(content) {
   const params = [];
   let depth = 0;
@@ -184,96 +246,125 @@ function splitParams(content) {
 }
 
 /**
- * Parse a named template (e.g. "Creature") from raw wikitext.
- * Returns { wikiKey: rawValue } or null if the template isn't present.
+ * Parse ALL occurrences of a named template in the wikitext.
+ * Returns an array of { fields, nearestHeader, startIdx }.
  */
-function parseTemplate(wikitext, templateName) {
-  const rx = new RegExp(`\\{\\{${templateName}\\s*\\|`, 'i');
-  const startMatch = wikitext.match(rx);
-  if (!startMatch) return null;
+function parseAllTemplates(wikitext, templateName) {
+  const results = [];
+  const rx = new RegExp(`\\{\\{${templateName}\\s*\\|`, 'gi');
+  let m;
+  while ((m = rx.exec(wikitext)) !== null) {
+    const startIdx = m.index;
+    let depth = 0;
+    let i     = startIdx;
+    let end   = -1;
+    while (i < wikitext.length) {
+      if (wikitext[i] === '{' && wikitext[i + 1] === '{') { depth++; i += 2; }
+      else if (wikitext[i] === '}' && wikitext[i + 1] === '}') {
+        depth--;
+        if (depth === 0) { end = i + 2; break; }
+        i += 2;
+      } else { i++; }
+    }
+    if (end === -1) continue;
 
-  const startIdx = wikitext.indexOf(startMatch[0]);
-  let depth = 0;
-  let i     = startIdx;
-  let end   = -1;
+    // Find the nearest section heading (== ... ==) that appears before this template
+    const before      = wikitext.slice(0, startIdx);
+    const headerMatch = before.match(/==+\s*([^=\n]+?)\s*==+\s*\n?$/);
+    const nearestHeader = headerMatch ? headerMatch[1].trim() : null;
 
-  while (i < wikitext.length) {
-    if (wikitext[i] === '{' && wikitext[i + 1] === '{') { depth++; i += 2; }
-    else if (wikitext[i] === '}' && wikitext[i + 1] === '}') {
-      depth--;
-      if (depth === 0) { end = i + 2; break; }
-      i += 2;
-    } else { i++; }
+    const templateContent = wikitext.slice(startIdx + 2, end - 2);
+    const firstPipe = templateContent.indexOf('|');
+    if (firstPipe === -1) continue;
+
+    const fields = {};
+    for (const param of splitParams(templateContent.slice(firstPipe + 1))) {
+      const eqIdx = param.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = param.slice(0, eqIdx).trim().toLowerCase().replace(/[\s_-]/g, '');
+      const val = param.slice(eqIdx + 1).trim();
+      if (key && val !== '') fields[key] = val;
+    }
+
+    if (Object.keys(fields).length > 0) {
+      results.push({ fields, nearestHeader, startIdx });
+    }
   }
-  if (end === -1) return null;
-
-  const templateContent = wikitext.slice(startIdx + 2, end - 2);
-  const firstPipe = templateContent.indexOf('|');
-  if (firstPipe === -1) return null;
-
-  const fields = {};
-  for (const param of splitParams(templateContent.slice(firstPipe + 1))) {
-    const eqIdx = param.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = param.slice(0, eqIdx).trim().toLowerCase().replace(/[\s_-]/g, '');
-    const val = param.slice(eqIdx + 1).trim();
-    if (key && val !== '') fields[key] = val;
-  }
-  return Object.keys(fields).length > 0 ? fields : null;
+  return results;
 }
 
-/**
- * Fallback: scan raw wikitext for lines containing "| key = value".
- * Catches pages with non-standard or undocumented infobox template names.
- */
 function scanKeyValueLines(wikitext) {
   const fields = {};
-  // Matches:  | armorclass = 5   OR   |armorclass=5
   const lineRx = /^\s*\|\s*([a-z][a-z0-9 _-]*?)\s*=\s*(.+)$/gim;
   let m;
   while ((m = lineRx.exec(wikitext)) !== null) {
     const key = m[1].trim().toLowerCase().replace(/[\s_-]/g, '');
     const val = m[2].trim();
-    // Only keep keys that are in our field map (avoids noise)
     if (FIELD_MAP[key] && val) fields[key] = val;
   }
   return fields;
 }
 
 /**
- * Try multiple strategies to extract creature stats from wikitext.
- * Returns { wikiKey: rawValue } or null if nothing useful found.
+ * Extract wiki fields, choosing the best-matching template when there are
+ * multiple (sub-type pages like "Aartuk, Elder" / "Aartuk, Warrior").
+ *
+ * @param {string} wikitext
+ * @param {string|null} monsterName  Full DB name, e.g. "Aartuk, Elder"
  */
-function extractWikiFields(wikitext) {
-  // Strategy 1: known infobox template names (case-insensitive)
-  const candidates = [
+function extractWikiFields(wikitext, monsterName = null) {
+  const TEMPLATE_NAMES = [
     'Creature', 'Monster', 'CreatureTemplate',
     'Infobox Creature', 'Infobox Monster', 'MonsterBox',
   ];
-  for (const name of candidates) {
-    const result = parseTemplate(wikitext, name);
-    if (result) return result;
+
+  let allTemplates = [];
+  for (const tname of TEMPLATE_NAMES) {
+    allTemplates = parseAllTemplates(wikitext, tname);
+    if (allTemplates.length > 0) break;
   }
 
-  // Strategy 2: raw | key = value line scan
-  const fields = scanKeyValueLines(wikitext);
-  if (Object.keys(fields).length >= 2) return fields;
+  if (allTemplates.length === 0) {
+    // Fallback: raw key=value scan
+    const fields = scanKeyValueLines(wikitext);
+    return Object.keys(fields).length >= 2 ? fields : null;
+  }
 
-  return null;
+  if (allTemplates.length === 1 || !monsterName) {
+    return allTemplates[0].fields;
+  }
+
+  // Multiple templates on the page — try to pick the one closest to the
+  // matching section header.
+  // "Aartuk, Elder"   → subtype "Elder"
+  // "Aasimon, Light"  → subtype "Light"
+  const commaIdx = monsterName.indexOf(',');
+  if (commaIdx !== -1) {
+    const subtype = monsterName.slice(commaIdx + 1).trim().toLowerCase();
+    for (const { fields, nearestHeader } of allTemplates) {
+      if (nearestHeader && nearestHeader.toLowerCase().includes(subtype)) {
+        return fields;
+      }
+    }
+    // No header match — try matching the subtype against a 'name' field inside
+    // the template itself, if present
+    for (const { fields } of allTemplates) {
+      const tmplName = (fields.name ?? '').toLowerCase();
+      if (tmplName.includes(subtype)) return fields;
+    }
+  }
+
+  // Fall back to first template
+  return allTemplates[0].fields;
 }
 
 // ── Field value mapper ────────────────────────────────────────────────────────
 
-/**
- * Convert raw wiki fields to { dbColumn: typedValue } pairs.
- * Integer columns are coerced; others are cleaned text strings.
- */
 function mapFields(wikiFields) {
   const updates = {};
   for (const [wikiKey, rawVal] of Object.entries(wikiFields)) {
     const col = FIELD_MAP[wikiKey];
     if (!col) continue;
-
     if (INT_COLS.has(col)) {
       const n = parseIntField(rawVal);
       if (n != null) updates[col] = n;
@@ -288,7 +379,7 @@ function mapFields(wikiFields) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('╔══════════════════════════════════════════════════════╗');
-  console.log('║  Monster Stats Re-Importer v2 (wiki template parser) ║');
+  console.log('║  Monster Stats Re-Importer v3 (wiki template parser) ║');
   console.log('╚══════════════════════════════════════════════════════╝');
   console.log(`  Mode   : ${DRY_RUN ? 'DRY RUN (no DB writes)' : 'LIVE'}`);
   console.log(`  Limit  : ${LIMIT === Infinity ? 'all' : LIMIT}`);
@@ -297,16 +388,14 @@ async function main() {
 
   let query, params;
   if (NAME_FILTER) {
-    // When filtering by name, process regardless of existing stats
     query  = `SELECT id, name, wiki_url FROM monsters
                WHERE wiki_url IS NOT NULL AND name ILIKE $1
                ORDER BY name LIMIT $2`;
     params = [`%${NAME_FILTER}%`, LIMIT === Infinity ? 99999 : LIMIT];
   } else {
-    // Include monsters missing ANY key stat (not just those missing all)
     query  = `SELECT id, name, wiki_url FROM monsters
                WHERE wiki_url IS NOT NULL
-                 AND (   hit_dice   IS NULL
+                 AND (   hit_dice    IS NULL
                       OR armor_class IS NULL
                       OR thac0       IS NULL
                       OR attacks     IS NULL )
@@ -317,14 +406,14 @@ async function main() {
   const { rows } = await pool.query(query, params);
   console.log(`  Found ${rows.length} monsters to process.\n`);
 
-  let updated = 0, notFound = 0, noTemplate = 0, noFields = 0, errors = 0;
+  let updated = 0, urlFixed = 0, notFound = 0, noTemplate = 0, noFields = 0, errors = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const { id, name, wiki_url } = rows[i];
 
     if (i > 0 && i % 50 === 0) {
       console.log(
-        `\n  ── [${i}/${rows.length}]  updated=${updated}  noTemplate=${noTemplate}  errors=${errors} ──`
+        `\n  ── [${i}/${rows.length}]  updated=${updated}  urlFixed=${urlFixed}  noTemplate=${noTemplate}  errors=${errors} ──`
       );
     }
 
@@ -336,10 +425,23 @@ async function main() {
       const pageTitle = titleFromUrl(wiki_url);
       if (!pageTitle) { noTemplate++; continue; }
 
-      const raw = await fetchWikiContent(pageTitle);
-      if (!raw) { notFound++; await sleep(DELAY_MS); continue; }
+      const result = await fetchWithFallbacks(pageTitle, name);
+      if (!result) { notFound++; await sleep(DELAY_MS); continue; }
 
-      const wikiFields = extractWikiFields(raw);
+      const { raw, fixedUrl } = result;
+
+      // If the URL was corrected, log it and save to DB
+      if (fixedUrl) {
+        const oldSlug = pageTitle;
+        const newSlug = titleFromUrl(fixedUrl) ?? fixedUrl;
+        process.stdout.write(`\n  ✓ URL fixed: ${oldSlug} → ${newSlug}`);
+        if (!DRY_RUN) {
+          await pool.query('UPDATE monsters SET wiki_url=$1 WHERE id=$2', [fixedUrl, id]);
+        }
+        urlFixed++;
+      }
+
+      const wikiFields = extractWikiFields(raw, name);
       if (!wikiFields) { noTemplate++; await sleep(DELAY_MS); continue; }
 
       const updates = mapFields(wikiFields);
@@ -369,6 +471,7 @@ async function main() {
   console.log('\n');
   console.log('  ── Results ──────────────────────────────────');
   console.log(`  Updated      : ${updated}`);
+  console.log(`  URL fixed    : ${urlFixed}`);
   console.log(`  Not found    : ${notFound}`);
   console.log(`  No template  : ${noTemplate}`);
   console.log(`  No fields    : ${noFields}`);
