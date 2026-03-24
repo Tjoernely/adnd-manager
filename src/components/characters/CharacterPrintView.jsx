@@ -41,7 +41,7 @@ import { getSocialRank, getRankTable } from '../../data/socialStatus.js';
 
 import '../PrintSheet.css';
 
-// ── THAC0 by class group (matches PrintSheet) ─────────────────────────────────
+// ── THAC0 by class group ──────────────────────────────────────────────────────
 function getBaseTHAC0(classGroup, level) {
   const lv = level ?? 1;
   if (classGroup === 'warrior') return 21 - lv;
@@ -49,6 +49,37 @@ function getBaseTHAC0(classGroup, level) {
   if (classGroup === 'wizard')  return 20 - Math.floor((lv - 1) / 3);
   if (classGroup === 'rogue')   return 20 - Math.floor((lv - 1) / 2);
   return 20;
+}
+
+// ── Saving throw base values by class group and level ─────────────────────────
+// Returns [PPD, RSW, PP, BW, Spell] in that order.
+// Formulas per AD&D 2E PHB Tables 53–57 (as simplified linear approximations).
+const SAVE_NAMES = [
+  'Paralysis / Poison / Death',
+  'Rod / Staff / Wand',
+  'Petrification / Polymorph',
+  'Breath Weapon',
+  'Spell',
+];
+function getSaveBase(classGroup, level) {
+  const lv = Math.max(1, parseInt(level) || 1);
+  if (classGroup === 'warrior') {
+    const d = Math.floor(lv / 2);
+    return [14-d, 16-d, 15-d, 17-d, 17-d];
+  }
+  if (classGroup === 'priest') {
+    const d = Math.floor(lv / 3);
+    return [10-d, 14-d, 13-d, 16-d, 15-d];
+  }
+  if (classGroup === 'rogue') {
+    const d = Math.floor(lv / 4);
+    return [13-d, 14-d, 12-d, 16-d, 15-d];
+  }
+  if (classGroup === 'wizard') {
+    const d = Math.floor(lv / 5);
+    return [14-d, 11-d, 13-d, 15-d, 12-d];
+  }
+  return [16, 18, 17, 20, 19]; // no class selected
 }
 
 // ── Sign-format a number ──────────────────────────────────────────────────────
@@ -414,6 +445,40 @@ export function CharacterPrintView({ characterData }) {
           </div>
         </div>
 
+        {/* ── Saving Throws ───────────────────────────────────────── */}
+        <SectionHead>Saving Throws</SectionHead>
+        {(() => {
+          const bases      = getSaveBase(classGroup, charLevel);
+          const poisonMod  = getHealthStats(effSub('health')).poisonSave   ?? 0;
+          const magDefMod  = getWillpowerStats(effSub('willpower')).magDefAdj ?? 0;
+          // Per-save modifiers: index 0 = PPD (poison), index 4 = Spell (mag def)
+          const mods = [poisonMod, 0, 0, 0, magDefMod];
+          return (
+            <table className="ps-ability-table" style={{ marginBottom: 6 }}>
+              <thead>
+                <tr>
+                  <th>Save vs</th>
+                  <th className="ps-score-col">Base</th>
+                  <th className="ps-score-col">Modifier</th>
+                  <th className="ps-score-col">Final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SAVE_NAMES.map((name, i) => (
+                  <tr key={name}>
+                    <td className="ps-sub-label">{name}</td>
+                    <td className="ps-score-col">{bases[i]}</td>
+                    <td className="ps-score-col" style={{ color: mods[i] !== 0 ? 'var(--ps-gold)' : undefined }}>
+                      {mods[i] !== 0 ? sgn(mods[i]) : '0'}
+                    </td>
+                    <td className="ps-score-col ps-score-val">{bases[i] - mods[i]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
+
         {/* ── Ability scores ──────────────────────────────────────── */}
         <SectionHead>Ability Scores</SectionHead>
         <table className="ps-ability-table">
@@ -494,6 +559,40 @@ export function CharacterPrintView({ characterData }) {
           PAGE 2 — NWPs · Thieving · Traits · Disadvs · Status · Equipment
           ══════════════════════════════════════════════════════════════ */}
       <div className="ps-page ps-page--break">
+
+        {/* ── Weapons ───────────────────────────────────────────────── */}
+        {/* Rows will be populated when the equipment system is connected. */}
+        <SectionHead>Weapons</SectionHead>
+        <table className="ps-ability-table ps-weapons-table" style={{ marginBottom: 6 }}>
+          <thead>
+            <tr>
+              <th>Weapon</th>
+              <th>Type</th>
+              <th className="ps-score-col">Speed</th>
+              <th className="ps-score-col">Dmg S/M</th>
+              <th className="ps-score-col">Dmg L</th>
+              <th>Range</th>
+              <th className="ps-score-col">Size</th>
+              <th className="ps-score-col">THAC0</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <tr key={i} className={i === 0 ? 'ps-row-top' : ''}>
+                <td>&nbsp;</td>
+                <td />
+                <td className="ps-score-col" />
+                <td className="ps-score-col" />
+                <td className="ps-score-col" />
+                <td />
+                <td className="ps-score-col" />
+                <td className="ps-score-col" />
+                <td />
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {/* ── NWPs ──────────────────────────────────────────────────── */}
         <SectionHead>Non-Weapon Proficiencies</SectionHead>
@@ -599,25 +698,6 @@ export function CharacterPrintView({ characterData }) {
             </div>
           </>
         )}
-
-        {/* ── Equipment (blank lines for handwriting) ───────────────── */}
-        <SectionHead>Equipment &amp; Encumbrance</SectionHead>
-        <div className="ps-equipment-block">
-          {Array.from({ length: 14 }).map((_, i) => (
-            <div key={i} className="ps-equipment-line">
-              <span className="ps-eq-num">{i + 1}.</span>
-              <span className="ps-eq-rule" />
-              <span className="ps-eq-wt">____lb</span>
-            </div>
-          ))}
-          <div className="ps-equip-totals">
-            <FillLine label="Total Weight:" />
-            <FillLine label="Max Carry:"
-              value={`${getMuscleStats(effSub('muscle'), isWarrior ? (exPcts?.muscle ?? 0) : 0).maxPress} lbs`} />
-            <FillLine label="Movement:" />
-            <FillLine label="Coins (gp):" />
-          </div>
-        </div>
 
         {/* ── Spellbook ─────────────────────────────────────────────── */}
         {(classGroup === 'wizard' || classGroup === 'priest') && (

@@ -270,8 +270,21 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   ABILITY SCORES TABLE
+   ABILITY SCORES TABLE  +  WEAPONS TABLE
 ───────────────────────────────────────────────────────────────────────────── */
+
+/* Weapons table: tighter font so 9 columns fit */
+.ps-weapons-table th,
+.ps-weapons-table td {
+  font-size: 9px;
+  padding: 3px 4px;
+  white-space: nowrap;
+}
+.ps-weapons-table td:first-child {
+  white-space: normal;  /* weapon name may wrap */
+  min-width: 80px;
+}
+
 .ps-ability-table {
   width: 100%;
   border-collapse: collapse;
