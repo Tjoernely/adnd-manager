@@ -14,7 +14,10 @@
     "import:items-all": "node ../scripts/import-item-descriptions.mjs",
     "import:monsters": "node ../scripts/import-monsters.mjs",
     "recalc:hp": "node recalculate-monster-hp.mjs",
-    "fix:treasure": "node fix-monster-treasure.mjs"
+    "fix:treasure": "node fix-monster-treasure.mjs",
+    "reimport:stats": "node scripts/reimport-monster-stats.mjs",
+    "import:dragon-variants": "node scripts/import-variants.mjs",
+    "set:vanilla-hp": "node scripts/set-vanilla-hp.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
