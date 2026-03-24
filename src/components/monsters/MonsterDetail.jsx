@@ -138,6 +138,19 @@ export function MonsterDetail({ monsterId, onClose }) {
   // Merge variant overrides onto base stats for display
   const disp = variant ? { ...monster, ...variant } : monster;
 
+  // Age-based HP scaling (dragons only — variants don't have their own hit_dice)
+  const ageNum = variant
+    ? parseInt((variant.label ?? '').match(/Age\s+(\d+)/i)?.[1] ?? '0')
+    : 0;
+  const ageScale =
+    ageNum >= 10 ? 1.3  :
+    ageNum >=  7 ? 1.0  :
+    ageNum >=  4 ? 0.75 :
+    ageNum >=  1 ? 0.5  : 1.0;
+  const displayHp = (variant && ageNum > 0 && hpData?.generatedHpFinal != null)
+    ? Math.round(hpData.generatedHpFinal * ageScale)
+    : hpData?.generatedHpFinal;
+
   const sectionHdr = (label) => (
     <div style={{
       fontSize: 10, letterSpacing: 3, color: C.textDim, textTransform: 'uppercase',
@@ -218,7 +231,7 @@ export function MonsterDetail({ monsterId, onClose }) {
             <option value={0}>Base Stats</option>
             {variants.map((v, i) => (
               <option key={i} value={i + 1}>
-                {v.label ?? `Variant ${i + 1}`}{v.body_length ? ` – ${v.body_length}` : ''}
+                {v.label ?? `Variant ${i + 1}`}{v.body_length ? ` (${v.body_length})` : ''}
               </option>
             ))}
           </select>
@@ -257,9 +270,11 @@ export function MonsterDetail({ monsterId, onClose }) {
             <div style={{ fontSize: 9, color: C.textDim, marginTop: 1, fontStyle: 'italic' }}>(range per hit dice)</div>
           </div>
           <div style={{ textAlign: 'center', padding: '8px 10px', background: 'rgba(200,50,50,.08)', borderRadius: 6, border: `1px solid rgba(200,80,50,.3)` }}>
-            <div style={{ fontSize: 22, color: C.red, fontWeight: 'bold', lineHeight: 1 }}>{hpData?.generatedHpFinal ?? '…'}</div>
+            <div style={{ fontSize: 22, color: C.red, fontWeight: 'bold', lineHeight: 1 }}>{displayHp ?? '…'}</div>
             <div style={{ fontSize: 9, letterSpacing: 2, color: C.textDim, marginTop: 3, textTransform: 'uppercase' }}>Generated HP</div>
-            <div style={{ fontSize: 9, color: C.textDim, marginTop: 1 }}>size × type × role × roll</div>
+            <div style={{ fontSize: 9, color: C.textDim, marginTop: 1 }}>
+              {variant && ageNum > 0 ? `age ×${ageScale} scale` : 'size × type × role × roll'}
+            </div>
           </div>
         </div>
         {hpData && (
@@ -269,6 +284,10 @@ export function MonsterDetail({ monsterId, onClose }) {
             <span>Roll: <strong style={{ color: C.gold }}>{hpData.randomRoll}</strong>/20 <span style={{ fontSize: 10, color: pct >= 0 ? C.green : C.red }}>({pctStr})</span></span>
             <span>·</span>
             <span>Final: <strong style={{ color: C.red }}>{hpData.generatedHpFinal}</strong></span>
+            {variant && ageNum > 0 && <>
+              <span>·</span>
+              <span>Age ×<strong style={{ color: C.amber }}>{ageScale}</strong> → <strong style={{ color: C.red }}>{displayHp}</strong></span>
+            </>}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
