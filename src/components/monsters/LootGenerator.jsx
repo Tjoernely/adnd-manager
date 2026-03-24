@@ -185,55 +185,46 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
     } finally { setSmartLoading(false); }
   }
 
-  // ── AI Loot (direct Anthropic API, key from localStorage) ──────────────────
+  // ── AI Loot (proxied through /api/ai/loot to avoid CORS) ───────────────────
   async function handleAiLoot() {
     setAiLoading(true);
     setAiError(null);
     setAiText(null);
     try {
-      const apiKey = localStorage.getItem('anthropic_api_key');
-      if (!apiKey) {
-        throw new Error('No Anthropic API key — set it in ⚙ Settings (top-right).');
-      }
+      const token = localStorage.getItem('dnd_token');
 
-      const monsterList = groups
-        ? groups.map(g => `${g.count > 1 ? `${g.count}× ` : ''}${g.monster?.name ?? 'Monster'}`).join(', ')
-        : monster ? monster.name : 'unknown monsters';
+      const monsters = groups
+        ? groups.map(g => ({ name: g.monster?.name ?? 'Monster', count: g.count ?? 1 }))
+        : monster
+          ? [{ name: monster.name, count: 1 }]
+          : [];
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/ai/loot', {
         method: 'POST',
         headers: {
-          'Content-Type':                   'application/json',
-          'x-api-key':                      apiKey,
-          'anthropic-version':              '2023-06-01',
-          'anthropic-dangerous-allow-browser': 'true',
+          'Content-Type':  'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          model:      'claude-sonnet-4-20250514',
-          max_tokens: 300,
-          messages: [{
-            role: 'user',
-            content: `You are a witty Dungeon Master for AD&D 2nd Edition.
-The party (level ${partyLevel}) defeated: ${monsterList} in a ${terrain} environment. Difficulty: ${difficulty}.
-Generate fun, lore-appropriate loot with a twist.
-Include coins (cp/sp/gp amounts), 1-2 interesting items with brief flavor text (funny or mysterious).
-Max 100 words. Use bullet points only — no intro sentence, no closing remark.`,
-          }],
+          monsters,
+          terrain,
+          difficulty,
+          party_level: partyLevel,
         }),
       });
 
       if (!response.ok) {
         const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody?.error?.message ?? `API error ${response.status}`);
+        throw new Error(errBody?.error ?? `Server error ${response.status}`);
       }
 
       const data = await response.json();
-      const text = data?.content?.[0]?.text ?? '';
+      const text = data?.text ?? '';
       if (!text) throw new Error('Empty response from AI');
       setAiText(text);
       setActiveTab('ai');
     } catch (e) {
-      setAiError(e.message ?? 'AI request failed — check your API key in Settings.');
+      setAiError(e.message ?? 'AI request failed — is the server running?');
     } finally { setAiLoading(false); }
   }
 

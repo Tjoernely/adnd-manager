@@ -14,6 +14,15 @@ if [ ! -f /var/www/adnd-manager/ecosystem.config.cjs ]; then
   exit 1
 fi
 
+# AI loot generation requires ANTHROPIC_API_KEY in ecosystem.config.cjs.
+# Example entry in the env block:
+#   ANTHROPIC_API_KEY: 'sk-ant-...'
+# Without this, /api/ai/loot and /api/ai/prompt return HTTP 503.
+if ! grep -q "ANTHROPIC_API_KEY" /var/www/adnd-manager/ecosystem.config.cjs 2>/dev/null; then
+  echo "WARNING: ANTHROPIC_API_KEY is not set in ecosystem.config.cjs."
+  echo "AI loot generation (/api/ai/loot, /api/ai/prompt) will return 503 until it is added."
+fi
+
 # Ensure nginx config is correct
 sudo tee /etc/nginx/sites-enabled/adnd-manager > /dev/null << 'NGINXEOF'
 server {

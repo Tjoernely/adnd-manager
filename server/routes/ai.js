@@ -28,6 +28,39 @@ function getClient() {
   return _client;
 }
 
+// ── POST /api/ai/prompt ───────────────────────────────────────────────────────
+// Generic text proxy — replaces direct browser calls to api.anthropic.com.
+// Body: { systemPrompt?: string, userPrompt: string, maxTokens?: number }
+// Returns: { text: string }
+router.post('/prompt', auth, async (req, res) => {
+  try {
+    const { systemPrompt, userPrompt, maxTokens = 300 } = req.body ?? {};
+    if (!userPrompt) return res.status(400).json({ error: '"userPrompt" is required' });
+
+    const client = getClient();
+    const msgOpts = {
+      model:      'claude-sonnet-4-20250514',
+      max_tokens: Math.min(Number(maxTokens) || 300, 4096),
+      messages:   [{ role: 'user', content: userPrompt }],
+    };
+    if (systemPrompt) msgOpts.system = systemPrompt;
+
+    const message = await client.messages.create(msgOpts);
+    const text = message.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('');
+
+    res.json({ text });
+  } catch (e) {
+    console.error('[ai/prompt]', e.message);
+    if (e.message?.includes('ANTHROPIC_API_KEY')) {
+      return res.status(503).json({ error: 'AI not configured on this server' });
+    }
+    res.status(500).json({ error: 'AI request failed', detail: e.message });
+  }
+});
+
 // ── POST /api/ai/loot ─────────────────────────────────────────────────────────
 // Returns plain-text lore-friendly loot description (no DM gate, just auth).
 router.post('/loot', auth, async (req, res) => {
