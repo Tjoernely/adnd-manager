@@ -4,6 +4,14 @@
  * For monsters whose stats are missing, fetches the wiki page and writes all
  * known Creature template fields back to the DB.
  *
+ * Fix log (v4):
+ *   • FIELD_MAP massively widened with short-form aliases (ac, hd, na, ml,
+ *     mv, att, dmg, al, sa, sd, mr, treas, freq, org, etc.) that the wiki
+ *     uses instead of the long canonical names.
+ *   • --debug-keys [N] flag: for the first N "no fields" cases, prints the
+ *     raw extracted template keys so new aliases can be identified.
+ *   • Error logging improved: prints monster name + full error on its own line.
+ *
  * Fix log (v3):
  *   • URL fallbacks: when the stored wiki_url returns 404, tries alternative
  *     title formats ("Base, Sub" → "Base_(Sub)", "Sub_(Base)") and updates
@@ -22,6 +30,7 @@
  *   node scripts/reimport-monster-stats.mjs --dry-run
  *   node scripts/reimport-monster-stats.mjs --limit 20
  *   node scripts/reimport-monster-stats.mjs --name "Aarakocra, Athasian"
+ *   node scripts/reimport-monster-stats.mjs --debug-keys 10   (show raw keys)
  *
  * Env vars: DB_HOST  DB_PORT  DB_NAME  DB_USER  DB_PASSWORD  DB_SSL
  */
@@ -41,13 +50,16 @@ try {
 } catch (_) {}
 
 // ── CLI flags ─────────────────────────────────────────────────────────────────
-const args        = process.argv.slice(2);
-const DRY_RUN     = args.includes('--dry-run');
-const limitIdx    = args.indexOf('--limit');
-const LIMIT       = limitIdx > -1 ? parseInt(args[limitIdx + 1]) : Infinity;
-const nameIdx     = args.indexOf('--name');
-const NAME_FILTER = nameIdx > -1 ? args[nameIdx + 1] : null;
-const DELAY_MS    = 250;
+const args           = process.argv.slice(2);
+const DRY_RUN        = args.includes('--dry-run');
+const limitIdx       = args.indexOf('--limit');
+const LIMIT          = limitIdx > -1 ? parseInt(args[limitIdx + 1]) : Infinity;
+const nameIdx        = args.indexOf('--name');
+const NAME_FILTER    = nameIdx > -1 ? args[nameIdx + 1] : null;
+const debugKeysIdx   = args.indexOf('--debug-keys');
+// --debug-keys N  → print raw template keys for first N "no fields" monsters
+const DEBUG_KEYS_MAX = debugKeysIdx > -1 ? (parseInt(args[debugKeysIdx + 1]) || 20) : 0;
+const DELAY_MS       = 250;
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 const pool = new pg.Pool({
@@ -64,43 +76,146 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // ── Field maps ────────────────────────────────────────────────────────────────
 
 const FIELD_MAP = {
+  // ── Armor Class ───────────────────────────────────────────────────────────
   armorclass:        'armor_class',
+  ac:                'armor_class',
+  armourclass:       'armor_class',  // British spelling
+  armour:            'armor_class',
+
+  // ── Hit Dice ──────────────────────────────────────────────────────────────
   hitdice:           'hit_dice',
+  hd:                'hit_dice',
+  hitdie:            'hit_dice',
+  hd1:               'hit_dice',     // some templates use hd1/hd2 for range
+  dice:              'hit_dice',
+
+  // ── THAC0 ─────────────────────────────────────────────────────────────────
   thac0:             'thac0',
+  thaco:             'thac0',        // common mis-spelling
+  thac:              'thac0',
+  tohit:             'thac0',
+
+  // ── Movement ──────────────────────────────────────────────────────────────
   movement:          'movement',
   move:              'movement',
+  mv:                'movement',
+  spd:               'movement',
+  speed:             'movement',
+  movementrate:      'movement',
+
+  // ── Attacks ───────────────────────────────────────────────────────────────
   numberofattacks:   'attacks',
   noattacks:         'attacks',
+  numberattacks:     'attacks',
   attacks:           'attacks',
+  att:               'attacks',
+  atk:               'attacks',
+  atts:              'attacks',
+  noa:               'attacks',
+
+  // ── Damage ────────────────────────────────────────────────────────────────
   damageattack:      'damage',
   damageperhit:      'damage',
+  damageperattack:   'damage',
   damage:            'damage',
+  dmg:               'damage',
+  dam:               'damage',
+
+  // ── Alignment ─────────────────────────────────────────────────────────────
   alignment:         'alignment',
+  align:             'alignment',
+  al:                'alignment',
+
+  // ── Number Appearing ──────────────────────────────────────────────────────
   numberappearing:   'no_appearing',
   noappearing:       'no_appearing',
+  numappearing:      'no_appearing',
+  na:                'no_appearing',
+  appearing:         'no_appearing',
+
+  // ── Size ──────────────────────────────────────────────────────────────────
   size:              'size',
+  sz:                'size',
+
+  // ── Magic Resistance ──────────────────────────────────────────────────────
   magicalresistance: 'magic_resistance',
+  magicresistance:   'magic_resistance',
   mr:                'magic_resistance',
+  magicres:          'magic_resistance',
+  magres:            'magic_resistance',
+  resistance:        'magic_resistance',
+
+  // ── Special Attacks ───────────────────────────────────────────────────────
   specialattack:     'special_attacks',
   specialattacks:    'special_attacks',
+  sa:                'special_attacks',
+  specatt:           'special_attacks',
+  spec:              'special_attacks',
+
+  // ── Special Defenses ──────────────────────────────────────────────────────
   specialdefense:    'special_defenses',
   specialdefenses:   'special_defenses',
+  sd:                'special_defenses',
+  specdef:           'special_defenses',
+
+  // ── Morale ────────────────────────────────────────────────────────────────
   moral:             'morale',
   morale:            'morale',
+  ml:                'morale',
+  mor:               'morale',
+
+  // ── Intelligence ──────────────────────────────────────────────────────────
   intelligence:      'intelligence',
+  intel:             'intelligence',
+  int:               'intelligence',
+  iq:                'intelligence',
+
+  // ── Habitat / Terrain ─────────────────────────────────────────────────────
   terrain:           'habitat',
   habitat:           'habitat',
+  terr:              'habitat',
+  climate:           'habitat',
+  climateterrain:    'habitat',
+
+  // ── Frequency ─────────────────────────────────────────────────────────────
   frequency:         'frequency',
+  freq:              'frequency',
+  rarity:            'frequency',
+
+  // ── Organization ──────────────────────────────────────────────────────────
   organization:      'organization',
+  org:               'organization',
+  social:            'organization',
+
+  // ── Activity Cycle ────────────────────────────────────────────────────────
   activitycycle:     'activity_cycle',
+  actcycle:          'activity_cycle',
+  active:            'activity_cycle',
+  activecycle:       'activity_cycle',
+
+  // ── Diet ──────────────────────────────────────────────────────────────────
   diet:              'diet',
+
+  // ── XP Value ──────────────────────────────────────────────────────────────
   xp:                'xp_value',
   xpvalue:           'xp_value',
   experience:        'xp_value',
+  expvalue:          'xp_value',
+  xpval:             'xp_value',
+  exp:               'xp_value',
+
+  // ── Treasure ──────────────────────────────────────────────────────────────
   treasure:          'treasure',
   treasuretype:      'treasure',
+  treas:             'treasure',
+  tt:                'treasure',
+  treastype:         'treasure',
+
+  // ── Save As ───────────────────────────────────────────────────────────────
   saveas:            'save_as',
   saves:             'save_as',
+  save:              'save_as',
+  savingthrow:       'save_as',
 };
 
 const INT_COLS = new Set(['armor_class', 'thac0', 'xp_value', 'morale']);
@@ -381,9 +496,10 @@ async function main() {
   console.log('╔══════════════════════════════════════════════════════╗');
   console.log('║  Monster Stats Re-Importer v3 (wiki template parser) ║');
   console.log('╚══════════════════════════════════════════════════════╝');
-  console.log(`  Mode   : ${DRY_RUN ? 'DRY RUN (no DB writes)' : 'LIVE'}`);
-  console.log(`  Limit  : ${LIMIT === Infinity ? 'all' : LIMIT}`);
-  if (NAME_FILTER) console.log(`  Filter : name ILIKE '%${NAME_FILTER}%'`);
+  console.log(`  Mode      : ${DRY_RUN ? 'DRY RUN (no DB writes)' : 'LIVE'}`);
+  console.log(`  Limit     : ${LIMIT === Infinity ? 'all' : LIMIT}`);
+  if (NAME_FILTER)    console.log(`  Filter    : name ILIKE '%${NAME_FILTER}%'`);
+  if (DEBUG_KEYS_MAX) console.log(`  Debug keys: first ${DEBUG_KEYS_MAX} "no fields" cases`);
   console.log('');
 
   let query, params;
@@ -407,6 +523,7 @@ async function main() {
   console.log(`  Found ${rows.length} monsters to process.\n`);
 
   let updated = 0, urlFixed = 0, notFound = 0, noTemplate = 0, noFields = 0, errors = 0;
+  let debugKeysSeen = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const { id, name, wiki_url } = rows[i];
@@ -445,7 +562,22 @@ async function main() {
       if (!wikiFields) { noTemplate++; await sleep(DELAY_MS); continue; }
 
       const updates = mapFields(wikiFields);
-      if (Object.keys(updates).length === 0) { noFields++; await sleep(DELAY_MS); continue; }
+      if (Object.keys(updates).length === 0) {
+        noFields++;
+        // --debug-keys: dump the raw extracted keys so we can add them to FIELD_MAP
+        if (DEBUG_KEYS_MAX && debugKeysSeen < DEBUG_KEYS_MAX) {
+          debugKeysSeen++;
+          const allKeys = Object.keys(wikiFields);
+          console.log(`\n  [debug-keys] "${name}"`);
+          console.log(`    raw keys (${allKeys.length}): ${allKeys.join(', ')}`);
+          // Show a sample value for each key
+          for (const k of allKeys.slice(0, 12)) {
+            console.log(`      ${k.padEnd(24)} = ${String(wikiFields[k]).slice(0, 60)}`);
+          }
+        }
+        await sleep(DELAY_MS);
+        continue;
+      }
 
       const cols       = Object.keys(updates);
       const vals       = Object.values(updates);
@@ -462,7 +594,8 @@ async function main() {
       updated++;
     } catch (e) {
       errors++;
-      process.stdout.write(`  ✗ ${e.message?.slice(0, 50)}`);
+      // Full error on its own line so it's readable
+      console.log(`\n  ✗ [${name}] ${e.message}`);
     }
 
     await sleep(DELAY_MS);
@@ -474,7 +607,7 @@ async function main() {
   console.log(`  URL fixed    : ${urlFixed}`);
   console.log(`  Not found    : ${notFound}`);
   console.log(`  No template  : ${noTemplate}`);
-  console.log(`  No fields    : ${noFields}`);
+  console.log(`  No fields    : ${noFields}  ← run with --debug-keys to inspect`);
   console.log(`  Errors       : ${errors}`);
   if (DRY_RUN) console.log('\n  (Dry run — no changes written to DB)');
 
