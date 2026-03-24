@@ -16,7 +16,7 @@ const { auth }      = require('../middleware/auth');
 
 const router = express.Router();
 
-// Lazy-init the client so missing key only errors on actual use
+// Lazy-init the shared server-key client (only used when env key is present)
 let _client = null;
 function getClient() {
   if (!_client) {
@@ -28,6 +28,15 @@ function getClient() {
   return _client;
 }
 
+// Per-request client: env key takes priority, then x-anthropic-key header.
+function getClientForRequest(req) {
+  const apiKey = process.env.ANTHROPIC_API_KEY || req.headers['x-anthropic-key'];
+  if (!apiKey) return null;
+  // Reuse the cached client when using the server-side env key
+  if (apiKey === process.env.ANTHROPIC_API_KEY) return getClient();
+  return new Anthropic({ apiKey });
+}
+
 // ── POST /api/ai/prompt ───────────────────────────────────────────────────────
 // Generic text proxy — replaces direct browser calls to api.anthropic.com.
 // Body: { systemPrompt?: string, userPrompt: string, maxTokens?: number }
@@ -37,7 +46,9 @@ router.post('/prompt', auth, async (req, res) => {
     const { systemPrompt, userPrompt, maxTokens = 300 } = req.body ?? {};
     if (!userPrompt) return res.status(400).json({ error: '"userPrompt" is required' });
 
-    const client = getClient();
+    const client = getClientForRequest(req);
+    if (!client) return res.status(400).json({ error: 'AI not configured — provide an Anthropic API key' });
+
     const msgOpts = {
       model:      'claude-sonnet-4-20250514',
       max_tokens: Math.min(Number(maxTokens) || 300, 4096),
@@ -54,9 +65,6 @@ router.post('/prompt', auth, async (req, res) => {
     res.json({ text });
   } catch (e) {
     console.error('[ai/prompt]', e.message);
-    if (e.message?.includes('ANTHROPIC_API_KEY')) {
-      return res.status(503).json({ error: 'AI not configured on this server' });
-    }
     res.status(500).json({ error: 'AI request failed', detail: e.message });
   }
 });
@@ -67,11 +75,12 @@ router.post('/loot', auth, async (req, res) => {
   try {
     const { monsters = [], terrain = 'dungeon', difficulty = 'Medium', party_level = 5 } = req.body ?? {};
 
+    const client = getClientForRequest(req);
+    if (!client) return res.status(400).json({ error: 'AI not configured — provide an Anthropic API key' });
+
     const monsterDesc = monsters.length
       ? monsters.map(m => `${m.count > 1 ? `${m.count}× ` : ''}${m.name}`).join(', ')
       : 'some monsters';
-
-    const client = getClient();
     const message = await client.messages.create({
       model:      'claude-sonnet-4-6',
       max_tokens: 350,

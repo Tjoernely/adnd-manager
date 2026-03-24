@@ -191,7 +191,8 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
     setAiError(null);
     setAiText(null);
     try {
-      const token = localStorage.getItem('dnd_token');
+      const token        = localStorage.getItem('dnd_token');
+      const anthropicKey = localStorage.getItem('anthropic_api_key');
 
       const monsters = groups
         ? groups.map(g => ({ name: g.monster?.name ?? 'Monster', count: g.count ?? 1 }))
@@ -202,8 +203,9 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
       const response = await fetch('/api/ai/loot', {
         method: 'POST',
         headers: {
-          'Content-Type':  'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type':    'application/json',
+          ...(token        ? { 'Authorization':  `Bearer ${token}` } : {}),
+          ...(anthropicKey ? { 'x-anthropic-key': anthropicKey     } : {}),
         },
         body: JSON.stringify({
           monsters,

@@ -6,8 +6,8 @@
  * The browser just needs a valid session JWT (dnd_token in localStorage).
  */
 
-export function hasAnthropicKey() { return true; }  // key is server-side; always available
-export function getAnthropicKey() { return null;  }  // not used client-side
+export function getAnthropicKey() { return localStorage.getItem('anthropic_api_key') ?? null; }
+export function hasAnthropicKey() { return !!getAnthropicKey(); }
 
 // OpenAI key (for DALL-E image generation) — still stored client-side
 export function getOpenAIKey()    { return localStorage.getItem('openai_api_key') ?? null; }
@@ -24,15 +24,17 @@ export function hasOpenAIKey()    { return !!getOpenAIKey(); }
  * @returns {Promise<object>}  parsed JSON
  */
 export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096 }) {
-  const token = localStorage.getItem('dnd_token');
+  const token        = localStorage.getItem('dnd_token');
+  const anthropicKey = getAnthropicKey();
 
   console.log('[callClaude] Proxying via /api/ai/prompt — maxTokens:', maxTokens);
 
   const resp = await fetch('/api/ai/prompt', {
     method: 'POST',
     headers: {
-      'Content-Type':  'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      'Content-Type':    'application/json',
+      ...(token        ? { 'Authorization':  `Bearer ${token}` } : {}),
+      ...(anthropicKey ? { 'x-anthropic-key': anthropicKey     } : {}),
     },
     body: JSON.stringify({ systemPrompt, userPrompt, maxTokens }),
   });
