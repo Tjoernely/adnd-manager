@@ -9,39 +9,16 @@ import { useState, useEffect } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
 import { rollLoot } from '../../rules-engine/lootRollEngine.js';
-import { SUB_ABILITIES, PARENT_STAT_LABELS } from '../../data/abilities.js';
+import { CharacterPrintView } from '../characters/CharacterPrintView.jsx';
 import { SLOT_LABELS } from '../../constants/equipmentSlots.js';
-import { ALL_NWP } from '../../data/proficiencies.js';
-import { WEAPON_GROUPS_49 } from '../../data/weapons.js';
 import { RACES } from '../../data/races.js';
 import { ALL_CLASSES } from '../../data/classes.js';
 
-// ── Build weapon / NWP name lookup maps (module-level, computed once) ──────────
-const _weapNameMap = {};
-WEAPON_GROUPS_49.forEach(bg => {
-  _weapNameMap[bg.id] = bg.broad;
-  bg.tightGroups.forEach(tg => {
-    _weapNameMap[tg.id] = tg.name;
-    (tg.weapons  ?? []).forEach(w => { _weapNameMap[w.id] = w.name; });
-  });
-  (bg.unrelated ?? []).forEach(w => { _weapNameMap[w.id] = w.name; });
-});
-const _nwpNameMap = {};
-ALL_NWP.forEach(p => { _nwpNameMap[p.id] = p.name; });
-
-// ── Race / class ID → display name lookup maps ─────────────────────────────
+// ── Race / class ID → display name lookup maps (used in panel header & list) ──
 const _raceNameMap  = {};
 RACES.forEach(r => { _raceNameMap[r.id] = r.label; });
 const _classNameMap = {};
 ALL_CLASSES.forEach(c => { _classNameMap[c.id] = c.label; });
-
-function formatWeapProf(id) {
-  const name = _weapNameMap[id];
-  if (!name) return id;                               // unknown id — show raw
-  if (id.startsWith('tg_')) return `${name} (Tight)`;
-  if (id.startsWith('wg_')) return `${name} (Broad)`;
-  return name;
-}
 
 const TABS = [
   { id: 'characters', icon: '👥', label: 'Characters' },
@@ -1284,22 +1261,6 @@ function NpcsTab({ npcs, isDM, onOpenModule, sectionCard }) {
   );
 }
 
-// ── THAC0 helper (AD&D 2E PHB Tables 53-57) ───────────────────────────────────
-function getBaseThac0(className, level) {
-  const cls = String(className ?? '').toLowerCase();
-  const lvl = parseInt(level) || 1;
-  // Warriors: improve 1 per level
-  if (['fighter','ranger','paladin'].includes(cls)) return Math.max(1, 21 - lvl);
-  // Priests: improve 2 per 3 levels (1-3→20, 4-6→18, 7-9→16…)
-  if (['cleric','druid','shaman','priest'].includes(cls)) return 20 - Math.floor((lvl - 1) / 3) * 2;
-  // Rogues: improve 1 per 2 levels (1-4→20, 5-8→18…)
-  if (['thief','bard'].includes(cls)) return 20 - Math.floor((lvl - 1) / 4) * 2;
-  // Wizards: improve 1 per 3 levels (1-5→20, 6-10→18…)
-  if (['mage','wizard','illusionist','specialist','necromancer'].includes(cls))
-    return 20 - Math.floor((lvl - 1) / 5) * 2;
-  return 20; // unknown / NPC class
-}
-
 // ── Character Panel (inline detail pane) ─────────────────────────────────────
 
 const ID_STATES = ['unknown', 'suspected', 'identified'];
@@ -1333,10 +1294,7 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const [addNotes,   setAddNotes]   = useState('');
   const [addWorking, setAddWorking] = useState(false);
 
-  const cd   = char.character_data ?? {};
-  // Support both key names: modern 'baseScores' and any legacy 'base' alias
-  const base = cd.baseScores ?? cd.base ?? {};
-  const mods = cd.splitMods  ?? {};
+  const cd = char.character_data ?? {};
 
   useEffect(() => {
     let cancelled = false;
@@ -1505,116 +1463,12 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
 
           {/* ════════════════════════ CHARACTER SHEET ════════════════════════ */}
           {panelTab === 'sheet' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-              {/* Identity block */}
-              <div style={{
-                background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
-                borderRadius: 7, padding: '10px 14px',
-              }}>
-                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                  <SheetField label="Race"      value={raceName} />
-                  <SheetField label="Class"     value={className} />
-                  {kitName && <SheetField label="Kit" value={kitName} />}
-                  <SheetField label="Level"     value={level} />
-                  <SheetField label="Alignment" value={cd.alignment ?? '—'} />
-                  <SheetField label="HP"        value={cd.maxHp ?? cd.hp ?? '—'} />
-                  <SheetField label="THAC0"     value={cd.selectedClass && cd.charLevel
-                    ? getBaseThac0(cd.selectedClass, cd.charLevel)
-                    : '—'} />
-                  <SheetField label="Base AC"   value="—" />
-                </div>
-              </div>
-
-              {/* Ability scores */}
-              <div>
-                <PanelSectionLabel>Ability Scores</PanelSectionLabel>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {Object.entries(SUB_ABILITIES).map(([parentKey, subs]) => {
-                    // Support both uppercase keys (STR) and lowercase (str) for legacy saves
-                    const parentScore = base[parentKey] ?? base[parentKey.toLowerCase()] ?? 0;
-                    return (
-                      <div key={parentKey} style={{
-                        background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
-                        borderRadius: 6, padding: '8px 12px',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, color: C.textDim, width: 90, textTransform: 'uppercase', letterSpacing: 1 }}>
-                            {PARENT_STAT_LABELS[parentKey]}
-                          </span>
-                          <StatBadge value={parentScore} />
-                        </div>
-                        {subs.map(sub => {
-                          const subVal = parentScore + (mods[sub.id] ?? 0);
-                          return (
-                            <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                              <span style={{ fontSize: 10, color: C.textDim, width: 90, paddingLeft: 12 }}>
-                                {sub.label}
-                              </span>
-                              <StatBadge value={subVal} small />
-                              {mods[sub.id] ? (
-                                <span style={{ fontSize: 9, color: mods[sub.id] > 0 ? C.green : C.red }}>
-                                  {mods[sub.id] > 0 ? `+${mods[sub.id]}` : mods[sub.id]}
-                                </span>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Weapon proficiencies */}
-              {cd.weapPicked && Object.keys(cd.weapPicked).length > 0 && (
-                <div>
-                  <PanelSectionLabel>Weapon Proficiencies</PanelSectionLabel>
-                  <div style={{
-                    background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
-                    borderRadius: 6, padding: '8px 12px',
-                    display: 'flex', flexWrap: 'wrap', gap: 6,
-                  }}>
-                    {Object.entries(cd.weapPicked).map(([wid, level]) => (
-                      <span key={wid} style={{
-                        fontSize: 10, color: C.text, background: 'rgba(0,0,0,.3)',
-                        border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px',
-                      }}>
-                        {formatWeapProf(wid)}
-                        {level && level !== 'single' && (
-                          <span style={{ color: C.textDim, marginLeft: 3 }}>
-                            ({level})
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* NWPs */}
-              {cd.profsPicked && Object.keys(cd.profsPicked).length > 0 && (
-                <div>
-                  <PanelSectionLabel>Nonweapon Proficiencies</PanelSectionLabel>
-                  <div style={{
-                    background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
-                    borderRadius: 6, padding: '8px 12px',
-                    display: 'flex', flexWrap: 'wrap', gap: 6,
-                  }}>
-                    {Object.keys(cd.profsPicked).filter(pid => cd.profsPicked[pid]).map(pid => (
-                      <span key={pid} style={{
-                        fontSize: 10, color: C.text, background: 'rgba(0,0,0,.3)',
-                        border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px',
-                      }}>
-                        {_nwpNameMap[pid] ?? pid}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div>
+              {/* Print view renders inside the dark panel — light parchment bg is intentional */}
+              <CharacterPrintView characterData={cd} />
 
               {/* Open in Builder */}
-              <div style={{ paddingTop: 4 }}>
+              <div style={{ paddingTop: 12, paddingBottom: 4 }}>
                 <button
                   onClick={() => { onClose(); onNavigate?.('characters'); }}
                   style={{
@@ -1860,46 +1714,3 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   );
 }
 
-// ── Sheet sub-components ──────────────────────────────────────────────────────
-
-function PanelSectionLabel({ children }) {
-  return (
-    <div style={{
-      fontSize: 9, letterSpacing: 2, textTransform: 'uppercase',
-      color: C.gold, marginBottom: 6, paddingBottom: 4,
-      borderBottom: `1px solid ${C.border}`,
-    }}>{children}</div>
-  );
-}
-
-function SheetField({ label, value }) {
-  return (
-    <div>
-      <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontSize: 13, color: C.text, fontWeight: 'bold' }}>{value ?? '—'}</div>
-    </div>
-  );
-}
-
-function StatBadge({ value, small }) {
-  const color = !value ? C.textDim
-    : value >= 17 ? '#ffd700'
-    : value >= 14 ? C.green
-    : value >= 10 ? C.text
-    : value >=  7 ? C.amber
-    : C.red;
-  return (
-    <span style={{
-      display: 'inline-block',
-      minWidth: small ? 26 : 30,
-      textAlign: 'center',
-      fontSize: small ? 11 : 13,
-      fontWeight: 'bold',
-      color,
-      background: 'rgba(0,0,0,.3)',
-      border: `1px solid ${color}44`,
-      borderRadius: 4,
-      padding: small ? '1px 4px' : '2px 6px',
-    }}>{value || '—'}</span>
-  );
-}

@@ -812,7 +812,7 @@ export default function App() {
       )}
 
       {/* ══════════ PRINT SHEET ══════════ */}
-      <PrintSheet {...char} isOpen={showPrint} onClose={()=>setShowPrint(false)} />
+      <PrintSheet characterData={char.serializeCharacter()} isOpen={showPrint} onClose={()=>setShowPrint(false)} />
 
       {/* ══════════ MAP MANAGER ══════════ */}
       <MapManager
