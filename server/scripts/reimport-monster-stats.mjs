@@ -105,6 +105,7 @@ const FIELD_MAP = {
 
   // ── Attacks ───────────────────────────────────────────────────────────────
   numberofattacks:   'attacks',
+  noofattacks:       'attacks',  // used as base key after stripping suffix from noofattacks1/2
   noattacks:         'attacks',
   numberattacks:     'attacks',
   attacks:           'attacks',
@@ -421,6 +422,71 @@ function scanKeyValueLines(wikitext) {
 }
 
 /**
+ * Handle dual-variant templates that use numbered suffixes for each column
+ * (e.g. armorclass1/armorclass2, hitdice1/hitdice2, name1/name2).
+ *
+ * This is the most common multi-variant pattern on the wiki — a single
+ * {{Creature}} template with every field duplicated as field1/field2.
+ * name1/name2 identify the sub-types ("Warrior"/"Elder", "Adult"/"Young").
+ *
+ * Returns a plain fields object with suffixes stripped, or null if the
+ * template doesn't use this pattern.
+ */
+function resolveNumberedSuffixFields(rawFields, monsterName) {
+  // Detect the pattern: at least 4 keys ending in a digit
+  const numberedKeys = Object.keys(rawFields).filter(k => /\d+$/.test(k));
+  if (numberedKeys.length < 4) return null;
+
+  // Find distinct suffix values ('1', '2', sometimes more)
+  const suffixes = [...new Set(numberedKeys.map(k => k.match(/(\d+)$/)[1]))].sort();
+  if (suffixes.length < 2) return null;
+
+  // Determine which suffix matches this monster's sub-type via name1/name2
+  let targetSuffix = suffixes[0]; // default: first variant
+
+  if (monsterName) {
+    // "Aartuk, Elder"             → parts = ["elder"]
+    // "Amphibian, Poisonous, Frog"→ parts = ["poisonous", "frog"]
+    const parts = monsterName.split(',').slice(1).map(p => p.trim().toLowerCase());
+
+    outer:
+    for (const suf of suffixes) {
+      const nameVal = (rawFields[`name${suf}`] ?? '').toLowerCase().trim();
+      if (!nameVal) continue;
+      // Strip trailing 's' for loose plural matching ("Frogs" ↔ "Frog")
+      const nameNorm = nameVal.replace(/s$/, '');
+      for (const part of parts) {
+        const partNorm = part.replace(/s$/, '');
+        if (partNorm.length >= 3 && (nameNorm.includes(partNorm) || partNorm.includes(nameNorm))) {
+          targetSuffix = suf;
+          break outer;
+        }
+      }
+    }
+  }
+
+  // Build result: de-suffixed target fields + any un-suffixed non-metadata fields
+  const SKIP = new Set(['caption', 'name', 'source', 'source1', 'source2', 'image',
+                        'name1', 'name2', 'name3', 'name4']);
+  const result = {};
+
+  // Plain (non-numbered) fields first
+  for (const [key, val] of Object.entries(rawFields)) {
+    if (!/\d+$/.test(key) && !SKIP.has(key) && val) result[key] = val;
+  }
+
+  // Numbered fields for the chosen suffix — strip the suffix to get base key
+  for (const [key, val] of Object.entries(rawFields)) {
+    if (key.endsWith(targetSuffix)) {
+      const baseKey = key.slice(0, key.length - targetSuffix.length);
+      if (baseKey && !SKIP.has(baseKey) && val) result[baseKey] = val;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+/**
  * Extract wiki fields, choosing the best-matching template when there are
  * multiple (sub-type pages like "Aartuk, Elder" / "Aartuk, Warrior").
  *
@@ -445,12 +511,19 @@ function extractWikiFields(wikitext, monsterName = null) {
     return Object.keys(fields).length >= 2 ? fields : null;
   }
 
+  // ── Strategy A: numbered-suffix dual-variant template ─────────────────────
+  // Most common multi-variant pattern: single template, every field doubled as
+  // field1/field2.  Resolve before trying multi-template header matching.
+  const firstFields = allTemplates[0].fields;
+  const resolved = resolveNumberedSuffixFields(firstFields, monsterName);
+  if (resolved) return resolved;
+
+  // ── Strategy B: single template, no suffix — return as-is ─────────────────
   if (allTemplates.length === 1 || !monsterName) {
-    return allTemplates[0].fields;
+    return firstFields;
   }
 
-  // Multiple templates on the page — try to pick the one closest to the
-  // matching section header.
+  // ── Strategy C: multiple separate {{Creature}} blocks — match by section ───
   // "Aartuk, Elder"   → subtype "Elder"
   // "Aasimon, Light"  → subtype "Light"
   const commaIdx = monsterName.indexOf(',');
@@ -461,8 +534,7 @@ function extractWikiFields(wikitext, monsterName = null) {
         return fields;
       }
     }
-    // No header match — try matching the subtype against a 'name' field inside
-    // the template itself, if present
+    // No header match — try 'name' field inside the template
     for (const { fields } of allTemplates) {
       const tmplName = (fields.name ?? '').toLowerCase();
       if (tmplName.includes(subtype)) return fields;
@@ -470,7 +542,7 @@ function extractWikiFields(wikitext, monsterName = null) {
   }
 
   // Fall back to first template
-  return allTemplates[0].fields;
+  return firstFields;
 }
 
 // ── Field value mapper ────────────────────────────────────────────────────────
