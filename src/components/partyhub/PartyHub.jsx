@@ -342,8 +342,8 @@ function CharactersTab({
       {/* ── Two-column layout: list (left) + detail (right) ── */}
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
 
-        {/* LEFT: character list */}
-        <div style={{ width: 250, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* LEFT: character list — 30 % */}
+        <div style={{ width: '30%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {characters.map(char => {
             const cd       = char.character_data ?? {};
             const portrait = cd.portraitUrl ?? cd.portrait_url ?? null;
@@ -1276,6 +1276,22 @@ function NpcsTab({ npcs, isDM, onOpenModule, sectionCard }) {
   );
 }
 
+// ── THAC0 helper (AD&D 2E PHB Tables 53-57) ───────────────────────────────────
+function getBaseThac0(className, level) {
+  const cls = String(className ?? '').toLowerCase();
+  const lvl = parseInt(level) || 1;
+  // Warriors: improve 1 per level
+  if (['fighter','ranger','paladin'].includes(cls)) return Math.max(1, 21 - lvl);
+  // Priests: improve 2 per 3 levels (1-3→20, 4-6→18, 7-9→16…)
+  if (['cleric','druid','shaman','priest'].includes(cls)) return 20 - Math.floor((lvl - 1) / 3) * 2;
+  // Rogues: improve 1 per 2 levels (1-4→20, 5-8→18…)
+  if (['thief','bard'].includes(cls)) return 20 - Math.floor((lvl - 1) / 4) * 2;
+  // Wizards: improve 1 per 3 levels (1-5→20, 6-10→18…)
+  if (['mage','wizard','illusionist','specialist','necromancer'].includes(cls))
+    return 20 - Math.floor((lvl - 1) / 5) * 2;
+  return 20; // unknown / NPC class
+}
+
 // ── Character Panel (inline detail pane) ─────────────────────────────────────
 
 const ID_STATES = ['unknown', 'suspected', 'identified'];
@@ -1312,6 +1328,16 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const cd   = char.character_data ?? {};
   const base = cd.baseScores ?? {};
   const mods = cd.splitMods  ?? {};
+
+  // ── Diagnostic: log the raw character data so field names can be verified ──
+  useEffect(() => {
+    console.log('[PartyHub] selected char id=%s name=%s', char.id, char.name);
+    console.log('[PartyHub] character_data:', char.character_data);
+    console.log('[PartyHub] baseScores:', char.character_data?.baseScores);
+    console.log('[PartyHub] splitMods:', char.character_data?.splitMods);
+    console.log('[PartyHub] weapPicked:', char.character_data?.weapPicked);
+    console.log('[PartyHub] profsPicked:', char.character_data?.profsPicked);
+  }, [char.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -1493,8 +1519,10 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                   {kitName && <SheetField label="Kit" value={kitName} />}
                   <SheetField label="Level"     value={level} />
                   <SheetField label="Alignment" value={cd.alignment ?? '—'} />
-                  <SheetField label="HP"        value="—" />
-                  <SheetField label="THAC0"     value="—" />
+                  <SheetField label="HP"        value={cd.maxHp ?? cd.hp ?? '—'} />
+                  <SheetField label="THAC0"     value={cd.selectedClass && cd.charLevel
+                    ? getBaseThac0(cd.selectedClass, cd.charLevel)
+                    : '—'} />
                   <SheetField label="Base AC"   value="—" />
                 </div>
               </div>
@@ -1504,7 +1532,8 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                 <PanelSectionLabel>Ability Scores</PanelSectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {Object.entries(SUB_ABILITIES).map(([parentKey, subs]) => {
-                    const parentScore = base[parentKey] ?? 0;
+                    // Support both uppercase keys (STR) and lowercase (str) for legacy saves
+                    const parentScore = base[parentKey] ?? base[parentKey.toLowerCase()] ?? 0;
                     return (
                       <div key={parentKey} style={{
                         background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
