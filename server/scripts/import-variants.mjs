@@ -81,9 +81,11 @@ async function fetchWikiContent(pageTitle) {
 function cleanCell(s) {
   if (!s) return '';
   return s
+    .replace(/\{\{br\}\}/gi, ' ')              // {{br}} → space BEFORE general template strip
     .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
     .replace(/\[\[([^\]]+)\]\]/g, '$1')
     .replace(/\{\{[^}]*\}\}/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/'{2,}/g, '')
     .replace(/\[\d+\]/g, '')
@@ -96,7 +98,7 @@ function normHeader(h) {
   if (/^age(cat|category)?$/.test(s) || s === 'age')           return 'age_category';
   if (/ageyear|ageyrs|yearsofage/.test(s))                     return 'age_years';
   if (/^hd$|hitdice|hitdie/.test(s))                           return 'hit_dice';
-  if (/^(body)?len(gth)?|bodysize/.test(s))                    return 'body_length';
+  if (/^(body)?len(gth)?|bodysize|bodylgt|^lgt$/.test(s))      return 'body_length';
   if (/wingspan/.test(s))                                      return 'wingspan';
   if (/^ac$|armorclass/.test(s))                               return 'armor_class';
   if (/breathweapon|breathwpn|breathdmg|breathdamage/.test(s)) return 'breath_weapon';
@@ -167,8 +169,12 @@ function parseVariants(raw) {
   const tables  = raw.match(tableRx) ?? [];
 
   for (const tbl of tables) {
-    // Skip tables that clearly aren't age tables
-    if (!/age\s*cat/i.test(tbl) && !/age\s*category/i.test(tbl)) continue;
+    // Accept tables that use a known infobox class AND have an Age column, OR
+    // that explicitly mention "age cat" / "age category" in their content.
+    const isKnownClass = /\{\|\s*class="(?:wikitable|article-table)"/i.test(tbl);
+    const hasAgeCat    = /age\s*cat/i.test(tbl) || /age\s*category/i.test(tbl);
+    const hasAgeCol    = /!\s*Age\b/i.test(tbl);
+    if (!hasAgeCat && !(isKnownClass && hasAgeCol)) continue;
 
     const { headers, rows } = parseWikiTable(tbl);
     if (rows.length < 2) continue;
@@ -205,7 +211,7 @@ function parseVariants(raw) {
         if (!isNaN(ac)) variant.armor_class = ac;
       }
       if (variant.xp_value) {
-        const xp = parseInt(String(variant.xp_value).replace(/[^0-9\-]/g, ''));
+        const xp = parseInt(String(variant.xp_value).replace(/,/g, ''));
         if (!isNaN(xp)) variant.xp_value = xp;
       }
 
