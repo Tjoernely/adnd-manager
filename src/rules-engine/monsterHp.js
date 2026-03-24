@@ -50,24 +50,28 @@ export function parseHitDice(hdStr) {
   if (!hdStr) return 1;
   const s = String(hdStr).trim().toLowerCase();
 
+  // Strip parenthetical annotations before any space or '('
+  // e.g. "14 (base)" → "14",  "22 (177 hp)" → "22"
+  const clean = s.split(/[\s(]/)[0];
+
   // "NdX" → take only the N part (ignore die size)
-  const dMatch = s.match(/^(\d+(?:\.\d+)?)d/);
+  const dMatch = clean.match(/^(\d+(?:\.\d+)?)d/);
   if (dMatch) return parseFloat(dMatch[1]);
 
   // "N/D" → fraction (e.g. "1/2")
-  const fracMatch = s.match(/^(\d+)\/(\d+)$/);
+  const fracMatch = clean.match(/^(\d+)\/(\d+)$/);
   if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
 
-  // "N+B" or "N-B" bonus
-  const bonusMatch = s.match(/^(\d+(?:\.\d+)?)([+-])(\d+(?:\.\d+)?)$/);
+  // "N+B" or "N-B" bonus  →  base ± bonus/8
+  const bonusMatch = clean.match(/^(\d+(?:\.\d+)?)([+-])(\d+(?:\.\d+)?)$/);
   if (bonusMatch) {
     const base  = parseFloat(bonusMatch[1]);
     const bonus = parseFloat(bonusMatch[3]);
     return bonusMatch[2] === '+' ? base + bonus / 8 : base - bonus / 8;
   }
 
-  // Plain number
-  return parseFloat(s) || 1;
+  // Plain number: "14", "13"
+  return parseFloat(clean) || 1;
 }
 
 // ── Base HP ───────────────────────────────────────────────────────────────────

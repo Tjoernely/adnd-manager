@@ -50,17 +50,22 @@ const ROLE_MODIFIERS = { normal: 1.0, elite: 1.5, boss: 2.5 };
 function parseHitDice(hdStr) {
   if (!hdStr) return 1;
   const s = String(hdStr).trim().toLowerCase();
-  const dMatch = s.match(/^(\d+(?:\.\d+)?)d/);
+
+  // Strip parenthetical annotations before any space or '('
+  // e.g. "14 (base)" → "14",  "22 (177 hp)" → "22"
+  const clean = s.split(/[\s(]/)[0];
+
+  const dMatch = clean.match(/^(\d+(?:\.\d+)?)d/);
   if (dMatch) return parseFloat(dMatch[1]);
-  const fracMatch = s.match(/^(\d+)\/(\d+)$/);
+  const fracMatch = clean.match(/^(\d+)\/(\d+)$/);
   if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
-  const bonusMatch = s.match(/^(\d+(?:\.\d+)?)([+-])(\d+(?:\.\d+)?)$/);
+  const bonusMatch = clean.match(/^(\d+(?:\.\d+)?)([+-])(\d+(?:\.\d+)?)$/);
   if (bonusMatch) {
     const base  = parseFloat(bonusMatch[1]);
     const bonus = parseFloat(bonusMatch[3]);
     return bonusMatch[2] === '+' ? base + bonus / 8 : base - bonus / 8;
   }
-  return parseFloat(s) || 1;
+  return parseFloat(clean) || 1;
 }
 
 function computeBaseHp(hitDice) {
