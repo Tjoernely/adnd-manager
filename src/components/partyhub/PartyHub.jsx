@@ -118,7 +118,7 @@ export default function PartyHub({ campaign, user, onBack, onNavigate }) {
     setError(null);
 
     Promise.allSettled([
-      api.getCharacters(campaignId),
+      api.getPartyView(campaignId),   // returns ALL campaign characters, not just own
       api.getMaps(campaignId),
       api.getQuests(campaignId),
       api.getEncounters(campaignId),

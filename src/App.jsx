@@ -94,16 +94,16 @@ export default function App() {
     if (!activeCampaign) return;
     setSaveStatus('saving');
     try {
-      const data = serializeCharacter();
+      const character_data = serializeCharacter();
       const name = char.charName;
       if (dbCharId) {
-        const updated = await api.saveCharacter(dbCharId, { name, data });
+        const updated = await api.saveCharacter(dbCharId, { name, character_data });
         setCharacters(prev => prev.map(c => c.id === dbCharId ? updated : c));
       } else {
         const created = await api.createCharacter({
           campaign_id: activeCampaign.id,
           name,
-          data,
+          character_data,
         });
         setDbCharId(created.id);
         setCharacters(prev => [created, ...prev]);

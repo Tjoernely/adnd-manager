@@ -59,10 +59,11 @@ router.get('/party/:campaignId', auth, async (req, res) => {
     );
     // DM sees everything; each player sees own full + others filtered
     const result = rows.map(row => {
-      const isOwn = row.player_user_id === req.user.id;
-      const isDM  = access.isDM;
-      const data  = (isOwn || isDM) ? row.character_data : partyFilter(row.character_data);
-      return { ...row, character_data: data, is_own: isOwn };
+      const isOwn  = row.player_user_id === req.user.id;
+      const isDM   = access.isDM;
+      const fmtRow = fmt(row);   // ensures character_data is a parsed JS object
+      const cd     = (isOwn || isDM) ? fmtRow.character_data : partyFilter(fmtRow.character_data ?? {});
+      return { ...fmtRow, character_data: cd, is_own: isOwn };
     });
     res.json(result);
   } catch (e) { next500(e, res); }
@@ -103,7 +104,8 @@ router.get('/:id', auth, async (req, res) => {
 // ── Create character ─────────────────────────────────────────────────────────
 router.post('/', auth, async (req, res) => {
   try {
-    const { name, campaign_id = null, character_data = {}, data } = req.body ?? {};
+    // Accept either 'character_data' or legacy 'data' key; no default so ?? works correctly
+    const { name, campaign_id = null, character_data, data } = req.body ?? {};
     const charData = character_data ?? data ?? {};
     const charName = (name ?? charData.charName ?? 'Adventurer').trim();
     const row = await db.one(
