@@ -249,7 +249,7 @@ router.get('/table-entries', async (req, res) => {
     // ── Primary: items with roll ranges already assigned by assign-roll-ranges.mjs ──
     const rangedRows = await db.all(
       `SELECT id AS item_id, name AS item_name, roll_min, roll_max,
-              description_preview AS description, cursed, source_url
+              description AS description, cursed, source_url
        FROM   magical_items
        WHERE  UPPER(table_letter) = $1 AND roll_min IS NOT NULL
        ORDER  BY roll_min ASC
@@ -272,7 +272,7 @@ router.get('/table-entries', async (req, res) => {
     // ── Fallback: compute virtual 1-1000 ranges from item position in table ──
     const allRows = await db.all(
       `SELECT id AS item_id, name AS item_name,
-              description_preview AS description, cursed, source_url
+              description AS description, cursed, source_url
        FROM   magical_items
        WHERE  UPPER(table_letter) = $1
        ORDER  BY id ASC
