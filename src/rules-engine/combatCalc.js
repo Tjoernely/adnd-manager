@@ -22,6 +22,14 @@ import { ALL_CLASSES, CLASS_ABILITIES } from '../data/classes.js';
 import { CLASS_GROUP_MAP }             from '../data/proficiencies.js';
 import { MASTERY_TIERS, WEAPON_GROUPS_49 } from '../data/weapons.js';
 
+// ── Magic bonus notes parsing ─────────────────────────────────────────────────
+// Parses "Bonus: +N" (or -N) from an item's notes string.
+// Used as fallback when magic_bonus column is null.
+function getMagicBonusFromNotes(notes) {
+  const m = (notes ?? '').match(/Bonus:\s*([+-]?\d+)/i);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
 // ── Sub-ability score computation ─────────────────────────────────────────────
 // Mirrors the effSub pipeline in CharacterPrintView / useCharacter.
 
@@ -337,8 +345,9 @@ export function calcWeaponThac0(weapon, characterData) {
   const wocBonus = getWocBonus(weapon, cd);
 
   // 7. Magic weapon bonus (only if identified; negative = better)
+  //    Falls back to parsing "Bonus: +N" from notes when magic_bonus column is null.
   const magicBonus = weapon.identify_state === 'identified'
-    ? -(weapon.magic_bonus ?? 0)
+    ? -((weapon.magic_bonus != null ? weapon.magic_bonus : getMagicBonusFromNotes(weapon.notes)))
     : 0;
 
   // 8. Racial bonus (negative = better)
@@ -388,8 +397,9 @@ export function calcWeaponDamage(weapon, characterData) {
   const masteryDmgMod = getMasteryDmgBonus(masteryEntry);
 
   // Magic damage bonus (only if identified)
+  //    Falls back to parsing "Bonus: +N" from notes when magic_bonus column is null.
   const magicDmgBonus = weapon.identify_state === 'identified'
-    ? (weapon.magic_bonus ?? 0)
+    ? (weapon.magic_bonus != null ? weapon.magic_bonus : getMagicBonusFromNotes(weapon.notes))
     : 0;
 
   const totalBonus = strDmgBonus + masteryDmgMod + magicDmgBonus;

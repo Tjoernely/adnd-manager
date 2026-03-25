@@ -2060,33 +2060,54 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {partyEquip.map(item => (
-                              <div key={item.id} style={{
-                                background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
-                                borderRadius: 5, padding: '5px 8px',
-                                display: 'flex', alignItems: 'center', gap: 6,
-                              }}>
-                                <span style={{ fontSize: 11, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {item.name}
-                                </span>
-                                <span style={idBadgeStyle(item.identify_state ?? 'unknown')}>
-                                  {ID_ICONS[item.identify_state ?? 'unknown']}
-                                </span>
-                                {isDM && (
-                                  <button onClick={() => cycleIdentify(item)} title="Cycle ID"
-                                    style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, cursor: 'pointer',
-                                      background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`, color: C.textDim }}>
-                                    🔄
-                                  </button>
-                                )}
-                                <button onClick={() => handleAssign(item.id)}
-                                  style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, flexShrink: 0,
-                                    background: 'rgba(109,190,136,.1)', border: `1px solid rgba(109,190,136,.35)`,
-                                    color: C.green, cursor: 'pointer', fontFamily: ff }}>
-                                  → Give
-                                </button>
-                              </div>
-                            ))}
+                            {partyEquip.map(item => {
+                              // Parse notes for bonus and type info
+                              const notesBonus = (item.notes ?? '').match(/Bonus:\s*(\+?-?\d+)/i)?.[1] ?? null;
+                              const notesType  = (item.notes ?? '').match(/Type:\s*([^|]+)/i)?.[1]?.trim() ?? null;
+                              const typeLabel  = item.item_type && item.item_type !== 'misc'
+                                ? item.item_type.charAt(0).toUpperCase() + item.item_type.slice(1)
+                                : null;
+                              return (
+                                <div key={item.id} style={{
+                                  background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
+                                  borderRadius: 5, padding: '5px 8px',
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 11, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {item.name}{notesBonus ? ` ${notesBonus}` : ''}
+                                    </span>
+                                    {typeLabel && (
+                                      <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8,
+                                        background: 'rgba(104,168,208,.12)', border: '1px solid rgba(104,168,208,.3)',
+                                        color: C.blue, flexShrink: 0 }}>
+                                        {typeLabel}
+                                      </span>
+                                    )}
+                                    <span style={idBadgeStyle(item.identify_state ?? 'unknown')}>
+                                      {ID_ICONS[item.identify_state ?? 'unknown']}
+                                    </span>
+                                    {isDM && (
+                                      <button onClick={() => cycleIdentify(item)} title="Cycle ID"
+                                        style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, cursor: 'pointer',
+                                          background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`, color: C.textDim }}>
+                                        🔄
+                                      </button>
+                                    )}
+                                    <button onClick={() => handleAssign(item.id)}
+                                      style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, flexShrink: 0,
+                                        background: 'rgba(109,190,136,.1)', border: `1px solid rgba(109,190,136,.35)`,
+                                        color: C.green, cursor: 'pointer', fontFamily: ff }}>
+                                      → Give
+                                    </button>
+                                  </div>
+                                  {notesType && (
+                                    <div style={{ fontSize: 9, color: C.textDim, marginTop: 2, paddingLeft: 2 }}>
+                                      {notesType}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

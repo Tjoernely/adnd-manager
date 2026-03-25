@@ -611,12 +611,14 @@ export function CharacterPrintView({ characterData, characterId }) {
               const dmg    = calcWeaponDamage(w, cd);
               const thac0w = calcWeaponThac0(w, cd);
               const apr    = calcAttacksPerRound(w, cd, equippedItems);
+              const noteNotes = w.notes ? w.notes.substring(0, 50) : null;
               const note   = [
                 w.identify_state === 'unidentified' ? '?' : null,
                 w.is_cursed ? 'Cursed' : null,
                 w.magic_bonus && w.identify_state === 'identified' && w.magic_bonus !== 0
                   ? sgn(w.magic_bonus) : null,
-              ].filter(Boolean).join(' ');
+                noteNotes,
+              ].filter(Boolean).join(' · ');
               return (
                 <tr key={w.id} className={i === 0 ? 'ps-row-top' : ''}>
                   <td>{w.name}{w.slot === 'hand_l' ? ' (off)' : ''}</td>

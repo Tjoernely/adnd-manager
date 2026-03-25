@@ -1023,7 +1023,7 @@ export default function DrillDown() {
               <div className="mi-bonus-col">
                 <div className="mi-bonus-col-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' }}>
                   <span>AC Bonus</span>
-                  <DiceRoller sides={20} label="d20" onRoll={n => { const e = findRow(R2_BONUS, n); if (e) selectR2Bonus(i, pane, e); }} />
+                  <DiceRoller sides={1000} label="d1000" onRoll={n => { const scaled = Math.ceil(n * 20 / 1000); const e = findRow(R2_BONUS, scaled); if (e) selectR2Bonus(i, pane, e); }} />
                 </div>
                 <div className="mi-bonus-col-body">
                   {R2_BONUS.map((entry, j) => (
