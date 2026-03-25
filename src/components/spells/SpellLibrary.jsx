@@ -52,7 +52,11 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
   const [filterOpen,   setFilterOpen]   = useState(false);
   const [charMenuOpen, setCharMenuOpen] = useState(false);
   const [charFilter,   setCharFilter]   = useState(null);  // selected character obj
+  const [charMaxLevel, setCharMaxLevel] = useState(null);  // visual-only cap when char selected
   const [tab,          setTab]          = useState('library');
+
+  // ── Add-to-spellbook / make-scroll loading state ──────────────────────────
+  const [addingSpell,  setAddingSpell]  = useState(null); // { id, action:'book'|'scroll' }
 
   // ── Results ───────────────────────────────────────────────────────────────
   const [spells,    setSpells]    = useState([]);
@@ -165,35 +169,95 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
     const cls = (d.selectedClass || '').toLowerCase();
     const lvl = d.charLevel || 1;
 
-    if (WIZARD_CLASS_IDS.has(cls)) {
+    let maxCastable = 0;
+
+    if (cls === 'bard') {
+      // Bard: both wizard and priest, up to level 6 max
+      setGroup('');
+      setSchools([]);
+      setSpheres([]);
+      maxCastable = Math.min(6, Math.ceil(lvl / 2));
+    } else if (cls === 'ranger') {
+      // Ranger: priest spells at level 8+, max level 3
+      setGroup('priest');
+      setSchools([]);
+      setSpheres([]);
+      maxCastable = lvl >= 8 ? 3 : 0;
+    } else if (cls === 'paladin') {
+      // Paladin: priest spells at level 9+, max level 4
+      setGroup('priest');
+      setSchools([]);
+      setSpheres([]);
+      maxCastable = lvl >= 9 ? 4 : 0;
+    } else if (WIZARD_CLASS_IDS.has(cls)) {
       setGroup('wizard');
-      // Specialist school → pre-select it
-      const school = (d.specialistSchool || '').toLowerCase();
+      // Specialist school → pre-select it; illusionist always gets illusion
+      let school = (d.specialistSchool || '').toLowerCase();
+      if (!school && cls === 'illusionist') school = 'illusion';
       setSchools(school ? [school] : []);
       setSpheres([]);
+      maxCastable = Math.min(9, Math.ceil(lvl / 2));
     } else if (PRIEST_CLASS_IDS.has(cls)) {
       setGroup('priest');
       setSchools([]);
       setSpheres([]);
+      maxCastable = Math.min(7, Math.ceil(lvl / 2));
     } else {
       setGroup('');
       setSchools([]);
       setSpheres([]);
+      maxCastable = Math.min(9, Math.ceil(lvl / 2));
     }
 
-    // Simplified spell level cap: ceil(charLevel / 2), capped at 9
-    const spellLvlMax = Math.max(1, Math.min(9, Math.ceil(lvl / 2)));
-    setMaxLevel(String(spellLvlMax));
+    // Store the cap for visual greying only — don't filter by level
+    setCharMaxLevel(Math.max(0, maxCastable));
+    setMaxLevel('');
     setMinLevel('');
   };
 
   const clearCharFilter = () => {
     setCharFilter(null);
+    setCharMaxLevel(null);
     setGroup('');
     setSchools([]);
     setSpheres([]);
     setMaxLevel('');
   };
+
+  // ── Add to spellbook ──────────────────────────────────────────────────────
+  async function handleAddToSpellbook(spell) {
+    if (!charFilter || addingSpell) return;
+    setAddingSpell({ id: spell.id, action: 'book' });
+    try {
+      await api.createCharacterSpell({
+        character_id: charFilter.id,
+        campaign_id:  campaignId,
+        name:         spell.name,
+        spell_level:  spell.spell_level,
+        spell_type:   spell.spell_group,
+        status:       'known',
+        is_special:   false,
+        spell_db_id:  spell.id,
+      });
+    } catch (e) { console.error('Add to spellbook failed:', e); }
+    finally { setAddingSpell(null); }
+  }
+
+  // ── Make scroll ───────────────────────────────────────────────────────────
+  async function handleMakeScroll(spell) {
+    if (!charFilter || addingSpell || !campaignId) return;
+    setAddingSpell({ id: spell.id, action: 'scroll' });
+    try {
+      await api.createPartyEquipment({
+        campaign_id:  campaignId,
+        name:         `Scroll: ${spell.name}`,
+        description:  `Level ${spell.spell_level} ${spell.spell_group} spell`,
+        item_type:    'scroll',
+        notes:        `Spell ID: ${spell.id}`,
+      });
+    } catch (e) { console.error('Make scroll failed:', e); }
+    finally { setAddingSpell(null); }
+  }
 
   // ── Pagination ────────────────────────────────────────────────────────────
   const totalPages  = Math.ceil(total / PAGE_SIZE);
@@ -427,14 +491,47 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
                 ) : (
                   <>
                     <div className="sl-spell-list">
-                      {spells.map(spell => (
-                        <SpellCard
-                          key={spell.id}
-                          spell={spell}
-                          selected={selected?.id === spell.id}
-                          onClick={() => selectSpell(spell)}
-                        />
-                      ))}
+                      {spells.map(spell => {
+                        const overCap  = charMaxLevel !== null && spell.spell_level > charMaxLevel;
+                        const isAdding = addingSpell?.id === spell.id;
+                        return (
+                          <div key={spell.id} style={{ display: 'flex', alignItems: 'stretch', opacity: overCap ? 0.35 : 1 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <SpellCard
+                                spell={spell}
+                                selected={selected?.id === spell.id}
+                                onClick={() => selectSpell(spell)}
+                              />
+                            </div>
+                            {charFilter && !overCap && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px', justifyContent: 'center', flexShrink: 0 }}>
+                                <button
+                                  onClick={e => { e.stopPropagation(); handleAddToSpellbook(spell); }}
+                                  disabled={isAdding}
+                                  title={`Add ${spell.name} to ${charFilter.name}'s spellbook`}
+                                  style={{
+                                    fontSize: 11, padding: '3px 7px', borderRadius: 4, cursor: isAdding ? 'not-allowed' : 'pointer',
+                                    background: 'rgba(109,190,136,.1)', border: '1px solid rgba(109,190,136,.35)',
+                                    color: '#6dbe88', fontFamily: 'inherit', opacity: isAdding ? 0.5 : 1, whiteSpace: 'nowrap',
+                                  }}
+                                >{addingSpell?.id === spell.id && addingSpell.action === 'book' ? '…' : '📖'}</button>
+                                {campaignId && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); handleMakeScroll(spell); }}
+                                    disabled={isAdding}
+                                    title={`Add ${spell.name} scroll to party pool`}
+                                    style={{
+                                      fontSize: 11, padding: '3px 7px', borderRadius: 4, cursor: isAdding ? 'not-allowed' : 'pointer',
+                                      background: 'rgba(212,160,53,.08)', border: '1px solid rgba(212,160,53,.3)',
+                                      color: '#c8a040', fontFamily: 'inherit', opacity: isAdding ? 0.5 : 1, whiteSpace: 'nowrap',
+                                    }}
+                                  >{addingSpell?.id === spell.id && addingSpell.action === 'scroll' ? '…' : '📜'}</button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {totalPages > 1 && (
@@ -471,7 +568,45 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
 
         {/* ── Generator Tab ──────────────────────────────────────────────────── */}
         {tab === 'generator' && (
-          <SpellGenerator filters={filterParams} />
+          <>
+            {campaignId && (
+              <div className="sl-toolbar" style={{ borderBottom: '1px solid var(--sl-border)', marginBottom: 0 }}>
+                <div className="sl-char-wrap" ref={charMenuRef}>
+                  <button
+                    className={`sl-toolbar-btn${charFilter ? ' sl-toolbar-btn--char' : ''}`}
+                    onClick={() => setCharMenuOpen(o => !o)}
+                  >
+                    🧙 {charFilter ? charFilter.name : 'Character'}
+                  </button>
+                  {charFilter && (
+                    <button className="sl-char-clear" onClick={clearCharFilter} title="Clear character filter">✕</button>
+                  )}
+                  {charMenuOpen && (
+                    <div className="sl-char-dropdown">
+                      <div className="sl-char-dropdown-title">Filter by character</div>
+                      {characters.length === 0 ? (
+                        <div className="sl-char-dropdown-empty">No characters in campaign</div>
+                      ) : characters.map(ch => (
+                        <button
+                          key={ch.id}
+                          className={`sl-char-dropdown-item${charFilter?.id === ch.id ? ' sl-char-dropdown-item--active' : ''}`}
+                          onClick={() => applyCharFilter(ch)}
+                        >
+                          {ch.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {charFilter && charMaxLevel !== null && (
+                  <span style={{ fontSize: 11, color: '#c8a040', fontFamily: 'inherit' }}>
+                    Max castable: level {charMaxLevel}
+                  </span>
+                )}
+              </div>
+            )}
+            <SpellGenerator filters={filterParams} />
+          </>
         )}
 
       </div>
