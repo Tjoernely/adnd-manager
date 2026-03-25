@@ -210,6 +210,12 @@ async function autoMigrate() {
       await db.query(`ALTER TABLE party_equipment ADD COLUMN IF NOT EXISTS source_encounter_id INTEGER;`);
     } catch (e) { console.warn('[auto-migrate] loot-data columns skipped:', e.message); }
 
+    // Roll range columns on magical_items for d1000 table lookups
+    try {
+      await db.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_min INTEGER;`);
+      await db.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_max INTEGER;`);
+    } catch (e) { console.warn('[auto-migrate] roll_min/roll_max cols skipped:', e.message); }
+
     // Fix concatenated AC/THAC0 values (e.g. 610 → 6, 1520 → 15)
     // These arise when parseIntSafe strips whitespace from "6 10" → 610
     try {

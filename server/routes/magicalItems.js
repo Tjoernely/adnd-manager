@@ -242,32 +242,58 @@ router.get('/table-entries', async (req, res) => {
       });
     }
 
-    // For S/R split into generic (1) vs special (3) via roll threshold
-    let whereExtra = '';
-    if (letter === 'S' || letter === 'R') {
-      const threshold = 975; // roll_min >= 975 = special entries
-      if (subtable === '1') whereExtra = `AND rit.roll_max < ${threshold}`;
-      if (subtable === '3') whereExtra = `AND rit.roll_min >= ${threshold}`;
-    }
+    // Tables R and S are handled by their own pane types in the client (S1/R1 etc.)
+    // and should never reach here without a subtable param. For safety, fall through
+    // to the magical_items path below which handles them correctly.
 
-    const rows = await db.all(
-      `SELECT rit.id, rit.roll_min, rit.roll_max, rit.item_name, rit.notes,
-              mi.id AS item_id, mi.description, mi.cursed, mi.source_url
-       FROM   random_item_tables rit
-       LEFT JOIN magical_items mi ON mi.id = rit.item_id
-       WHERE  rit.table_letter = $1 ${whereExtra}
-       ORDER BY rit.roll_min ASC
+    // ── Primary: items with roll ranges already assigned by assign-roll-ranges.mjs ──
+    const rangedRows = await db.all(
+      `SELECT id AS item_id, name AS item_name, roll_min, roll_max,
+              description_preview AS description, cursed, source_url
+       FROM   magical_items
+       WHERE  UPPER(table_letter) = $1 AND roll_min IS NOT NULL
+       ORDER  BY roll_min ASC
        LIMIT  $2`,
       [letter, limit],
     );
 
+    if (rangedRows.length > 0) {
+      return res.json({
+        table_letter:  letter,
+        subtable:      subtable ?? null,
+        table_name:    meta.name,
+        dice:          'd1000',
+        total:         rangedRows.length,
+        entries:       rangedRows,
+        has_subtables: letter === 'S' || letter === 'R',
+      });
+    }
+
+    // ── Fallback: compute virtual 1-1000 ranges from item position in table ──
+    const allRows = await db.all(
+      `SELECT id AS item_id, name AS item_name,
+              description_preview AS description, cursed, source_url
+       FROM   magical_items
+       WHERE  UPPER(table_letter) = $1
+       ORDER  BY id ASC
+       LIMIT  $2`,
+      [letter, limit],
+    );
+
+    const n = allRows.length;
+    const entries = allRows.map((row, i) => ({
+      ...row,
+      roll_min: n === 0 ? 1    : Math.round(i * 1000 / n) + 1,
+      roll_max: n === 0 ? 1000 : (i === n - 1 ? 1000 : Math.round((i + 1) * 1000 / n)),
+    }));
+
     res.json({
-      table_letter: letter,
-      subtable:     subtable ?? null,
-      table_name:   meta.name,
-      dice:         meta.dice,
-      total:        rows.length,
-      entries:      rows,
+      table_letter:  letter,
+      subtable:      subtable ?? null,
+      table_name:    meta.name,
+      dice:          'd1000',
+      total:         entries.length,
+      entries,
       has_subtables: letter === 'S' || letter === 'R',
     });
   } catch (e) { next500(e, res); }
