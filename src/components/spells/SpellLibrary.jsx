@@ -198,7 +198,7 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
   const applyCharFilter = char => {
     setCharFilter(char);
     setCharMenuOpen(false);
-    const d   = char.data || {};
+    const d   = char.character_data || {};
     const cls = (d.selectedClass || '').toLowerCase();
     const lvl = d.charLevel || 1;
 
@@ -529,7 +529,7 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
                           : false;
 
                         // Bard school restriction (wizard spells, limited schools)
-                        const charCls = charFilter ? (charFilter.data?.selectedClass || '').toLowerCase() : '';
+                        const charCls = charFilter ? (charFilter.character_data?.selectedClass || '').toLowerCase() : '';
                         const isBard  = charCls.includes('bard');
                         const isBardForbidden = isBard && spell.school
                           ? !BARD_ALLOWED_SCHOOL_KEYWORDS.some(k => school.includes(k))
