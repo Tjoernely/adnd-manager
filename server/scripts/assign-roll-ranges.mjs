@@ -23,6 +23,11 @@ const pool = new Pool({
 
 const TABLES = 'ABCDEFGHIJKLMNOPQRST'.split('');
 
+// Ensure columns exist (idempotent)
+await pool.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_min INTEGER`);
+await pool.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_max INTEGER`);
+console.log('Columns roll_min / roll_max ensured.\n');
+
 let totalUpdated = 0;
 
 for (const letter of TABLES) {
