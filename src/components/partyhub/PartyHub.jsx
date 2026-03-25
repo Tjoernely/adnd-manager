@@ -1343,17 +1343,33 @@ const SLOT_ITEM_TYPES = {
   ammo:      ['ammo'],
 };
 
-const AMMO_COMPAT = {
-  bow:      ['arrow', 'flight arrow', 'sheaf arrow', 'pile arrow', 'stone arrow'],
-  crossbow: ['bolt', 'quarrel', 'hand quarrel', 'heavy quarrel', 'light quarrel', 'pellet'],
-  sling:    ['bullet', 'stone', 'sling bullet', 'sling stone'],
-  blowgun:  ['dart', 'needle', 'barbed dart'],
-  thrown:   [],
+// ammo_type values compatible with each ranged weapon category
+const RANGED_AMMO_TYPES = {
+  bow:            ['arrow'],
+  crossbow_hand:  ['bolt'],
+  crossbow_light: ['bolt'],
+  crossbow_heavy: ['bolt'],
+  sling:          ['bullet', 'stone'],
+  blowgun:        ['needle', 'dart'],
+  thrown:         [],
+};
+
+// Name-based fallback for custom ammo items without ammo_type
+const RANGED_AMMO_NAMES = {
+  bow:            ['arrow'],
+  crossbow_hand:  ['quarrel', 'bolt', 'pellet'],
+  crossbow_light: ['quarrel', 'bolt', 'pellet'],
+  crossbow_heavy: ['quarrel', 'bolt'],
+  sling:          ['bullet', 'stone'],
+  blowgun:        ['dart', 'needle'],
+  thrown:         [],
 };
 
 function getRangedCategory(name) {
   const n = (name ?? '').toLowerCase();
-  if (n.includes('crossbow')) return 'crossbow';
+  if (n.includes('hand') && n.includes('crossbow')) return 'crossbow_hand';
+  if (n.includes('heavy') && n.includes('crossbow')) return 'crossbow_heavy';
+  if (n.includes('crossbow')) return 'crossbow_light';
   if (n.includes('bow'))      return 'bow';
   if (n.includes('sling'))    return 'sling';
   if (n.includes('blowgun'))  return 'blowgun';
@@ -1378,7 +1394,7 @@ function SlotDropdown({ slotKey, label, charEquip, onEquip }) {
     );
   }
 
-  // Ammo: disabled if no ranged equipped, filtered by compat if there is
+  // Ammo: disabled if no ranged equipped; filtered by ammo_type (or name fallback)
   if (slotKey === 'ammo') {
     const rangedItem = charEquip.find(x => x.slot === 'ranged' && x.is_equipped);
     if (!rangedItem) {
@@ -1392,11 +1408,16 @@ function SlotDropdown({ slotKey, label, charEquip, onEquip }) {
       );
     }
     const category    = getRangedCategory(rangedItem.name);
-    const compatTerms = AMMO_COMPAT[category] ?? [];
+    const compatTypes = RANGED_AMMO_TYPES[category] ?? [];
+    const compatNames = RANGED_AMMO_NAMES[category] ?? [];
     let ammoItems = charEquip.filter(x => x.item_type === 'ammo');
-    if (category !== 'thrown' && compatTerms.length) {
-      ammoItems = ammoItems.filter(x => compatTerms.some(t => x.name.toLowerCase().includes(t)));
-    } else if (category === 'thrown') {
+    if (category !== 'thrown') {
+      ammoItems = ammoItems.filter(x =>
+        x.weapon_type // weapon_type stores ammo_type for catalog-sourced ammo
+          ? compatTypes.includes(x.weapon_type)
+          : compatNames.some(t => x.name.toLowerCase().includes(t))
+      );
+    } else {
       ammoItems = [];
     }
     return (
@@ -1405,7 +1426,9 @@ function SlotDropdown({ slotKey, label, charEquip, onEquip }) {
         <select value={currentId} onChange={e => onEquip(slotKey, e.target.value || null)} style={eqInputSt}>
           <option value="">— empty —</option>
           {ammoItems.map(item => (
-            <option key={item.id} value={item.id}>{item.name}</option>
+            <option key={item.id} value={item.id}>
+              {item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
+            </option>
           ))}
         </select>
       </div>
@@ -1474,8 +1497,16 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const [weapSearch,        setWeapSearch]        = useState('');
   const [weapCatalog,       setWeapCatalog]       = useState([]);
   const [armorCatalog,      setArmorCatalog]      = useState([]);
+  const [ammoCatalog,       setAmmoCatalog]       = useState([]);
   const [catalogLoading,    setCatalogLoading]    = useState(false);
   const [addingFromCatalog, setAddingFromCatalog] = useState(null);
+
+  // Quick-add ammo slot state
+  const [ammoCompat,   setAmmoCompat]   = useState([]); // compatible ammo from catalog
+  const [ammoFormOpen, setAmmoFormOpen] = useState(false);
+  const [ammoFormId,   setAmmoFormId]   = useState('');
+  const [ammoFormQty,  setAmmoFormQty]  = useState('20');
+  const [ammoAdding,   setAmmoAdding]   = useState(false);
 
   const cd = char.character_data ?? {};
 
@@ -1607,17 +1638,29 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   // Load catalogs lazily when the modal first opens
   useEffect(() => {
     if (!catalogOpen) return;
-    if (weapCatalog.length > 0 && armorCatalog.length > 0) return;
+    if (weapCatalog.length > 0 && armorCatalog.length > 0 && ammoCatalog.length > 0) return;
     setCatalogLoading(true);
     Promise.all([
       api.getWeaponsCatalog().catch(() => []),
       api.getArmorCatalog().catch(() => []),
-    ]).then(([weaps, armors]) => {
+      api.getCompatibleAmmo().catch(() => []),
+    ]).then(([weaps, armors, ammos]) => {
       setWeapCatalog(Array.isArray(weaps) ? weaps : []);
       setArmorCatalog(Array.isArray(armors) ? armors : []);
+      setAmmoCatalog(Array.isArray(ammos) ? ammos : []);
       setCatalogLoading(false);
     });
   }, [catalogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch compatible ammo from catalog when ranged slot changes
+  useEffect(() => {
+    const rangedItem = charEquip.find(x => x.slot === 'ranged' && x.is_equipped);
+    if (!rangedItem) { setAmmoCompat([]); setAmmoFormOpen(false); return; }
+    api.getCompatibleAmmo(rangedItem.name).then(data => {
+      setAmmoCompat(Array.isArray(data) ? data : []);
+      if (data?.length) setAmmoFormId(String(data[0].id));
+    }).catch(() => setAmmoCompat([]));
+  }, [charEquip]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAddFromCatalog(item, sourceTable) {
     setAddingFromCatalog(item.id);
@@ -1632,6 +1675,9 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
         if (item.range_short != null) {
           rangeStr = [item.range_short, item.range_medium, item.range_long].filter(Boolean).join('/');
         }
+      } else if (sourceTable === 'ammo') {
+        itemType   = 'ammo';
+        weaponType = item.ammo_type ?? null; // stored in weapon_type for slot filtering
       } else {
         itemType = item.item_type; // 'armor' or 'shield'
       }
@@ -1646,13 +1692,40 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
         range_str:     rangeStr,
         armor_ac:      item.ac_bonus   ?? null,
         weight_lbs:    item.weight     ?? null,
-        quantity:      1,
+        quantity:      sourceTable === 'ammo' ? 20 : 1,
         is_two_handed: is2H,
         speed_factor:  item.speed_factor ?? null,
       });
       await refreshEquip();
     } catch (e) { setEquipError(e.message); }
     finally { setAddingFromCatalog(null); }
+  }
+
+  async function handleQuickAddAmmo(e) {
+    e.preventDefault();
+    if (!ammoFormId) return;
+    setAmmoAdding(true);
+    setEquipError(null);
+    try {
+      const catalogItem = ammoCompat.find(a => a.id === parseInt(ammoFormId));
+      if (!catalogItem) return;
+      const created = await api.createCharacterEquipment({
+        character_id: char.id,
+        campaign_id:  campaignId,
+        name:         catalogItem.name,
+        item_type:    'ammo',
+        weapon_type:  catalogItem.ammo_type ?? null, // stores ammo_type for slot filtering
+        damage_s_m:   catalogItem.damage_sm  ?? null,
+        damage_l:     catalogItem.damage_l   ?? null,
+        weight_lbs:   catalogItem.weight     ?? null,
+        quantity:     parseInt(ammoFormQty) || 20,
+        notes:        catalogItem.notes      ?? null,
+      });
+      await api.equipCharacterItem(created.id, { slot: 'ammo', is_equipped: true });
+      setAmmoFormOpen(false);
+      await refreshEquip();
+    } catch (e) { setEquipError(e.message); }
+    finally { setAmmoAdding(false); }
   }
 
   const totalWeight = charEquip.reduce((s, x) => s + (parseFloat(x.weight_lbs) || 0), 0);
@@ -1901,7 +1974,50 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                   }}>
                     <div>
                       <SlotDropdown slotKey="hand_l" label="🗡 Off Hand" charEquip={charEquip} onEquip={handleEquipSlot} />
-                      <SlotDropdown slotKey="ammo"   label="🏹 Ammo"     charEquip={charEquip} onEquip={handleEquipSlot} />
+                      <SlotDropdown slotKey="ammo" label="🏹 Ammo" charEquip={charEquip} onEquip={handleEquipSlot} />
+                      {/* Quick-add ammo shortcut */}
+                      {ammoCompat.length > 0 && (
+                        !ammoFormOpen ? (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                            <button onClick={() => setAmmoFormOpen(true)} style={{
+                              fontSize: 9, padding: '1px 7px', borderRadius: 3, cursor: 'pointer',
+                              background: 'rgba(212,160,53,.1)', border: `1px solid ${C.border}`,
+                              color: C.gold, fontFamily: ff,
+                            }}>+ Add Ammo</button>
+                          </div>
+                        ) : (
+                          <form onSubmit={handleQuickAddAmmo} style={{
+                            display: 'flex', gap: 3, alignItems: 'center', marginBottom: 5, flexWrap: 'wrap',
+                          }}>
+                            <select
+                              value={ammoFormId}
+                              onChange={e => setAmmoFormId(e.target.value)}
+                              style={{ ...eqInputSt, flex: 1, minWidth: 90, fontSize: 9 }}
+                            >
+                              <option value="">— type —</option>
+                              {ammoCompat.map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="number" min={1} max={999} value={ammoFormQty}
+                              onChange={e => setAmmoFormQty(e.target.value)}
+                              style={{ ...eqInputSt, width: 40, fontSize: 9, textAlign: 'center' }}
+                              title="Quantity"
+                            />
+                            <button type="submit" disabled={ammoAdding || !ammoFormId} style={{
+                              fontSize: 9, padding: '2px 7px', borderRadius: 3, cursor: 'pointer',
+                              background: 'rgba(212,160,53,.15)', border: `1px solid ${C.borderHi}`,
+                              color: C.gold, fontFamily: ff, opacity: ammoAdding ? 0.5 : 1,
+                            }}>{ammoAdding ? '…' : '✓'}</button>
+                            <button type="button" onClick={() => setAmmoFormOpen(false)} style={{
+                              fontSize: 9, padding: '2px 5px', borderRadius: 3, cursor: 'pointer',
+                              background: 'transparent', border: `1px solid ${C.border}`,
+                              color: C.textDim, fontFamily: ff,
+                            }}>✕</button>
+                          </form>
+                        )
+                      )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5 }}>
                         <span style={{ fontSize: 9, color: '#7a6a4a', width: 58, textAlign: 'right', flexShrink: 0 }}>💰 GP</span>
                         <input
@@ -2060,6 +2176,7 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                 <div style={{ display: 'flex', gap: 6, padding: '8px 18px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
                   <button style={panelTabSt(catalogTab === 'weapons')} onClick={() => setCatalogTab('weapons')}>⚔️ Weapons</button>
                   <button style={panelTabSt(catalogTab === 'armor')}   onClick={() => setCatalogTab('armor')}>🛡️ Armor & Shields</button>
+                  <button style={panelTabSt(catalogTab === 'ammo')}   onClick={() => setCatalogTab('ammo')}>🏹 Ammunition</button>
                 </div>
 
                 {catalogLoading ? (
@@ -2188,6 +2305,83 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                             )}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+
+                    {/* ── AMMUNITION ── */}
+                    {catalogTab === 'ammo' && (
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 18px 14px' }}>
+                        {(() => {
+                          const groups = {};
+                          ammoCatalog.forEach(a => {
+                            const g = a.ammo_type ?? 'other';
+                            if (!groups[g]) groups[g] = [];
+                            groups[g].push(a);
+                          });
+                          return Object.entries(groups).map(([groupKey, items]) => (
+                            <div key={groupKey} style={{ marginBottom: 14 }}>
+                              <div style={{
+                                fontSize: 9, color: C.gold, letterSpacing: 2,
+                                textTransform: 'uppercase', paddingBottom: 4,
+                                borderBottom: `1px solid ${C.border}`, marginBottom: 4,
+                              }}>
+                                {groupKey === 'arrow' ? 'Arrows' :
+                                 groupKey === 'bolt'   ? 'Bolts' :
+                                 groupKey === 'bullet' ? 'Bullets' :
+                                 groupKey === 'stone'  ? 'Stones' :
+                                 groupKey === 'needle' ? 'Needles' :
+                                 groupKey === 'dart'   ? 'Darts' :
+                                 capitalize(groupKey)}
+                              </div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                                <thead>
+                                  <tr>
+                                    {['Name', 'Compatible With', 'Dmg S/M', 'Dmg L', 'Notes', ''].map((h, i) => (
+                                      <th key={i} style={{
+                                        textAlign: i >= 2 && i <= 3 ? 'center' : 'left',
+                                        fontSize: 9, color: C.gold, letterSpacing: 1,
+                                        textTransform: 'uppercase', padding: '3px 5px 5px',
+                                        whiteSpace: 'nowrap',
+                                      }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {items.map(a => (
+                                    <tr key={a.id} style={{ borderBottom: `1px solid rgba(200,168,50,.06)` }}>
+                                      <td style={{ padding: '4px 5px', color: C.text }}>{a.name}</td>
+                                      <td style={{ padding: '4px 5px', color: C.textDim, fontSize: 10 }}>
+                                        {a.compatible_ranged?.replace('_', ' ') ?? '—'}
+                                      </td>
+                                      <td style={{ padding: '4px 5px', color: C.textDim, textAlign: 'center' }}>{a.damage_sm}</td>
+                                      <td style={{ padding: '4px 5px', color: C.textDim, textAlign: 'center' }}>{a.damage_l}</td>
+                                      <td style={{ padding: '4px 5px', color: C.textDim, fontSize: 10 }}>{a.notes}</td>
+                                      <td style={{ padding: '4px 0 4px 5px', textAlign: 'right' }}>
+                                        <button
+                                          onClick={() => handleAddFromCatalog(a, 'ammo')}
+                                          disabled={addingFromCatalog === a.id}
+                                          style={{
+                                            fontSize: 10, padding: '2px 9px', borderRadius: 4, whiteSpace: 'nowrap',
+                                            background: 'rgba(212,160,53,.12)', border: `1px solid ${C.border}`,
+                                            color: C.gold, cursor: 'pointer', fontFamily: ff,
+                                            opacity: addingFromCatalog === a.id ? 0.5 : 1,
+                                          }}
+                                        >
+                                          {addingFromCatalog === a.id ? '…' : '+ Add ×20'}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ));
+                        })()}
+                        {ammoCatalog.length === 0 && (
+                          <div style={{ textAlign: 'center', color: C.textDim, fontStyle: 'italic', padding: '24px 0' }}>
+                            No ammo in catalog — server will seed on next restart.
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

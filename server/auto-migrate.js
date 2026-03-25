@@ -453,6 +453,40 @@ async function autoMigrate() {
       console.log('[auto-migrate] catalog seed: done');
     } catch (e) { console.warn('[auto-migrate] catalog seed skipped:', e.message); }
 
+    // ── Add ammo columns to weapons_catalog ──────────────────────────────────
+    try {
+      await db.query(`ALTER TABLE weapons_catalog ADD COLUMN IF NOT EXISTS ammo_type         VARCHAR(50) DEFAULT NULL;`);
+      await db.query(`ALTER TABLE weapons_catalog ADD COLUMN IF NOT EXISTS compatible_ranged VARCHAR(50) DEFAULT NULL;`);
+    } catch (e) { console.warn('[auto-migrate] weapons_catalog ammo cols skipped:', e.message); }
+
+    // ── Seed ammo catalog entries ─────────────────────────────────────────────
+    try {
+      const AMMO = [
+        // name, ammo_type, compatible_ranged, damage_sm, damage_l, weight, notes
+        ['Flight Arrow',     'arrow',  'bow',             '1d6',   '1d6',   0.1, 'Standard arrow, all bows'],
+        ['Sheaf Arrow',      'arrow',  'bow',             '1d8',   '1d8',   0.1, '+1 dmg vs armored, all bows'],
+        ['Pile Arrow',       'arrow',  'bow',             '1d6',   '1d6',   0.1, 'Armor-piercing, composite & long bow'],
+        ['Stone Arrow',      'arrow',  'bow',             '1d4',   '1d4',   0.1, 'Primitive, short & composite short bow'],
+        ['Hand Quarrel',     'bolt',   'crossbow_hand',   '1d3',   '1d2',   0.1, 'Hand crossbow only'],
+        ['Light Quarrel',    'bolt',   'crossbow_light',  '1d6+1', '1d8+1', 0.1, 'Light crossbow only'],
+        ['Heavy Quarrel',    'bolt',   'crossbow_heavy',  '1d8+1', '1d10+1',0.1, 'Heavy crossbow only'],
+        ['Pellet (crossbow)','bolt',   'crossbow_light',  '1d4',   '1d4',   0.1, 'Pellet bow only'],
+        ['Sling Bullet',     'bullet', 'sling',           '1d4+1', '1d6+1', 0.1, 'Standard sling ammunition'],
+        ['Sling Stone',      'stone',  'sling',           '1d4',   '1d4',   0.1, 'Field-expedient, -1 to hit'],
+        ['Blowgun Needle',   'needle', 'blowgun',         '1',     '1',     0.0, 'Can be poisoned'],
+        ['Blowgun Dart',     'dart',   'blowgun',         '1d3',   '1d2',   0.0, 'Barbed dart'],
+      ];
+      for (const [name, ammoType, compatRanged, dsm, dl, weight, notes] of AMMO) {
+        await db.query(
+          `INSERT INTO weapons_catalog (name, ammo_type, compatible_ranged, damage_sm, damage_l, weight, notes)
+           VALUES($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (name) DO NOTHING`,
+          [name, ammoType, compatRanged, dsm, dl, weight, notes]
+        );
+      }
+      console.log('[auto-migrate] ammo seed: done');
+    } catch (e) { console.warn('[auto-migrate] ammo seed skipped:', e.message); }
+
     // ── Add missing columns to character_equipment ────────────────────────────
     try {
       await db.query(`ALTER TABLE character_equipment ADD COLUMN IF NOT EXISTS quantity     INTEGER DEFAULT 1;`);

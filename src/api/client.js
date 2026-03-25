@@ -286,6 +286,13 @@ export const api = {
     ).toString();
     return apiFetch(`/armor-catalog${qs ? `?${qs}` : ''}`);
   },
+  // Ammo catalog — optionally filtered by equipped ranged weapon name
+  getCompatibleAmmo: (rangedWeaponName) => {
+    const qs = rangedWeaponName
+      ? `?ranged_weapon_name=${encodeURIComponent(rangedWeaponName)}`
+      : '';
+    return apiFetch(`/weapons-catalog/ammo${qs}`);
+  },
 
   // ── Visibility toggles (DM only) ──────────────────────────────────
   setQuestVisibility:     (id, v) => apiFetch(`/quests/${id}`,          { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
