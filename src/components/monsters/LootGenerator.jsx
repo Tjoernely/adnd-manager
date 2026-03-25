@@ -101,7 +101,7 @@ const CAT_ICON = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function LootGenerator({ monster, groups, terrain = 'dungeon', difficulty = 'Medium', partyLevel = 5 }) {
+export default function LootGenerator({ monster, groups, terrain = 'dungeon', difficulty = 'Medium', partyLevel = 5, onLootGenerated }) {
   const [lootLines,    setLootLines]    = useState(null);
   const [aiText,       setAiText]       = useState(null);
   const [smartResult,  setSmartResult]  = useState(null);
@@ -180,6 +180,15 @@ export default function LootGenerator({ monster, groups, terrain = 'dungeon', di
 
       setSmartResult({ items: results, totalXp, totalGp, budget, log });
       setActiveTab('smart');
+      onLootGenerated?.(results.map(item => ({
+        name:             item.name,
+        item_type:        (item.category || 'misc').toLowerCase(),
+        is_magical:       true,
+        value_gp:         item.gpValue,
+        magical_item_id:  item.id,
+        description:      `${item.category} — ${item.listedXp.toLocaleString()} XP`,
+        identify_state:   'unknown',
+      })));
     } catch (e) {
       setSmartError(e.message ?? 'Failed to fetch loot pool — is the server running?');
     } finally { setSmartLoading(false); }

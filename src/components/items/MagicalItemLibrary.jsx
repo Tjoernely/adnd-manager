@@ -27,7 +27,7 @@ const TABLE_LETTERS = 'ABCDEFGHIJKLMNOPQRST'.split('');
  * Props:
  *   onBack — () => void
  */
-export default function MagicalItemLibrary({ onBack }) {
+export default function MagicalItemLibrary({ onBack, campaignId }) {
   // ── Meta ──────────────────────────────────────────────────────────────────
   const [meta, setMeta] = useState(null);
 
@@ -53,6 +53,31 @@ export default function MagicalItemLibrary({ onBack }) {
   // ── Detail ────────────────────────────────────────────────────────────────
   const [selected,   setSelected]   = useState(null);
   const [detailLoad, setDetailLoad] = useState(false);
+
+  // ── Add to Party Loot ─────────────────────────────────────────────────────
+  const [addingToLoot, setAddingToLoot] = useState(null); // item.id while in-flight
+  const [lootSuccess,  setLootSuccess]  = useState({});   // item.id → true (clears after timeout)
+
+  async function handleAddToLoot(item) {
+    if (!campaignId || addingToLoot === item.id) return;
+    setAddingToLoot(item.id);
+    try {
+      await api.createPartyEquipment({
+        campaign_id:          campaignId,
+        name:                 item.name,
+        description:          item.description_preview || item.description || '',
+        is_magical:           true,
+        identify_state:       'unknown',
+        item_type:            (item.category || 'misc').toLowerCase(),
+        magical_item_id:      item.id,
+        value_gp:             item.value_gp ?? null,
+        source:               'found',
+      });
+      setLootSuccess(prev => ({ ...prev, [item.id]: true }));
+      setTimeout(() => setLootSuccess(prev => { const n = { ...prev }; delete n[item.id]; return n; }), 3000);
+    } catch (e) { console.error('Add to party loot failed:', e); }
+    finally { setAddingToLoot(null); }
+  }
 
   const searchDebounce = useRef(null);
 
@@ -335,12 +360,37 @@ export default function MagicalItemLibrary({ onBack }) {
               </div>
 
               {/* ── Detail panel — slides from RIGHT ──────────────────────── */}
-              <div className={`mi-detail-panel${selected ? ' mi-detail-panel--open' : ''}`}>
-                <ItemDetail
-                  item={selected}
-                  loading={detailLoad}
-                  onClose={() => setSelected(null)}
-                />
+              <div className={`mi-detail-panel${selected ? ' mi-detail-panel--open' : ''}`}
+                style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <ItemDetail
+                    item={selected}
+                    loading={detailLoad}
+                    onClose={() => setSelected(null)}
+                  />
+                </div>
+                {selected && campaignId && (
+                  <div style={{
+                    padding: '10px 14px', borderTop: '1px solid rgba(200,168,75,0.2)',
+                    flexShrink: 0, background: 'rgba(0,0,0,.25)',
+                  }}>
+                    <button
+                      onClick={() => handleAddToLoot(selected)}
+                      disabled={addingToLoot === selected.id}
+                      style={{
+                        width: '100%', padding: '8px 12px', borderRadius: 5, cursor: addingToLoot === selected.id ? 'not-allowed' : 'pointer',
+                        background: lootSuccess[selected.id] ? 'rgba(109,190,136,.18)' : 'rgba(212,160,53,.1)',
+                        border: `1px solid ${lootSuccess[selected.id] ? 'rgba(109,190,136,.5)' : 'rgba(212,160,53,.35)'}`,
+                        color: lootSuccess[selected.id] ? '#6dbe88' : '#c8a040',
+                        fontSize: 12, fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif",
+                        fontVariant: 'small-caps', letterSpacing: '0.08em',
+                        opacity: addingToLoot === selected.id ? 0.6 : 1,
+                      }}
+                    >
+                      {addingToLoot === selected.id ? '⏳ Adding…' : lootSuccess[selected.id] ? '✓ Added to Party Loot' : '📦 Add to Party Loot'}
+                    </button>
+                  </div>
+                )}
               </div>
 
             </div>

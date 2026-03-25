@@ -30,27 +30,29 @@ router.get('/', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
-// ── Create (DM only) ──────────────────────────────────────────────────────────
+// ── Create (any campaign member) ──────────────────────────────────────────────
 router.post('/', auth, async (req, res) => {
   try {
     const {
       campaign_id, name, description = '', item_type = 'mundane',
       identify_state = 'unknown', weight_lbs, value_gp,
       magical_item_id, notes = '',
+      source, source_encounter_id,
     } = req.body ?? {};
 
     if (!campaign_id || !name)
       return res.status(400).json({ error: 'campaign_id and name required' });
-    if (!(await isDM(campaign_id, req.user.id)))
-      return res.status(403).json({ error: 'DM only' });
+    if (!(await hasAccess(campaign_id, req.user.id)))
+      return res.status(403).json({ error: 'Access denied' });
 
     const row = await db.one(
       `INSERT INTO party_equipment
          (campaign_id, name, description, item_type, identify_state,
-          weight_lbs, value_gp, magical_item_id, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+          weight_lbs, value_gp, magical_item_id, notes, source, source_encounter_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [campaign_id, name.trim(), description, item_type, identify_state,
-       weight_lbs ?? null, value_gp ?? null, magical_item_id ?? null, notes],
+       weight_lbs ?? null, value_gp ?? null, magical_item_id ?? null, notes,
+       source ?? null, source_encounter_id ?? null],
     );
     res.status(201).json(row);
   } catch (e) { next500(e, res); }

@@ -639,11 +639,35 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
     onEncounterUpdate(enc.id, { current_round: newRound });
   }
 
+  const [completing, setCompleting] = useState(false);
+
   async function markComplete() {
+    setCompleting(true);
     try {
+      // Transfer saved loot_data items to party equipment pool first
+      const lootItems = enc.loot_data
+        ? (typeof enc.loot_data === 'string' ? JSON.parse(enc.loot_data) : enc.loot_data)
+        : [];
+      for (const item of lootItems) {
+        try {
+          await api.createPartyEquipment({
+            campaign_id:       campaignId,
+            name:              item.name,
+            description:       item.description ?? '',
+            item_type:         item.item_type ?? 'misc',
+            identify_state:    item.identify_state ?? 'unknown',
+            value_gp:          item.value_gp ?? null,
+            magical_item_id:   item.magical_item_id ?? null,
+            source:            'encounter',
+            source_encounter_id: enc.id,
+          });
+        } catch { /* skip individual item failures */ }
+      }
       await api.updateSavedEncounter(enc.id, { status: 'completed' });
       onEncounterUpdate(enc.id, { status: 'completed' });
-    } catch { /* */ }
+    } catch { /* */ } finally {
+      setCompleting(false);
+    }
   }
 
   async function rollSmartLoot() {
@@ -1045,11 +1069,11 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
       {/* ── Complete encounter button ── */}
       {isActive && isDM && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
-          <button onClick={markComplete} style={{
-            padding: '8px 20px', borderRadius: 6, cursor: 'pointer', fontFamily: ff, fontSize: 12,
+          <button onClick={markComplete} disabled={completing} style={{
+            padding: '8px 20px', borderRadius: 6, cursor: completing ? 'not-allowed' : 'pointer', fontFamily: ff, fontSize: 12,
             background: 'rgba(109,190,136,.12)', border: `1px solid rgba(109,190,136,.4)`,
-            color: C.green, fontWeight: 'bold',
-          }}>✅ Complete Encounter</button>
+            color: C.green, fontWeight: 'bold', opacity: completing ? 0.6 : 1,
+          }}>{completing ? '⏳ Completing…' : '✅ Complete Encounter'}</button>
           {deadXpEarned > 0 && (
             <span style={{ fontSize: 11, color: C.gold, fontFamily: ff }}>
               ⚔ {deadXpEarned.toLocaleString()} XP earned so far

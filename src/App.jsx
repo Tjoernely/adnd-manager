@@ -227,7 +227,7 @@ export default function App() {
   // ── Magical Items screen ────────────────────────────────────
   if (screen === 'magical-items') {
     return (
-      <MagicalItemLibrary onBack={() => setScreen('dashboard')} />
+      <MagicalItemLibrary onBack={() => setScreen('dashboard')} campaignId={activeCampaign?.id} />
     );
   }
 

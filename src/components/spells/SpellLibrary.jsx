@@ -90,6 +90,8 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
 
   // ── Add-to-spellbook / make-scroll loading state ──────────────────────────
   const [addingSpell,  setAddingSpell]  = useState(null); // { id, action:'book'|'scroll' }
+  const [spellbookIds, setSpellbookIds] = useState(new Set()); // spell_db_id already in spellbook
+  const [spellSuccess, setSpellSuccess] = useState({}); // spellId → 'book'|'scroll' (clears after timeout)
 
   // ── Results ───────────────────────────────────────────────────────────────
   const [spells,    setSpells]    = useState([]);
@@ -194,6 +196,15 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
     setCharFilter(null);
   };
 
+  // Fetch spellbook when character filter changes
+  useEffect(() => {
+    if (!charFilter) { setSpellbookIds(new Set()); return; }
+    api.getCharacterSpells(charFilter.id).then(spells => {
+      const ids = new Set((Array.isArray(spells) ? spells : []).map(s => s.spell_db_id).filter(Boolean));
+      setSpellbookIds(ids);
+    }).catch(() => {});
+  }, [charFilter?.id]);
+
   // ── Apply character filter ────────────────────────────────────────────────
   const applyCharFilter = char => {
     setCharFilter(char);
@@ -253,7 +264,7 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
 
   // ── Add to spellbook ──────────────────────────────────────────────────────
   async function handleAddToSpellbook(spell) {
-    if (!charFilter || addingSpell) return;
+    if (!charFilter || addingSpell || spellbookIds.has(spell.id)) return;
     setAddingSpell({ id: spell.id, action: 'book' });
     try {
       await api.createCharacterSpell({
@@ -266,6 +277,9 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
         is_special:   false,
         spell_db_id:  spell.id,
       });
+      setSpellbookIds(prev => new Set([...prev, spell.id]));
+      setSpellSuccess(prev => ({ ...prev, [spell.id]: 'book' }));
+      setTimeout(() => setSpellSuccess(prev => { const n = { ...prev }; delete n[spell.id]; return n; }), 3000);
     } catch (e) { console.error('Add to spellbook failed:', e); }
     finally { setAddingSpell(null); }
   }
@@ -276,12 +290,17 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
     setAddingSpell({ id: spell.id, action: 'scroll' });
     try {
       await api.createPartyEquipment({
-        campaign_id:  campaignId,
-        name:         `Scroll: ${spell.name}`,
-        description:  `Level ${spell.spell_level} ${spell.spell_group} spell`,
-        item_type:    'scroll',
-        notes:        `Spell ID: ${spell.id}`,
+        campaign_id:       campaignId,
+        name:              `Scroll of ${spell.name}`,
+        description:       `Level ${spell.spell_level} ${spell.spell_group} spell scroll`,
+        is_magical:        true,
+        identify_state:    'unknown',
+        item_type:         'scroll',
+        source:            'crafted',
+        notes:             `spell_id:${spell.id}`,
       });
+      setSpellSuccess(prev => ({ ...prev, [spell.id]: 'scroll' }));
+      setTimeout(() => setSpellSuccess(prev => { const n = { ...prev }; delete n[spell.id]; return n; }), 3000);
     } catch (e) { console.error('Make scroll failed:', e); }
     finally { setAddingSpell(null); }
   }
@@ -559,32 +578,45 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
                                 </div>
                               )}
                             </div>
-                            {charFilter && !overCap && !isOpposition && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px', justifyContent: 'center', flexShrink: 0 }}>
-                                <button
-                                  onClick={e => { e.stopPropagation(); handleAddToSpellbook(spell); }}
-                                  disabled={isAdding}
-                                  title={`Add ${spell.name} to ${charFilter.name}'s spellbook`}
-                                  style={{
-                                    fontSize: 11, padding: '3px 7px', borderRadius: 4, cursor: isAdding ? 'not-allowed' : 'pointer',
-                                    background: 'rgba(109,190,136,.1)', border: '1px solid rgba(109,190,136,.35)',
-                                    color: '#6dbe88', fontFamily: 'inherit', opacity: isAdding ? 0.5 : 1, whiteSpace: 'nowrap',
-                                  }}
-                                >{addingSpell?.id === spell.id && addingSpell.action === 'book' ? '…' : '📖'}</button>
-                                {campaignId && (
+                            {charFilter && !overCap && !isOpposition && (() => {
+                              const inBook     = spellbookIds.has(spell.id);
+                              const bookAdding = addingSpell?.id === spell.id && addingSpell.action === 'book';
+                              const bookDone   = spellSuccess[spell.id] === 'book';
+                              const scrollAdding = addingSpell?.id === spell.id && addingSpell.action === 'scroll';
+                              const scrollDone   = spellSuccess[spell.id] === 'scroll';
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px', justifyContent: 'center', flexShrink: 0 }}>
                                   <button
-                                    onClick={e => { e.stopPropagation(); handleMakeScroll(spell); }}
-                                    disabled={isAdding}
-                                    title={`Add ${spell.name} scroll to party pool`}
+                                    onClick={e => { e.stopPropagation(); handleAddToSpellbook(spell); }}
+                                    disabled={isAdding || inBook}
+                                    title={inBook ? 'Already in spellbook' : `Add ${spell.name} to ${charFilter.name}'s spellbook`}
                                     style={{
-                                      fontSize: 11, padding: '3px 7px', borderRadius: 4, cursor: isAdding ? 'not-allowed' : 'pointer',
-                                      background: 'rgba(212,160,53,.08)', border: '1px solid rgba(212,160,53,.3)',
-                                      color: '#c8a040', fontFamily: 'inherit', opacity: isAdding ? 0.5 : 1, whiteSpace: 'nowrap',
+                                      fontSize: 11, padding: '3px 7px', borderRadius: 4,
+                                      cursor: (isAdding || inBook) ? 'not-allowed' : 'pointer',
+                                      background: inBook ? 'rgba(109,190,136,.06)' : bookDone ? 'rgba(109,190,136,.18)' : 'rgba(109,190,136,.1)',
+                                      border: `1px solid ${inBook ? 'rgba(109,190,136,.2)' : 'rgba(109,190,136,.35)'}`,
+                                      color: inBook ? '#5a9a6a' : '#6dbe88',
+                                      fontFamily: 'inherit', opacity: (isAdding && !bookAdding) ? 0.4 : 1, whiteSpace: 'nowrap',
                                     }}
-                                  >{addingSpell?.id === spell.id && addingSpell.action === 'scroll' ? '…' : '📜'}</button>
-                                )}
-                              </div>
-                            )}
+                                  >{bookAdding ? '…' : inBook ? '✓ In Spellbook' : bookDone ? '✓ Added!' : '📖'}</button>
+                                  {campaignId && (
+                                    <button
+                                      onClick={e => { e.stopPropagation(); handleMakeScroll(spell); }}
+                                      disabled={isAdding}
+                                      title={`Add ${spell.name} scroll to party loot`}
+                                      style={{
+                                        fontSize: 11, padding: '3px 7px', borderRadius: 4,
+                                        cursor: isAdding ? 'not-allowed' : 'pointer',
+                                        background: scrollDone ? 'rgba(212,160,53,.18)' : 'rgba(212,160,53,.08)',
+                                        border: '1px solid rgba(212,160,53,.3)',
+                                        color: '#c8a040', fontFamily: 'inherit',
+                                        opacity: (isAdding && !scrollAdding) ? 0.4 : 1, whiteSpace: 'nowrap',
+                                      }}
+                                    >{scrollAdding ? '…' : scrollDone ? '✓ Added to Loot!' : '📜'}</button>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}

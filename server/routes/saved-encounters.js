@@ -50,6 +50,7 @@ router.post('/', auth, async (req, res) => {
     const {
       campaign_id, title, terrain, difficulty,
       party_level, party_size, total_xp,
+      loot_data,
       creatures: creaturesInput = [],   // new format: one row per creature
       groups    = [],                   // legacy format: count-based
     } = req.body ?? {};
@@ -63,10 +64,11 @@ router.post('/', auth, async (req, res) => {
     // Create the encounter record
     const enc = await db.one(
       `INSERT INTO saved_encounters
-         (campaign_id, title, terrain, difficulty, party_level, party_size, total_xp)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+         (campaign_id, title, terrain, difficulty, party_level, party_size, total_xp, loot_data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [campaign_id, title, terrain ?? null, difficulty ?? null,
-       party_level ?? null, party_size ?? null, total_xp ?? 0],
+       party_level ?? null, party_size ?? null, total_xp ?? 0,
+       loot_data ? JSON.stringify(loot_data) : null],
     );
 
     const savedCreatures = [];
@@ -121,16 +123,19 @@ router.put('/:id', auth, async (req, res) => {
       status        = enc.status,
       loot_official = enc.loot_official,
       loot_ai       = enc.loot_ai,
+      loot_data     = enc.loot_data,
       current_round = enc.current_round ?? 1,
     } = req.body ?? {};
 
     const updated = await db.one(
       `UPDATE saved_encounters
-       SET title=$1, status=$2, loot_official=$3, loot_ai=$4, current_round=$5, updated_at=NOW()
-       WHERE id=$6 RETURNING *`,
+       SET title=$1, status=$2, loot_official=$3, loot_ai=$4, current_round=$5,
+           loot_data=$6, updated_at=NOW()
+       WHERE id=$7 RETURNING *`,
       [title, status,
        loot_official ? JSON.stringify(loot_official) : null,
        loot_ai, current_round,
+       loot_data ? JSON.stringify(loot_data) : null,
        req.params.id],
     );
     res.json(updated);

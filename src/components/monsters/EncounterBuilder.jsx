@@ -145,6 +145,8 @@ export default function EncounterBuilder({ campaignId }) {
   const [groups,     setGroups]     = useState(null);
   const [genError,   setGenError]   = useState(null);
 
+  const [generatedLoot, setGeneratedLoot] = useState([]);
+
   const [encName, setEncName] = useState('');
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
@@ -349,6 +351,7 @@ export default function EncounterBuilder({ campaignId }) {
         party_size:  partySize,
         total_xp:    totalXp,
         creatures,
+        loot_data:   generatedLoot.length ? generatedLoot : undefined,
       });
       setSaveError(null);
       setSaved(true);
@@ -618,6 +621,7 @@ export default function EncounterBuilder({ campaignId }) {
             terrain={terrain}
             difficulty={ratedDiff ?? difficulty}
             partyLevel={level}
+            onLootGenerated={items => setGeneratedLoot(items)}
           />
 
           {/* Save */}

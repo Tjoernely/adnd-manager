@@ -203,6 +203,13 @@ async function autoMigrate() {
       await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS xp_value INTEGER DEFAULT 0;`);
     } catch (e) { console.warn('[auto-migrate] combat columns skipped:', e.message); }
 
+    // Loot data + source tracking columns
+    try {
+      await db.query(`ALTER TABLE saved_encounters ADD COLUMN IF NOT EXISTS loot_data JSONB DEFAULT NULL;`);
+      await db.query(`ALTER TABLE party_equipment ADD COLUMN IF NOT EXISTS source VARCHAR(50);`);
+      await db.query(`ALTER TABLE party_equipment ADD COLUMN IF NOT EXISTS source_encounter_id INTEGER;`);
+    } catch (e) { console.warn('[auto-migrate] loot-data columns skipped:', e.message); }
+
     // Fix concatenated AC/THAC0 values (e.g. 610 → 6, 1520 → 15)
     // These arise when parseIntSafe strips whitespace from "6 10" → 610
     try {
