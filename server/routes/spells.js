@@ -161,7 +161,9 @@ const CATEGORY_KEYWORDS = {
 };
 
 function buildFilters(query) {
-  const { group, level, minLevel, maxLevel, school, sphere, source, reversible, category } = query;
+  const { level, minLevel, maxLevel, school, sphere, source, reversible, category } = query;
+  // Accept both 'spell_group' (primary) and 'group' (legacy) as param names
+  const group = query.spell_group || query.group;
   // `search` is an alias for `q`
   const q = query.search ?? query.q;
 
@@ -169,10 +171,10 @@ function buildFilters(query) {
   const params     = [];
   let searchTerm   = null;
 
-  if (group) {
-    params.push(group.toLowerCase());
-    conditions.push(`spell_group = $${params.length}`);
-  }
+  // Always push; NULL means no filter (null-safe pattern)
+  const spellGroupVal = group ? group.toLowerCase() : null;
+  params.push(spellGroupVal);
+  conditions.push(`($${params.length}::text IS NULL OR spell_group = $${params.length})`);
   if (level !== undefined && level !== '') {
     const lvl = parseInt(level, 10);
     if (!Number.isNaN(lvl)) {

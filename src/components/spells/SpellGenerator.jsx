@@ -7,16 +7,28 @@ import './Spells.css';
 /**
  * SpellGenerator — random spell generator tab.
  * Props:
- *   filters   — { group, minLevel, maxLevel, school, sphere, source, reversible }
- *               shared filter state from SpellLibrary
+ *   filters      — { spell_group, minLevel, maxLevel, school, sphere, source, reversible }
+ *   charFilter   — character object | null
+ *   charMaxLevel — number | null (max castable spell level for selected character)
  */
-export default function SpellGenerator({ filters }) {
-  const [count,       setCount]       = useState(5);
-  const [results,     setResults]     = useState([]);      // { spell, kept: bool|null }[]
-  const [selected,    setSelected]    = useState(null);    // spell object (full)
-  const [detailLoad,  setDetailLoad]  = useState(false);
-  const [generating,  setGenerating]  = useState(false);
-  const [error,       setError]       = useState(null);
+export default function SpellGenerator({ filters, charFilter = null, charMaxLevel = null }) {
+  const [count,        setCount]        = useState(5);
+  const [levelCounts,  setLevelCounts]  = useState({});  // { 1: 0, 2: 0, ... }
+  const [results,      setResults]      = useState([]);   // { spell, kept: bool|null }[]
+  const [selected,     setSelected]     = useState(null);
+  const [detailLoad,   setDetailLoad]   = useState(false);
+  const [generating,   setGenerating]   = useState(false);
+  const [error,        setError]        = useState(null);
+
+  // When charFilter or charMaxLevel changes, reset levelCounts
+  React.useEffect(() => {
+    setLevelCounts({});
+  }, [charFilter?.id, charMaxLevel]);
+
+  const hasLevelCounts = charFilter && charMaxLevel > 0;
+  const totalLevelSpells = hasLevelCounts
+    ? Object.values(levelCounts).reduce((s, n) => s + (parseInt(n) || 0), 0)
+    : 0;
 
   // ── Generate ───────────────────────────────────────────────────────────────
   const generate = useCallback(async () => {
@@ -25,15 +37,28 @@ export default function SpellGenerator({ filters }) {
     setResults([]);
     setSelected(null);
     try {
-      const params = { ...filters, count };
-      const spells = await api.randomSpellBatch(params);
-      setResults(Array.isArray(spells) ? spells.map(s => ({ spell: s, kept: null })) : []);
+      if (hasLevelCounts && totalLevelSpells > 0) {
+        // Per-level generation: one batch call per level with count > 0
+        const allSpells = [];
+        for (let lv = 1; lv <= (charMaxLevel ?? 9); lv++) {
+          const cnt = parseInt(levelCounts[lv]) || 0;
+          if (cnt <= 0) continue;
+          const batch = await api.randomSpellBatch({ ...filters, level: lv, count: cnt });
+          if (Array.isArray(batch)) allSpells.push(...batch);
+        }
+        setResults(allSpells.map(s => ({ spell: s, kept: null })));
+      } else {
+        // Fallback: count-based generation
+        const params = { ...filters, count };
+        const spells = await api.randomSpellBatch(params);
+        setResults(Array.isArray(spells) ? spells.map(s => ({ spell: s, kept: null })) : []);
+      }
     } catch (e) {
       setError(e.message ?? 'Failed to generate spells');
     } finally {
       setGenerating(false);
     }
-  }, [filters, count]);
+  }, [filters, count, levelCounts, hasLevelCounts, totalLevelSpells, charMaxLevel]);
 
   // ── Keep / Discard ─────────────────────────────────────────────────────────
   const markKept    = id => setResults(r => r.map(x => x.spell.id === id ? { ...x, kept: true  } : x));
@@ -57,25 +82,53 @@ export default function SpellGenerator({ filters }) {
 
   return (
     <div className="sg-root">
+      {/* Level selection grid — shown when character with known max level is selected */}
+      {hasLevelCounts && (
+        <div className="sg-level-select">
+          <div className="sg-level-select-title">
+            Select spells to generate for {charFilter.name}:
+          </div>
+          <div className="sg-level-grid">
+            {Array.from({ length: charMaxLevel }, (_, i) => i + 1).map(lv => (
+              <label key={lv} className="sg-level-item">
+                <span className="sg-level-label">Level {lv}</span>
+                <select
+                  className="sg-level-select-input"
+                  value={levelCounts[lv] ?? 0}
+                  onChange={e => setLevelCounts(prev => ({ ...prev, [lv]: parseInt(e.target.value) || 0 }))}
+                >
+                  {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          {totalLevelSpells > 0 && (
+            <div className="sg-level-total">Total: {totalLevelSpells} spell{totalLevelSpells !== 1 ? 's' : ''}</div>
+          )}
+        </div>
+      )}
+
       {/* Controls bar */}
       <div className="sg-controls">
-        <label className="sg-count-label">
-          Generate
-          <input
-            className="sg-count-input"
-            type="number"
-            min={1}
-            max={20}
-            value={count}
-            onChange={e => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-          />
-          spells
-        </label>
+        {!hasLevelCounts && (
+          <label className="sg-count-label">
+            Generate
+            <input
+              className="sg-count-input"
+              type="number"
+              min={1}
+              max={20}
+              value={count}
+              onChange={e => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+            />
+            spells
+          </label>
+        )}
 
         <button
           className="sg-generate-btn"
           onClick={generate}
-          disabled={generating}
+          disabled={generating || (hasLevelCounts && totalLevelSpells === 0)}
         >
           {generating ? <span className="sl-spinner sl-spinner--sm" /> : '⚄ Roll'}
         </button>

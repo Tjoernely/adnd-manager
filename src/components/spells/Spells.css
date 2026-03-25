@@ -1082,3 +1082,29 @@
   .sl-toolbar { flex-wrap: wrap; }
   .sl-search-input { min-width: 0; }
 }
+
+/* ── Spell Generator level selection grid ─────────────────────────────────── */
+.sg-level-select {
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid var(--sl-border);
+  background: rgba(0,0,0,.15);
+}
+.sg-level-select-title {
+  font-size: 12px; color: var(--sl-gold); margin-bottom: 10px; letter-spacing: .5px;
+}
+.sg-level-grid {
+  display: flex; flex-wrap: wrap; gap: 8px 16px;
+}
+.sg-level-item {
+  display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--sl-text-dim);
+}
+.sg-level-label { min-width: 42px; }
+.sg-level-select-input {
+  background: rgba(0,0,0,.35); border: 1px solid var(--sl-border); border-radius: 4px;
+  color: var(--sl-text); font-family: inherit; font-size: 12px;
+  padding: 3px 6px; outline: none; cursor: pointer;
+}
+.sg-level-select-input:focus { border-color: var(--sl-gold); }
+.sg-level-total {
+  margin-top: 8px; font-size: 11px; color: var(--sl-gold-dim); font-style: italic;
+}

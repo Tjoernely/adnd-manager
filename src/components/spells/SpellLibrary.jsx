@@ -22,9 +22,41 @@ const SPELL_CATEGORIES = [
   { id: 'summoning',   label: 'Summoning' },
 ];
 
-// Class IDs that map to wizard / priest spell groups
-const WIZARD_CLASS_IDS = new Set(['mage', 'illusionist', 'specialist', 'bard']);
-const PRIEST_CLASS_IDS = new Set(['cleric', 'druid', 'shaman']);
+// Map a class name to its spell group using substring matching
+function getSpellGroup(cls) {
+  const c = (cls || '').toLowerCase();
+  if (['mage','wizard','illusionist','conjurer','invoker',
+       'diviner','enchanter','necromancer','transmuter',
+       'abjurer','wild mage'].some(k => c.includes(k))) return 'wizard';
+  if (['cleric','druid','priest','shaman','crusader',
+       'specialty priest'].some(k => c.includes(k))) return 'priest';
+  if (c.includes('bard'))    return 'wizard'; // bard draws from wizard list
+  if (c.includes('ranger'))  return 'priest';
+  if (c.includes('paladin')) return 'priest';
+  return null;
+}
+
+// Return specialist school info for wizard subclasses (null = generalist)
+const SPECIALIST_SCHOOLS = {
+  illusionist: { allowed: ['Illusion','Phantasm'],                    opposition: ['Necromancy','Invocation','Evocation','Abjuration'] },
+  conjurer:    { allowed: ['Conjuration','Summoning'],                 opposition: ['Divination','Invocation','Evocation'] },
+  invoker:     { allowed: ['Invocation','Evocation'],                  opposition: ['Conjuration','Summoning','Enchantment','Charm'] },
+  diviner:     { allowed: ['Divination'],                              opposition: ['Conjuration','Summoning','Enchantment','Charm'] },
+  enchanter:   { allowed: ['Enchantment','Charm'],                     opposition: ['Invocation','Evocation','Necromancy'] },
+  necromancer: { allowed: ['Necromancy'],                              opposition: ['Enchantment','Charm','Illusion','Phantasm'] },
+  transmuter:  { allowed: ['Alteration','Transmutation'],              opposition: ['Abjuration','Necromancy'] },
+  abjurer:     { allowed: ['Abjuration'],                              opposition: ['Alteration','Transmutation','Illusion','Phantasm'] },
+};
+function getSpecialistSchools(cls) {
+  const c = (cls || '').toLowerCase();
+  for (const [key, val] of Object.entries(SPECIALIST_SCHOOLS)) {
+    if (c.includes(key)) return val;
+  }
+  return null;
+}
+
+// Bard-accessible wizard schools (by keyword match against spell.school)
+const BARD_ALLOWED_SCHOOL_KEYWORDS = ['alteration','transmutation','enchantment','charm','illusion','phantasm','conjuration','summoning'];
 
 /**
  * SpellLibrary — full-screen spell browser.
@@ -49,11 +81,12 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
   const [sort,       setSort]       = useState('name');
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [filterOpen,   setFilterOpen]   = useState(false);
-  const [charMenuOpen, setCharMenuOpen] = useState(false);
-  const [charFilter,   setCharFilter]   = useState(null);  // selected character obj
-  const [charMaxLevel, setCharMaxLevel] = useState(null);  // visual-only cap when char selected
-  const [tab,          setTab]          = useState('library');
+  const [filterOpen,       setFilterOpen]       = useState(false);
+  const [charMenuOpen,     setCharMenuOpen]     = useState(false);
+  const [charFilter,       setCharFilter]       = useState(null);  // selected character obj
+  const [charMaxLevel,     setCharMaxLevel]     = useState(null);  // visual-only cap when char selected
+  const [charSpecialist,   setCharSpecialist]   = useState(null);  // { allowed, opposition } | null
+  const [tab,              setTab]              = useState('library');
 
   // ── Add-to-spellbook / make-scroll loading state ──────────────────────────
   const [addingSpell,  setAddingSpell]  = useState(null); // { id, action:'book'|'scroll' }
@@ -88,15 +121,15 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Build filter params object
+  // Build filter params object (spell_group is the canonical API param name)
   const filterParams = {
-    group:      group      || undefined,
-    minLevel:   minLevel   || undefined,
-    maxLevel:   maxLevel   || undefined,
-    school:     schools.length    > 0 ? schools.join(',')    : undefined,
-    sphere:     spheres.length    > 0 ? spheres.join(',')    : undefined,
-    category:   categories.length > 0 ? categories.join(',') : undefined,
-    reversible: reversible ? 'true' : undefined,
+    spell_group: group      || undefined,
+    minLevel:    minLevel   || undefined,
+    maxLevel:    maxLevel   || undefined,
+    school:      schools.length    > 0 ? schools.join(',')    : undefined,
+    sphere:      spheres.length    > 0 ? spheres.join(',')    : undefined,
+    category:    categories.length > 0 ? categories.join(',') : undefined,
+    reversible:  reversible ? 'true' : undefined,
   };
 
   // Fetch spell list
@@ -169,47 +202,40 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
     const cls = (d.selectedClass || '').toLowerCase();
     const lvl = d.charLevel || 1;
 
-    let maxCastable = 0;
+    const spellGroup     = getSpellGroup(cls);
+    const specialistInfo = getSpecialistSchools(cls);
 
-    if (cls === 'bard') {
-      // Bard: both wizard and priest, up to level 6 max
-      setGroup('');
-      setSchools([]);
+    // API-level group filter
+    setGroup(spellGroup || '');
+    // No school pre-filter — specialist opposition handled client-side visually
+    setSchools([]);
+    setCharSpecialist(specialistInfo);
+
+    // Sphere restrictions passed to API for ranger/paladin
+    if (cls.includes('ranger')) {
+      setSpheres(['animal', 'plant', 'elemental']);
+    } else if (cls.includes('paladin')) {
+      setSpheres(['combat', 'divination', 'healing', 'protection']);
+    } else {
       setSpheres([]);
-      maxCastable = Math.min(6, Math.ceil(lvl / 2));
-    } else if (cls === 'ranger') {
-      // Ranger: priest spells at level 8+, max level 3
-      setGroup('priest');
-      setSchools([]);
-      setSpheres([]);
+    }
+
+    // Max castable level
+    let maxCastable;
+    if (cls.includes('bard')) {
+      maxCastable = Math.floor(lvl / 3);                   // floor(level/3)
+    } else if (cls.includes('ranger')) {
       maxCastable = lvl >= 8 ? 3 : 0;
-    } else if (cls === 'paladin') {
-      // Paladin: priest spells at level 9+, max level 4
-      setGroup('priest');
-      setSchools([]);
-      setSpheres([]);
+    } else if (cls.includes('paladin')) {
       maxCastable = lvl >= 9 ? 4 : 0;
-    } else if (WIZARD_CLASS_IDS.has(cls)) {
-      setGroup('wizard');
-      // Specialist school → pre-select it; illusionist always gets illusion
-      let school = (d.specialistSchool || '').toLowerCase();
-      if (!school && cls === 'illusionist') school = 'illusion';
-      setSchools(school ? [school] : []);
-      setSpheres([]);
+    } else if (spellGroup === 'wizard') {
       maxCastable = Math.min(9, Math.ceil(lvl / 2));
-    } else if (PRIEST_CLASS_IDS.has(cls)) {
-      setGroup('priest');
-      setSchools([]);
-      setSpheres([]);
+    } else if (spellGroup === 'priest') {
       maxCastable = Math.min(7, Math.ceil(lvl / 2));
     } else {
-      setGroup('');
-      setSchools([]);
-      setSpheres([]);
       maxCastable = Math.min(9, Math.ceil(lvl / 2));
     }
 
-    // Store the cap for visual greying only — don't filter by level
     setCharMaxLevel(Math.max(0, maxCastable));
     setMaxLevel('');
     setMinLevel('');
@@ -218,6 +244,7 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
   const clearCharFilter = () => {
     setCharFilter(null);
     setCharMaxLevel(null);
+    setCharSpecialist(null);
     setGroup('');
     setSchools([]);
     setSpheres([]);
@@ -494,16 +521,45 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
                       {spells.map(spell => {
                         const overCap  = charMaxLevel !== null && spell.spell_level > charMaxLevel;
                         const isAdding = addingSpell?.id === spell.id;
+                        const school   = (spell.school || '').toLowerCase();
+
+                        // Specialist opposition school check
+                        const isOpposition = charSpecialist
+                          ? charSpecialist.opposition.some(s => school.includes(s.toLowerCase()))
+                          : false;
+
+                        // Bard school restriction (wizard spells, limited schools)
+                        const charCls = charFilter ? (charFilter.data?.selectedClass || '').toLowerCase() : '';
+                        const isBard  = charCls.includes('bard');
+                        const isBardForbidden = isBard && spell.school
+                          ? !BARD_ALLOWED_SCHOOL_KEYWORDS.some(k => school.includes(k))
+                          : false;
+
+                        if (isBardForbidden) return null; // hide non-bard schools entirely
+
                         return (
-                          <div key={spell.id} style={{ display: 'flex', alignItems: 'stretch', opacity: overCap ? 0.35 : 1 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
+                          <div key={spell.id} style={{
+                            display: 'flex', alignItems: 'stretch',
+                            opacity: overCap ? 0.35 : isOpposition ? 0.5 : 1,
+                          }}>
+                            <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
                               <SpellCard
                                 spell={spell}
                                 selected={selected?.id === spell.id}
                                 onClick={() => selectSpell(spell)}
                               />
+                              {isOpposition && (
+                                <div style={{
+                                  position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)',
+                                  fontSize: 10, color: '#c47070', background: 'rgba(180,50,50,.15)',
+                                  border: '1px solid rgba(180,50,50,.35)', borderRadius: 4,
+                                  padding: '1px 6px', pointerEvents: 'none',
+                                }}>
+                                  ⊗ Opposition
+                                </div>
+                              )}
                             </div>
-                            {charFilter && !overCap && (
+                            {charFilter && !overCap && !isOpposition && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px', justifyContent: 'center', flexShrink: 0 }}>
                                 <button
                                   onClick={e => { e.stopPropagation(); handleAddToSpellbook(spell); }}
@@ -605,7 +661,11 @@ export default function SpellLibrary({ onBack, campaignId, characters = [] }) {
                 )}
               </div>
             )}
-            <SpellGenerator filters={filterParams} />
+            <SpellGenerator
+              filters={filterParams}
+              charFilter={charFilter}
+              charMaxLevel={charMaxLevel}
+            />
           </>
         )}
 
