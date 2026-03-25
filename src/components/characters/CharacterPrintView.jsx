@@ -12,7 +12,7 @@
  *   characterData  {object}  — output of useCharacter → serializeCharacter()
  */
 
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 import {
   PARENT_STATS, SUB_ABILITIES, SUB_PARENT,
@@ -40,6 +40,10 @@ import {
 import { getSocialRank, getRankTable } from '../../data/socialStatus.js';
 
 import '../PrintSheet.css';
+
+import {
+  calcAC, calcWeaponThac0, calcWeaponDamage, calcAttacksPerRound,
+} from '../../rules-engine/combatCalc.js';
 
 // ── THAC0 by class group ──────────────────────────────────────────────────────
 function getBaseTHAC0(classGroup, level) {
@@ -209,8 +213,21 @@ function FillLine({ label, value, wide }) {
 //  MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function CharacterPrintView({ characterData }) {
+export function CharacterPrintView({ characterData, characterId }) {
   const cd = characterData ?? {};
+
+  // ── Fetch equipped items when characterId is provided ─────────────────────
+  const [equippedItems, setEquippedItems] = useState([]);
+  useEffect(() => {
+    if (!characterId) return;
+    fetch(
+      `/api/character-equipment?character_id=${characterId}`,
+      { headers: { Authorization: 'Bearer ' + localStorage.getItem('dnd_token') } },
+    )
+      .then(r => r.ok ? r.json() : [])
+      .then(items => setEquippedItems(Array.isArray(items) ? items.filter(i => i.slot) : []))
+      .catch(() => {});
+  }, [characterId]);
 
   // ── Destructure raw stored fields ─────────────────────────────────────────
   const {
@@ -302,6 +319,19 @@ export function CharacterPrintView({ characterData }) {
   );
   const showExStr   = effSub('muscle') === 18;
   const exStrActive = showExStr && (!!classData?.allowsExStr || abilGrantsExStr);
+
+  // ── Equipment-derived combat values ──────────────────────────────────────
+  const acCalc = useMemo(
+    () => calcAC(cd, equippedItems),
+    [cd, equippedItems],
+  );
+  const equippedWeapons = useMemo(
+    () => equippedItems.filter(
+      i => (i.slot === 'hand_r' || i.slot === 'hand_l' || i.slot === 'ranged') &&
+           i.item_type !== 'ammo' && i.item_type !== 'armor' && i.item_type !== 'shield',
+    ),
+    [equippedItems],
+  );
 
   // ── Derived combat values ─────────────────────────────────────────────────
   const thac0 = getBaseTHAC0(classGroup, charLevel);
@@ -438,7 +468,7 @@ export function CharacterPrintView({ characterData }) {
           <StatBox label="Melee Dmg Adj"   value={sgn(meleeDmgAdj)} />
           <StatBox label="AC Modifier"     value={sgn(acAdj)} />
           <div className="ps-combat-fields">
-            <FillLine label="AC:" />
+            <FillLine label="AC:" value={equippedItems.length ? acCalc.finalAC : undefined} />
             <FillLine label="HP:" />
             <FillLine label="Max HP:" />
             <FillLine label="Init Adj:" value={sgn(getBalanceStats(effSub('balance')).reactAdj)} />
@@ -561,7 +591,6 @@ export function CharacterPrintView({ characterData }) {
       <div className="ps-page ps-page--break">
 
         {/* ── Weapons ───────────────────────────────────────────────── */}
-        {/* Rows will be populated when the equipment system is connected. */}
         <SectionHead>Weapons</SectionHead>
         <table className="ps-ability-table ps-weapons-table" style={{ marginBottom: 6 }}>
           <thead>
@@ -572,23 +601,42 @@ export function CharacterPrintView({ characterData }) {
               <th className="ps-score-col">Dmg S/M</th>
               <th className="ps-score-col">Dmg L</th>
               <th>Range</th>
-              <th className="ps-score-col">Size</th>
+              <th className="ps-score-col">Att/Rd</th>
               <th className="ps-score-col">THAC0</th>
               <th>Note</th>
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <tr key={i} className={i === 0 ? 'ps-row-top' : ''}>
+            {equippedWeapons.map((w, i) => {
+              const dmg    = calcWeaponDamage(w, cd);
+              const thac0w = calcWeaponThac0(w, cd);
+              const apr    = calcAttacksPerRound(w, cd, equippedItems);
+              const note   = [
+                w.identify_state === 'unidentified' ? '?' : null,
+                w.is_cursed ? 'Cursed' : null,
+                w.magic_bonus && w.identify_state === 'identified' && w.magic_bonus !== 0
+                  ? sgn(w.magic_bonus) : null,
+              ].filter(Boolean).join(' ');
+              return (
+                <tr key={w.id} className={i === 0 ? 'ps-row-top' : ''}>
+                  <td>{w.name}{w.slot === 'hand_l' ? ' (off)' : ''}</td>
+                  <td>{w.weapon_type ?? '—'}</td>
+                  <td className="ps-score-col">{w.speed_factor ?? '—'}</td>
+                  <td className="ps-score-col">{dmg.damageSM}</td>
+                  <td className="ps-score-col">{dmg.damageL}</td>
+                  <td>{w.range_str ?? '—'}</td>
+                  <td className="ps-score-col">{apr.attacks}</td>
+                  <td className="ps-score-col">{thac0w.finalThac0}</td>
+                  <td>{note || '—'}</td>
+                </tr>
+              );
+            })}
+            {Array.from({ length: Math.max(0, 4 - equippedWeapons.length) }).map((_, i) => (
+              <tr key={`blank-${i}`}>
                 <td>&nbsp;</td>
-                <td />
-                <td className="ps-score-col" />
-                <td className="ps-score-col" />
-                <td className="ps-score-col" />
-                <td />
-                <td className="ps-score-col" />
-                <td className="ps-score-col" />
-                <td />
+                <td /><td className="ps-score-col" /><td className="ps-score-col" />
+                <td className="ps-score-col" /><td /><td className="ps-score-col" />
+                <td className="ps-score-col" /><td />
               </tr>
             ))}
           </tbody>

@@ -18,7 +18,7 @@
 import { CharacterPrintView } from './characters/CharacterPrintView.jsx';
 import './PrintSheet.css';
 
-export function PrintSheet({ isOpen, onClose, characterData }) {
+export function PrintSheet({ isOpen, onClose, characterData, characterId }) {
   return (
     <>
       {/* Screen overlay backdrop */}
@@ -37,7 +37,7 @@ export function PrintSheet({ isOpen, onClose, characterData }) {
           </button>
         </div>
 
-        <CharacterPrintView characterData={characterData} />
+        <CharacterPrintView characterData={characterData} characterId={characterId} />
       </div>
     </>
   );

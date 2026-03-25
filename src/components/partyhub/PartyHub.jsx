@@ -1812,7 +1812,7 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
           {panelTab === 'sheet' && (
             <div>
               {/* Print view renders inside the dark panel — light parchment bg is intentional */}
-              <CharacterPrintView characterData={cd} />
+              <CharacterPrintView characterData={cd} characterId={char.id} />
 
               {/* Open in Builder */}
               <div style={{ paddingTop: 12, paddingBottom: 4 }}>
