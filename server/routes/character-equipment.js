@@ -127,10 +127,13 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // ── Equip / Unequip (DM or owner, with slot rules) ────────────────────────────
+// Body: { is_equipped: bool, slot?: string }
+// When equipping, `slot` from body overrides the item's current slot.
+// When unequipping, slot is cleared to NULL.
 router.put('/:id/equip', auth, async (req, res) => {
   const client = await db.pool.connect();
   try {
-    const { is_equipped } = req.body ?? {};
+    const { is_equipped, slot: bodySlot } = req.body ?? {};
     if (is_equipped === undefined)
       return res.status(400).json({ error: 'is_equipped required' });
 
@@ -149,6 +152,9 @@ router.put('/:id/equip', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Resolve the effective slot: body overrides stored value
+    const effectiveSlot = is_equipped ? (bodySlot ?? item.slot) : null;
+
     // ── Rule 1: Unequipping a cursed item is blocked ──────────────────────────
     if (!is_equipped && item.is_equipped && item.is_cursed) {
       await client.query('ROLLBACK');
@@ -156,23 +162,23 @@ router.put('/:id/equip', auth, async (req, res) => {
     }
 
     // ── Rule 2: Equipping requires a slot ─────────────────────────────────────
-    if (is_equipped && !item.slot) {
+    if (is_equipped && !effectiveSlot) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Item must have a slot assigned before equipping' });
+      return res.status(400).json({ error: 'A slot is required to equip this item' });
     }
 
     // ── Rule 3: Slot must be valid ────────────────────────────────────────────
-    if (is_equipped && item.slot && !VALID_SLOTS.includes(item.slot)) {
+    if (is_equipped && effectiveSlot && !VALID_SLOTS.includes(effectiveSlot)) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: `Invalid slot: ${item.slot}` });
+      return res.status(400).json({ error: `Invalid slot: ${effectiveSlot}` });
     }
 
     if (is_equipped) {
       // ── Rule 4: Off-hand blocked if main hand has 2H weapon ──────────────────
-      if (item.slot === 'hand_l') {
+      if (effectiveSlot === 'hand_l') {
         const { rows: [twoH] } = await client.query(
           `SELECT id FROM character_equipment
-           WHERE character_id=$1 AND slot='hand_r' AND weapon_type='2h' AND is_equipped=TRUE`,
+           WHERE character_id=$1 AND slot='hand_r' AND (weapon_type='2h' OR is_two_handed=TRUE) AND is_equipped=TRUE`,
           [item.character_id],
         );
         if (twoH) {
@@ -182,10 +188,10 @@ router.put('/:id/equip', auth, async (req, res) => {
       }
 
       // ── Rule 5: Equipping 2H weapon in main hand — clear off-hand ────────────
-      if (item.slot === 'hand_r' && item.weapon_type === '2h') {
+      if (effectiveSlot === 'hand_r' && (item.weapon_type === '2h' || item.is_two_handed)) {
         await client.query(
           `UPDATE character_equipment
-           SET is_equipped=FALSE, updated_at=NOW()
+           SET is_equipped=FALSE, slot=NULL, updated_at=NOW()
            WHERE character_id=$1 AND slot='hand_l' AND is_equipped=TRUE`,
           [item.character_id],
         );
@@ -194,17 +200,17 @@ router.put('/:id/equip', auth, async (req, res) => {
       // ── Rule 6: Unequip any existing item in the same slot ───────────────────
       await client.query(
         `UPDATE character_equipment
-         SET is_equipped=FALSE, updated_at=NOW()
+         SET is_equipped=FALSE, slot=NULL, updated_at=NOW()
          WHERE character_id=$1 AND slot=$2 AND is_equipped=TRUE AND id<>$3`,
-        [item.character_id, item.slot, item.id],
+        [item.character_id, effectiveSlot, item.id],
       );
     }
 
     // ── Apply the change ──────────────────────────────────────────────────────
     const { rows: [updated] } = await client.query(
-      `UPDATE character_equipment SET is_equipped=$1, updated_at=NOW()
-       WHERE id=$2 RETURNING *`,
-      [is_equipped, item.id],
+      `UPDATE character_equipment SET is_equipped=$1, slot=$2, updated_at=NOW()
+       WHERE id=$3 RETURNING *`,
+      [is_equipped, effectiveSlot, item.id],
     );
 
     await client.query('COMMIT');

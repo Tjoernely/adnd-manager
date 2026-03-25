@@ -1568,11 +1568,14 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   async function handleEquipSlot(slotKey, newItemId) {
     setEquipError(null);
     try {
+      // Unequip current occupant of the slot (server also does this, but do it
+      // explicitly so the UI doesn't flicker with stale state)
       const current = charEquip.find(x => x.slot === slotKey && x.is_equipped);
       if (current && current.id !== parseInt(newItemId)) {
-        await api.updateCharacterEquipment(current.id, { slot: null, is_equipped: false });
+        await api.equipCharacterItem(current.id, { is_equipped: false });
       }
       if (newItemId) {
+        // Pass the slot so the server sets slot+is_equipped atomically
         await api.equipCharacterItem(parseInt(newItemId), { slot: slotKey, is_equipped: true });
       }
       await refreshEquip();
