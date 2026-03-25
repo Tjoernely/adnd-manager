@@ -1324,8 +1324,102 @@ function HumanoidSilhouette() {
   );
 }
 
+// Allowed item_types per slot (for dropdown filtering)
+const SLOT_ITEM_TYPES = {
+  head:      ['helmet', 'head'],
+  neck:      ['amulet', 'neck'],
+  cloak:     ['cloak'],
+  belt:      ['belt'],
+  gloves:    ['gloves'],
+  ring_l:    ['ring'],
+  ring_r:    ['ring'],
+  boots:     ['boots'],
+  shoulders: ['shoulders'],
+  body:      ['armor'],
+  wrists:    ['bracers', 'wrists'],
+  hand_r:    ['weapon'],
+  hand_l:    ['weapon', 'shield'],
+  ranged:    ['ranged'],
+  ammo:      ['ammo'],
+};
+
+const AMMO_COMPAT = {
+  bow:      ['arrow', 'flight arrow', 'sheaf arrow', 'pile arrow', 'stone arrow'],
+  crossbow: ['bolt', 'quarrel', 'hand quarrel', 'heavy quarrel', 'light quarrel', 'pellet'],
+  sling:    ['bullet', 'stone', 'sling bullet', 'sling stone'],
+  blowgun:  ['dart', 'needle', 'barbed dart'],
+  thrown:   [],
+};
+
+function getRangedCategory(name) {
+  const n = (name ?? '').toLowerCase();
+  if (n.includes('crossbow')) return 'crossbow';
+  if (n.includes('bow'))      return 'bow';
+  if (n.includes('sling'))    return 'sling';
+  if (n.includes('blowgun'))  return 'blowgun';
+  return 'thrown';
+}
+
 function SlotDropdown({ slotKey, label, charEquip, onEquip }) {
-  const currentId = charEquip.find(x => x.slot === slotKey && x.is_equipped)?.id ?? '';
+  const allowedTypes = SLOT_ITEM_TYPES[slotKey] ?? null;
+  const currentId    = charEquip.find(x => x.slot === slotKey && x.is_equipped)?.id ?? '';
+  const handRItem    = charEquip.find(x => x.slot === 'hand_r' && x.is_equipped);
+  const handRIs2H    = handRItem?.is_two_handed || handRItem?.weapon_type === '2h';
+
+  // Off-hand disabled while 2H weapon in main hand
+  if (slotKey === 'hand_l' && handRIs2H) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+        <span style={{ fontSize: 9, color: '#7a6a4a', width: 58, textAlign: 'right', flexShrink: 0 }}>{label}</span>
+        <span style={{ ...eqInputSt, display: 'inline-block', color: '#5a5040', fontStyle: 'italic', padding: '2px 8px' }}>
+          (Two-handed)
+        </span>
+      </div>
+    );
+  }
+
+  // Ammo: disabled if no ranged equipped, filtered by compat if there is
+  if (slotKey === 'ammo') {
+    const rangedItem = charEquip.find(x => x.slot === 'ranged' && x.is_equipped);
+    if (!rangedItem) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+          <span style={{ fontSize: 9, color: '#7a6a4a', width: 58, textAlign: 'right', flexShrink: 0 }}>{label}</span>
+          <select disabled style={{ ...eqInputSt, opacity: 0.35 }}>
+            <option>— no ranged —</option>
+          </select>
+        </div>
+      );
+    }
+    const category    = getRangedCategory(rangedItem.name);
+    const compatTerms = AMMO_COMPAT[category] ?? [];
+    let ammoItems = charEquip.filter(x => x.item_type === 'ammo');
+    if (category !== 'thrown' && compatTerms.length) {
+      ammoItems = ammoItems.filter(x => compatTerms.some(t => x.name.toLowerCase().includes(t)));
+    } else if (category === 'thrown') {
+      ammoItems = [];
+    }
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+        <span style={{ fontSize: 9, color: '#7a6a4a', width: 58, textAlign: 'right', flexShrink: 0 }}>{label}</span>
+        <select value={currentId} onChange={e => onEquip(slotKey, e.target.value || null)} style={eqInputSt}>
+          <option value="">— empty —</option>
+          {ammoItems.map(item => (
+            <option key={item.id} value={item.id}>{item.name}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  // Standard slot: filter by allowed item types, plus hand_l excludes 2H weapons
+  let filteredItems = allowedTypes
+    ? charEquip.filter(x => allowedTypes.includes(x.item_type))
+    : charEquip;
+  if (slotKey === 'hand_l') {
+    filteredItems = filteredItems.filter(x => !x.is_two_handed && x.weapon_type !== '2h');
+  }
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
       <span style={{ fontSize: 9, color: '#7a6a4a', width: 58, textAlign: 'right', flexShrink: 0, lineHeight: 1.2 }}>
@@ -1337,7 +1431,7 @@ function SlotDropdown({ slotKey, label, charEquip, onEquip }) {
         style={eqInputSt}
       >
         <option value="">— empty —</option>
-        {charEquip.map(item => (
+        {filteredItems.map(item => (
           <option key={item.id} value={item.id}>
             {item.name}{item.magic_bonus > 0 ? ` +${item.magic_bonus}` : ''}
           </option>
@@ -1366,13 +1460,22 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   // Paperdoll UI state
   const [poolOpen,       setPoolOpen]       = useState(false);
   const [currency,       setCurrency]       = useState('0');
-  const [addCharOpen,    setAddCharOpen]    = useState(false);
   const [newName,        setNewName]        = useState('');
-  const [newType,        setNewType]        = useState('mundane');
+  const [newType,        setNewType]        = useState('weapon');
   const [newWeight,      setNewWeight]      = useState('');
   const [newQty,         setNewQty]         = useState('1');
   const [newNotes,       setNewNotes]       = useState('');
   const [addCharWorking, setAddCharWorking] = useState(false);
+
+  // Catalog modal state
+  const [catalogOpen,       setCatalogOpen]       = useState(false);
+  const [catalogMode,       setCatalogMode]       = useState('catalog');
+  const [catalogTab,        setCatalogTab]        = useState('weapons');
+  const [weapSearch,        setWeapSearch]        = useState('');
+  const [weapCatalog,       setWeapCatalog]       = useState([]);
+  const [armorCatalog,      setArmorCatalog]      = useState([]);
+  const [catalogLoading,    setCatalogLoading]    = useState(false);
+  const [addingFromCatalog, setAddingFromCatalog] = useState(null);
 
   const cd = char.character_data ?? {};
 
@@ -1491,11 +1594,62 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
         quantity: parseInt(newQty) || 1,
         notes: newNotes,
       });
-      setNewName(''); setNewType('mundane'); setNewWeight(''); setNewQty('1'); setNewNotes('');
-      setAddCharOpen(false);
+      setNewName(''); setNewType('weapon'); setNewWeight(''); setNewQty('1'); setNewNotes('');
+      setCatalogOpen(false);
       await refreshEquip();
     } catch (e) { setEquipError(e.message); }
     finally { setAddCharWorking(false); }
+  }
+
+  // Load catalogs lazily when the modal first opens
+  useEffect(() => {
+    if (!catalogOpen) return;
+    if (weapCatalog.length > 0 && armorCatalog.length > 0) return;
+    setCatalogLoading(true);
+    Promise.all([
+      api.getWeaponsCatalog().catch(() => []),
+      api.getArmorCatalog().catch(() => []),
+    ]).then(([weaps, armors]) => {
+      setWeapCatalog(Array.isArray(weaps) ? weaps : []);
+      setArmorCatalog(Array.isArray(armors) ? armors : []);
+      setCatalogLoading(false);
+    });
+  }, [catalogOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleAddFromCatalog(item, sourceTable) {
+    setAddingFromCatalog(item.id);
+    setEquipError(null);
+    try {
+      let itemType, weaponType = null, is2H = false, rangeStr = null;
+      if (sourceTable === 'weapon') {
+        is2H = item.is_two_handed ?? false;
+        const isRanged = item.melee_reach == null;
+        itemType   = isRanged ? 'ranged' : 'weapon';
+        weaponType = is2H ? '2h' : (item.weapon_type ?? null);
+        if (item.range_short != null) {
+          rangeStr = [item.range_short, item.range_medium, item.range_long].filter(Boolean).join('/');
+        }
+      } else {
+        itemType = item.item_type; // 'armor' or 'shield'
+      }
+      await api.createCharacterEquipment({
+        character_id:  char.id,
+        campaign_id:   campaignId,
+        name:          item.name,
+        item_type:     itemType,
+        weapon_type:   weaponType,
+        damage_s_m:    item.damage_sm  ?? null,
+        damage_l:      item.damage_l   ?? null,
+        range_str:     rangeStr,
+        armor_ac:      item.ac_bonus   ?? null,
+        weight_lbs:    item.weight     ?? null,
+        quantity:      1,
+        is_two_handed: is2H,
+        speed_factor:  item.speed_factor ?? null,
+      });
+      await refreshEquip();
+    } catch (e) { setEquipError(e.message); }
+    finally { setAddingFromCatalog(null); }
   }
 
   const totalWeight = charEquip.reduce((s, x) => s + (parseFloat(x.weight_lbs) || 0), 0);
@@ -1520,6 +1674,7 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
   const level     = cd.charLevel ?? '—';
 
   return (
+    <>
     <div style={{
       background: 'linear-gradient(180deg,#1c1408 0%,#0d0a06 100%)',
       border: `1px solid ${C.border}`,
@@ -1835,65 +1990,15 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
                     </table>
                   </div>
 
-                  {/* ── ADD ITEM ── */}
-                  {!addCharOpen ? (
-                    <button
-                      onClick={() => setAddCharOpen(true)}
-                      style={{
-                        fontSize: 11, padding: '5px 12px', borderRadius: 5, cursor: 'pointer',
-                        background: 'rgba(212,160,53,.08)', border: `1px solid ${C.border}`,
-                        color: C.gold, fontFamily: ff, width: '100%',
-                      }}
-                    >➕ Add Item to Inventory</button>
-                  ) : (
-                    <form onSubmit={handleAddCharItem} style={{
-                      background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`,
-                      borderRadius: 6, padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
-                    }}>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <input
-                          required placeholder="Item name" value={newName}
-                          onChange={e => setNewName(e.target.value)}
-                          style={{ ...inputSt, flex: 1 }}
-                        />
-                        <select value={newType} onChange={e => setNewType(e.target.value)} style={{ ...inputSt, width: 100 }}>
-                          {['mundane','weapon','armor','magic_item','potion','scroll','wand','ring','ammo','misc'].map(t => (
-                            <option key={t} value={t}>{capitalize(t.replace('_', ' '))}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <input
-                          type="number" min={0} step={0.1} placeholder="Wt (lbs)"
-                          value={newWeight} onChange={e => setNewWeight(e.target.value)}
-                          style={{ ...inputSt, width: 80 }}
-                        />
-                        <input
-                          type="number" min={1} step={1} placeholder="Qty"
-                          value={newQty} onChange={e => setNewQty(e.target.value)}
-                          style={{ ...inputSt, width: 60 }}
-                        />
-                        <input
-                          placeholder="Notes (optional)" value={newNotes}
-                          onChange={e => setNewNotes(e.target.value)}
-                          style={{ ...inputSt, flex: 1 }}
-                        />
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button type="submit" disabled={addCharWorking} style={{
-                          fontSize: 11, padding: '4px 14px', borderRadius: 4,
-                          cursor: addCharWorking ? 'not-allowed' : 'pointer',
-                          background: 'rgba(212,160,53,.15)', border: `1px solid ${C.borderHi}`,
-                          color: C.gold, fontFamily: ff, opacity: addCharWorking ? 0.5 : 1,
-                        }}>{addCharWorking ? '…' : 'Add Item'}</button>
-                        <button type="button" onClick={() => setAddCharOpen(false)} style={{
-                          fontSize: 11, padding: '4px 10px', borderRadius: 4, cursor: 'pointer',
-                          background: 'transparent', border: `1px solid ${C.border}`,
-                          color: C.textDim, fontFamily: ff,
-                        }}>Cancel</button>
-                      </div>
-                    </form>
-                  )}
+                  {/* ── ADD ITEM BUTTON ── */}
+                  <button
+                    onClick={() => { setCatalogOpen(true); setCatalogMode('catalog'); setCatalogTab('weapons'); }}
+                    style={{
+                      fontSize: 11, padding: '5px 12px', borderRadius: 5, cursor: 'pointer',
+                      background: 'rgba(212,160,53,.08)', border: `1px solid ${C.border}`,
+                      color: C.gold, fontFamily: ff, width: '100%',
+                    }}
+                  >➕ Add Item to Inventory</button>
 
                 </div>
               )}
@@ -1901,6 +2006,264 @@ function CharacterPanel({ char, campaignId, isDM, onClose, onNavigate }) {
           )}
         </div>
     </div>
+
+    {/* ════════════════════ CATALOG MODAL ════════════════════ */}
+    {catalogOpen && (
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,.78)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+        onClick={() => setCatalogOpen(false)}
+      >
+        <div
+          style={{
+            width: 680, maxHeight: '82vh',
+            background: 'linear-gradient(180deg,#1c1408 0%,#0d0a06 100%)',
+            border: `1px solid ${C.borderHi}`, borderRadius: 8,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            fontFamily: ff,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', padding: '12px 18px',
+            borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+          }}>
+            <span style={{ color: C.gold, fontSize: 14, fontWeight: 'bold', flex: 1 }}>
+              Add Item to Inventory — {cd.charName ?? char.name}
+            </span>
+            <button onClick={() => setCatalogOpen(false)} style={{
+              background: 'none', border: `1px solid ${C.border}`, borderRadius: 5,
+              color: C.textDim, fontSize: 12, cursor: 'pointer', padding: '3px 10px',
+            }}>✕</button>
+          </div>
+
+          {/* Mode tabs */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 18px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+            <button style={panelTabSt(catalogMode === 'catalog')} onClick={() => setCatalogMode('catalog')}>📚 From Catalog</button>
+            <button style={panelTabSt(catalogMode === 'custom')}  onClick={() => setCatalogMode('custom')}>✏️ Custom Item</button>
+          </div>
+
+          {/* Content */}
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+            {/* ── FROM CATALOG ── */}
+            {catalogMode === 'catalog' && (
+              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {/* Catalog sub-tabs */}
+                <div style={{ display: 'flex', gap: 6, padding: '8px 18px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+                  <button style={panelTabSt(catalogTab === 'weapons')} onClick={() => setCatalogTab('weapons')}>⚔️ Weapons</button>
+                  <button style={panelTabSt(catalogTab === 'armor')}   onClick={() => setCatalogTab('armor')}>🛡️ Armor & Shields</button>
+                </div>
+
+                {catalogLoading ? (
+                  <div style={{ color: C.textDim, textAlign: 'center', padding: 40, fontSize: 12 }}>
+                    Loading catalog…
+                  </div>
+                ) : (
+                  <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+                    {/* ── WEAPONS ── */}
+                    {catalogTab === 'weapons' && (
+                      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ padding: '8px 18px', flexShrink: 0 }}>
+                          <input
+                            placeholder="🔍 Search weapons…"
+                            value={weapSearch}
+                            onChange={e => setWeapSearch(e.target.value)}
+                            style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 14px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                            <thead style={{ position: 'sticky', top: 0, background: '#120e06', zIndex: 1 }}>
+                              <tr>
+                                {['Weapon','Type','Spd','Dmg S/M','Dmg L','Range','2H',''].map((h, i) => (
+                                  <th key={i} style={{
+                                    textAlign: i >= 5 ? 'center' : 'left', fontSize: 9,
+                                    color: C.gold, letterSpacing: 1, textTransform: 'uppercase',
+                                    padding: '4px 5px 6px', borderBottom: `1px solid ${C.border}`,
+                                    whiteSpace: 'nowrap',
+                                  }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {weapCatalog
+                                .filter(w => !weapSearch || w.name.toLowerCase().includes(weapSearch.toLowerCase()))
+                                .map(w => (
+                                  <tr key={w.id} style={{ borderBottom: `1px solid rgba(200,168,50,.06)` }}>
+                                    <td style={{ padding: '4px 5px', color: C.text }}>{w.name}</td>
+                                    <td style={{ padding: '4px 5px', color: C.textDim, whiteSpace: 'nowrap' }}>{w.weapon_type}</td>
+                                    <td style={{ padding: '4px 5px', color: C.textDim, textAlign: 'center' }}>{w.speed_factor}</td>
+                                    <td style={{ padding: '4px 5px', color: C.textDim, whiteSpace: 'nowrap' }}>{w.damage_sm}</td>
+                                    <td style={{ padding: '4px 5px', color: C.textDim, whiteSpace: 'nowrap' }}>{w.damage_l}</td>
+                                    <td style={{ padding: '4px 5px', color: C.textDim, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                      {w.range_short != null ? `${w.range_short}/${w.range_medium}/${w.range_long}` : '—'}
+                                    </td>
+                                    <td style={{ padding: '4px 5px', textAlign: 'center', color: w.is_two_handed ? C.amber : C.textDim, fontWeight: w.is_two_handed ? 'bold' : 'normal' }}>
+                                      {w.is_two_handed ? '2H' : '1H'}
+                                    </td>
+                                    <td style={{ padding: '4px 0 4px 5px', textAlign: 'right' }}>
+                                      <button
+                                        onClick={() => handleAddFromCatalog(w, 'weapon')}
+                                        disabled={addingFromCatalog === w.id}
+                                        style={{
+                                          fontSize: 10, padding: '2px 9px', borderRadius: 4, whiteSpace: 'nowrap',
+                                          background: 'rgba(212,160,53,.12)', border: `1px solid ${C.border}`,
+                                          color: C.gold, cursor: 'pointer', fontFamily: ff,
+                                          opacity: addingFromCatalog === w.id ? 0.5 : 1,
+                                        }}
+                                      >{addingFromCatalog === w.id ? '…' : '+ Add'}</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              {weapCatalog.length === 0 && (
+                                <tr>
+                                  <td colSpan={8} style={{ textAlign: 'center', color: C.textDim, fontStyle: 'italic', padding: '24px 0' }}>
+                                    No weapons in catalog — run import-weapons.mjs on the server.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── ARMOR & SHIELDS ── */}
+                    {catalogTab === 'armor' && (
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 18px 14px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                          <thead style={{ position: 'sticky', top: 0, background: '#120e06', zIndex: 1 }}>
+                            <tr>
+                              {['Name','Category','AC Bonus','DR Slash','DR Pierce','DR Bludg',''].map((h, i) => (
+                                <th key={i} style={{
+                                  textAlign: i >= 2 ? 'center' : 'left', fontSize: 9,
+                                  color: C.gold, letterSpacing: 1, textTransform: 'uppercase',
+                                  padding: '4px 5px 6px', borderBottom: `1px solid ${C.border}`,
+                                  whiteSpace: 'nowrap',
+                                }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {armorCatalog.map(a => (
+                              <tr key={a.id} style={{ borderBottom: `1px solid rgba(200,168,50,.06)` }}>
+                                <td style={{ padding: '4px 5px', color: C.text }}>
+                                  {a.name}
+                                  {a.item_type === 'shield' && <span style={{ fontSize: 9, color: C.amber, marginLeft: 4 }}>🛡</span>}
+                                </td>
+                                <td style={{ padding: '4px 5px', color: C.textDim, whiteSpace: 'nowrap' }}>{a.armor_class_type}</td>
+                                <td style={{ padding: '4px 5px', textAlign: 'center', color: a.ac_bonus < 0 ? C.green : C.textDim }}>{a.ac_bonus}</td>
+                                <td style={{ padding: '4px 5px', textAlign: 'center', color: C.textDim }}>{a.dr_slashing}</td>
+                                <td style={{ padding: '4px 5px', textAlign: 'center', color: C.textDim }}>{a.dr_piercing}</td>
+                                <td style={{ padding: '4px 5px', textAlign: 'center', color: C.textDim }}>{a.dr_bludgeoning}</td>
+                                <td style={{ padding: '4px 0 4px 5px', textAlign: 'right' }}>
+                                  <button
+                                    onClick={() => handleAddFromCatalog(a, 'armor')}
+                                    disabled={addingFromCatalog === a.id}
+                                    style={{
+                                      fontSize: 10, padding: '2px 9px', borderRadius: 4, whiteSpace: 'nowrap',
+                                      background: 'rgba(212,160,53,.12)', border: `1px solid ${C.border}`,
+                                      color: C.gold, cursor: 'pointer', fontFamily: ff,
+                                      opacity: addingFromCatalog === a.id ? 0.5 : 1,
+                                    }}
+                                  >{addingFromCatalog === a.id ? '…' : '+ Add'}</button>
+                                </td>
+                              </tr>
+                            ))}
+                            {armorCatalog.length === 0 && (
+                              <tr>
+                                <td colSpan={7} style={{ textAlign: 'center', color: C.textDim, fontStyle: 'italic', padding: '24px 0' }}>
+                                  No armor in catalog — run import-armor.mjs on the server.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── CUSTOM ITEM ── */}
+            {catalogMode === 'custom' && (
+              <div style={{ padding: '16px 18px', overflowY: 'auto' }}>
+                <form onSubmit={handleAddCharItem} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: C.textDim, marginBottom: 3, letterSpacing: 1 }}>ITEM NAME *</div>
+                      <input
+                        required placeholder="Name" value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.textDim, marginBottom: 3, letterSpacing: 1 }}>TYPE</div>
+                      <select value={newType} onChange={e => setNewType(e.target.value)} style={inputSt}>
+                        {['weapon','armor','shield','ranged','ammo',
+                          'ring','helmet','cloak','belt','boots','gloves','bracers',
+                          'amulet','shoulders','magic_item','potion','scroll','wand','mundane','misc',
+                        ].map(t => (
+                          <option key={t} value={t}>{capitalize(t.replace(/_/g, ' '))}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.textDim, marginBottom: 3, letterSpacing: 1 }}>WEIGHT (lbs)</div>
+                      <input
+                        type="number" min={0} step={0.1} placeholder="0"
+                        value={newWeight} onChange={e => setNewWeight(e.target.value)}
+                        style={{ ...inputSt, width: 80 }}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.textDim, marginBottom: 3, letterSpacing: 1 }}>QTY</div>
+                      <input
+                        type="number" min={1} step={1} placeholder="1"
+                        value={newQty} onChange={e => setNewQty(e.target.value)}
+                        style={{ ...inputSt, width: 60 }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: C.textDim, marginBottom: 3, letterSpacing: 1 }}>NOTES</div>
+                      <input
+                        placeholder="Notes (optional)" value={newNotes}
+                        onChange={e => setNewNotes(e.target.value)}
+                        style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
+                    <button type="submit" disabled={addCharWorking} style={{
+                      fontSize: 12, padding: '7px 20px', borderRadius: 5,
+                      cursor: addCharWorking ? 'not-allowed' : 'pointer',
+                      background: 'rgba(212,160,53,.15)', border: `1px solid ${C.borderHi}`,
+                      color: C.gold, fontFamily: ff, opacity: addCharWorking ? 0.5 : 1,
+                    }}>{addCharWorking ? '…' : '✓ Add to Inventory'}</button>
+                    <button type="button" onClick={() => setCatalogOpen(false)} style={{
+                      fontSize: 12, padding: '7px 14px', borderRadius: 5, cursor: 'pointer',
+                      background: 'transparent', border: `1px solid ${C.border}`,
+                      color: C.textDim, fontFamily: ff,
+                    }}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

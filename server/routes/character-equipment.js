@@ -53,6 +53,7 @@ router.post('/', auth, async (req, res) => {
       slot, weapon_type, damage_s_m, damage_l, range_str,
       armor_ac, magic_bonus = 0, is_cursed = false,
       weight_lbs, value_gp, magical_item_id, notes = '',
+      quantity = 1, is_two_handed = false, speed_factor,
     } = req.body ?? {};
 
     if (!character_id || !campaign_id || !name)
@@ -65,13 +66,15 @@ router.post('/', auth, async (req, res) => {
       `INSERT INTO character_equipment
          (character_id, campaign_id, name, description, item_type, identify_state,
           slot, weapon_type, damage_s_m, damage_l, range_str,
-          armor_ac, magic_bonus, is_cursed, weight_lbs, value_gp, magical_item_id, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          armor_ac, magic_bonus, is_cursed, weight_lbs, value_gp, magical_item_id, notes,
+          quantity, is_two_handed, speed_factor)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING *`,
       [character_id, campaign_id, name.trim(), description, item_type, identify_state,
        slot ?? null, weapon_type ?? null, damage_s_m ?? null, damage_l ?? null, range_str ?? null,
        armor_ac ?? null, magic_bonus, is_cursed, weight_lbs ?? null, value_gp ?? null,
-       magical_item_id ?? null, notes],
+       magical_item_id ?? null, notes,
+       quantity, is_two_handed, speed_factor ?? null],
     );
     res.status(201).json(row);
   } catch (e) { next500(e, res); }
@@ -88,7 +91,7 @@ router.put('/:id', auth, async (req, res) => {
     const fields = ['name','description','item_type','identify_state','slot',
                     'weapon_type','damage_s_m','damage_l','range_str',
                     'armor_ac','magic_bonus','is_cursed','weight_lbs','value_gp',
-                    'magical_item_id','notes'];
+                    'magical_item_id','notes','quantity','is_two_handed','speed_factor'];
     const updates = [];
     const values  = [];
     let p = 1;

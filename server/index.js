@@ -24,6 +24,8 @@ const aiRouter               = require('./routes/ai');
 const partyEquipmentRouter   = require('./routes/party-equipment');
 const characterEquipmentRouter = require('./routes/character-equipment');
 const characterSpellsRouter  = require('./routes/character-spells');
+const weaponsCatalogRouter   = require('./routes/weapons-catalog');
+const armorCatalogRouter     = require('./routes/armor-catalog');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -58,6 +60,8 @@ app.use('/api/ai',               aiRouter);
 app.use('/api/party-equipment',      partyEquipmentRouter);
 app.use('/api/character-equipment',  characterEquipmentRouter);
 app.use('/api/character-spells',     characterSpellsRouter);
+app.use('/api/weapons-catalog',      weaponsCatalogRouter);
+app.use('/api/armor-catalog',        armorCatalogRouter);
 
 // ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');

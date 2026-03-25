@@ -273,6 +273,20 @@ export const api = {
   updateCharacterSpell:  (id, data)        => apiFetch(`/character-spells/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
   deleteCharacterSpell:  (id)              => apiFetch(`/character-spells/${id}`, { method: 'DELETE' }),
 
+  // ── Catalog (reference data, no auth) ────────────────────────────────────────
+  getWeaponsCatalog: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/weapons-catalog${qs ? `?${qs}` : ''}`);
+  },
+  getArmorCatalog: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return apiFetch(`/armor-catalog${qs ? `?${qs}` : ''}`);
+  },
+
   // ── Visibility toggles (DM only) ──────────────────────────────────
   setQuestVisibility:     (id, v) => apiFetch(`/quests/${id}`,          { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
   setEncounterVisibility: (id, v) => apiFetch(`/encounters/${id}`,      { method: 'PUT', body: JSON.stringify({ visibility: v }) }),
