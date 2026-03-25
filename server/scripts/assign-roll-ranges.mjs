@@ -23,10 +23,20 @@ const pool = new Pool({
 
 const TABLES = 'ABCDEFGHIJKLMNOPQRST'.split('');
 
-// Ensure columns exist (idempotent)
-await pool.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_min INTEGER`);
-await pool.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_max INTEGER`);
-console.log('Columns roll_min / roll_max ensured.\n');
+// Ensure columns exist — requires table ownership (postgres user).
+// If adnduser lacks ALTER TABLE rights, run this manually first:
+//   sudo -u postgres psql adnddb -c "ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_min INTEGER; ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_max INTEGER;"
+try {
+  await pool.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_min INTEGER`);
+  await pool.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_max INTEGER`);
+  console.log('Columns roll_min / roll_max ensured.\n');
+} catch (e) {
+  if (e.code === '42501') {
+    console.log('No ALTER TABLE permission — assuming columns already exist, continuing…\n');
+  } else {
+    throw e;
+  }
+}
 
 let totalUpdated = 0;
 
