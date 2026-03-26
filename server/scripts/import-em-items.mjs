@@ -1,13 +1,13 @@
 /**
  * import-em-items.mjs
  *
- * Scrapes magical item tables from adnd2e.fandom.com (EM sourcebook)
- * and writes parsed items to a staging table for review / merge.
+ * Fetches magical item tables from adnd2e.fandom.com (EM sourcebook)
+ * via the MediaWiki API (bypasses Cloudflare) and writes parsed items
+ * to a staging table for review / merge.
  *
  * Default (safe): --table A --dry-run --limit 10
  */
 
-import { load }          from 'cheerio';
 import pg                from 'pg';
 import fs                from 'fs';
 import path              from 'path';
@@ -66,6 +66,7 @@ function getPool() {
 
 // ── Table metadata ────────────────────────────────────────────────────────────
 const BASE_WIKI = 'https://adnd2e.fandom.com';
+const API_BASE  = 'https://adnd2e.fandom.com/api.php';
 
 const TABLE_WIKI_NAMES = {
   A: 'Magical Liquids',
@@ -90,44 +91,67 @@ const TABLE_WIKI_NAMES = {
   T: 'Artifacts & Relics',
 };
 
-// Fallback URLs — used if index page discovery misses a table
-const TABLE_URL_FALLBACKS = {
-  A: BASE_WIKI + '/wiki/Magical_Liquids_(EM)',
-  B: BASE_WIKI + '/wiki/Scrolls_(EM)',
-  C: BASE_WIKI + '/wiki/Rings_(EM)',
-  D: BASE_WIKI + '/wiki/Rods_(EM)',
-  E: BASE_WIKI + '/wiki/Staves_(EM)',
-  F: BASE_WIKI + '/wiki/Wands_(EM)',
-  G: BASE_WIKI + '/wiki/Books_%26_Tomes_(EM)',
-  H: BASE_WIKI + '/wiki/Gems_%26_Jewelry_(EM)',
-  I: BASE_WIKI + '/wiki/Clothing_(EM)',
-  J: BASE_WIKI + '/wiki/Boots%2C_Gloves_%26_Accessories_(EM)',
-  K: BASE_WIKI + '/wiki/Girdles_%26_Helmets_(EM)',
-  L: BASE_WIKI + '/wiki/Bags%2C_Bands_%26_Bottles_(EM)',
-  M: BASE_WIKI + '/wiki/Dusts_%26_Stones_(EM)',
-  N: BASE_WIKI + '/wiki/Household_Items_(EM)',
-  O: BASE_WIKI + '/wiki/Musical_Instruments_(EM)',
-  P: BASE_WIKI + '/wiki/Weird_Stuff_(EM)',
-  Q: BASE_WIKI + '/wiki/Humorous_Items_(EM)',
-  R: BASE_WIKI + '/wiki/Armor_%26_Shields_(EM)',
-  S: BASE_WIKI + '/wiki/Weapons_(EM)',
-  T: BASE_WIKI + '/wiki/Artifacts_%26_Relics_(EM)',
+// Fallback page titles — used if index page discovery misses a table
+const TABLE_PAGE_TITLES = {
+  A: 'Magical_Liquids_(EM)',
+  B: 'Scrolls_(EM)',
+  C: 'Rings_(EM)',
+  D: 'Rods_(EM)',
+  E: 'Staves_(EM)',
+  F: 'Wands_(EM)',
+  G: 'Books_%26_Tomes_(EM)',
+  H: 'Gems_%26_Jewelry_(EM)',
+  I: 'Clothing_(EM)',
+  J: 'Boots%2C_Gloves_%26_Accessories_(EM)',
+  K: 'Girdles_%26_Helmets_(EM)',
+  L: 'Bags%2C_Bands_%26_Bottles_(EM)',
+  M: 'Dusts_%26_Stones_(EM)',
+  N: 'Household_Items_(EM)',
+  O: 'Musical_Instruments_(EM)',
+  P: 'Weird_Stuff_(EM)',
+  Q: 'Humorous_Items_(EM)',
+  R: 'Armor_%26_Shields_(EM)',
+  S: 'Weapons_(EM)',
+  T: 'Artifacts_%26_Relics_(EM)',
 };
 
-// ── Rate-limited fetch with retries ──────────────────────────────────────────
+// Human-readable wiki URLs for display / sourceUrl fields
+const TABLE_URL_FALLBACKS = Object.fromEntries(
+  Object.entries(TABLE_PAGE_TITLES).map(([k, v]) => [k, `${BASE_WIKI}/wiki/${v}`]),
+);
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function fetchWithRetry(url, retries = 3, baseDelay = delayMs) {
-  let currentDelay = baseDelay;
+// ── MediaWiki API fetch ───────────────────────────────────────────────────────
+/**
+ * Fetch raw wikitext for a page via the MediaWiki API.
+ * API does NOT hit Cloudflare protection — safe from Node.js.
+ */
+async function fetchWikitext(pageTitle, retries = 3) {
+  const encodedTitle = pageTitle.includes('%') ? pageTitle : encodeURIComponent(pageTitle);
+  const apiUrl = `${API_BASE}?action=query&titles=${encodedTitle}&prop=revisions&rvprop=content&format=json&redirects=1`;
+  let currentDelay = delayMs;
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'ADnD-Manager-Bot/1.0' },
+      const res = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'ADnD-Manager-Bot/1.0 (import script; non-commercial)',
+          'Accept':     'application/json',
+        },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.text();
+      const data  = await res.json();
+      const pages = data?.query?.pages;
+      if (!pages) throw new Error('No pages in API response');
+      const page  = Object.values(pages)[0];
+      if (page.missing !== undefined) throw new Error(`Page not found: ${pageTitle}`);
+      const wikitext = page?.revisions?.[0]?.['*'];
+      if (!wikitext) throw new Error('No wikitext in API response');
+      return wikitext;
     } catch (e) {
-      if (attempt === retries) throw new Error(`${e.message} — ${url}`);
+      if (attempt === retries) throw new Error(`${e.message} — ${pageTitle}`);
       console.warn(`    ⚠ Attempt ${attempt}/${retries} failed: ${e.message} — retry in ${currentDelay * 2}ms`);
       await sleep(currentDelay * 2);
       currentDelay *= 2;
@@ -135,47 +159,76 @@ async function fetchWithRetry(url, retries = 3, baseDelay = delayMs) {
   }
 }
 
-// ── Discover table URLs from index page ───────────────────────────────────────
-async function discoverTableUrls() {
-  const INDEX_URL = BASE_WIKI + '/wiki/Magical_Item_Random_Determination_Tables_(EM)';
-  const result    = { ...TABLE_URL_FALLBACKS };
+// ── Wikitext helpers ──────────────────────────────────────────────────────────
 
-  // Reverse map: normalized wiki name → letter
-  const nameToLetter = {};
-  for (const [letter, name] of Object.entries(TABLE_WIKI_NAMES)) {
-    nameToLetter[name.toLowerCase()] = letter;
+/**
+ * Strip wikitext markup, returning plain text.
+ */
+function stripWikiMarkup(text) {
+  if (!text) return '';
+  return text
+    .replace(/\[\[(?:[^\]|]+\|)?([^\]]+)\]\]/g, '$1') // [[link|display]] → display
+    .replace(/\{\{[^}]*\}\}/g, '')                      // remove {{templates}}
+    .replace(/'''([^']*?)'''/g, '$1')                   // '''bold''' → bold
+    .replace(/''([^']*?)''/g, '$1')                     // ''italic'' → italic
+    .replace(/<ref[^>]*?>[\s\S]*?<\/ref>/g, '')         // strip <ref>...</ref>
+    .replace(/<[^>]+>/g, '')                            // strip other HTML tags
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extract the first [[link|display]] or [[link]] from text.
+ * Returns { linkTarget, displayName }.
+ */
+function extractLink(text) {
+  const match = text.match(/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/);
+  if (!match) return { linkTarget: null, displayName: stripWikiMarkup(text) };
+  return {
+    linkTarget:  match[1].trim(),
+    displayName: (match[2] || match[1]).trim(),
+  };
+}
+
+/**
+ * Strip cell attribute prefix from a raw cell string.
+ * Wikitext: `colspan="2" style="..." | actual content` → `actual content`
+ */
+function getCellContent(rawCell) {
+  const pipeIdx = rawCell.indexOf(' | ');
+  if (pipeIdx !== -1 && rawCell.slice(0, pipeIdx).includes('=')) {
+    return rawCell.slice(pipeIdx + 3).trim();
   }
+  return rawCell.trim();
+}
 
-  try {
-    console.log(`\nDiscovering table URLs from index page…`);
-    const html = await fetchWithRetry(INDEX_URL);
-    await sleep(delayMs);
-    const $ = load(html);
-    let found = 0;
+/**
+ * Extract all cells from a wikitext table row block
+ * (the text between two \n|- delimiters).
+ */
+function extractCellsFromRow(rowBlock) {
+  const cells = [];
+  for (const line of rowBlock.split('\n')) {
+    const t = line.trim();
+    let isData    = t.startsWith('|') && !t.startsWith('|}') && !t.startsWith('{|');
+    let isHeader  = t.startsWith('!');
+    if (!isData && !isHeader) continue;
 
-    $('.mw-parser-output a[href*="_(EM)"]').each((_, el) => {
-      const href = $(el).attr('href') ?? '';
-      if (!href.startsWith('/wiki/')) return;
-      // Decode path, strip _(EM) suffix, replace underscores → spaces
-      const pageName = decodeURIComponent(href.slice(6).replace('_(EM)', '')).replace(/_/g, ' ');
-      const letter   = nameToLetter[pageName.toLowerCase()];
-      if (letter) {
-        result[letter] = BASE_WIKI + href;
-        found++;
+    const content = t.slice(1).trim();               // strip leading | or !
+    const sep     = isHeader ? ' !! ' : ' || ';       // inline cell separator
+    if (content.includes(sep)) {
+      for (const part of content.split(sep)) {
+        cells.push(getCellContent(part.trim()));
       }
-    });
-
-    console.log(`  Discovered ${found} table links (using fallbacks for the rest)`);
-  } catch (e) {
-    console.warn(`  ⚠ Index page fetch failed: ${e.message} — using fallback URLs`);
+    } else {
+      cells.push(getCellContent(content));
+    }
   }
-
-  return result;
+  return cells;
 }
 
 // ── Roll text parsing ─────────────────────────────────────────────────────────
 function parseRoll(rollText) {
-  // Normalise em/en dashes → hyphen
   const norm  = rollText.trim().replace(/[–—]/g, '-');
   const parts = norm.split('-').map(s => s.trim());
   const toNum = s => (s === '000' ? 1000 : parseInt(s.replace(/^0+/, '') || '0', 10));
@@ -191,50 +244,106 @@ function isRollText(text) {
   return /^\d{1,4}[-–—]\d{1,4}$/.test(t) || /^\d{1,4}$/.test(t);
 }
 
-// ── Parse a single table page ─────────────────────────────────────────────────
-function parseTablePage(tableCode, tableUrl, html) {
-  const $       = load(html);
-  const items   = [];
+// ── Discover table page titles from index page ────────────────────────────────
+async function discoverTablePageTitles() {
+  const INDEX_TITLE = 'Magical_Item_Random_Determination_Tables_(EM)';
+  const result      = { ...TABLE_PAGE_TITLES };
+
+  // Reverse map: normalized table name → letter
+  const nameToLetter = {};
+  for (const [letter, name] of Object.entries(TABLE_WIKI_NAMES)) {
+    nameToLetter[name.toLowerCase()] = letter;
+  }
+
+  try {
+    console.log(`\nDiscovering table pages from index via MediaWiki API…`);
+    const wikitext = await fetchWikitext(INDEX_TITLE);
+    await sleep(delayMs);
+
+    let found = 0;
+    // Match [[Page Title (EM)]] and [[Page Title (EM)|display]] links
+    const linkPattern = /\[\[([^\]|]+\(EM\))(?:\|[^\]]+)?\]\]/g;
+    let match;
+    while ((match = linkPattern.exec(wikitext)) !== null) {
+      const linkTarget = match[1].trim();
+      const pageName   = linkTarget.replace(/_/g, ' ').replace(/ \(EM\)$/i, '');
+      const letter     = nameToLetter[pageName.toLowerCase()];
+      if (letter) {
+        result[letter] = linkTarget.replace(/ /g, '_');
+        found++;
+      }
+    }
+
+    console.log(`  Discovered ${found} table pages (using fallbacks for the rest)`);
+  } catch (e) {
+    console.warn(`  ⚠ Index page fetch failed: ${e.message} — using fallback page titles`);
+  }
+
+  return result;
+}
+
+// ── Parse a single table page from wikitext ───────────────────────────────────
+function parseWikitextTable(tableCode, tableUrl, wikitext) {
+  const items = [];
   let   currentCategory = '';
 
-  // Target the first wikitable in the article body
-  const table = $('.mw-parser-output table.wikitable, .mw-parser-output table').first();
-  if (!table.length) {
-    console.warn(`  ⚠ No table found at ${tableUrl}`);
+  // Find the first wikitable block {| ... |}
+  const tableStart = wikitext.indexOf('{|');
+  if (tableStart === -1) {
+    console.warn(`  ⚠ No wikitable found in wikitext for ${tableUrl}`);
     return items;
   }
 
-  table.find('tr').each((_, tr) => {
-    const cells     = $(tr).find('td, th');
-    const cellCount = cells.length;
-    if (!cellCount) return;
+  // Walk to find matching |}
+  let depth = 0, tableEnd = -1;
+  for (let i = tableStart; i < wikitext.length - 1; i++) {
+    if (wikitext[i] === '{' && wikitext[i + 1] === '|') { depth++; i++; }
+    else if (wikitext[i] === '|' && wikitext[i + 1] === '}') {
+      depth--;
+      if (depth === 0) { tableEnd = i + 2; break; }
+      i++;
+    }
+  }
+  const tableText = tableEnd !== -1 ? wikitext.slice(tableStart, tableEnd) : wikitext.slice(tableStart);
 
-    const firstText = cells.eq(0).text().trim();
+  // Split into row blocks by \n|-
+  const rowBlocks = tableText.split(/\n\s*\|-/);
 
-    // ── Category row ──────────────────────────────────────────────────────────
-    // 1–2 cells and first cell is NOT a roll number
-    if (cellCount <= 2 && !isRollText(firstText)) {
-      const cat = firstText.replace(/\s+/g, ' ').trim();
-      if (cat) currentCategory = cat;
-      return;
+  for (const block of rowBlocks) {
+    const cells = extractCellsFromRow(block);
+    if (cells.length === 0) continue;
+
+    // ── Single cell — category row (colspan="2" or header) ───────────────────
+    if (cells.length === 1) {
+      const catText = stripWikiMarkup(cells[0]).trim();
+      if (catText && !isRollText(catText)) {
+        currentCategory = catText;
+      }
+      continue;
+    }
+
+    // ── Two+ cells — check if first cell is a roll number ────────────────────
+    const firstClean = stripWikiMarkup(cells[0]).trim();
+
+    if (!isRollText(firstClean)) {
+      // Not a roll row — treat first non-empty cell as category
+      const catText = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
+      if (catText) currentCategory = catText;
+      continue;
     }
 
     // ── Item row ─────────────────────────────────────────────────────────────
-    if (!isRollText(firstText)) return;
+    const rollText               = firstClean;
+    const { rollMin, rollMax }   = parseRoll(rollText);
+    const { linkTarget, displayName } = extractLink(cells[1]);
+    const rawName                = (displayName || stripWikiMarkup(cells[1])).trim();
+    if (!rawName) continue;
 
-    const rollText = firstText;
-    const { rollMin, rollMax } = parseRoll(rollText);
+    const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
+    const sourceUrl = slug
+      ? `${BASE_WIKI}/wiki/${slug.split('/').map(s => encodeURIComponent(decodeURIComponent(s))).join('/')}`
+      : null;
 
-    const secondCell = cells.eq(1);
-    const rawName    = secondCell.text().trim();
-    if (!rawName) return;
-
-    const anchor    = secondCell.find('a').first();
-    const href      = anchor.attr('href') ?? null;
-    const sourceUrl = (href && href.startsWith('/wiki/')) ? BASE_WIKI + href : null;
-    const slug      = href ? href.slice(6) : null; // strip leading /wiki/
-
-    // Apply final name rule
     const finalName = rawName.toLowerCase().startsWith('of ')
       ? `${currentCategory} ${rawName}`.trim()
       : rawName;
@@ -255,28 +364,32 @@ function parseTablePage(tableCode, tableUrl, html) {
       description:   null,
       warnings:      sourceUrl ? null : 'No detail page link',
     });
-  });
+  }
 
   return items;
 }
 
-// ── Fetch description from a detail page ─────────────────────────────────────
+// ── Fetch description from a detail page via MediaWiki API ───────────────────
 async function fetchDescription(url) {
   try {
-    const html = await fetchWithRetry(url);
-    const $    = load(html);
+    const urlPath  = new URL(url).pathname;
+    const rawTitle = urlPath.replace('/wiki/', '');               // still URL-encoded
+    const wikitext = await fetchWikitext(rawTitle);
 
-    const title = ($('.page-header__title, h1.page-title, h1').first().text().trim()) || null;
+    const cleanTitle = decodeURIComponent(rawTitle).replace(/_/g, ' ');
 
-    const paras = [];
-    $('.mw-parser-output > p').each((_, el) => {
-      if (paras.length >= 3) return false; // stop iteration
-      const t = $(el).text().trim();
-      if (t) paras.push(t);
-    });
+    // Extract intro text: everything before the first == section heading ==
+    const sectionIdx = wikitext.search(/\n==\s*[^=]/);
+    const introText  = sectionIdx !== -1 ? wikitext.slice(0, sectionIdx) : wikitext;
 
-    const description = paras.join('\n').slice(0, 1000) || null;
-    return { title, description, warning: null };
+    // Split into paragraphs, strip markup, filter short/template lines
+    const paragraphs = introText
+      .split(/\n\n+/)
+      .map(p => stripWikiMarkup(p).trim())
+      .filter(p => p.length > 15 && !p.startsWith('{') && !p.startsWith('|') && !p.startsWith('!'));
+
+    const description = paragraphs.slice(0, 3).join('\n').slice(0, 1000) || null;
+    return { title: cleanTitle, description, warning: null };
   } catch (e) {
     return { title: null, description: null, warning: e.message };
   }
@@ -368,12 +481,16 @@ async function upsertItems(items) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  const tableUrls = await discoverTableUrls();
+  const pageTitles = await discoverTablePageTitles();
+  const tableUrls  = Object.fromEntries(
+    Object.entries(pageTitles).map(([k, v]) => [k, `${BASE_WIKI}/wiki/${v}`]),
+  );
 
   for (const tableCode of tablesToProcess) {
-    const tableUrl = tableUrls[tableCode];
-    if (!tableUrl) {
-      console.error(`\n✗ No URL known for table ${tableCode} — skipping`);
+    const pageTitle = pageTitles[tableCode];
+    const tableUrl  = tableUrls[tableCode];
+    if (!pageTitle) {
+      console.error(`\n✗ No page title known for table ${tableCode} — skipping`);
       continue;
     }
 
@@ -382,21 +499,22 @@ async function main() {
     console.log(`  ${tableUrl}`);
     console.log('═'.repeat(64));
 
-    // Fetch and parse the table page
-    let html;
+    // Fetch wikitext via MediaWiki API
+    let wikitext;
     try {
-      html = await fetchWithRetry(tableUrl);
+      console.log(`  Fetching wikitext via API…`);
+      wikitext = await fetchWikitext(pageTitle);
       await sleep(delayMs);
     } catch (e) {
       console.error(`  ✗ Failed to fetch: ${e.message}`);
       continue;
     }
 
-    const allItems = parseTablePage(tableCode, tableUrl, html);
+    const allItems = parseWikitextTable(tableCode, tableUrl, wikitext);
     console.log(`  Parsed ${allItems.length} items from wiki`);
 
     if (!allItems.length) {
-      console.warn('  ⚠ No items parsed — check table format on the wiki page');
+      console.warn('  ⚠ No items parsed — check wikitext table format');
       continue;
     }
 
@@ -466,8 +584,6 @@ async function main() {
   console.log(`\n${'─'.repeat(64)}`);
   console.log('  Usage examples:\n');
   console.log('  # Safe test — Table A, no DB write, first 10 items:');
-  console.log('  DB_HOST=localhost DB_PORT=5432 DB_NAME=adnddb \\');
-  console.log('  DB_USER=adnduser DB_PASSWORD=ADTjoernely53 \\');
   console.log('  node server/scripts/import-em-items.mjs \\');
   console.log('    --table A --dry-run --write-json --limit 10\n');
   console.log('  # Write Table A to staging DB:');
