@@ -68,57 +68,28 @@ function getPool() {
 const BASE_WIKI = 'https://adnd2e.fandom.com';
 const API_BASE  = 'https://adnd2e.fandom.com/api.php';
 
-const TABLE_WIKI_NAMES = {
-  A: 'Magical Liquids',
-  B: 'Scrolls',
-  C: 'Rings',
-  D: 'Rods',
-  E: 'Staves',
-  F: 'Wands',
-  G: 'Books & Tomes',
-  H: 'Gems & Jewelry',
-  I: 'Clothing',
-  J: 'Boots, Gloves & Accessories',
-  K: 'Girdles & Helmets',
-  L: 'Bags, Bands & Bottles',
-  M: 'Dusts & Stones',
-  N: 'Household Items',
-  O: 'Musical Instruments',
-  P: 'Weird Stuff',
-  Q: 'Humorous Items',
-  R: 'Armor & Shields',
-  S: 'Weapons',
-  T: 'Artifacts & Relics',
+const TABLE_MAP = {
+  A: { name: 'Magical Liquids',               title: 'Table A: Magical Liquids (EM)' },
+  B: { name: 'Scrolls',                        title: 'Table B: Scrolls (EM)' },
+  C: { name: 'Rings',                          title: 'Table C: Rings (EM)' },
+  D: { name: 'Rods',                           title: 'Table D: Rods (EM)' },
+  E: { name: 'Staves',                         title: 'Table E: Staves (EM)' },
+  F: { name: 'Wands',                          title: 'Table F: Wands (EM)' },
+  G: { name: 'Books & Tomes',                  title: 'Table G: Books & Tomes (EM)' },
+  H: { name: 'Gems & Jewelry',                 title: 'Table H: Gems & Jewelry (EM)' },
+  I: { name: 'Clothing',                       title: 'Table I: Clothing (EM)' },
+  J: { name: 'Boots, Gloves & Accessories',    title: 'Table J: Boots, Gloves & Accessories (EM)' },
+  K: { name: 'Girdles & Helmets',              title: 'Table K: Girdles & Helmets (EM)' },
+  L: { name: 'Bags, Bands & Bottles',          title: 'Table L: Bags, Bands & Bottles (EM)' },
+  M: { name: 'Dusts & Stones',                 title: 'Table M: Dusts & Stones (EM)' },
+  N: { name: 'Household Items',                title: 'Table N: Household Items (EM)' },
+  O: { name: 'Musical Instruments',            title: 'Table O: Musical Instruments (EM)' },
+  P: { name: 'Weird Stuff',                    title: 'Table P: Weird Stuff (EM)' },
+  Q: { name: 'Humorous Items',                 title: 'Table Q: Humorous Items (EM)' },
+  R: { name: 'Armor & Shields',                title: 'Table R: Armor & Shields (EM)' },
+  S: { name: 'Weapons',                        title: 'Table S: Weapons (EM)' },
+  T: { name: 'Artifacts & Relics',             title: 'Table T: Artifacts & Relics (EM)' },
 };
-
-// Fallback page titles — used if index page discovery misses a table
-const TABLE_PAGE_TITLES = {
-  A: 'Magical_Liquids_(EM)',
-  B: 'Scrolls_(EM)',
-  C: 'Rings_(EM)',
-  D: 'Rods_(EM)',
-  E: 'Staves_(EM)',
-  F: 'Wands_(EM)',
-  G: 'Books_%26_Tomes_(EM)',
-  H: 'Gems_%26_Jewelry_(EM)',
-  I: 'Clothing_(EM)',
-  J: 'Boots%2C_Gloves_%26_Accessories_(EM)',
-  K: 'Girdles_%26_Helmets_(EM)',
-  L: 'Bags%2C_Bands_%26_Bottles_(EM)',
-  M: 'Dusts_%26_Stones_(EM)',
-  N: 'Household_Items_(EM)',
-  O: 'Musical_Instruments_(EM)',
-  P: 'Weird_Stuff_(EM)',
-  Q: 'Humorous_Items_(EM)',
-  R: 'Armor_%26_Shields_(EM)',
-  S: 'Weapons_(EM)',
-  T: 'Artifacts_%26_Relics_(EM)',
-};
-
-// Human-readable wiki URLs for display / sourceUrl fields
-const TABLE_URL_FALLBACKS = Object.fromEntries(
-  Object.entries(TABLE_PAGE_TITLES).map(([k, v]) => [k, `${BASE_WIKI}/wiki/${v}`]),
-);
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -129,8 +100,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
  * API does NOT hit Cloudflare protection — safe from Node.js.
  */
 async function fetchWikitext(pageTitle, retries = 3) {
-  const encodedTitle = pageTitle.includes('%') ? pageTitle : encodeURIComponent(pageTitle);
-  const apiUrl = `${API_BASE}?action=query&titles=${encodedTitle}&prop=revisions&rvprop=content&format=json&redirects=1`;
+  const apiUrl = `${API_BASE}?action=query&titles=${encodeURIComponent(pageTitle)}&prop=revisions&rvprop=content&format=json&redirects=1`;
   let currentDelay = delayMs;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -242,44 +212,6 @@ function parseRoll(rollText) {
 function isRollText(text) {
   const t = text.trim();
   return /^\d{1,4}[-–—]\d{1,4}$/.test(t) || /^\d{1,4}$/.test(t);
-}
-
-// ── Discover table page titles from index page ────────────────────────────────
-async function discoverTablePageTitles() {
-  const INDEX_TITLE = 'Magical_Item_Random_Determination_Tables_(EM)';
-  const result      = { ...TABLE_PAGE_TITLES };
-
-  // Reverse map: normalized table name → letter
-  const nameToLetter = {};
-  for (const [letter, name] of Object.entries(TABLE_WIKI_NAMES)) {
-    nameToLetter[name.toLowerCase()] = letter;
-  }
-
-  try {
-    console.log(`\nDiscovering table pages from index via MediaWiki API…`);
-    const wikitext = await fetchWikitext(INDEX_TITLE);
-    await sleep(delayMs);
-
-    let found = 0;
-    // Match [[Page Title (EM)]] and [[Page Title (EM)|display]] links
-    const linkPattern = /\[\[([^\]|]+\(EM\))(?:\|[^\]]+)?\]\]/g;
-    let match;
-    while ((match = linkPattern.exec(wikitext)) !== null) {
-      const linkTarget = match[1].trim();
-      const pageName   = linkTarget.replace(/_/g, ' ').replace(/ \(EM\)$/i, '');
-      const letter     = nameToLetter[pageName.toLowerCase()];
-      if (letter) {
-        result[letter] = linkTarget.replace(/ /g, '_');
-        found++;
-      }
-    }
-
-    console.log(`  Discovered ${found} table pages (using fallbacks for the rest)`);
-  } catch (e) {
-    console.warn(`  ⚠ Index page fetch failed: ${e.message} — using fallback page titles`);
-  }
-
-  return result;
 }
 
 // ── Parse a single table page from wikitext ───────────────────────────────────
@@ -481,22 +413,19 @@ async function upsertItems(items) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  const pageTitles = await discoverTablePageTitles();
-  const tableUrls  = Object.fromEntries(
-    Object.entries(pageTitles).map(([k, v]) => [k, `${BASE_WIKI}/wiki/${v}`]),
-  );
-
   for (const tableCode of tablesToProcess) {
-    const pageTitle = pageTitles[tableCode];
-    const tableUrl  = tableUrls[tableCode];
-    if (!pageTitle) {
-      console.error(`\n✗ No page title known for table ${tableCode} — skipping`);
+    const meta = TABLE_MAP[tableCode];
+    if (!meta) {
+      console.error(`\n✗ No entry in TABLE_MAP for table ${tableCode} — skipping`);
       continue;
     }
 
+    const { name: tableName, title: pageTitle } = meta;
+    const tableUrl = `${BASE_WIKI}/wiki/${pageTitle.replace(/ /g, '_')}`;
+
     console.log(`\n${'═'.repeat(64)}`);
-    console.log(`  Table ${tableCode} — ${TABLE_WIKI_NAMES[tableCode]}`);
-    console.log(`  ${tableUrl}`);
+    console.log(`  Table ${tableCode} — ${tableName}`);
+    console.log(`  API title: "${pageTitle}"`);
     console.log('═'.repeat(64));
 
     // Fetch wikitext via MediaWiki API
