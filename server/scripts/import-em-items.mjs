@@ -228,6 +228,20 @@ function isRollText(text) {
   return /^\d{1,4}[-–—]\d{1,4}$/.test(t) || /^\d{1,4}$/.test(t);
 }
 
+function isHeaderLikeCategory(text) {
+  const t = (text || '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+  return [
+    'd1000roll',
+    'roll',
+    'item',
+    'rollitem',
+    'd1000',
+    'd1000item',
+  ].includes(t);
+}
+
 // ── Parse a single table page from wikitext ───────────────────────────────────
 function parseWikitextTable(tableCode, tableUrl, wikitext) {
   const items = [];
@@ -272,9 +286,10 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
 
     // ── Single cell — category row (colspan="2" or header) ───────────────────
     if (cells.length === 1) {
-      const catText = stripWikiMarkup(cells[0]).trim();
-      if (catText && !isRollText(catText)) {
-        currentCategory = cleanCat(catText) || currentCategory;
+      const catText   = stripWikiMarkup(cells[0]).trim();
+      const cleanedCat = cleanCat(catText);
+      if (cleanedCat && !isRollText(cleanedCat) && !isHeaderLikeCategory(cleanedCat)) {
+        currentCategory = cleanedCat;
       }
       continue;
     }
@@ -284,9 +299,9 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
 
     if (!isRollText(firstClean)) {
       // Not a roll row — treat first non-empty cell as category
-      const rawCat = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
-      const cat    = cleanCat(rawCat);
-      if (cat) currentCategory = cat;
+      const rawCat    = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
+      const cat       = cleanCat(rawCat);
+      if (cat && !isHeaderLikeCategory(cat)) currentCategory = cat;
       continue;
     }
 
