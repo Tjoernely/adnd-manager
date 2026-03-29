@@ -456,6 +456,7 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
       .replace(/\|/g, '')
       .replace(/'''/g, '')
       .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+      .replace(/\s*!+\s*$/, '')   // strip trailing "!!" wiki header markers
       .trim();
     return cleaned || null;
   };
@@ -484,7 +485,7 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
     // whether the line starts with ! (which would also block Elixir etc.).
     if (cells.length === 1) {
       const catText    = stripWikiMarkup(cells[0]).trim();
-      const cleanedCat = cleanCat(catText);
+      const cleanedCat = cleanCat(stripWikiMarkup(catText));
       const blocked    = !cleanedCat || isRollText(cleanedCat) || isHeaderLikeCategory(cleanedCat);
       if (!blocked) {
         currentCategory = cleanedCat;
@@ -503,7 +504,7 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
       // Not a roll row — candidate category from first non-empty cell.
       // isRealCategoryLabel blocks column-header text (d1000Roll, Item, etc.)
       const rawCat = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
-      const cat    = cleanCat(rawCat);
+      const cat    = cleanCat(stripWikiMarkup(rawCat));
       if (isRealCategoryLabel(cat)) {
         currentCategory = cat;
         if (debugRowCount < 20) console.log(`    → CATEGORY (multi): "${currentCategory}"`);
