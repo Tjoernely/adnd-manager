@@ -259,11 +259,22 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
     const cells = extractCellsFromRow(block);
     if (cells.length === 0) continue;
 
+    // ── Category text cleaner ─────────────────────────────────────────────────
+    const cleanCat = (raw) => {
+      const cleaned = raw
+        .replace(/\|\|/g, '')
+        .replace(/\|/g, '')
+        .replace(/'''/g, '')
+        .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+        .trim();
+      return cleaned || null;
+    };
+
     // ── Single cell — category row (colspan="2" or header) ───────────────────
     if (cells.length === 1) {
       const catText = stripWikiMarkup(cells[0]).trim();
       if (catText && !isRollText(catText)) {
-        currentCategory = catText;
+        currentCategory = cleanCat(catText) || currentCategory;
       }
       continue;
     }
@@ -273,8 +284,9 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
 
     if (!isRollText(firstClean)) {
       // Not a roll row — treat first non-empty cell as category
-      const catText = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
-      if (catText) currentCategory = catText;
+      const rawCat = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
+      const cat    = cleanCat(rawCat);
+      if (cat) currentCategory = cat;
       continue;
     }
 
@@ -290,7 +302,7 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
       ? `${BASE_WIKI}/wiki/${slug.split('/').map(s => encodeURIComponent(decodeURIComponent(s))).join('/')}`
       : null;
 
-    const finalName = rawName.toLowerCase().startsWith('of ')
+    const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
       ? `${currentCategory} ${rawName}`.trim()
       : rawName;
 
