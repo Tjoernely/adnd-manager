@@ -242,6 +242,32 @@ function isHeaderLikeCategory(text) {
   ].includes(t);
 }
 
+function isRealCategoryLabel(text) {
+  const t = (text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!t) return false;
+
+  const compact = t.replace(/\s+/g, '').toLowerCase();
+
+  const blacklist = new Set([
+    'd1000',
+    'roll',
+    'item',
+    'd1000roll',
+    'rollitem',
+    'd1000item',
+  ]);
+
+  if (blacklist.has(compact)) return false;
+
+  // Category labels are short single labels like: Elixir, Perfume, Philter
+  if (t.length > 40) return false;
+
+  return true;
+}
+
 // ── Parse a single table page from wikitext ───────────────────────────────────
 function parseWikitextTable(tableCode, tableUrl, wikitext) {
   const items = [];
@@ -330,11 +356,11 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
       // Not a roll row — treat first non-empty cell as category
       const rawCat = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
       const cat    = cleanCat(rawCat);
-      if (cat && !isHeaderLikeCategory(cat)) {
+      if (isRealCategoryLabel(cat)) {
         currentCategory = cat;
         if (debugRowCount < 10) console.log(`    → CATEGORY (multi): "${currentCategory}"`);
       } else {
-        if (debugRowCount < 10) console.log(`    → SKIP (multi-cell blocked: cat="${cat}" isHeader=${isHeaderLikeCategory(cat)})`);
+        if (debugRowCount < 10) console.log(`    → SKIP (multi-cell blocked: cat="${cat}")`);
       }
       debugRowCount++;
       continue;
