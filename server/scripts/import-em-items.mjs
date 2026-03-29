@@ -268,6 +268,155 @@ function isRealCategoryLabel(text) {
   return true;
 }
 
+// ── Weapon family detection ───────────────────────────────────────────────────
+function detectWeaponFamily(name) {
+  if (name.includes('sword') || name.includes('saber') ||
+      name.includes('scimitar') || name.includes('rapier') ||
+      name.includes('blade') || name.includes('falchion') ||
+      name.includes('katana') || name.includes('wakizashi')) return 'sword';
+  if (name.includes('axe') || name.includes('hatchet'))       return 'axe';
+  if (name.includes('mace') || name.includes('morningstar'))  return 'mace';
+  if (name.includes('hammer') || name.includes('warhammer'))  return 'hammer';
+  if (name.includes('dagger') || name.includes('knife') ||
+      name.includes('dirk')  || name.includes('stiletto'))    return 'dagger';
+  if (name.includes('spear') || name.includes('javelin'))     return 'spear';
+  if (name.includes('flail'))                                 return 'flail';
+  if (name.includes('staff') || name.includes('quarterstaff'))return 'staff';
+  if (name.includes('lance'))                                 return 'lance';
+  return 'misc';
+}
+
+// ── Item type normalizer — applied as a post-parse layer ──────────────────────
+// Uses tableCode + subtable + finalName. Raw parsed fields stay unchanged.
+function normalizeItem(item) {
+  const name  = (item.finalName || '').toLowerCase();
+  const table = item.tableCode;
+  const sub   = item.subtable || '';
+
+  if (table === 'A')
+    return { item_type: 'potion',      equip_slot: null,      inventory_group: 'potions' };
+
+  if (table === 'B')
+    return { item_type: 'scroll',      equip_slot: null,      inventory_group: 'scrolls' };
+
+  if (table === 'C')
+    return { item_type: 'ring',        equip_slot: null,      inventory_group: 'magic' };
+
+  if (table === 'D')
+    return { item_type: 'rod',         equip_slot: null,      inventory_group: 'magic' };
+
+  if (table === 'E')
+    return { item_type: 'staff',       equip_slot: 'hand_r',  hands_required: 2, inventory_group: 'magic' };
+
+  if (table === 'F')
+    return { item_type: 'wand',        equip_slot: 'hand_r',  inventory_group: 'magic' };
+
+  if (table === 'G')
+    return { item_type: 'book',        equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'H') {
+    if (name.includes('ring'))
+      return { item_type: 'ring',      equip_slot: null,      inventory_group: 'magic' };
+    if (name.includes('amulet') || name.includes('medallion') ||
+        name.includes('necklace') || name.includes('pendant') ||
+        name.includes('periapt') || name.includes('talisman'))
+      return { item_type: 'amulet',    equip_slot: 'neck',    inventory_group: 'magic' };
+    if (name.includes('bracelet') || name.includes('bracer') ||
+        name.includes('bangle'))
+      return { item_type: 'bracers',   equip_slot: 'wrists',  inventory_group: 'magic' };
+    if (name.includes('crown') || name.includes('circlet') ||
+        name.includes('tiara') || name.includes('diadem'))
+      return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'magic' };
+    return { item_type: 'jewelry',     equip_slot: null,      inventory_group: 'magic' };
+  }
+
+  if (table === 'I') {
+    if (name.includes('cloak') || name.includes('robe') || name.includes('cape'))
+      return { item_type: 'cloak',     equip_slot: 'cloak',   inventory_group: 'clothing' };
+    return { item_type: 'clothing',    equip_slot: 'body',    inventory_group: 'clothing' };
+  }
+
+  if (table === 'J') {
+    if (name.includes('boot') || name.includes('sandal') || name.includes('slipper'))
+      return { item_type: 'boots',     equip_slot: 'boots',   inventory_group: 'clothing' };
+    if (name.includes('glove') || name.includes('gauntlet'))
+      return { item_type: 'gloves',    equip_slot: 'gloves',  inventory_group: 'clothing' };
+    return { item_type: 'accessory',   equip_slot: null,      inventory_group: 'clothing' };
+  }
+
+  if (table === 'K') {
+    if (name.includes('girdle') || name.includes('belt') || name.includes('sash'))
+      return { item_type: 'belt',      equip_slot: 'belt',    inventory_group: 'clothing' };
+    if (name.includes('helm') || name.includes('hat') || name.includes('crown') ||
+        name.includes('bonnet') || name.includes('cap') || name.includes('coif'))
+      return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'clothing' };
+    return { item_type: 'accessory',   equip_slot: null,      inventory_group: 'clothing' };
+  }
+
+  if (table === 'L')
+    return { item_type: 'container',   equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'M')
+    return { item_type: 'misc',        equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'N')
+    return { item_type: 'misc',        equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'O')
+    return { item_type: 'instrument',  equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'P')
+    return { item_type: 'misc',        equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'Q')
+    return { item_type: 'misc',        equip_slot: null,      inventory_group: 'misc' };
+
+  if (table === 'R') {
+    if (sub === 'R2')
+      return { item_type: 'armor_enchantment', equip_slot: null, inventory_group: 'armor' };
+    if (name.includes('shield') || name.includes('buckler'))
+      return { item_type: 'shield',    equip_slot: 'hand_l',  inventory_group: 'armor' };
+    if (name.includes('bonnet') || name.includes('helm') ||
+        name.includes('cap') || name.includes('coif'))
+      return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'armor' };
+    if (name.includes('barding') || name.includes('caparison'))
+      return { item_type: 'mount_armor', equip_slot: null,    inventory_group: 'armor' };
+    return { item_type: 'armor',       equip_slot: 'body',    inventory_group: 'armor' };
+  }
+
+  if (table === 'S') {
+    if (sub === 'S2')
+      return { item_type: 'weapon_modifier', equip_slot: null, inventory_group: 'weapons' };
+    if (name.includes('arrow') || name.includes('quarrel') ||
+        name.includes('bolt') || name.includes('bullet') ||
+        name.includes('dart') || name.includes('needle') ||
+        name.includes('shot') || name.includes('stone')) {
+      const ammo_type = name.includes('arrow')   ? 'arrow'
+                      : (name.includes('bolt') || name.includes('quarrel')) ? 'bolt'
+                      : name.includes('bullet')  ? 'bullet' : 'misc';
+      return { item_type: 'ammo', equip_slot: 'ammo', ammo_type, inventory_group: 'ammo' };
+    }
+    if (name.includes('bow') || name.includes('crossbow') ||
+        name.includes('sling') || name.includes('blowgun')) {
+      const weapon_family = name.includes('crossbow') ? 'crossbow'
+                          : name.includes('bow')      ? 'bow'
+                          : name.includes('sling')    ? 'sling' : 'blowgun';
+      return { item_type: 'ranged', equip_slot: 'ranged', weapon_family, hands_required: 2, inventory_group: 'weapons' };
+    }
+    if (name.includes('two-handed') || name.includes('great sword') ||
+        name.includes('pike') || name.includes('halberd') ||
+        name.includes('polearm') || name.includes('quarterstaff') ||
+        name.includes('lance') || name.includes('great axe'))
+      return { item_type: 'weapon', equip_slot: 'hand_r', weapon_family: detectWeaponFamily(name), hands_required: 2, inventory_group: 'weapons' };
+    return { item_type: 'weapon', equip_slot: 'hand_r', weapon_family: detectWeaponFamily(name), hands_required: 1, inventory_group: 'weapons' };
+  }
+
+  if (table === 'T')
+    return { item_type: 'artifact',    equip_slot: null,      inventory_group: 'artifacts' };
+
+  return { item_type: 'misc',          equip_slot: null,      inventory_group: 'misc' };
+}
+
 // ── Parse a single table page from wikitext ───────────────────────────────────
 function parseWikitextTable(tableCode, tableUrl, wikitext) {
   const items = [];
@@ -768,6 +917,25 @@ async function ensureStagingTable(client) {
     )
   `);
 
+  // Add normalized typing columns if they don't exist yet
+  for (const col of [
+    `item_type       VARCHAR(50)`,
+    `equip_slot      VARCHAR(50)`,
+    `weapon_family   VARCHAR(50)`,
+    `hands_required  INTEGER`,
+    `ammo_type       VARCHAR(50)`,
+    `inventory_group VARCHAR(50)`,
+  ]) {
+    const colName = col.trim().split(/\s+/)[0];
+    try {
+      await client.query(
+        `ALTER TABLE magical_items_em_import ADD COLUMN IF NOT EXISTS ${col}`,
+      );
+    } catch (e) {
+      console.warn(`  [staging] Could not add column ${colName}: ${e.message}`);
+    }
+  }
+
   const dbUser = process.env.DB_USER || 'adnduser';
   try {
     await client.query(`GRANT ALL ON magical_items_em_import TO ${dbUser}`);
@@ -787,8 +955,9 @@ async function upsertItems(items) {
         `INSERT INTO magical_items_em_import
            (slug, name, raw_name, category, table_code, table_url,
             roll_text, roll_min, roll_max, source_url,
-            description_title, description, has_detail_page, import_warnings)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+            description_title, description, has_detail_page, import_warnings,
+            item_type, equip_slot, weapon_family, hands_required, ammo_type, inventory_group)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
          ON CONFLICT (table_code, roll_min, roll_max) DO UPDATE SET
            name              = EXCLUDED.name,
            raw_name          = EXCLUDED.raw_name,
@@ -798,12 +967,20 @@ async function upsertItems(items) {
            description       = EXCLUDED.description,
            has_detail_page   = EXCLUDED.has_detail_page,
            import_warnings   = EXCLUDED.import_warnings,
+           item_type         = EXCLUDED.item_type,
+           equip_slot        = EXCLUDED.equip_slot,
+           weapon_family     = EXCLUDED.weapon_family,
+           hands_required    = EXCLUDED.hands_required,
+           ammo_type         = EXCLUDED.ammo_type,
+           inventory_group   = EXCLUDED.inventory_group,
            updated_at        = NOW()
          RETURNING (xmax = 0) AS was_inserted`,
         [
           item.slug, item.finalName, item.rawName, item.category,
           item.tableCode, item.tableUrl, item.rollText, item.rollMin, item.rollMax,
           item.sourceUrl, item.descTitle, item.description, item.hasDetailPage, item.warnings,
+          item.item_type, item.equip_slot, item.weapon_family, item.hands_required,
+          item.ammo_type, item.inventory_group,
         ],
       );
       if (rows[0]?.was_inserted) inserted++; else updated++;
@@ -852,6 +1029,17 @@ async function main() {
                    : parseWikitextTable(tableCode, tableUrl, wikitext);
     console.log(`  Parsed ${allItems.length} items from wiki`);
 
+    // ── Apply item type normalization (post-parse, non-destructive) ───────────
+    for (const item of allItems) {
+      const norm = normalizeItem(item);
+      item.item_type       = norm.item_type       ?? null;
+      item.equip_slot      = norm.equip_slot      ?? null;
+      item.weapon_family   = norm.weapon_family   ?? null;
+      item.hands_required  = norm.hands_required  ?? null;
+      item.ammo_type       = norm.ammo_type       ?? null;
+      item.inventory_group = norm.inventory_group ?? null;
+    }
+
     if (!allItems.length) {
       console.warn('  ⚠ No items parsed — check wikitext table format');
       continue;
@@ -878,32 +1066,28 @@ async function main() {
     // ── Print first 10 parsed items ──────────────────────────────────────────
     console.log(`\n  First ${Math.min(10, items.length)} items:`);
     for (const item of items.slice(0, 10)) {
-      const display = (tableCode === 'S' || tableCode === 'R')
-        ? {
-            tableCode:     item.tableCode,
-            rollText:      item.rollText,
-            rollMin:       item.rollMin,
-            rollMax:       item.rollMax,
-            subtable:      item.subtable,
-            subtableTitle: item.subtableTitle,
-            category:      item.category,
-            rawName:       item.rawName,
-            finalName:     item.finalName,
-            hasDetailPage: item.hasDetailPage,
-            sourceUrl:     item.sourceUrl,
-          }
-        : {
-            tableCode:     item.tableCode,
-            rollText:      item.rollText,
-            rollMin:       item.rollMin,
-            rollMax:       item.rollMax,
-            category:      item.category,
-            rawName:       item.rawName,
-            finalName:     item.finalName,
-            hasDetailPage: item.hasDetailPage,
-            sourceUrl:     item.sourceUrl,
-          };
-      console.log(JSON.stringify(display, null, 2));
+      const base = {
+        tableCode:      item.tableCode,
+        rollText:       item.rollText,
+        rollMin:        item.rollMin,
+        rollMax:        item.rollMax,
+        category:       item.category,
+        rawName:        item.rawName,
+        finalName:      item.finalName,
+        item_type:      item.item_type,
+        equip_slot:     item.equip_slot,
+        weapon_family:  item.weapon_family,
+        hands_required: item.hands_required,
+        ammo_type:      item.ammo_type,
+        inventory_group:item.inventory_group,
+        hasDetailPage:  item.hasDetailPage,
+        sourceUrl:      item.sourceUrl,
+      };
+      if (tableCode === 'S' || tableCode === 'R') {
+        base.subtable      = item.subtable;
+        base.subtableTitle = item.subtableTitle;
+      }
+      console.log(JSON.stringify(base, null, 2));
     }
 
     // ── Summary ──────────────────────────────────────────────────────────────
