@@ -246,6 +246,7 @@ function isHeaderLikeCategory(text) {
 function parseWikitextTable(tableCode, tableUrl, wikitext) {
   const items = [];
   let   currentCategory = '';
+  let   debugRowCount   = 0;  // temporary: log first 10 row blocks
 
   // Find the first wikitable block {| ... |}
   const tableStart = wikitext.indexOf('{|');
@@ -269,28 +270,56 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
   // Split into row blocks by \n|-
   const rowBlocks = tableText.split(/\n\s*\|-/);
 
+  // ── Category text cleaner ─────────────────────────────────────────────────
+  const cleanCat = (raw) => {
+    const cleaned = raw
+      .replace(/\|\|/g, '')
+      .replace(/\|/g, '')
+      .replace(/'''/g, '')
+      .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+      .trim();
+    return cleaned || null;
+  };
+
   for (const block of rowBlocks) {
     const cells = extractCellsFromRow(block);
-    if (cells.length === 0) continue;
 
-    // ── Category text cleaner ─────────────────────────────────────────────────
-    const cleanCat = (raw) => {
-      const cleaned = raw
-        .replace(/\|\|/g, '')
-        .replace(/\|/g, '')
-        .replace(/'''/g, '')
-        .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
-        .trim();
-      return cleaned || null;
-    };
+    // ── DEBUG: first 10 row blocks ────────────────────────────────────────────
+    if (debugRowCount < 10) {
+      const rawLines = block.split('\n').map(l => l.trimEnd()).filter(Boolean);
+      const hasExcl  = rawLines.some(l => l.trimStart().startsWith('!'));
+      console.log(`  [ROW ${debugRowCount}] lines=${rawLines.length} cells=${cells.length} hasBang=${hasExcl} catBefore="${currentCategory}"`);
+      if (rawLines.length) console.log(`    raw[0]: ${rawLines[0].slice(0, 80)}`);
+      if (cells.length)    console.log(`    cells : ${JSON.stringify(cells.slice(0, 3))}`);
+    }
 
-    // ── Single cell — category row (colspan="2" or header) ───────────────────
+    if (cells.length === 0) {
+      if (debugRowCount < 10) console.log(`    → SKIP (no cells)`);
+      debugRowCount++;
+      continue;
+    }
+
+    // ── Skip pure header rows (lines starting with !) ─────────────────────────
+    // Table column headers use ! cells; they must never become a category.
+    const isHeaderRow = block.split('\n').some(l => l.trimStart().startsWith('!'));
+    if (isHeaderRow) {
+      if (debugRowCount < 10) console.log(`    → SKIP (header row with ! cells)`);
+      debugRowCount++;
+      continue;
+    }
+
+    // ── Single cell — category row (colspan="2") ──────────────────────────────
     if (cells.length === 1) {
-      const catText   = stripWikiMarkup(cells[0]).trim();
+      const catText    = stripWikiMarkup(cells[0]).trim();
       const cleanedCat = cleanCat(catText);
-      if (cleanedCat && !isRollText(cleanedCat) && !isHeaderLikeCategory(cleanedCat)) {
+      const blocked    = !cleanedCat || isRollText(cleanedCat) || isHeaderLikeCategory(cleanedCat);
+      if (!blocked) {
         currentCategory = cleanedCat;
+        if (debugRowCount < 10) console.log(`    → CATEGORY: "${currentCategory}"`);
+      } else {
+        if (debugRowCount < 10) console.log(`    → SKIP (single-cell blocked: cleanedCat="${cleanedCat}" isHeader=${isHeaderLikeCategory(cleanedCat)})`);
       }
+      debugRowCount++;
       continue;
     }
 
@@ -299,13 +328,21 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
 
     if (!isRollText(firstClean)) {
       // Not a roll row — treat first non-empty cell as category
-      const rawCat    = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
-      const cat       = cleanCat(rawCat);
-      if (cat && !isHeaderLikeCategory(cat)) currentCategory = cat;
+      const rawCat = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
+      const cat    = cleanCat(rawCat);
+      if (cat && !isHeaderLikeCategory(cat)) {
+        currentCategory = cat;
+        if (debugRowCount < 10) console.log(`    → CATEGORY (multi): "${currentCategory}"`);
+      } else {
+        if (debugRowCount < 10) console.log(`    → SKIP (multi-cell blocked: cat="${cat}" isHeader=${isHeaderLikeCategory(cat)})`);
+      }
+      debugRowCount++;
       continue;
     }
 
     // ── Item row ─────────────────────────────────────────────────────────────
+    if (debugRowCount < 10) console.log(`    → ITEM: roll="${firstClean}" catNow="${currentCategory}"`);
+    debugRowCount++;
     const rollText               = firstClean;
     const { rollMin, rollMax }   = parseRoll(rollText);
     const { linkTarget, displayName } = extractLink(cells[1]);
