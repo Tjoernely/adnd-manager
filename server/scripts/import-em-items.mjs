@@ -371,9 +371,7 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
     if (!rawName) continue;
 
     const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
-    const sourceUrl = slug
-      ? `${BASE_WIKI}/wiki/${slug.split('/').map(s => encodeURIComponent(decodeURIComponent(s))).join('/')}`
-      : null;
+    const sourceUrl = slug ? `${BASE_WIKI}/wiki/${slug}` : null;
 
     const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
       ? `${currentCategory} ${rawName}`.trim()
@@ -525,9 +523,7 @@ function parseTableS(tableCode, tableUrl, wikitext) {
     if (!rawName) continue;
 
     const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
-    const sourceUrl = slug
-      ? `${BASE_WIKI}/wiki/${slug.split('/').map(s => encodeURIComponent(decodeURIComponent(s))).join('/')}`
-      : null;
+    const sourceUrl = slug ? `${BASE_WIKI}/wiki/${slug}` : null;
 
     const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
       ? `${currentCategory} ${rawName}`.trim()
@@ -559,11 +555,15 @@ function parseTableS(tableCode, tableUrl, wikitext) {
 // ── Fetch description from a detail page via MediaWiki API ───────────────────
 async function fetchDescription(url) {
   try {
-    const urlPath  = new URL(url).pathname;
-    const rawTitle = urlPath.replace('/wiki/', '');               // still URL-encoded
-    const wikitext = await fetchWikitext(rawTitle);
+    const urlPath      = new URL(url).pathname;
+    const encodedSlug  = urlPath.replace('/wiki/', '');       // may contain %XX
+    // Decode so fetchWikitext can re-encode cleanly (avoids double-encoding)
+    const pageTitle    = decodeURIComponent(encodedSlug);     // e.g. "Azuredge,_Slayer..."
+    const cleanTitle   = pageTitle.replace(/_/g, ' ');
 
-    const cleanTitle = decodeURIComponent(rawTitle).replace(/_/g, ' ');
+    console.log(`    [detail] href="${encodedSlug}" title="${pageTitle}" url="${url}"`);
+
+    const wikitext = await fetchWikitext(pageTitle);
 
     // Extract intro text: everything before the first == section heading ==
     const sectionIdx = wikitext.search(/\n==\s*[^=]/);
@@ -578,6 +578,7 @@ async function fetchDescription(url) {
     const description = paragraphs.slice(0, 3).join('\n').slice(0, 1000) || null;
     return { title: cleanTitle, description, warning: null };
   } catch (e) {
+    console.warn(`    [detail] FAILED url="${url}" error="${e.message}"`);
     return { title: null, description: null, warning: e.message };
   }
 }
