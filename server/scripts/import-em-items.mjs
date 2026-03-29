@@ -400,6 +400,149 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
   return items;
 }
 
+// ── Parse Table S (Weapons) — subtable-aware ─────────────────────────────────
+// Table S contains named subtables (S1, S2, …).  Their header rows look like:
+//   "+ Table S1 : Generic Magical Weapons"
+// or split across two cells:
+//   cells[0] = "Table S1"   cells[1] = "Generic Magical Weapons"
+// These must be stored as subtable/subtableTitle, NOT as category.
+function parseTableS(tableCode, tableUrl, wikitext) {
+  const items = [];
+  let   currentSubtable      = null;
+  let   currentSubtableTitle = null;
+  let   currentCategory      = '';
+  let   debugRowCount        = 0;
+
+  // Regex: matches "Table S1", "Table S2", etc. with optional ": Title" part
+  const SUBTABLE_RE = /Table\s+S(\d+)(?:\s*[:\-–]\s*(.+))?/i;
+
+  const tableStart = wikitext.indexOf('{|');
+  if (tableStart === -1) {
+    console.warn(`  ⚠ No wikitable found in wikitext for ${tableUrl}`);
+    return items;
+  }
+
+  let depth = 0, tableEnd = -1;
+  for (let i = tableStart; i < wikitext.length - 1; i++) {
+    if (wikitext[i] === '{' && wikitext[i + 1] === '|') { depth++; i++; }
+    else if (wikitext[i] === '|' && wikitext[i + 1] === '}') {
+      depth--;
+      if (depth === 0) { tableEnd = i + 2; break; }
+      i++;
+    }
+  }
+  const tableText = tableEnd !== -1 ? wikitext.slice(tableStart, tableEnd) : wikitext.slice(tableStart);
+  const rowBlocks = tableText.split(/\n\s*\|-/);
+
+  const cleanCat = (raw) => {
+    const cleaned = raw
+      .replace(/\|\|/g, '')
+      .replace(/\|/g, '')
+      .replace(/'''/g, '')
+      .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+      .replace(/^\+\s*/, '')   // strip leading "+ " that appears in S subtable headers
+      .trim();
+    return cleaned || null;
+  };
+
+  for (const block of rowBlocks) {
+    const cells = extractCellsFromRow(block);
+
+    // ── DEBUG: first 10 row blocks for Table S ────────────────────────────────
+    if (debugRowCount < 10) {
+      const rawLines = block.split('\n').map(l => l.trimEnd()).filter(Boolean);
+      console.log(`  [S-ROW ${debugRowCount}] cells=${cells.length} subtable="${currentSubtable}" cat="${currentCategory}"`);
+      if (rawLines.length) console.log(`    raw[0]: ${rawLines[0].slice(0, 80)}`);
+      if (cells.length)    console.log(`    cells : ${JSON.stringify(cells.slice(0, 3))}`);
+    }
+
+    if (cells.length === 0) { debugRowCount++; continue; }
+
+    // ── Subtable / category detection for single-cell rows ───────────────────
+    if (cells.length === 1) {
+      const raw     = cleanCat(stripWikiMarkup(cells[0]).trim()) || '';
+      const subMatch = raw.match(SUBTABLE_RE);
+      if (subMatch) {
+        currentSubtable      = `S${subMatch[1]}`;
+        currentSubtableTitle = (subMatch[2] || '').trim() || null;
+        currentCategory      = '';
+        if (debugRowCount < 10) console.log(`    → SUBTABLE: ${currentSubtable} "${currentSubtableTitle}"`);
+      } else if (raw && !isRollText(raw) && !isHeaderLikeCategory(raw)) {
+        currentCategory = raw;
+        if (debugRowCount < 10) console.log(`    → CATEGORY: "${currentCategory}"`);
+      } else {
+        if (debugRowCount < 10) console.log(`    → SKIP (single-cell: "${raw}")`);
+      }
+      debugRowCount++;
+      continue;
+    }
+
+    // ── Two+ cells ────────────────────────────────────────────────────────────
+    const firstClean = stripWikiMarkup(cells[0]).trim();
+    const rawFirst   = cleanCat(firstClean) || '';
+
+    if (!isRollText(firstClean)) {
+      // Check if this is a two-cell subtable header: "Table S1" | "Generic Magical Weapons"
+      const subMatch = rawFirst.match(SUBTABLE_RE);
+      if (subMatch) {
+        currentSubtable      = `S${subMatch[1]}`;
+        // Title: from the regex group OR from the second cell
+        const titleFromRegex = (subMatch[2] || '').trim();
+        const titleFromCell  = cleanCat(stripWikiMarkup(cells[1]).trim()) || '';
+        currentSubtableTitle = titleFromRegex || titleFromCell || null;
+        currentCategory      = '';
+        if (debugRowCount < 10) console.log(`    → SUBTABLE (multi): ${currentSubtable} "${currentSubtableTitle}"`);
+      } else if (isRealCategoryLabel(rawFirst)) {
+        currentCategory = rawFirst;
+        if (debugRowCount < 10) console.log(`    → CATEGORY (multi): "${currentCategory}"`);
+      } else {
+        if (debugRowCount < 10) console.log(`    → SKIP (multi non-roll: "${rawFirst}")`);
+      }
+      debugRowCount++;
+      continue;
+    }
+
+    // ── Item row ─────────────────────────────────────────────────────────────
+    if (debugRowCount < 10) console.log(`    → ITEM: roll="${firstClean}" sub="${currentSubtable}" cat="${currentCategory}"`);
+    debugRowCount++;
+    const rollText                    = firstClean;
+    const { rollMin, rollMax }        = parseRoll(rollText);
+    const { linkTarget, displayName } = extractLink(cells[1]);
+    const rawName                     = (displayName || stripWikiMarkup(cells[1])).trim();
+    if (!rawName) continue;
+
+    const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
+    const sourceUrl = slug
+      ? `${BASE_WIKI}/wiki/${slug.split('/').map(s => encodeURIComponent(decodeURIComponent(s))).join('/')}`
+      : null;
+
+    const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
+      ? `${currentCategory} ${rawName}`.trim()
+      : rawName;
+
+    items.push({
+      tableCode,
+      tableUrl,
+      rollText,
+      rollMin,
+      rollMax,
+      subtable:      currentSubtable      || null,
+      subtableTitle: currentSubtableTitle || null,
+      category:      currentCategory      || null,
+      rawName,
+      finalName,
+      slug,
+      hasDetailPage: !!sourceUrl,
+      sourceUrl,
+      descTitle:     null,
+      description:   null,
+      warnings:      sourceUrl ? null : 'No detail page link',
+    });
+  }
+
+  return items;
+}
+
 // ── Fetch description from a detail page via MediaWiki API ───────────────────
 async function fetchDescription(url) {
   try {
@@ -543,7 +686,9 @@ async function main() {
       continue;
     }
 
-    const allItems = parseWikitextTable(tableCode, tableUrl, wikitext);
+    const allItems = tableCode === 'S'
+      ? parseTableS(tableCode, tableUrl, wikitext)
+      : parseWikitextTable(tableCode, tableUrl, wikitext);
     console.log(`  Parsed ${allItems.length} items from wiki`);
 
     if (!allItems.length) {
@@ -572,17 +717,32 @@ async function main() {
     // ── Print first 10 parsed items ──────────────────────────────────────────
     console.log(`\n  First ${Math.min(10, items.length)} items:`);
     for (const item of items.slice(0, 10)) {
-      console.log(JSON.stringify({
-        tableCode:     item.tableCode,
-        rollText:      item.rollText,
-        rollMin:       item.rollMin,
-        rollMax:       item.rollMax,
-        category:      item.category,
-        rawName:       item.rawName,
-        finalName:     item.finalName,
-        hasDetailPage: item.hasDetailPage,
-        sourceUrl:     item.sourceUrl,
-      }, null, 2));
+      const display = tableCode === 'S'
+        ? {
+            tableCode:     item.tableCode,
+            rollText:      item.rollText,
+            rollMin:       item.rollMin,
+            rollMax:       item.rollMax,
+            subtable:      item.subtable,
+            subtableTitle: item.subtableTitle,
+            category:      item.category,
+            rawName:       item.rawName,
+            finalName:     item.finalName,
+            hasDetailPage: item.hasDetailPage,
+            sourceUrl:     item.sourceUrl,
+          }
+        : {
+            tableCode:     item.tableCode,
+            rollText:      item.rollText,
+            rollMin:       item.rollMin,
+            rollMax:       item.rollMax,
+            category:      item.category,
+            rawName:       item.rawName,
+            finalName:     item.finalName,
+            hasDetailPage: item.hasDetailPage,
+            sourceUrl:     item.sourceUrl,
+          };
+      console.log(JSON.stringify(display, null, 2));
     }
 
     // ── Summary ──────────────────────────────────────────────────────────────
