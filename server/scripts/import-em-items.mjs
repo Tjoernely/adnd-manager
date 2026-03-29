@@ -375,13 +375,14 @@ function normalizeItem(item) {
     if (sub === 'R2')
       return { item_type: 'armor_enchantment', equip_slot: null, inventory_group: 'armor' };
     if (name.includes('shield') || name.includes('buckler'))
-      return { item_type: 'shield',    equip_slot: 'hand_l',  inventory_group: 'armor' };
+      return { item_type: 'shield',      equip_slot: 'hand_l', inventory_group: 'armor' };
+    // Check caparison before 'cap' to avoid false helmet match
+    if (name.includes('barding') || name.includes('caparison'))
+      return { item_type: 'mount_armor', equip_slot: null,     inventory_group: 'armor' };
     if (name.includes('bonnet') || name.includes('helm') ||
         name.includes('cap') || name.includes('coif'))
-      return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'armor' };
-    if (name.includes('barding') || name.includes('caparison'))
-      return { item_type: 'mount_armor', equip_slot: null,    inventory_group: 'armor' };
-    return { item_type: 'armor',       equip_slot: 'body',    inventory_group: 'armor' };
+      return { item_type: 'helmet',      equip_slot: 'head',   inventory_group: 'armor' };
+    return { item_type: 'armor',         equip_slot: 'body',   inventory_group: 'armor' };
   }
 
   if (table === 'S') {
@@ -403,6 +404,9 @@ function normalizeItem(item) {
                           : name.includes('sling')    ? 'sling' : 'blowgun';
       return { item_type: 'ranged', equip_slot: 'ranged', weapon_family, hands_required: 2, inventory_group: 'weapons' };
     }
+    // Siege / oversized weapons — not hand-carried
+    if (name.includes('ballista') || name.includes('battering ram') || name.includes('bombard'))
+      return { item_type: 'siege_weapon', equip_slot: null, hands_required: null, inventory_group: 'weapons' };
     if (name.includes('two-handed') || name.includes('great sword') ||
         name.includes('pike') || name.includes('halberd') ||
         name.includes('polearm') || name.includes('quarterstaff') ||
@@ -1038,6 +1042,13 @@ async function main() {
       item.hands_required  = norm.hands_required  ?? null;
       item.ammo_type       = norm.ammo_type       ?? null;
       item.inventory_group = norm.inventory_group ?? null;
+
+      // Table C: ring items named "of X" need a "Ring" prefix in finalName
+      // (no category header precedes them in the wiki table)
+      if (item.tableCode === 'C' && item.finalName &&
+          item.finalName.toLowerCase().startsWith('of ')) {
+        item.finalName = 'Ring ' + item.finalName;
+      }
     }
 
     if (!allItems.length) {
