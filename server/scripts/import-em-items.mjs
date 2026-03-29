@@ -86,7 +86,7 @@ const TABLE_MAP = {
   O: 'Table O: Musical Instruments (EM)',
   P: 'Table P: Weird Stuff (EM)',
   Q: 'Table Q: Humorous Items (EM)',
-  R: 'Table R: Armor & Shields (EM)',
+  R: 'Table R: Armor and Shields (EM)',
   S: 'Table S: Weapons (EM)',
   T: 'Table T: Artifacts (EM)',
 };
