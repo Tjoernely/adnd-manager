@@ -69,26 +69,26 @@ const BASE_WIKI = 'https://adnd2e.fandom.com';
 const API_BASE  = 'https://adnd2e.fandom.com/api.php';
 
 const TABLE_MAP = {
-  A: { name: 'Magical Liquids',               title: 'Table A: Magical Liquids (EM)' },
-  B: { name: 'Scrolls',                        title: 'Table B: Scrolls (EM)' },
-  C: { name: 'Rings',                          title: 'Table C: Rings (EM)' },
-  D: { name: 'Rods',                           title: 'Table D: Rods (EM)' },
-  E: { name: 'Staves',                         title: 'Table E: Staves (EM)' },
-  F: { name: 'Wands',                          title: 'Table F: Wands (EM)' },
-  G: { name: 'Books & Tomes',                  title: 'Table G: Books & Tomes (EM)' },
-  H: { name: 'Gems & Jewelry',                 title: 'Table H: Gems & Jewelry (EM)' },
-  I: { name: 'Clothing',                       title: 'Table I: Clothing (EM)' },
-  J: { name: 'Boots, Gloves & Accessories',    title: 'Table J: Boots, Gloves & Accessories (EM)' },
-  K: { name: 'Girdles & Helmets',              title: 'Table K: Girdles & Helmets (EM)' },
-  L: { name: 'Bags, Bands & Bottles',          title: 'Table L: Bags, Bands & Bottles (EM)' },
-  M: { name: 'Dusts & Stones',                 title: 'Table M: Dusts & Stones (EM)' },
-  N: { name: 'Household Items',                title: 'Table N: Household Items (EM)' },
-  O: { name: 'Musical Instruments',            title: 'Table O: Musical Instruments (EM)' },
-  P: { name: 'Weird Stuff',                    title: 'Table P: Weird Stuff (EM)' },
-  Q: { name: 'Humorous Items',                 title: 'Table Q: Humorous Items (EM)' },
-  R: { name: 'Armor & Shields',                title: 'Table R: Armor & Shields (EM)' },
-  S: { name: 'Weapons',                        title: 'Table S: Weapons (EM)' },
-  T: { name: 'Artifacts & Relics',             title: 'Table T: Artifacts & Relics (EM)' },
+  A: 'Table A: Magical Liquids (EM)',
+  B: 'Table B: Scrolls (EM)',
+  C: 'Table C: Rings (EM)',
+  D: 'Table D: Rods (EM)',
+  E: 'Table E: Staves (EM)',
+  F: 'Table F: Wands (EM)',
+  G: 'Table G: Books (EM)',
+  H: 'Table H: Gems & Jewelry (EM)',
+  I: 'Table I: Clothing (EM)',
+  J: 'Table J: Boots, Gloves, and Accessories (EM)',
+  K: 'Table K: Girdles and Helmets (EM)',
+  L: 'Table L: Bags, Bands, Bottles, and Basins (EM)',
+  M: 'Table M: Dust and Stones (EM)',
+  N: 'Table N: Household Items (EM)',
+  O: 'Table O: Musical Instruments (EM)',
+  P: 'Table P: Weird Stuff (EM)',
+  Q: 'Table Q: Humorous Items (EM)',
+  R: 'Table R: Armor & Shields (EM)',
+  S: 'Table S: Weapons (EM)',
+  T: 'Table T: Artifacts (EM)',
 };
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -99,8 +99,26 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
  * Fetch raw wikitext for a page via the MediaWiki API.
  * API does NOT hit Cloudflare protection — safe from Node.js.
  */
+function extractWikitext(pages) {
+  const pageId = Object.keys(pages)[0];
+  if (pageId === '-1') {
+    const title = pages[pageId]?.title || 'unknown';
+    throw new Error('Page not found for title: ' + title);
+  }
+  const p   = pages[pageId];
+  const rev = p?.revisions?.[0];
+  if (!rev) throw new Error('No revisions found');
+  const content = rev['*'] ?? rev?.slots?.main?.['*'];
+  if (!content) throw new Error('No content in revision');
+  return content;
+}
+
 async function fetchWikitext(pageTitle, retries = 3) {
-  const apiUrl = `${API_BASE}?action=query&titles=${encodeURIComponent(pageTitle)}&prop=revisions&rvprop=content&format=json&redirects=1`;
+  const apiUrl =
+    'https://adnd2e.fandom.com/api.php' +
+    '?action=query' +
+    '&titles=' + encodeURIComponent(pageTitle) +
+    '&prop=revisions&rvprop=content&format=json&redirects=1';
   let currentDelay = delayMs;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -115,11 +133,7 @@ async function fetchWikitext(pageTitle, retries = 3) {
       const data  = await res.json();
       const pages = data?.query?.pages;
       if (!pages) throw new Error('No pages in API response');
-      const page  = Object.values(pages)[0];
-      if (page.missing !== undefined) throw new Error(`Page not found: ${pageTitle}`);
-      const wikitext = page?.revisions?.[0]?.['*'];
-      if (!wikitext) throw new Error('No wikitext in API response');
-      return wikitext;
+      return extractWikitext(pages);
     } catch (e) {
       if (attempt === retries) throw new Error(`${e.message} — ${pageTitle}`);
       console.warn(`    ⚠ Attempt ${attempt}/${retries} failed: ${e.message} — retry in ${currentDelay * 2}ms`);
@@ -414,18 +428,23 @@ async function upsertItems(items) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   for (const tableCode of tablesToProcess) {
-    const meta = TABLE_MAP[tableCode];
-    if (!meta) {
+    const pageTitle = TABLE_MAP[tableCode];
+    if (!pageTitle) {
       console.error(`\n✗ No entry in TABLE_MAP for table ${tableCode} — skipping`);
       continue;
     }
 
-    const { name: tableName, title: pageTitle } = meta;
     const tableUrl = `${BASE_WIKI}/wiki/${pageTitle.replace(/ /g, '_')}`;
+    const apiUrl   =
+      'https://adnd2e.fandom.com/api.php' +
+      '?action=query' +
+      '&titles=' + encodeURIComponent(pageTitle) +
+      '&prop=revisions&rvprop=content&format=json&redirects=1';
 
     console.log(`\n${'═'.repeat(64)}`);
-    console.log(`  Table ${tableCode} — ${tableName}`);
-    console.log(`  API title: "${pageTitle}"`);
+    console.log(`  Table code: ${tableCode}`);
+    console.log(`  Title: ${pageTitle}`);
+    console.log(`  API URL: ${apiUrl}`);
     console.log('═'.repeat(64));
 
     // Fetch wikitext via MediaWiki API
