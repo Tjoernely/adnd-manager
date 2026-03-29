@@ -421,6 +421,20 @@ function normalizeItem(item) {
   return { item_type: 'misc',          equip_slot: null,      inventory_group: 'misc' };
 }
 
+function normalizeCategoryText(raw) {
+  let s = stripWikiMarkup(raw || '');
+
+  s = s
+    .replace(/^Table\s+\w+\s*:\s*/i, '')  // remove "Table X: " prefix
+    .replace(/^\+\s*/, '')                  // remove leading "+"
+    .replace(/\|\|.*$/, '')                 // remove anything after ||
+    .replace(/[!|:\s]+$/, '')               // remove trailing !, |, :, spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return s;
+}
+
 // ── Parse a single table page from wikitext ───────────────────────────────────
 function parseWikitextTable(tableCode, tableUrl, wikitext) {
   const items = [];
@@ -484,18 +498,13 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
     // We rely on isHeaderLikeCategory to block column-header text, NOT on
     // whether the line starts with ! (which would also block Elixir etc.).
     if (cells.length === 1) {
-      const rawCell        = cells[0];
-      const afterMarkup    = stripWikiMarkup(rawCell).trim();
-      const cleanedCategory = cleanCat(stripWikiMarkup(afterMarkup));
-      if (debugRowCount < 20) {
-        console.log(`    [cat-pipeline] raw="${rawCell.slice(0,60)}" afterMarkup="${afterMarkup.slice(0,60)}" cleaned="${cleanedCategory}"`);
-      }
-      const blocked = !cleanedCategory || isRollText(cleanedCategory) || isHeaderLikeCategory(cleanedCategory);
-      if (!blocked) {
+      const cleanedCategory = normalizeCategoryText(cells[0]);
+      if (debugRowCount < 20) console.log(`    [cat] raw="${cells[0].slice(0,60)}" → "${cleanedCategory}"`);
+      if (cleanedCategory && !isRollText(cleanedCategory) && !isHeaderLikeCategory(cleanedCategory)) {
         currentCategory = cleanedCategory;
-        if (debugRowCount < 20) console.log(`    → CATEGORY: "${currentCategory}"`);
+        console.log(`    → CATEGORY: "${currentCategory}"`);
       } else {
-        if (debugRowCount < 20) console.log(`    → SKIP (single-cell blocked: cleaned="${cleanedCategory}")`);
+        if (debugRowCount < 20) console.log(`    → SKIP (single-cell: "${cleanedCategory}")`);
       }
       debugRowCount++;
       continue;
@@ -506,17 +515,14 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
 
     if (!isRollText(firstClean)) {
       // Not a roll row — candidate category from first non-empty cell.
-      // isRealCategoryLabel blocks column-header text (d1000Roll, Item, etc.)
-      const rawCat          = stripWikiMarkup(cells[0]).trim() || stripWikiMarkup(cells[1]).trim();
-      const cleanedCategory = cleanCat(stripWikiMarkup(rawCat));
-      if (debugRowCount < 20) {
-        console.log(`    [cat-pipeline-multi] rawCat="${rawCat.slice(0,60)}" cleaned="${cleanedCategory}"`);
-      }
+      const rawCat          = cells[0] || cells[1];
+      const cleanedCategory = normalizeCategoryText(rawCat);
+      if (debugRowCount < 20) console.log(`    [cat-multi] raw="${rawCat.slice(0,60)}" → "${cleanedCategory}"`);
       if (isRealCategoryLabel(cleanedCategory)) {
         currentCategory = cleanedCategory;
-        if (debugRowCount < 20) console.log(`    → CATEGORY (multi): "${currentCategory}"`);
+        console.log(`    → CATEGORY (multi): "${currentCategory}"`);
       } else {
-        if (debugRowCount < 20) console.log(`    → SKIP (multi-cell blocked: cleaned="${cleanedCategory}")`);
+        if (debugRowCount < 20) console.log(`    → SKIP (multi-cell: "${cleanedCategory}")`);
       }
       debugRowCount++;
       continue;
