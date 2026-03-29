@@ -416,23 +416,34 @@ function parseTableS(tableCode, tableUrl, wikitext) {
   // Regex: matches "Table S1", "Table S2", etc. with optional ": Title" part
   const SUBTABLE_RE = /Table\s+S(\d+)(?:\s*[:\-–]\s*(.+))?/i;
 
-  const tableStart = wikitext.indexOf('{|');
-  if (tableStart === -1) {
-    console.warn(`  ⚠ No wikitable found in wikitext for ${tableUrl}`);
+  // ── Collect ALL {| ... |} table blocks from the wikitext ─────────────────────
+  const allTableTexts = [];
+  let pos = 0;
+  while (pos < wikitext.length) {
+    const start = wikitext.indexOf('{|', pos);
+    if (start === -1) break;
+    let depth = 0, end = -1;
+    for (let i = start; i < wikitext.length - 1; i++) {
+      if (wikitext[i] === '{' && wikitext[i + 1] === '|') { depth++; i++; }
+      else if (wikitext[i] === '|' && wikitext[i + 1] === '}') {
+        depth--;
+        if (depth === 0) { end = i + 2; break; }
+        i++;
+      }
+    }
+    allTableTexts.push(wikitext.slice(start, end !== -1 ? end : wikitext.length));
+    pos = end !== -1 ? end : wikitext.length;
+  }
+
+  if (allTableTexts.length === 0) {
+    console.warn(`  ⚠ No wikitables found in wikitext for ${tableUrl}`);
     return items;
   }
 
-  let depth = 0, tableEnd = -1;
-  for (let i = tableStart; i < wikitext.length - 1; i++) {
-    if (wikitext[i] === '{' && wikitext[i + 1] === '|') { depth++; i++; }
-    else if (wikitext[i] === '|' && wikitext[i + 1] === '}') {
-      depth--;
-      if (depth === 0) { tableEnd = i + 2; break; }
-      i++;
-    }
-  }
-  const tableText = tableEnd !== -1 ? wikitext.slice(tableStart, tableEnd) : wikitext.slice(tableStart);
-  const rowBlocks = tableText.split(/\n\s*\|-/);
+  console.log(`  Found ${allTableTexts.length} wiki table block(s) in Table S wikitext`);
+
+  // Flatten all table blocks into a single rowBlocks array
+  const rowBlocks = allTableTexts.flatMap(t => t.split(/\n\s*\|-/));
 
   const cleanCat = (raw) => {
     const cleaned = raw
@@ -466,6 +477,7 @@ function parseTableS(tableCode, tableUrl, wikitext) {
         currentSubtable      = `S${subMatch[1]}`;
         currentSubtableTitle = (subMatch[2] || '').trim() || null;
         currentCategory      = '';
+        console.log(`  Detected subtable: ${currentSubtable} "${currentSubtableTitle}"`);
         if (debugRowCount < 10) console.log(`    → SUBTABLE: ${currentSubtable} "${currentSubtableTitle}"`);
       } else if (raw && !isRollText(raw) && !isHeaderLikeCategory(raw)) {
         currentCategory = raw;
@@ -491,6 +503,7 @@ function parseTableS(tableCode, tableUrl, wikitext) {
         const titleFromCell  = cleanCat(stripWikiMarkup(cells[1]).trim()) || '';
         currentSubtableTitle = titleFromRegex || titleFromCell || null;
         currentCategory      = '';
+        console.log(`  Detected subtable: ${currentSubtable} "${currentSubtableTitle}"`);
         if (debugRowCount < 10) console.log(`    → SUBTABLE (multi): ${currentSubtable} "${currentSubtableTitle}"`);
       } else if (isRealCategoryLabel(rawFirst)) {
         currentCategory = rawFirst;
