@@ -117,27 +117,43 @@ async function main() {
       ['ammo_type',       'VARCHAR(50)'],
       ['inventory_group', 'VARCHAR(50)'],
     ];
+
+    // Check which columns actually exist via information_schema — avoids needing
+    // table ownership just to run "ALTER TABLE … IF NOT EXISTS" as a no-op.
+    const { rows: existingColRows } = await client.query(`
+      SELECT column_name
+      FROM   information_schema.columns
+      WHERE  table_schema = 'public'
+        AND  table_name   = 'magical_items'
+        AND  column_name  = ANY($1)
+    `, [newCols.map(([n]) => n)]);
+    const existingColSet = new Set(existingColRows.map(r => r.column_name));
+
     let missingCols = [];
     for (const [col, type] of newCols) {
-      try {
-        await client.query(
-          `ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS ${col} ${type}`
-        );
-        console.log(`    + ${col}`);
-      } catch (e) {
-        console.warn(`    ! Could not add ${col}: ${e.message}`);
-        missingCols.push(col);
+      if (existingColSet.has(col)) {
+        console.log(`    ✓ ${col} (already exists)`);
+      } else {
+        // Column is genuinely absent — try to add it (requires table ownership).
+        try {
+          await client.query(
+            `ALTER TABLE magical_items ADD COLUMN ${col} ${type}`
+          );
+          console.log(`    + ${col} (added)`);
+        } catch (e) {
+          console.warn(`    ! Could not add ${col}: ${e.message}`);
+          missingCols.push([col, type]);
+        }
       }
     }
 
-    // ── Guard: abort if typed columns are missing ─────────────────────────────
+    // ── Guard: abort only if columns are genuinely missing AND couldn't be added
     if (missingCols.length > 0) {
       console.error(`\n  ✗ Cannot promote: ${missingCols.length} column(s) missing from magical_items.`);
       console.error('  Add them as the postgres superuser, then re-run:\n');
-      const alterStmts = missingCols.map(c => {
-        const type = newCols.find(([n]) => n === c)?.[1] ?? 'TEXT';
-        return `    ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS ${c} ${type};`;
-      }).join('\n');
+      const alterStmts = missingCols.map(([c, t]) =>
+        `    ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS ${c} ${t};`
+      ).join('\n');
       console.error(`  sudo -u postgres psql adnddb <<'SQL'\n${alterStmts}\n  SQL\n`);
       process.exit(1);
     }
