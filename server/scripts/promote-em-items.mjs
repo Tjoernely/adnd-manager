@@ -92,9 +92,7 @@ async function main() {
     //  PROMOTE MODE
     // ═════════════════════════════════════════════════════════════════════════
 
-    await client.query('BEGIN');
-
-    // ── Step 1: Backup ────────────────────────────────────────────────────────
+    // ── Step 1: Backup (outside transaction — CREATE TABLE AS is DDL) ─────────
     const backupTable = `magical_items_backup_${today()}`;
     console.log(`\n  Step 1 — Creating backup: ${backupTable} …`);
     await client.query(`DROP TABLE IF EXISTS ${backupTable}`);
@@ -104,7 +102,11 @@ async function main() {
     );
     console.log(`  ✓ Backed up ${backupCount} rows`);
 
-    // ── Step 2: Add new typed columns to magical_items if missing ─────────────
+    // ── Step 2: Add new typed columns (DDL — outside transaction) ────────────
+    // ALTER TABLE requires table ownership.  If adnduser is not the owner,
+    // run this manually first as the postgres superuser:
+    //   sudo -u postgres psql adnddb -c "ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50); ..."
+    // Failures here are logged as warnings and do NOT abort the upsert.
     console.log('\n  Step 2 — Ensuring new columns exist on magical_items …');
     const newCols = [
       ['item_type',       'VARCHAR(50)'],
@@ -114,21 +116,36 @@ async function main() {
       ['ammo_type',       'VARCHAR(50)'],
       ['inventory_group', 'VARCHAR(50)'],
     ];
+    let missingCols = [];
     for (const [col, type] of newCols) {
       try {
         await client.query(
           `ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS ${col} ${type}`
         );
-        console.log(`    + ${col} ${type}`);
+        console.log(`    + ${col}`);
       } catch (e) {
         console.warn(`    ! Could not add ${col}: ${e.message}`);
+        missingCols.push(col);
       }
     }
 
-    // ── Step 3: Upsert staging → magical_items ────────────────────────────────
+    // ── Guard: abort if typed columns are missing ─────────────────────────────
+    if (missingCols.length > 0) {
+      console.error(`\n  ✗ Cannot promote: ${missingCols.length} column(s) missing from magical_items.`);
+      console.error('  Add them as the postgres superuser, then re-run:\n');
+      const alterStmts = missingCols.map(c => {
+        const type = newCols.find(([n]) => n === c)?.[1] ?? 'TEXT';
+        return `    ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS ${c} ${type};`;
+      }).join('\n');
+      console.error(`  sudo -u postgres psql adnddb <<'SQL'\n${alterStmts}\n  SQL\n`);
+      process.exit(1);
+    }
+
+    // ── Step 3: Upsert staging → magical_items (in a transaction) ────────────
     // Conflict target: UNIQUE (name, category) on magical_items.
     // staging.category may be NULL; live column is NOT NULL — use COALESCE.
     console.log('\n  Step 3 — Upserting staging rows into magical_items …');
+    await client.query('BEGIN');
 
     const upsertSql = `
       INSERT INTO magical_items (
