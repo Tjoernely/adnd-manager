@@ -292,6 +292,7 @@ function normalizeItem(item) {
   const name  = (item.finalName || '').toLowerCase();
   const table = item.tableCode;
   const sub   = item.subtable || '';
+  const cat   = (item.category || '').toLowerCase();
 
   if (table === 'A')
     return { item_type: 'potion',      equip_slot: null,      inventory_group: 'potions' };
@@ -315,6 +316,7 @@ function normalizeItem(item) {
     return { item_type: 'book',        equip_slot: null,      inventory_group: 'misc' };
 
   if (table === 'H') {
+    // ── Name-based (highest confidence) ──────────────────────────────────────
     if (name.includes('ring'))
       return { item_type: 'ring',      equip_slot: null,      inventory_group: 'magic' };
     if (name.includes('amulet') || name.includes('medallion') ||
@@ -327,28 +329,66 @@ function normalizeItem(item) {
     if (name.includes('crown') || name.includes('circlet') ||
         name.includes('tiara') || name.includes('diadem'))
       return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'magic' };
+    // ── Category-based fallback (e.g. "Against Disease" under "Amulet") ──────
+    if (cat.includes('ring'))
+      return { item_type: 'ring',      equip_slot: null,      inventory_group: 'magic' };
+    if (cat.includes('amulet') || cat.includes('medallion') ||
+        cat.includes('necklace') || cat.includes('pendant') ||
+        cat.includes('periapt') || cat.includes('talisman'))
+      return { item_type: 'amulet',    equip_slot: 'neck',    inventory_group: 'magic' };
+    if (cat.includes('bracelet') || cat.includes('bracer') ||
+        cat.includes('bangle'))
+      return { item_type: 'bracers',   equip_slot: 'wrists',  inventory_group: 'magic' };
+    if (cat.includes('circlet') || cat.includes('crown') ||
+        cat.includes('tiara') || cat.includes('diadem'))
+      return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'magic' };
     return { item_type: 'jewelry',     equip_slot: null,      inventory_group: 'magic' };
   }
 
   if (table === 'I') {
+    // ── Name-based ────────────────────────────────────────────────────────────
     if (name.includes('cloak') || name.includes('robe') || name.includes('cape'))
+      return { item_type: 'cloak',     equip_slot: 'cloak',   inventory_group: 'clothing' };
+    // ── Category-based fallback (e.g. "Iuz's" / "Shadow" under "Cape") ───────
+    if (cat.includes('cape') || cat.includes('cloak') || cat.includes('robe'))
       return { item_type: 'cloak',     equip_slot: 'cloak',   inventory_group: 'clothing' };
     return { item_type: 'clothing',    equip_slot: 'body',    inventory_group: 'clothing' };
   }
 
   if (table === 'J') {
+    // ── Name-based ────────────────────────────────────────────────────────────
     if (name.includes('boot') || name.includes('sandal') || name.includes('slipper'))
       return { item_type: 'boots',     equip_slot: 'boots',   inventory_group: 'clothing' };
     if (name.includes('glove') || name.includes('gauntlet'))
       return { item_type: 'gloves',    equip_slot: 'gloves',  inventory_group: 'clothing' };
+    if (name.includes('anklet'))
+      return { item_type: 'accessory', equip_slot: 'boots',   inventory_group: 'clothing' };
+    if (name.includes('armband') || name.includes('bracer') || name.includes('bracelet'))
+      return { item_type: 'accessory', equip_slot: 'wrists',  inventory_group: 'clothing' };
+    // ── Category-based fallback ───────────────────────────────────────────────
+    if (cat.includes('boot') || cat.includes('sandal') || cat.includes('slipper'))
+      return { item_type: 'boots',     equip_slot: 'boots',   inventory_group: 'clothing' };
+    if (cat.includes('glove') || cat.includes('gauntlet'))
+      return { item_type: 'gloves',    equip_slot: 'gloves',  inventory_group: 'clothing' };
+    if (cat.includes('anklet'))
+      return { item_type: 'accessory', equip_slot: 'boots',   inventory_group: 'clothing' };
+    if (cat.includes('armband') || cat.includes('bracer') || cat.includes('bracelet'))
+      return { item_type: 'accessory', equip_slot: 'wrists',  inventory_group: 'clothing' };
     return { item_type: 'accessory',   equip_slot: null,      inventory_group: 'clothing' };
   }
 
   if (table === 'K') {
+    // ── Name-based ────────────────────────────────────────────────────────────
     if (name.includes('girdle') || name.includes('belt') || name.includes('sash'))
       return { item_type: 'belt',      equip_slot: 'belt',    inventory_group: 'clothing' };
     if (name.includes('helm') || name.includes('hat') || name.includes('crown') ||
         name.includes('bonnet') || name.includes('cap') || name.includes('coif'))
+      return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'clothing' };
+    // ── Category-based fallback (e.g. "Arcane" / "Black Elk Clan" under "Belt") ──
+    if (cat.includes('girdle') || cat.includes('belt') || cat.includes('sash'))
+      return { item_type: 'belt',      equip_slot: 'belt',    inventory_group: 'clothing' };
+    if (cat.includes('helm') || cat.includes('hat') || cat.includes('crown') ||
+        cat.includes('bonnet') || cat.includes('cap'))
       return { item_type: 'helmet',    equip_slot: 'head',    inventory_group: 'clothing' };
     return { item_type: 'accessory',   equip_slot: null,      inventory_group: 'clothing' };
   }
