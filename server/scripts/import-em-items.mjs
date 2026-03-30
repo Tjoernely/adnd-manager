@@ -587,15 +587,30 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
     if (currentCategory) {
       const lname    = rawName.toLowerCase();
       const catLower = currentCategory.toLowerCase();
+
       if (lname.startsWith('of ')) {
-        // bare "of X" → "<Category> of X"
+        // "of Beans" → "Bag of Beans"  (all tables)
         finalName = `${currentCategory} ${rawName}`.trim();
-      } else if ((tableCode === 'D' || tableCode === 'E') &&
-                 lname.includes(' of ') &&
-                 !lname.startsWith(catLower)) {
-        // possessive: "Bample's of Distortion" → "Bample's Rod of Distortion"
+
+      } else if (lname.includes(' of ') && !lname.startsWith(catLower) &&
+                 ['D','E','M','N','P'].includes(tableCode)) {
+        // Insert category before the first " of " when the name is an
+        // abbreviated form that drops the category word.
+        //   D/E: "Bample's of Distortion"     → "Bample's Rod of Distortion"
+        //   N:   "High of the Dwarves"         → "High Anvil of the Dwarves"
+        //   P:   "Cursed of Staying"           → "Cursed Anchor of Staying"
+        // Tables L / O are excluded: their items often have a different
+        // leading word that is already a complete type noun (e.g. "Backpack
+        // of Holding" under category "Bag").
         const ofIdx = rawName.indexOf(' of ');
         finalName = rawName.slice(0, ofIdx) + ' ' + currentCategory + rawName.slice(ofIdx);
+
+      } else if (/['\u2019]s?$/.test(rawName) && !lname.includes(catLower)) {
+        // Pure possessive display name — the wiki omits the item type entirely.
+        //   M: "Chandrasakar's"       (cat: Air Spores) → "Chandrasakar's Air Spores"
+        //   N: "Flandal Steelskin's"  (cat: Apron)      → "Flandal Steelskin's Apron"
+        // Guard: skip if category word is already in the name.
+        finalName = rawName + ' ' + currentCategory;
       }
     }
 
