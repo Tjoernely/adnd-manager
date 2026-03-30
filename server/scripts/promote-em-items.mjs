@@ -185,7 +185,10 @@ async function main() {
         ammo_type,
         inventory_group
       )
-      SELECT
+      -- DISTINCT ON deduplicates staging rows that share the same (name, category)
+      -- key before they hit the conflict target, avoiding the "cannot affect row
+      -- a second time" error.  The highest id (latest import) wins.
+      SELECT DISTINCT ON (s.name, COALESCE(s.category, ''))
         s.name,
         COALESCE(s.category, ''),
         s.description_title,
@@ -208,6 +211,7 @@ async function main() {
         s.ammo_type,
         s.inventory_group
       FROM magical_items_em_import s
+      ORDER BY s.name, COALESCE(s.category, ''), s.id DESC
       ON CONFLICT (name, category) DO UPDATE SET
         source_page_title = EXCLUDED.source_page_title,
         source_url        = EXCLUDED.source_url,
