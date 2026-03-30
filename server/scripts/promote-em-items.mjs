@@ -17,6 +17,7 @@
  *   node scripts/promote-em-items.mjs --promote   # backup + promote for real
  */
 
+import 'dotenv/config';
 import pg                from 'pg';
 import { fileURLToPath } from 'url';
 import path              from 'path';

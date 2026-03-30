@@ -8,6 +8,7 @@
  * Default (safe): --table A --dry-run --limit 10
  */
 
+import 'dotenv/config';
 import pg                from 'pg';
 import fs                from 'fs';
 import path              from 'path';
