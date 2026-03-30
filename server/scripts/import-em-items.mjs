@@ -424,6 +424,9 @@ function normalizeItem(item) {
 function normalizeCategoryText(raw) {
   let s = stripWikiMarkup(raw || '');
 
+  // Reject MediaWiki category links: [[Category:Wands (EM)]] → "Category:Wands (EM)"
+  if (/^Category:/i.test(s.trim())) return '';
+
   s = s
     .replace(/^Table\s+\w+\s*:\s*/i, '')  // remove "Table X: " prefix
     .replace(/^\+\s*/, '')                  // remove leading "+"
@@ -540,9 +543,21 @@ function parseWikitextTable(tableCode, tableUrl, wikitext) {
     const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
     const sourceUrl = slug ? `${BASE_WIKI}/wiki/${slug}` : null;
 
-    const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
-      ? `${currentCategory} ${rawName}`.trim()
-      : rawName;
+    let finalName = rawName;
+    if (currentCategory) {
+      const lname    = rawName.toLowerCase();
+      const catLower = currentCategory.toLowerCase();
+      if (lname.startsWith('of ')) {
+        // bare "of X" → "<Category> of X"
+        finalName = `${currentCategory} ${rawName}`.trim();
+      } else if ((tableCode === 'D' || tableCode === 'E') &&
+                 lname.includes(' of ') &&
+                 !lname.startsWith(catLower)) {
+        // possessive: "Bample's of Distortion" → "Bample's Rod of Distortion"
+        const ofIdx = rawName.indexOf(' of ');
+        finalName = rawName.slice(0, ofIdx) + ' ' + currentCategory + rawName.slice(ofIdx);
+      }
+    }
 
     items.push({
       tableCode,
@@ -866,6 +881,125 @@ function parseTableR(tableCode, tableUrl, wikitext) {
   return items;
 }
 
+// ── Parse Table F (Wands) — all-blocks scanner, no subtables ─────────────────
+// Table F uses [[Category:Wands (EM)]] links in the wikitext which would be
+// mis-detected as category headers.  normalizeCategoryText() now rejects those.
+// We also scan ALL {| ... |} blocks (like S and R) in case the page has multiple
+// table blocks.
+function parseTableF(tableCode, tableUrl, wikitext) {
+  const items = [];
+  let   currentCategory = '';
+  let   debugRowCount   = 0;
+
+  // ── Collect ALL {| ... |} table blocks ───────────────────────────────────────
+  const allTableTexts = [];
+  let pos = 0;
+  while (pos < wikitext.length) {
+    const start = wikitext.indexOf('{|', pos);
+    if (start === -1) break;
+    let depth = 0, end = -1;
+    for (let i = start; i < wikitext.length - 1; i++) {
+      if (wikitext[i] === '{' && wikitext[i + 1] === '|') { depth++; i++; }
+      else if (wikitext[i] === '|' && wikitext[i + 1] === '}') {
+        depth--;
+        if (depth === 0) { end = i + 2; break; }
+        i++;
+      }
+    }
+    allTableTexts.push(wikitext.slice(start, end !== -1 ? end : wikitext.length));
+    pos = end !== -1 ? end : wikitext.length;
+  }
+
+  if (allTableTexts.length === 0) {
+    console.warn(`  ⚠ No wikitables found in wikitext for ${tableUrl}`);
+    return items;
+  }
+
+  console.log(`  Found ${allTableTexts.length} wiki table block(s) in Table F wikitext`);
+
+  const rowBlocks = allTableTexts.flatMap(t => t.split(/\n\s*\|-/));
+
+  for (const block of rowBlocks) {
+    const cells = extractCellsFromRow(block);
+
+    // ── DEBUG: first 20 row blocks ────────────────────────────────────────────
+    if (debugRowCount < 20) {
+      const rawLines = block.split('\n').map(l => l.trimEnd()).filter(Boolean);
+      console.log(`  [F-ROW ${debugRowCount}] cells=${cells.length} cat="${currentCategory}"`);
+      if (rawLines.length) console.log(`    raw[0]: ${rawLines[0].slice(0, 80)}`);
+      if (cells.length)    console.log(`    cells : ${JSON.stringify(cells.slice(0, 3))}`);
+    }
+
+    if (cells.length === 0) { debugRowCount++; continue; }
+
+    // ── Single cell — potential category row ──────────────────────────────────
+    if (cells.length === 1) {
+      const cleanedCategory = normalizeCategoryText(cells[0]);
+      if (debugRowCount < 20) console.log(`    [cat] raw="${cells[0].slice(0,60)}" → "${cleanedCategory}"`);
+      if (cleanedCategory && !isRollText(cleanedCategory) && !isHeaderLikeCategory(cleanedCategory)) {
+        currentCategory = cleanedCategory;
+        console.log(`    → CATEGORY: "${currentCategory}"`);
+      } else {
+        if (debugRowCount < 20) console.log(`    → SKIP (single-cell: "${cleanedCategory}")`);
+      }
+      debugRowCount++;
+      continue;
+    }
+
+    // ── Two+ cells — check if first cell is a roll number ────────────────────
+    const firstClean = stripWikiMarkup(cells[0]).trim();
+
+    if (!isRollText(firstClean)) {
+      const rawCat          = cells[0] || cells[1];
+      const cleanedCategory = normalizeCategoryText(rawCat);
+      if (debugRowCount < 20) console.log(`    [cat-multi] raw="${rawCat.slice(0,60)}" → "${cleanedCategory}"`);
+      if (isRealCategoryLabel(cleanedCategory)) {
+        currentCategory = cleanedCategory;
+        console.log(`    → CATEGORY (multi): "${currentCategory}"`);
+      } else {
+        if (debugRowCount < 20) console.log(`    → SKIP (multi-cell: "${cleanedCategory}")`);
+      }
+      debugRowCount++;
+      continue;
+    }
+
+    // ── Item row ─────────────────────────────────────────────────────────────
+    if (debugRowCount < 20) console.log(`    → ITEM: roll="${firstClean}" cat="${currentCategory}"`);
+    debugRowCount++;
+    const rollText               = firstClean;
+    const { rollMin, rollMax }   = parseRoll(rollText);
+    const { linkTarget, displayName } = extractLink(cells[1]);
+    const rawName                = (displayName || stripWikiMarkup(cells[1])).trim();
+    if (!rawName) continue;
+
+    const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
+    const sourceUrl = slug ? `${BASE_WIKI}/wiki/${slug}` : null;
+
+    const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
+      ? `${currentCategory} ${rawName}`.trim()
+      : rawName;
+
+    items.push({
+      tableCode,
+      tableUrl,
+      rollText,
+      rollMin,
+      rollMax,
+      category:      currentCategory || null,
+      rawName,
+      finalName,
+      slug,
+      hasDetailPage: !!sourceUrl,
+      sourceUrl,
+      descTitle:     null,
+      description:   null,
+      warnings:      sourceUrl ? null : 'No detail page link',
+    });
+  }
+
+  return items;
+}
+
 // ── Fetch description from a detail page via MediaWiki API ───────────────────
 async function fetchDescription(url) {
   try {
@@ -1044,6 +1178,7 @@ async function main() {
 
     const allItems = tableCode === 'S' ? parseTableS(tableCode, tableUrl, wikitext)
                    : tableCode === 'R' ? parseTableR(tableCode, tableUrl, wikitext)
+                   : tableCode === 'F' ? parseTableF(tableCode, tableUrl, wikitext)
                    : parseWikitextTable(tableCode, tableUrl, wikitext);
     console.log(`  Parsed ${allItems.length} items from wiki`);
 
