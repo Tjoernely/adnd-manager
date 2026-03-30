@@ -881,15 +881,32 @@ function parseTableR(tableCode, tableUrl, wikitext) {
   return items;
 }
 
-// ── Parse Table F (Wands) — all-blocks scanner, no subtables ─────────────────
-// Table F uses [[Category:Wands (EM)]] links in the wikitext which would be
-// mis-detected as category headers.  normalizeCategoryText() now rejects those.
-// We also scan ALL {| ... |} blocks (like S and R) in case the page has multiple
-// table blocks.
+// ── Parse Table F (Wands) — all-blocks, || normalisation, no categories ───────
+//
+// Root causes of the original failures:
+//   1. Table F wikitext uses ||  WITHOUT surrounding spaces as the cell separator
+//      (e.g. `|001-007||[[...]]`).  extractCellsFromRow splits on ' || ' (WITH
+//      spaces) so every item row became a single cell, was cleaned to just the
+//      roll number, and was then rejected by isRollText → only ~1 item parsed.
+//   2. The decorative row `![[Wands (EM)]]||` (no roll number) was being picked
+//      up as a category header, setting currentCategory = "Wands (EM)".
+//
+// Fixes applied here (Table F only — no other parser is affected):
+//   a. Normalise all ||  in the raw table text to ' || ' before parsing, so that
+//      extractCellsFromRow correctly sees two cells per item row.
+//      (Single | inside [[link|display]] links is NOT affected.)
+//   b. Skip any row that yields < 2 cells after normalisation — this catches the
+//      column-header row, the ![[Wands (EM)]]|| separator, and any other one-cell
+//      decorative row without needing category-detection logic.
+//   c. No category detection at all — Table F is a flat list of wands with no
+//      real subcategories; category is always null.
+//   d. finalName: insert "Wand" where the wiki display name omits it:
+//        "of Conjuration"        → "Wand of Conjuration"
+//        "Almen's of Illumination" → "Almen's Wand of Illumination"
+//        "Anything"              → "Anything"  (no change)
 function parseTableF(tableCode, tableUrl, wikitext) {
   const items = [];
-  let   currentCategory = '';
-  let   debugRowCount   = 0;
+  let   debugRowCount = 0;
 
   // ── Collect ALL {| ... |} table blocks ───────────────────────────────────────
   const allTableTexts = [];
@@ -917,7 +934,12 @@ function parseTableF(tableCode, tableUrl, wikitext) {
 
   console.log(`  Found ${allTableTexts.length} wiki table block(s) in Table F wikitext`);
 
-  const rowBlocks = allTableTexts.flatMap(t => t.split(/\n\s*\|-/));
+  // Normalise cell separator: replace any ||  (with optional surrounding spaces)
+  // with exactly ' || '.  This is safe because || only appears as a separator
+  // in wikitext; wiki links use a single | ( [[link|display]] ).
+  const rowBlocks = allTableTexts.flatMap(t =>
+    t.replace(/\s*\|\|\s*/g, ' || ').split(/\n\s*\|-/)
+  );
 
   for (const block of rowBlocks) {
     const cells = extractCellsFromRow(block);
@@ -925,46 +947,29 @@ function parseTableF(tableCode, tableUrl, wikitext) {
     // ── DEBUG: first 20 row blocks ────────────────────────────────────────────
     if (debugRowCount < 20) {
       const rawLines = block.split('\n').map(l => l.trimEnd()).filter(Boolean);
-      console.log(`  [F-ROW ${debugRowCount}] cells=${cells.length} cat="${currentCategory}"`);
+      console.log(`  [F-ROW ${debugRowCount}] cells=${cells.length}`);
       if (rawLines.length) console.log(`    raw[0]: ${rawLines[0].slice(0, 80)}`);
       if (cells.length)    console.log(`    cells : ${JSON.stringify(cells.slice(0, 3))}`);
     }
 
-    if (cells.length === 0) { debugRowCount++; continue; }
-
-    // ── Single cell — potential category row ──────────────────────────────────
-    if (cells.length === 1) {
-      const cleanedCategory = normalizeCategoryText(cells[0]);
-      if (debugRowCount < 20) console.log(`    [cat] raw="${cells[0].slice(0,60)}" → "${cleanedCategory}"`);
-      if (cleanedCategory && !isRollText(cleanedCategory) && !isHeaderLikeCategory(cleanedCategory)) {
-        currentCategory = cleanedCategory;
-        console.log(`    → CATEGORY: "${currentCategory}"`);
-      } else {
-        if (debugRowCount < 20) console.log(`    → SKIP (single-cell: "${cleanedCategory}")`);
-      }
+    // Skip header rows, the ![[Wands (EM)]]|| separator, and any other row
+    // that does not produce at least two cells after normalisation.
+    if (cells.length < 2) {
+      if (debugRowCount < 20) console.log(`    → SKIP (< 2 cells)`);
       debugRowCount++;
       continue;
     }
 
-    // ── Two+ cells — check if first cell is a roll number ────────────────────
+    // Skip if first cell is not a roll number (e.g. "d1000 Roll", "Item").
     const firstClean = stripWikiMarkup(cells[0]).trim();
-
     if (!isRollText(firstClean)) {
-      const rawCat          = cells[0] || cells[1];
-      const cleanedCategory = normalizeCategoryText(rawCat);
-      if (debugRowCount < 20) console.log(`    [cat-multi] raw="${rawCat.slice(0,60)}" → "${cleanedCategory}"`);
-      if (isRealCategoryLabel(cleanedCategory)) {
-        currentCategory = cleanedCategory;
-        console.log(`    → CATEGORY (multi): "${currentCategory}"`);
-      } else {
-        if (debugRowCount < 20) console.log(`    → SKIP (multi-cell: "${cleanedCategory}")`);
-      }
+      if (debugRowCount < 20) console.log(`    → SKIP (not a roll: "${firstClean}")`);
       debugRowCount++;
       continue;
     }
 
     // ── Item row ─────────────────────────────────────────────────────────────
-    if (debugRowCount < 20) console.log(`    → ITEM: roll="${firstClean}" cat="${currentCategory}"`);
+    if (debugRowCount < 20) console.log(`    → ITEM: roll="${firstClean}"`);
     debugRowCount++;
     const rollText               = firstClean;
     const { rollMin, rollMax }   = parseRoll(rollText);
@@ -975,9 +980,18 @@ function parseTableF(tableCode, tableUrl, wikitext) {
     const slug      = linkTarget ? linkTarget.replace(/ /g, '_') : null;
     const sourceUrl = slug ? `${BASE_WIKI}/wiki/${slug}` : null;
 
-    const finalName = rawName.toLowerCase().startsWith('of ') && currentCategory
-      ? `${currentCategory} ${rawName}`.trim()
-      : rawName;
+    // Build finalName: wiki display names often abbreviate by dropping "Wand".
+    //   "of Conjuration"           → "Wand of Conjuration"
+    //   "Almen's of Illumination"  → "Almen's Wand of Illumination"
+    //   "Anything" / "Buckler"     → unchanged (no " of ")
+    const lname = rawName.toLowerCase();
+    let finalName = rawName;
+    if (lname.startsWith('of ')) {
+      finalName = `Wand ${rawName}`;
+    } else if (lname.includes(' of ') && !lname.startsWith('wand ')) {
+      const ofIdx = rawName.indexOf(' of ');
+      finalName = rawName.slice(0, ofIdx) + ' Wand' + rawName.slice(ofIdx);
+    }
 
     items.push({
       tableCode,
@@ -985,7 +999,7 @@ function parseTableF(tableCode, tableUrl, wikitext) {
       rollText,
       rollMin,
       rollMax,
-      category:      currentCategory || null,
+      category:      null,   // Table F: flat wand list, no subcategories
       rawName,
       finalName,
       slug,
