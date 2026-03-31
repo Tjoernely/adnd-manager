@@ -1,29 +1,26 @@
 /**
- * import-kits.mjs
- * Seed 102 kits fra src/data/kits.js + kit->proficiency links
- * Forudsætning: import-proficiencies.mjs er kørt først
+ * import-kits.mjs  (v2 — fixed dotenv path + dynamic import)
  * Kør: node server/scripts/import-kits.mjs
+ * Forudsætning: import-proficiencies.mjs er kørt først
  */
-import 'dotenv/config';
-import pg from 'pg';
+import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import fs from 'fs';
+import pg from 'pg';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+config({ path: path.join(__dirname, '../.env') });
 
 const { Pool } = pg;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-function toCanonicalId(name) {
+function toId(name) {
   return name.toLowerCase().replace(/[(),\/]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
 
-const PREFIX_CLASS = { fig:'fighter',ran:'ranger',pal:'paladin',mag:'wizard',
-  cle:'cleric',dru:'druid',thi:'thief',bar:'bard',uni:null };
-
 async function resolveProfId(raw) {
   const clean = raw.replace(/\s*\*\s*$/,'').trim();
-  const cid = toCanonicalId(clean);
+  const cid   = toId(clean);
   let r = await pool.query('SELECT id FROM nonweapon_proficiencies WHERE canonical_id=$1',[cid]);
   if (r.rows.length) return r.rows[0].id;
   r = await pool.query('SELECT prof_id FROM proficiency_aliases WHERE LOWER(alias)=LOWER($1)',[clean]);
@@ -33,73 +30,82 @@ async function resolveProfId(raw) {
   return null;
 }
 
-async function parseBundleKits() {
-  const src = fs.readFileSync(path.join(__dirname,'../../src/data/kits.js'),'utf8');
-  const kits = [];
-  const re = /\{id:"([a-z]{2,4}_[a-z0-9-]+)"/g;
-  let m;
-  while ((m = re.exec(src)) !== null) {
-    const startPos = m.index;
-    let depth=0, endPos=startPos;
-    for (let i=startPos;i<src.length;i++) {
-      if (src[i]==='{') depth++;
-      if (src[i]==='}') { depth--; if(depth===0){endPos=i;break;} }
-    }
-    const ks = src.slice(startPos,endPos+1);
-    const get = f => ks.match(new RegExp(f+':"((?:[^"\\\\]|\\\\.)*)"'))?.[1]??null;
-    const getArr = f => { const raw=ks.match(new RegExp(f+':\\[([^\\]]*)\\]'))?.[1]??''; return raw.match(/"([^"]+)"/g)?.map(s=>s.slice(1,-1))??[]; };
-    const prefix = m[1].split('_')[0];
-    kits.push({
-      canonical_id: m[1], name: get('name'), kit_class: PREFIX_CLASS[prefix]??null,
-      is_universal: prefix==='uni', is_racial: false,
-      description: get('desc'), benefits_text: get('benefits'),
-      hindrances_text: get('hindrances'), requirements_text: get('requirements'),
-      wealth_text: get('wealth'), source_book: get('source'),
-      nwpRequired: getArr('nwpRequired'), nwpRecommended: getArr('nwpRecommended'),
-      wpRequired: getArr('wpRequired'), wpRecommended: getArr('wpRecommended'),
-    });
-  }
-  return kits;
-}
+async function seedKits() {
+  console.log('[kits] Indlæser kits fra source …');
+  const kitsPath = path.join(__dirname, '../../src/data/kits.js');
+  const { SP_KITS, CLASS_KITS } = await import(kitsPath);
 
-async function seedKits(kits) {
-  console.log('[import-kits] Indsætter '+kits.length+' kits …');
-  let ins=0,skip=0;
-  for (const k of kits) {
-    if (!k.name) continue;
+  // Flatten: SP_KITS (universal) + CLASS_KITS (class-specific)
+  const allKits = [];
+
+  // SP_KITS — universal S&P kits
+  for (const k of (SP_KITS || [])) {
+    allKits.push({ ...k, kit_class: null, is_universal: true, is_racial: false });
+  }
+
+  // CLASS_KITS — { fighter: [...], ranger: [...], ... }
+  const classMap = { fighter:'fighter', ranger:'ranger', paladin:'paladin',
+    wizard:'wizard', mage:'wizard', illusionist:'wizard',
+    cleric:'cleric', druid:'druid', thief:'thief', bard:'bard' };
+  for (const [cls, kitsArr] of Object.entries(CLASS_KITS || {})) {
+    for (const k of (kitsArr || [])) {
+      allKits.push({ ...k, kit_class: classMap[cls]??cls, is_universal: false, is_racial: false });
+    }
+  }
+
+  console.log('[kits] Fandt '+allKits.length+' kits i alt');
+
+  let ins=0, skip=0;
+  for (const k of allKits) {
+    if (!k.id || !k.name) continue;
     try {
-      const r = await pool.query(`INSERT INTO kits
-        (canonical_id,name,kit_class,is_universal,is_racial,description,benefits_text,
-         hindrances_text,requirements_text,wealth_text,source_book)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (canonical_id) DO NOTHING RETURNING id`,
-        [k.canonical_id,k.name,k.kit_class,k.is_universal,k.is_racial,
-         k.description,k.benefits_text,k.hindrances_text,k.requirements_text,k.wealth_text,k.source_book]);
-      r.rows.length ? ins++ : skip++;
+      const res = await pool.query(`
+        INSERT INTO kits
+          (canonical_id,name,kit_class,is_universal,is_racial,
+           description,benefits_text,hindrances_text,requirements_text,wealth_text,source_book)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (canonical_id) DO NOTHING RETURNING id`,
+        [k.id, k.name, k.kit_class, k.is_universal, k.is_racial,
+         k.desc??null, k.benefits??null, k.hindrances??null,
+         k.reqText??null, k.wealth??null, k.source??null]);
+      res.rows.length ? ins++ : skip++;
     } catch(e) { console.error('  ERR '+k.name+': '+e.message); }
   }
   console.log('  Inserted: '+ins+', skipped: '+skip);
+  return allKits;
 }
 
-async function seedLinks(kits) {
-  console.log('[import-kits] Opretter prof-links …');
-  let linked=0,unres=0;
-  for (const k of kits) {
-    const kr = await pool.query('SELECT id FROM kits WHERE canonical_id=$1',[k.canonical_id]);
+async function seedLinks(allKits) {
+  console.log('[kits] Opretter prof-links …');
+  let linked=0, unres=0;
+
+  for (const k of allKits) {
+    if (!k.id) continue;
+    const kr = await pool.query('SELECT id FROM kits WHERE canonical_id=$1',[k.id]);
     if (!kr.rows.length) continue;
     const kitId = kr.rows[0].id;
-    for (const [arr,rel] of [[k.nwpRequired,'required'],[k.nwpRecommended,'recommended']]) {
+
+    const nwpRequired   = Array.isArray(k.nwpRequired)   ? k.nwpRequired   : [];
+    const nwpRecommended= Array.isArray(k.nwpRecommended) ? k.nwpRecommended: [];
+    const wpRequired    = Array.isArray(k.wpRequired)     ? k.wpRequired    : [];
+    const wpRecommended = Array.isArray(k.wpRecommended)  ? k.wpRecommended : [];
+
+    for (const [arr, rel] of [[nwpRequired,'required'],[nwpRecommended,'recommended']]) {
       for (const pn of arr) {
-        const pid = await resolveProfId(pn);
-        try { await pool.query(`INSERT INTO kit_proficiency_links (kit_id,prof_id,prof_name_raw,relation_type)
-          VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[kitId,pid,pn,rel]); }
-        catch(_) {}
+        const pid = await resolveProfId(String(pn));
+        try {
+          await pool.query(`INSERT INTO kit_proficiency_links(kit_id,prof_id,prof_name_raw,relation_type)
+            VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[kitId,pid,String(pn),rel]);
+        } catch(_) {}
         pid ? linked++ : unres++;
       }
     }
-    for (const [arr,rel] of [[k.wpRequired,'required'],[k.wpRecommended,'recommended']]) {
+    for (const [arr, rel] of [[wpRequired,'required'],[wpRecommended,'recommended']]) {
       for (const wn of arr) {
-        try { await pool.query('INSERT INTO kit_weapon_links (kit_id,weapon_name_raw,relation_type) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',[kitId,wn,rel]); }
-        catch(_) {}
+        try {
+          await pool.query('INSERT INTO kit_weapon_links(kit_id,weapon_name_raw,relation_type) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [kitId,String(wn),rel]);
+        } catch(_) {}
       }
     }
   }
@@ -107,15 +113,13 @@ async function seedLinks(kits) {
 }
 
 async function main() {
-  console.log('=== import-kits.mjs ===');
+  console.log('=== import-kits.mjs v2 ===');
   try {
-    const kits = await parseBundleKits();
-    console.log('  Parsede '+kits.length+' kits');
-    await seedKits(kits);
-    await seedLinks(kits);
+    const allKits = await seedKits();
+    await seedLinks(allKits);
     const t = await pool.query('SELECT COUNT(*)::int AS n FROM kits');
     const l = await pool.query('SELECT COUNT(*)::int AS n FROM kit_proficiency_links');
     console.log('✓ Færdig. '+t.rows[0].n+' kits, '+l.rows[0].n+' prof-links.');
   } finally { await pool.end(); }
 }
-main().catch(e => { console.error('Fatal:',e); process.exit(1); });
+main().catch(e => { console.error('Fatal:',e.message); process.exit(1); });
