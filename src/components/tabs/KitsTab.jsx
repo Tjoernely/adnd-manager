@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, numInputStyle } from "../../data/constants.js";
 import { SP_KITS, CLASS_KITS } from "../../data/kits.js";
 import { ALL_CLASSES } from "../../data/classes.js";
@@ -40,8 +40,26 @@ export function KitsTab(props) {
 
   const _ALL_PROFS = props.ALL_PROFS ?? [];
 
+  // Fetch kits from API — falls back to bundle data if unavailable
+  const [apiClassKits, setApiClassKits] = useState(null);
+  const [apiSpKits,    setApiSpKits]    = useState(null);
+  useEffect(() => {
+    if (!selectedClass) return;
+    fetch(`/api/kits?class=${selectedClass}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        const universal = data.kits.filter(k => k.is_universal);
+        const classBased = data.kits.filter(k => !k.is_universal);
+        setApiSpKits(universal);
+        setApiClassKits(classBased);
+      })
+      .catch(() => { /* use bundle fallback */ });
+  }, [selectedClass]);
+
+
   // local variables that were inside the IIFE
-  const classKits  = selectedClass ? (CLASS_KITS[selectedClass] ?? []) : [];
+  const classKits  = apiClassKits ?? (selectedClass ? (CLASS_KITS[selectedClass] ?? []) : []);
   // Kit stat check helper
   const kitStatsMet = kit => {
     if (!kit.reqStats) return true;
@@ -59,7 +77,7 @@ export function KitsTab(props) {
   };
   // Get the currently selected kit object
   const activeKit = selectedKit
-    ? ([...SP_KITS, ...classKits].find(k => k.id === selectedKit))
+    ? ([...(apiSpKits ?? SP_KITS), ...classKits].find(k => k.id === selectedKit))
     : null;
   const activeKitStatsMet  = activeKit ? kitStatsMet(activeKit) : true;
   const activeKitNWPMet    = activeKit ? kitReqNWPMet(activeKit) : true;
