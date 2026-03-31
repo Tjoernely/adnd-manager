@@ -64,8 +64,8 @@ app.use('/api/character-equipment',  characterEquipmentRouter);
 app.use('/api/character-spells',     characterSpellsRouter);
 app.use('/api/weapons-catalog',      weaponsCatalogRouter);
 app.use('/api/armor-catalog',        armorCatalogRouter);
-app.use('/proficiencies',             proficienciesRouter);
-app.use('/kits',                      kitsRouter);
+app.use('/api/proficiencies',          proficienciesRouter);
+app.use('/api/kits',                   kitsRouter);
 
 // ââ Serve React frontend (production build) ââââââââââââââââââââââââââââââââââââ
 const PUBLIC = path.join(__dirname, 'public');
