@@ -41,8 +41,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
-// Capture raw body for webhook HMAC verification
-app.use((req, _res, next) => { let d = ''; req.on('data', c => d += c.toString()); req.on('end', () => { req.rawBody = d; next(); }); });
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString(); }, limit: '5mb' }));   // 5 MB â covers portrait URLs + large character state
 
 // ââ API routes âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
