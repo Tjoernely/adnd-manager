@@ -41,10 +41,15 @@ router.post('/deploy', (req, res) => {
   }
   console.log('[webhook] Push to main — deploying...');
   res.status(202).json({ message: 'Deploy queued' });
-  const child = exec('bash ' + DEPLOY_SCRIPT,
-    (err) => err
-      ? console.error('[webhook] deploy.sh error:', err.message)
-      : console.log('[webhook] deploy.sh completed'));
+  const env = Object.assign({}, process.env, {
+    PATH: process.env.PATH + ':/usr/local/bin:/usr/bin:/bin' +
+          ':/var/www/adnd-manager/node_modules/.bin'
+  });
+  const child = exec('bash ' + DEPLOY_SCRIPT, { env },
+    (err, stdout, stderr) => {
+      if (err) console.error('[webhook] deploy.sh error:', err.message, stderr?.substring(0,200));
+      else console.log('[webhook] deploy.sh completed');
+    });
   child.unref();
 });
 
