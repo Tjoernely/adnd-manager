@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Ensure local node_modules binaries are on PATH
+export PATH="/var/www/adnd-manager/node_modules/.bin:$PATH"
+
 cd /var/www/adnd-manager
 git fetch origin
 git reset --hard origin/main
