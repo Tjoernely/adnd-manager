@@ -47,6 +47,9 @@ async function fixClassAccess() {
 
 async function importWikiProfs() {
   console.log('Trin 2: Import wiki NWPs...');
+  // Ensure columns are wide enough
+  await db.query("ALTER TABLE nonweapon_proficiencies ALTER COLUMN check_ability TYPE VARCHAR(50)").catch(()=>{});
+  await db.query("ALTER TABLE nonweapon_proficiencies ALTER COLUMN source_book TYPE VARCHAR(200)").catch(()=>{});
   const dataPath = path.join(__dirname, 'wiki-nwp-data.json');
   const wikiProfs = JSON.parse(readFileSync(dataPath, 'utf8'));
   console.log('  Loaded '+wikiProfs.length+' profs from file');
