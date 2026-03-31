@@ -5,9 +5,9 @@
 const db = require('./db');
 
 async function autoMigrate() {
-  console.log('[auto-migrate] checking incremental schema…');
+  console.log('[auto-migrate] checking incremental schemaâ¦');
   try {
-    // Core tables — idempotent, safe to run on every start
+    // Core tables â idempotent, safe to run on every start
     await db.query(`
       CREATE TABLE IF NOT EXISTS npcs (
         id          SERIAL PRIMARY KEY,
@@ -113,7 +113,7 @@ async function autoMigrate() {
       );
     `);
 
-    // Monster HP system columns — each in its own try/catch so one existing
+    // Monster HP system columns â each in its own try/catch so one existing
     // column doesn't block the others from being added.
     for (const stmt of [
       `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS generated_hp_base INTEGER`,
@@ -127,7 +127,7 @@ async function autoMigrate() {
       `ALTER TABLE monsters ADD COLUMN IF NOT EXISTS variants          JSONB DEFAULT NULL`,
     ]) {
       try { await db.query(stmt); }
-      catch (e) { console.warn('[auto-migrate] skipped:', stmt.slice(0, 60), '—', e.message); }
+      catch (e) { console.warn('[auto-migrate] skipped:', stmt.slice(0, 60), 'â', e.message); }
     }
 
     // Widen monster columns that were too narrow for full wiki text values.
@@ -141,7 +141,7 @@ async function autoMigrate() {
       `ALTER TABLE monsters ALTER COLUMN treasure         TYPE VARCHAR(100)`,
     ]) {
       try { await db.query(stmt); }
-      catch (e) { console.warn('[auto-migrate] widen col skipped:', stmt.slice(0, 60), '—', e.message); }
+      catch (e) { console.warn('[auto-migrate] widen col skipped:', stmt.slice(0, 60), 'â', e.message); }
     }
 
     // Saved encounters (fight-tracked, with per-creature HP)
@@ -186,14 +186,14 @@ async function autoMigrate() {
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE encounter_creatures_id_seq TO ${u};`);
     } catch (_) { /* ignore */ }
 
-    // Grant access — best-effort, may fail on managed DBs
+    // Grant access â best-effort, may fail on managed DBs
     try {
       const u = process.env.DB_USER || 'adnduser';
       await db.query(`GRANT ALL ON party_inventory TO ${u};`);
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE party_inventory_id_seq TO ${u};`);
     } catch (_) { /* ignore */ }
 
-    // New combat columns — idempotent, safe to run repeatedly
+    // New combat columns â idempotent, safe to run repeatedly
     try {
       await db.query(`ALTER TABLE saved_encounters ADD COLUMN IF NOT EXISTS current_round INTEGER DEFAULT 1;`);
       await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS ac INTEGER;`);
@@ -216,8 +216,8 @@ async function autoMigrate() {
       await db.query(`ALTER TABLE magical_items ADD COLUMN IF NOT EXISTS roll_max INTEGER;`);
     } catch (e) { console.warn('[auto-migrate] roll_min/roll_max cols skipped:', e.message); }
 
-    // Fix concatenated AC/THAC0 values (e.g. 610 → 6, 1520 → 15)
-    // These arise when parseIntSafe strips whitespace from "6 10" → 610
+    // Fix concatenated AC/THAC0 values (e.g. 610 â 6, 1520 â 15)
+    // These arise when parseIntSafe strips whitespace from "6 10" â 610
     try {
       await db.query(`
         UPDATE monsters SET armor_class =
@@ -247,7 +247,7 @@ async function autoMigrate() {
       `);
     } catch (e) { console.warn('[auto-migrate] AC/THAC0 fix skipped:', e.message); }
 
-    // ── Equipment & Spells tables ──────────────────────────────────────────────
+    // ââ Equipment & Spells tables ââââââââââââââââââââââââââââââââââââââââââââââ
     await db.query(`
       CREATE TABLE IF NOT EXISTS party_equipment (
         id               SERIAL PRIMARY KEY,
@@ -314,7 +314,7 @@ async function autoMigrate() {
       );
     `);
 
-    // ── Catalog tables (reference data, not campaign-scoped) ──────────────────
+    // ââ Catalog tables (reference data, not campaign-scoped) ââââââââââââââââââ
     await db.query(`
       CREATE TABLE IF NOT EXISTS weapons_catalog (
         id             SERIAL PRIMARY KEY,
@@ -352,7 +352,7 @@ async function autoMigrate() {
       );
     `);
 
-    // ── Seed catalog data (idempotent via ON CONFLICT DO NOTHING) ─────────────
+    // ââ Seed catalog data (idempotent via ON CONFLICT DO NOTHING) âââââââââââââ
     try {
       // Weapons
       const WEAPONS = [
@@ -466,13 +466,13 @@ async function autoMigrate() {
       console.log('[auto-migrate] catalog seed: done');
     } catch (e) { console.warn('[auto-migrate] catalog seed skipped:', e.message); }
 
-    // ── Add ammo columns to weapons_catalog ──────────────────────────────────
+    // ââ Add ammo columns to weapons_catalog ââââââââââââââââââââââââââââââââââ
     try {
       await db.query(`ALTER TABLE weapons_catalog ADD COLUMN IF NOT EXISTS ammo_type         VARCHAR(50) DEFAULT NULL;`);
       await db.query(`ALTER TABLE weapons_catalog ADD COLUMN IF NOT EXISTS compatible_ranged VARCHAR(50) DEFAULT NULL;`);
     } catch (e) { console.warn('[auto-migrate] weapons_catalog ammo cols skipped:', e.message); }
 
-    // ── Seed ammo catalog entries ─────────────────────────────────────────────
+    // ââ Seed ammo catalog entries âââââââââââââââââââââââââââââââââââââââââââââ
     try {
       const AMMO = [
         // name, ammo_type, compatible_ranged, damage_sm, damage_l, weight, notes
@@ -500,7 +500,7 @@ async function autoMigrate() {
       console.log('[auto-migrate] ammo seed: done');
     } catch (e) { console.warn('[auto-migrate] ammo seed skipped:', e.message); }
 
-    // ── Add missing columns to character_equipment ────────────────────────────
+    // ââ Add missing columns to character_equipment ââââââââââââââââââââââââââââ
     try {
       await db.query(`ALTER TABLE character_equipment ADD COLUMN IF NOT EXISTS quantity     INTEGER DEFAULT 1;`);
       await db.query(`ALTER TABLE character_equipment ADD COLUMN IF NOT EXISTS is_two_handed BOOLEAN DEFAULT FALSE;`);
@@ -520,6 +520,99 @@ async function autoMigrate() {
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE weapons_catalog_id_seq     TO ${u};`);
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE armor_catalog_id_seq       TO ${u};`);
     } catch (_) { /* ignore on managed DBs */ }
+
+    // ── Nonweapon Proficiencies ─────────────────────────────────
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS nonweapon_proficiencies (
+        id             SERIAL PRIMARY KEY,
+        canonical_id   VARCHAR(80)  UNIQUE NOT NULL,
+        name           VARCHAR(120) NOT NULL,
+        prof_group     VARCHAR(20)  NOT NULL
+                         CHECK (prof_group IN ('general','priest','rogue','warrior','wizard',
+                                               'psionicist','chronomancer','avariel','other')),
+        slots_required INTEGER      NOT NULL DEFAULT 1,
+        check_ability  VARCHAR(20),
+        check_modifier INTEGER      NOT NULL DEFAULT 0,
+        source_book    VARCHAR(120),
+        source_url     TEXT,
+        sp_cp_cost     INTEGER,
+        sp_rank        INTEGER,
+        sp_stat_1      VARCHAR(20)  CHECK (sp_stat_1 IN (
+                           'muscle','stamina','aim','balance','fitness','health',
+                           'reason','knowledge','intuition','willpower','leadership','appearance')),
+        sp_stat_2      VARCHAR(20)  CHECK (sp_stat_2 IN (
+                           'muscle','stamina','aim','balance','fitness','health',
+                           'reason','knowledge','intuition','willpower','leadership','appearance')),
+        is_sp_native   BOOLEAN      NOT NULL DEFAULT FALSE,
+        conversion_note TEXT,
+        description    TEXT,
+        created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.query(`CREATE TABLE IF NOT EXISTS proficiency_class_access (
+      id               SERIAL PRIMARY KEY,
+      prof_id          INTEGER NOT NULL REFERENCES nonweapon_proficiencies(id) ON DELETE CASCADE,
+      class_group      VARCHAR(20) NOT NULL CHECK (class_group IN
+                         ('general','priest','rogue','warrior','wizard','psionicist','chronomancer','any')),
+      cp_cost_override INTEGER,
+      UNIQUE (prof_id, class_group))`);
+    await db.query(`CREATE TABLE IF NOT EXISTS proficiency_aliases (
+      id      SERIAL PRIMARY KEY,
+      prof_id INTEGER NOT NULL REFERENCES nonweapon_proficiencies(id) ON DELETE CASCADE,
+      alias   VARCHAR(120) NOT NULL,
+      UNIQUE (alias))`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_nwp_group     ON nonweapon_proficiencies (prof_group)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_nwp_canonical ON nonweapon_proficiencies (canonical_id)`);
+    await db.query(`CREATE TABLE IF NOT EXISTS weapon_proficiencies (
+      id           SERIAL PRIMARY KEY,
+      canonical_id VARCHAR(80)  UNIQUE NOT NULL,
+      name         VARCHAR(120) NOT NULL,
+      weapon_group VARCHAR(80),
+      source_book  VARCHAR(120),
+      source_url   TEXT,
+      created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW())`);
+    // ── Kits ─────────────────────────────────────────────────
+    await db.query(`CREATE TABLE IF NOT EXISTS kits (
+      id                SERIAL PRIMARY KEY,
+      canonical_id      VARCHAR(80)  UNIQUE NOT NULL,
+      name              VARCHAR(120) NOT NULL,
+      kit_class         VARCHAR(30),
+      kit_race          VARCHAR(50),
+      is_universal      BOOLEAN      NOT NULL DEFAULT FALSE,
+      is_racial         BOOLEAN      NOT NULL DEFAULT FALSE,
+      source_book       VARCHAR(120),
+      source_url        TEXT,
+      description       TEXT,
+      benefits_text     TEXT,
+      hindrances_text   TEXT,
+      requirements_text TEXT,
+      wealth_text       TEXT,
+      req_race          TEXT[],
+      req_alignment     TEXT[],
+      req_min_stats     JSONB,
+      prohibited_races  TEXT[],
+      created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW())`);
+    await db.query(`CREATE TABLE IF NOT EXISTS kit_proficiency_links (
+      id            SERIAL PRIMARY KEY,
+      kit_id        INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
+      prof_id       INTEGER REFERENCES nonweapon_proficiencies(id) ON DELETE SET NULL,
+      prof_name_raw VARCHAR(120),
+      relation_type VARCHAR(20) NOT NULL CHECK (relation_type IN ('required','recommended','granted','forbidden')),
+      notes         TEXT,
+      UNIQUE (kit_id, prof_id, relation_type))`);
+    await db.query(`CREATE TABLE IF NOT EXISTS kit_weapon_links (
+      id              SERIAL PRIMARY KEY,
+      kit_id          INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
+      weapon_prof_id  INTEGER REFERENCES weapon_proficiencies(id) ON DELETE SET NULL,
+      weapon_name_raw VARCHAR(120),
+      relation_type   VARCHAR(20) NOT NULL CHECK (relation_type IN ('required','recommended','forbidden')),
+      UNIQUE (kit_id, weapon_name_raw, relation_type))`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_kits_class    ON kits (kit_class)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_kits_universal ON kits (is_universal)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_kpl_kit       ON kit_proficiency_links (kit_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_kpl_prof      ON kit_proficiency_links (prof_id)`);
 
     console.log('[auto-migrate] done');
   } catch (e) {
