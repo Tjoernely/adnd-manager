@@ -1,61 +1,29 @@
 #!/bin/bash
 set -e
 
+APP=/var/www/adnd-manager
 
-cd /var/www/adnd-manager
+cd $APP
 git fetch origin
 git reset --hard origin/main
 
 # ecosystem.config.cjs is NOT in git (credentials).
 # If it already exists, leave it alone.
 # If missing, the admin must run server/setup-secrets.sh first.
-if [ ! -f /var/www/adnd-manager/ecosystem.config.cjs ]; then
-  echo "ERROR: ecosystem.config.cjs is missing."
-  echo "Run server/setup-secrets.sh once on the server to create it."
+if [ ! -f $APP/server/.env ]; then
+  echo "ERROR: server/.env not found. Run setup-secrets.sh first"
   exit 1
 fi
 
-# AI loot generation requires ANTHROPIC_API_KEY in ecosystem.config.cjs.
-# Example entry in the env block:
-#   ANTHROPIC_API_KEY: 'sk-ant-...'
-# Without this, /api/ai/loot and /api/ai/prompt return HTTP 503.
-if ! grep -q "ANTHROPIC_API_KEY" /var/www/adnd-manager/ecosystem.config.cjs 2>/dev/null; then
-  echo "WARNING: ANTHROPIC_API_KEY is not set in ecosystem.config.cjs."
-  echo "AI loot generation (/api/ai/loot, /api/ai/prompt) will return 503 until it is added."
-fi
+# Install dependencies
+cd $APP && npm ci
+cd $APP/server && npm ci
 
-# Ensure nginx config is correct
-sudo tee /etc/nginx/sites-enabled/adnd-manager > /dev/null << 'NGINXEOF'
-server {
-  listen 80;
-  location /api/ {
-    proxy_pass http://localhost:3001;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_read_timeout 120s;
-    proxy_connect_timeout 30s;
-    proxy_send_timeout 120s;
-  }
-  location / {
-    root /var/server/public;
-    try_files $uri $uri/ /index.html;
-  }
-}
-NGINXEOF
-sudo nginx -t && sudo nginx -s reload
+# Build frontend — cd into dir so npm finds local node_modules/.bin/tsc
+cd $APP && npm run build
 
-npm install
-cd server && npm install && cd ..
-npm run build
-
-# Restart backend
-fuser -k 3001/tcp 2>/dev/null || true
-sleep 1
-pm2 delete adnd-backend 2>/dev/null || true
-pm2 start /var/www/adnd-manager/ecosystem.config.cjs
+# Restart server
+pm2 restart adnd-backend
 pm2 save
 
-# Copy build to nginx
-sudo chown -R ubuntu:ubuntu /var/server/public/ 2>/dev/null || true
-cp -r /var/www/adnd-manager/server/public/* /var/server/public/
 echo "Deploy complete"
