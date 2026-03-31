@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * import-proficiencies.mjs  (v3)
- * Bruger db.js via createRequire — samme mønster som import-spells.js
- * Kør fra: /var/www/adnd-manager/server/
+ * Bruger db.js via createRequire â samme mÃ¸nster som import-spells.js
+ * KÃ¸r fra: /var/www/adnd-manager/server/
  *   node scripts/import-proficiencies.mjs
  */
 import { createRequire } from 'module';
@@ -12,7 +12,7 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require   = createRequire(import.meta.url);
 
-// db.js kalder selv require('dotenv').config() — ingen separat dotenv nødvendig
+// db.js kalder selv require('dotenv').config() â ingen separat dotenv nÃ¸dvendig
 const db = require('../db');
 
 const VALID_STATS = new Set(['muscle','stamina','aim','balance','fitness','health',
@@ -28,7 +28,7 @@ function abilityToStat(a) {
 }
 
 async function seedFromSource() {
-  console.log('[profs] Trin 1: seed fra proficiencies.js …');
+  console.log('[profs] Trin 1: seed fra proficiencies.js â¦');
   const profsPath = path.join(__dirname, '../../src/data/proficiencies.js');
   const { PROFICIENCY_GROUPS } = await import(profsPath);
   const groupTagMap = { general:'general',priest:'priest',rogue:'rogue',warrior:'warrior',wizard:'wizard' };
@@ -59,7 +59,7 @@ async function seedFromSource() {
 }
 
 async function scrapeWiki() {
-  console.log('[profs] Trin 2: scrape wiki …');
+  console.log('[profs] Trin 2: scrape wiki â¦');
   let html;
   try { html = await fetch('https://adnd2e.fandom.com/wiki/Nonweapon_Proficiencies').then(r=>r.text()); }
   catch(e) { console.error('  Wiki fetch failed: '+e.message); return; }
@@ -100,7 +100,7 @@ async function scrapeWiki() {
         INSERT INTO nonweapon_proficiencies
           (canonical_id,name,prof_group,slots_required,check_ability,check_modifier,
            source_book,is_sp_native,sp_stat_1,conversion_note)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,'Wiki-import — sp_cp_cost kræver review')
+        VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,'Wiki-import â sp_cp_cost krÃ¦ver review')
         ON CONFLICT (canonical_id) DO NOTHING RETURNING id`,
         [cid,name,currentGroup,slots,ability,modifier,source,abilityToStat(ability)]);
       if (res.rows.length) {
@@ -111,17 +111,17 @@ async function scrapeWiki() {
   }
   console.log('  Nye fra wiki: '+newCount);
   const nr = await db.query('SELECT COUNT(*)::int AS n FROM nonweapon_proficiencies WHERE sp_cp_cost IS NULL');
-  console.log('  Mangler sp_cp_cost: '+nr.rows[0].n+' (kræver review)');
+  console.log('  Mangler sp_cp_cost: '+nr.rows[0].n+' (krÃ¦ver review)');
 }
 
 async function seedClassAccess() {
-  console.log('[profs] Trin 3: class-access …');
+  console.log('[profs] Trin 3: class-access â¦');
   await db.query(`INSERT INTO proficiency_class_access(prof_id,class_group)
     SELECT id,'any' FROM nonweapon_proficiencies WHERE prof_group='general'
     ON CONFLICT DO NOTHING`);
   for (const g of ['priest','rogue','warrior','wizard','psionicist','chronomancer']) {
     await db.query(`INSERT INTO proficiency_class_access(prof_id,class_group)
-      SELECT id,$1 FROM nonweapon_proficiencies WHERE prof_group=$1
+      SELECT id,$1::text FROM nonweapon_proficiencies WHERE prof_group=$1::text
       ON CONFLICT DO NOTHING`,[g]);
   }
   const t = await db.query('SELECT COUNT(*)::int AS n FROM nonweapon_proficiencies');
