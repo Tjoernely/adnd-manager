@@ -30,7 +30,7 @@ const armorCatalogRouter     = require('./routes/armor-catalog');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ─────────────────────────────────────────────────────────────────
+// ââ Middleware âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Explicitly allow Authorization header so JWT tokens pass through all routes
 app.use(cors({
   origin: true,
@@ -38,9 +38,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
-app.use(express.json({ limit: '5mb' }));   // 5 MB — covers portrait URLs + large character state
+app.use(express.json({ limit: '5mb' }));   // 5 MB â covers portrait URLs + large character state
 
-// ── API routes ─────────────────────────────────────────────────────────────────
+// ââ API routes âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 app.use('/api/auth',            authRouter);
 app.use('/api/campaigns',       campaignRouter);
 app.use('/api/characters',      characterRouter);
@@ -63,12 +63,12 @@ app.use('/api/character-spells',     characterSpellsRouter);
 app.use('/api/weapons-catalog',      weaponsCatalogRouter);
 app.use('/api/armor-catalog',        armorCatalogRouter);
 
-// ── Serve React frontend (production build) ────────────────────────────────────
+// ââ Serve React frontend (production build) ââââââââââââââââââââââââââââââââââââ
 const PUBLIC = path.join(__dirname, 'public');
 app.use(express.static(PUBLIC));
 app.get('*', (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
-// ── Start ──────────────────────────────────────────────────────────────────────
+// ââ Start ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 autoMigrate().then(() => {
   app.listen(PORT, () => {
     console.log(`AD&D Manager running on http://localhost:${PORT}`);
