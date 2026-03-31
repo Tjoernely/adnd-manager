@@ -1,17 +1,15 @@
 /**
- * server/routes/webhook.js
- * POST /api/webhook/deploy  — GitHub push event -> auto deploy
+ * server/routes/webhook.js — v4
  */
 const express  = require('express');
 const crypto   = require('crypto');
 const { exec } = require('child_process');
 const router   = express.Router();
-
-const APP = '/var/www/adnd-manager';
+const APP      = '/var/www/adnd-manager';
 
 function verifySignature(req) {
   const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) { console.warn('[webhook] WEBHOOK_SECRET not set'); return false; }
+  if (!secret) return false;
   const sig = req.headers['x-hub-signature-256'];
   if (!sig) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', secret)
@@ -20,7 +18,16 @@ function verifySignature(req) {
   catch { return false; }
 }
 
-router.post('/deploy', (req, res) => {
+function run(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { shell: '/bin/bash', env: process.env }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve(stdout);
+    });
+  });
+}
+
+router.post('/deploy', async (req, res) => {
   if (!verifySignature(req)) {
     console.warn('[webhook] Bad signature');
     return res.status(401).json({ error: 'Unauthorized' });
@@ -32,24 +39,21 @@ router.post('/deploy', (req, res) => {
   console.log('[webhook] Push to main — deploying...');
   res.status(202).json({ message: 'Deploy queued' });
 
-  // Run all deploy steps inline — avoids bash re-reading a cached script file
-  const steps = [
-    'cd ' + APP + ' && git fetch origin && git reset --hard origin/main',
-    'npm --prefix ' + APP + ' ci --silent',
-    'npm --prefix ' + APP + '/server ci --silent',
-    'npm run --prefix ' + APP + ' build',
-    'pm2 restart adnd-backend',
-    'pm2 save'
-  ].join(' && ');
-
-  exec(steps, { env: process.env, shell: '/bin/bash' }, (err, _out, stderr) => {
-    if (err) {
-      console.error('[webhook] deploy error:', err.message);
-      if (stderr) console.error('[webhook] stderr:', stderr.substring(0, 500));
-    } else {
-      console.log('[webhook] Deploy complete');
-    }
-  });
+  try {
+    console.log('[deploy] git pull...');
+    await run('cd ' + APP + ' && git fetch origin && git reset --hard origin/main');
+    console.log('[deploy] npm ci root...');
+    await run('npm --prefix ' + APP + ' ci');
+    console.log('[deploy] npm ci server...');
+    await run('npm --prefix ' + APP + '/server ci');
+    console.log('[deploy] build...');
+    await run('npm run --prefix ' + APP + ' build');
+    console.log('[deploy] pm2 restart...');
+    await run('pm2 restart adnd-backend && pm2 save');
+    console.log('[deploy] DONE');
+  } catch(e) {
+    console.error('[deploy] FAILED at step:', e.message.substring(0, 1000));
+  }
 });
 
 module.exports = router;
