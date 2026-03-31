@@ -26,6 +26,7 @@ const characterEquipmentRouter = require('./routes/character-equipment');
 const characterSpellsRouter  = require('./routes/character-spells');
 const weaponsCatalogRouter   = require('./routes/weapons-catalog');
 const armorCatalogRouter     = require('./routes/armor-catalog');
+const webhookRouter         = require('./routes/webhook');
 const proficienciesRouter     = require('./routes/proficiencies');
 const kitsRouter              = require('./routes/kits');
 
@@ -40,6 +41,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
+// Capture raw body for webhook HMAC verification
+app.use((req, _res, next) => { let d = ''; req.on('data', c => d += c.toString()); req.on('end', () => { req.rawBody = d; next(); }); });
 app.use(express.json({ limit: '5mb' }));   // 5 MB â covers portrait URLs + large character state
 
 // ââ API routes âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -64,6 +67,7 @@ app.use('/api/character-equipment',  characterEquipmentRouter);
 app.use('/api/character-spells',     characterSpellsRouter);
 app.use('/api/weapons-catalog',      weaponsCatalogRouter);
 app.use('/api/armor-catalog',        armorCatalogRouter);
+app.use('/api/webhook',               webhookRouter);
 app.use('/api/proficiencies',          proficienciesRouter);
 app.use('/api/kits',                   kitsRouter);
 
