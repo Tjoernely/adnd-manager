@@ -1,33 +1,23 @@
 /**
  * server/routes/webhook.js
- * POST /api/webhook/deploy  — GitHub push event -> korer deploy.sh
- *
- * Ops setup:
- *   1. Tilfoej WEBHOOK_SECRET til server/.env
- *   2. GitHub: Settings -> Webhooks -> Add webhook
- *      Payload URL : http://<din-server>/api/webhook/deploy
- *      Content type: application/json
- *      Secret      : <WEBHOOK_SECRET>
- *      Events      : Just the push event
+ * POST /api/webhook/deploy  — GitHub push event -> auto deploy
  */
 const express  = require('express');
 const crypto   = require('crypto');
 const { exec } = require('child_process');
-const path     = require('path');
 const router   = express.Router();
 
-const DEPLOY_SCRIPT = path.resolve(__dirname, '../../deploy.sh');
+const APP = '/var/www/adnd-manager';
 
 function verifySignature(req) {
   const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) { console.warn('[webhook] WEBHOOK_SECRET not set — rejecting'); return false; }
+  if (!secret) { console.warn('[webhook] WEBHOOK_SECRET not set'); return false; }
   const sig = req.headers['x-hub-signature-256'];
   if (!sig) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', secret)
     .update(req.rawBody || '').digest('hex');
-  try {
-    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-  } catch { return false; }
+  try { return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)); }
+  catch { return false; }
 }
 
 router.post('/deploy', (req, res) => {
@@ -41,13 +31,25 @@ router.post('/deploy', (req, res) => {
   }
   console.log('[webhook] Push to main — deploying...');
   res.status(202).json({ message: 'Deploy queued' });
-  // Run in login shell so nvm/node/tsc/vite are on PATH
-  const child = exec('bash -l ' + DEPLOY_SCRIPT,
-    (err, _stdout, stderr) => {
-      if (err) console.error('[webhook] deploy.sh error:', err.message, (stderr||'').substring(0,300));
-      else     console.log('[webhook] deploy.sh completed successfully');
-    });
-  child.unref();
+
+  // Run all deploy steps inline — avoids bash re-reading a cached script file
+  const steps = [
+    'cd ' + APP + ' && git fetch origin && git reset --hard origin/main',
+    'npm --prefix ' + APP + ' ci --silent',
+    'npm --prefix ' + APP + '/server ci --silent',
+    'npm run --prefix ' + APP + ' build',
+    'pm2 restart adnd-backend',
+    'pm2 save'
+  ].join(' && ');
+
+  exec(steps, { env: process.env, shell: '/bin/bash' }, (err, _out, stderr) => {
+    if (err) {
+      console.error('[webhook] deploy error:', err.message);
+      if (stderr) console.error('[webhook] stderr:', stderr.substring(0, 500));
+    } else {
+      console.log('[webhook] Deploy complete');
+    }
+  });
 });
 
 module.exports = router;
