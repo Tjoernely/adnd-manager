@@ -12,14 +12,9 @@ if [ ! -f $APP/server/.env ]; then
   exit 1
 fi
 
-# Install dependencies
 npm --prefix $APP ci
 npm --prefix $APP/server ci
-
-# Build — call tsc and vite directly via node_modules/.bin
-cd $APP
-node_modules/.bin/tsc -b
-node_modules/.bin/vite build
+npm run --prefix $APP build
 
 pm2 restart adnd-backend
 pm2 save
