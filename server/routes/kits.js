@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
       conditions.push(`LOWER(k.name) LIKE $${params.length}`);
     }
 
-    const rows = await db.query(`
+    const { rows } = await db.query(`
       SELECT k.id, k.canonical_id, k.name, k.kit_class, k.kit_race,
              k.is_universal, k.is_racial, k.source_book, k.source_url,
              k.description, k.benefits_text, k.hindrances_text,
@@ -68,7 +68,7 @@ router.get('/', async (req, res) => {
 // GET /kits/meta
 router.get('/meta', async (req, res) => {
   try {
-    const rows = await db.query(`
+    const { rows } = await db.query(`
       SELECT kit_class, COUNT(*)::int AS count,
              SUM(CASE WHEN is_universal THEN 1 ELSE 0 END)::int AS universal_count,
              SUM(CASE WHEN is_racial    THEN 1 ELSE 0 END)::int AS racial_count
@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const byNum = /^\d+$/.test(id);
-    const rows = await db.query(`
+    const { rows } = await db.query(`
       SELECT k.*,
         COALESCE(json_agg(DISTINCT jsonb_build_object(
           'relation_type', kpl.relation_type, 'prof_name_raw', kpl.prof_name_raw,
