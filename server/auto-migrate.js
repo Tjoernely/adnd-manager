@@ -519,7 +519,14 @@ async function autoMigrate() {
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE character_spells_id_seq    TO ${u};`);
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE weapons_catalog_id_seq     TO ${u};`);
       await db.query(`GRANT USAGE, SELECT ON SEQUENCE armor_catalog_id_seq       TO ${u};`);
-    } catch (_) { /* ignore on managed DBs */ }
+
+    // Widen columns that may be too narrow from initial migration
+    try {
+      await db.query("ALTER TABLE nonweapon_proficiencies ALTER COLUMN check_ability TYPE VARCHAR(50)");
+      await db.query("ALTER TABLE nonweapon_proficiencies ALTER COLUMN source_book TYPE VARCHAR(200)");
+    } catch (_) { /* already wide enough or not yet created */ }
+
+        } catch (_) { /* ignore on managed DBs */ }
 
     // ── Nonweapon Proficiencies ─────────────────────────────────
     await db.query(`
