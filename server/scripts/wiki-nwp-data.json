@@ -1,0 +1,3002 @@
+[
+  {
+    "name": "Agriculture",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Alertness",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "The Complete Ranger's HandbookThe Complete Barbarian's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Animal Handling",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Animal Husbandry",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Dragon Magazine #247",
+    "group": "general"
+  },
+  {
+    "name": "Animal Rending",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 2,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Animal Training",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Artistic Ability",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Begging",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Blacksmithing",
+    "slots": 1,
+    "ability": "Strength",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Boat Piloting",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "general"
+  },
+  {
+    "name": "Boating",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "The Complete Ranger's HandbookThe Complete Barbarian's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Boatwright",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Brewing",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Carpentry",
+    "slots": 1,
+    "ability": "Strength",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Cartography",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Ranger's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Chaos Shaping",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Planewalker's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Cheesemaking",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Chitinworking",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Thri-Kreen of Athas",
+    "group": "general"
+  },
+  {
+    "name": "City Familiarity",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Clothesmaking, Crude",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Cobbling",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Contact",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Skills & Powers: Psionicist",
+    "group": "general"
+  },
+  {
+    "name": "Cooking",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Curtain Cognizance",
+    "slots": 2,
+    "ability": "Int",
+    "modifier": -2,
+    "source": "A Guide to the Ethereal Plane",
+    "group": "general"
+  },
+  {
+    "name": "Dancing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Danger Sense",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Dark Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Dragon Magazine #198",
+    "group": "general"
+  },
+  {
+    "name": "Debate",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "general"
+  },
+  {
+    "name": "Deep Diving",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "general"
+  },
+  {
+    "name": "Direction Sense",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Direction Sense, Planar",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "The Planewalker's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Distance Sense",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "The Complete Ranger's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Dragon Lore",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -4,
+    "source": "Dragon Magazine #230",
+    "group": "general"
+  },
+  {
+    "name": "Drinking",
+    "slots": 1,
+    "ability": "Constitution",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Dwarf Runes",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 2,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Eating",
+    "slots": 1,
+    "ability": "Constitution",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Ethereal Sight",
+    "slots": 1,
+    "ability": "Wis",
+    "modifier": -1,
+    "source": "A Guide to the Ethereal Plane",
+    "group": "general"
+  },
+  {
+    "name": "Etiquette",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Excavation",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Dragon Magazine #241",
+    "group": "general"
+  },
+  {
+    "name": "Feign Magic",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Dragon Magazine #255(42)",
+    "group": "general"
+  },
+  {
+    "name": "Fire-building",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Fishing",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Flintworking",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 1,
+    "source": "Dragon Magazine #265",
+    "group": "general"
+  },
+  {
+    "name": "Folklore",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Warriors & Priests of the Realms",
+    "group": "general"
+  },
+  {
+    "name": "Foraging",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Ranger's HandbookThe Complete Barbarian's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Fungi Recognition",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 3,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Haggling",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "general"
+  },
+  {
+    "name": "Hands-Off Mount Control",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Dragon Magazine #260(37)",
+    "group": "general"
+  },
+  {
+    "name": "Heraldry",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Heraldry (Space)",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Herding",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "Dragon Magazine #247",
+    "group": "general"
+  },
+  {
+    "name": "Hiding",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Languages, Modern",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's HandbookPlayer's Option: Skills & Powers",
+    "group": "general"
+  },
+  {
+    "name": "Leatherworking",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Local Dwarf History",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 2,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Mental Armor",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Skills & Powers: Psionicist",
+    "group": "general"
+  },
+  {
+    "name": "Metalworking",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "general"
+  },
+  {
+    "name": "Mining",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Nutriment",
+    "slots": 1,
+    "ability": "Wis",
+    "modifier": -2,
+    "source": "A Guide to the Ethereal Plane",
+    "group": "general"
+  },
+  {
+    "name": "Observation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Orienteering",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "general"
+  },
+  {
+    "name": "Painting",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "general"
+  },
+  {
+    "name": "Pilot Airship",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -3,
+    "source": "Dragon Magazine #244",
+    "group": "general"
+  },
+  {
+    "name": "Planar Sense",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "The Planewalker's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Planar Survival",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Planewalker's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Poetry",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Paladin's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Portal Feel",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "The Planewalker's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Pottery",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Prospecting",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Dragon Magazine #229(45)",
+    "group": "general"
+  },
+  {
+    "name": "Psychic Defense",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "The Will and the Way",
+    "group": "general"
+  },
+  {
+    "name": "Realmspace Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Demihumans of the Realms",
+    "group": "general"
+  },
+  {
+    "name": "Relic Dating",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Dragon Magazine #241",
+    "group": "general"
+  },
+  {
+    "name": "Riding, Airborne",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Riding, Land-Based",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 3,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Riding, Sea-based",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "The Complete Ranger's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Rope Use",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Sculpting",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "general"
+  },
+  {
+    "name": "Seamanship",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Seamstress/Tailor",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Shipwright",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 1,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Signaling",
+    "slots": 1,
+    "ability": "Intelligence - DwarfIntelligence - Barb",
+    "modifier": 2,
+    "source": "The Complete Book of DwarvesThe Complete Ranger's HandbookThe Complete Barbarian's HandbookThe Complete Spacefarer's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Sign Language",
+    "slots": 1,
+    "ability": "Intelligence - DwarfDexterity - Barb",
+    "modifier": 20,
+    "source": "The Complete Book of DwarvesThe Complete Barbarian's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Singing",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Slow Respiration",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Book of DwarvesThe Complete Spacefarer's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Smelting",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Sound Analysis",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Spacemanship",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 1,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Statecraft",
+    "slots": 1,
+    "ability": "Unknown",
+    "modifier": 0,
+    "source": "Charlemagne's Paladins Campaign Sourcebook",
+    "group": "general"
+  },
+  {
+    "name": "Stonemasonry",
+    "slots": 1,
+    "ability": "Strength",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Storytelling",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Dragon Magazine #245",
+    "group": "general"
+  },
+  {
+    "name": "Survival, Underground",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Swimming",
+    "slots": 1,
+    "ability": "Strength",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Tribal Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "Dragon Magazine #247",
+    "group": "general"
+  },
+  {
+    "name": "Underground Navigation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Book of Dwarves",
+    "group": "general"
+  },
+  {
+    "name": "Underwater Communication",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Sea of Fallen Stars",
+    "group": "general"
+  },
+  {
+    "name": "Underwater Riding",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Of Ships and the Sea",
+    "group": "general"
+  },
+  {
+    "name": "Voice Mimicry",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Weather Sense",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Weaving",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "general"
+  },
+  {
+    "name": "Wind-Sailing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Earth, Air, Fire and Water",
+    "group": "general"
+  },
+  {
+    "name": "Winemaking",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "general"
+  },
+  {
+    "name": "Administration",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Alchemy",
+    "slots": 3,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Warriors & Priests of the Realms",
+    "group": "priest"
+  },
+  {
+    "name": "Alms",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Anatomy",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 2,
+    "source": "The Complete Book of Necromancers",
+    "group": "priest"
+  },
+  {
+    "name": "Ancient History",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Astrology",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Ayuveda",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Bartering",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Bookbinding",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Burial Customs",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Warriors & Priests of the Realms",
+    "group": "priest"
+  },
+  {
+    "name": "Bureaucracy",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & MagicThe Complete Paladin's HandbookArabian Adventures",
+    "group": "priest"
+  },
+  {
+    "name": "Cartography",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Ceremony",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Chakra",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Diagnostics",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "The Complete Paladin's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Diplomacy",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Energy",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -4,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Engineering",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Genie Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "priest"
+  },
+  {
+    "name": "Geonosy",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Dragon Magazine #265(38)",
+    "group": "priest"
+  },
+  {
+    "name": "Healing",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Herbalism",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Homeopathy",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -5,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Inquisitor",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Warriors & Priests of the Realms",
+    "group": "priest"
+  },
+  {
+    "name": "Investigation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Languages, Ancient",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's HandbookPlayer's Option: Skills & Powers",
+    "group": "priest"
+  },
+  {
+    "name": "Law",
+    "slots": 1,
+    "ability": "IntelligenceWisdom",
+    "modifier": 0,
+    "source": "Player's Option: Spells & MagicThe Complete Paladin's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Local History",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Mudra Sign Language",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Dragon Magazine #229",
+    "group": "priest"
+  },
+  {
+    "name": "Musical Instrument",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Naturopathy",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -4,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Navigation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Navigation (Wildspace)",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Navigation (Phlogiston)",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Necrology",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Book of Necromancers",
+    "group": "priest"
+  },
+  {
+    "name": "Netherworld Knowledge",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "The Complete Book of Necromancers",
+    "group": "priest"
+  },
+  {
+    "name": "Observation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Omen Reading",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Oratory",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -1,
+    "source": "Player's Option: Spells & MagicThe Complete Paladin's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Oriental",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Papermaking",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Persuasion",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "Player's Option: Spells & MagicThe Complete Ranger's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Pharmacy",
+    "slots": 1,
+    "ability": "Intellect",
+    "modifier": 0,
+    "source": "Dragon Magazine #200",
+    "group": "priest"
+  },
+  {
+    "name": "Planetology",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Planology",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Planewalker's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Reading/Writing",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Religion",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Sacred Legends",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Dragon Magazine #241",
+    "group": "priest"
+  },
+  {
+    "name": "Sage Knowledge",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Screed Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Dragon Magazine #241",
+    "group": "priest"
+  },
+  {
+    "name": "Scribe",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Soothsaying",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Spell Recovery",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -5,
+    "source": "The Planewalker's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Spellcraft",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Spelljamming",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Spirit Lore",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": 4,
+    "source": "The Complete Book of Necromancers",
+    "group": "priest"
+  },
+  {
+    "name": "Undead Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "priest"
+  },
+  {
+    "name": "Underwater Spellcasting",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Sea of Fallen Stars",
+    "group": "priest"
+  },
+  {
+    "name": "Veterinary Healing",
+    "slots": 1,
+    "ability": "Inteligence",
+    "modifier": -3,
+    "source": "The Complete Ranger's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Venom Handling",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "The Complete Book of Necromancers",
+    "group": "priest"
+  },
+  {
+    "name": "Western",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "Dragon Magazine #269",
+    "group": "priest"
+  },
+  {
+    "name": "Zero-Gravity Combat",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "priest"
+  },
+  {
+    "name": "Acting",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -1,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Ancient History",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Appraising",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Assimilation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Awareness",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "rogue"
+  },
+  {
+    "name": "Begging",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Thief's HandbookArabian AdventuresA Mighty Fortress Campaign Sourcebook",
+    "group": "rogue"
+  },
+  {
+    "name": "Blind-fighting",
+    "slots": 2,
+    "ability": "NA",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Bribery",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Castle Guide",
+    "group": "rogue"
+  },
+  {
+    "name": "Bureaucracy",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & MagicThe Complete Paladin's HandbookArabian Adventures",
+    "group": "rogue"
+  },
+  {
+    "name": "Camouflage",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Ranger's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Camouflage",
+    "slots": 1,
+    "ability": "Intellect",
+    "modifier": 0,
+    "source": "Dragon Magazine #200",
+    "group": "rogue"
+  },
+  {
+    "name": "Cartography",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Close-quarter Fighting",
+    "slots": 2,
+    "ability": "Dex",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "rogue"
+  },
+  {
+    "name": "Cryptography",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "rogue"
+  },
+  {
+    "name": "Detect Signing",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Disguise",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Enamor",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Escape",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Fast-Talking",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Feign/Detect Sleep",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Fey Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Dragon Magazine #237",
+    "group": "rogue"
+  },
+  {
+    "name": "Forgery",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Fortune Telling",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": 2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Gaming",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Gem Cutting",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Giant Kite Flying",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -3,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Grooming",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "rogue"
+  },
+  {
+    "name": "Hold Breath",
+    "slots": 1,
+    "ability": "Constitution",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Information Gathering",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Thief's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Intrigue",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "Dragon Magazine #245",
+    "group": "rogue"
+  },
+  {
+    "name": "Juggling",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Jumping",
+    "slots": 1,
+    "ability": "Strength",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Local History",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Locksmithing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Thief's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Looting",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Mudra Sign Language",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Dragon Magazine #229",
+    "group": "rogue"
+  },
+  {
+    "name": "Musical Instrument",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Night Vision",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Observation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Pest Control",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Book of Dwarves",
+    "group": "rogue"
+  },
+  {
+    "name": "Quick Study",
+    "slots": 2,
+    "ability": "Varies",
+    "modifier": -3,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Reading Lips",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Riding, Horse Specialization",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 4,
+    "source": "Arabian Adventures",
+    "group": "rogue"
+  },
+  {
+    "name": "Riding, Camel Specialization",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 4,
+    "source": "Arabian Adventures",
+    "group": "rogue"
+  },
+  {
+    "name": "Set Snares",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Sleight of Hand",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Dragon Magazine #200",
+    "group": "rogue"
+  },
+  {
+    "name": "Sword Swallowing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Dragon Magazine #229",
+    "group": "rogue"
+  },
+  {
+    "name": "Toxicology",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Throwing",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "rogue"
+  },
+  {
+    "name": "Tightrope Walking",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Trail Signs",
+    "slots": 1,
+    "ability": "Inteligence",
+    "modifier": -1,
+    "source": "The Complete Ranger's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Trailing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Thief's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Tumbling",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Underclass",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Underwater Combat",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Of Ships and the Sea",
+    "group": "rogue"
+  },
+  {
+    "name": "Ventriloquism",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Voice Mimicry",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Water Walking",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "The Complete Ninja's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Zero-Gravity Combat",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "rogue"
+  },
+  {
+    "name": "Animal Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Armorer",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Armorer, Crude",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Artillerist",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Option: Combat & Tactics",
+    "group": "warrior"
+  },
+  {
+    "name": "Awareness",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "warrior"
+  },
+  {
+    "name": "Blind-fighting",
+    "slots": 2,
+    "ability": "NA",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Bowyer/Fletcher",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Bowyer/Fletcher, Crude",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Camouflage",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Ranger's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Camouflage",
+    "slots": 1,
+    "ability": "Intellect",
+    "modifier": 0,
+    "source": "Dragon Magazine #200",
+    "group": "warrior"
+  },
+  {
+    "name": "Chariot-jump",
+    "slots": 4,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Celts Campaign Sourcebook",
+    "group": "warrior"
+  },
+  {
+    "name": "Charioteering",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 2,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Close-quarter Fighting",
+    "slots": 2,
+    "ability": "Dex",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "warrior"
+  },
+  {
+    "name": "Display Weapon Prowess",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "warrior"
+  },
+  {
+    "name": "Elephant Care",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Dragon Magazine #229",
+    "group": "warrior"
+  },
+  {
+    "name": "Endurance",
+    "slots": 2,
+    "ability": "Constitution",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Ethereal Tracking",
+    "slots": 2,
+    "ability": "Wis",
+    "modifier": -2,
+    "source": "A Guide to the Ethereal Plane",
+    "group": "warrior"
+  },
+  {
+    "name": "Gaming",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Gunnery",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "A Mighty Fortress Campaign Sourcebook",
+    "group": "warrior"
+  },
+  {
+    "name": "Gunsmithing",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Demihumans of the Realms",
+    "group": "warrior"
+  },
+  {
+    "name": "Horde Summoning",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Hunting",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Jousting",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 2,
+    "source": "The Complete Paladin's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Law",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Paladin's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Leadership",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Light Sleeping",
+    "slots": 1,
+    "ability": "Constitution",
+    "modifier": -1,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Mountaineering",
+    "slots": 1,
+    "ability": "NA",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Natural Fighting",
+    "slots": 2,
+    "ability": "Strength",
+    "modifier": 1,
+    "source": "The Complete Book of Humanoids",
+    "group": "warrior"
+  },
+  {
+    "name": "Naval Combat",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Wizards & Rogues of the Realms",
+    "group": "warrior"
+  },
+  {
+    "name": "Navigation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Oratory",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "The Complete Paladin's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Riding, Horse Specialization",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 4,
+    "source": "Arabian Adventures",
+    "group": "warrior"
+  },
+  {
+    "name": "Riding, Camel Specialization",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 4,
+    "source": "Arabian Adventures",
+    "group": "warrior"
+  },
+  {
+    "name": "Running",
+    "slots": 1,
+    "ability": "Constitution",
+    "modifier": -6,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Set Snares",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Spelunking",
+    "slots": 1,
+    "ability": "Inteligence",
+    "modifier": -1,
+    "source": "The Complete Ranger's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Style Analysis",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Ninja's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Survival",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Tracking",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Trail Marking",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Ranger's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Trail Signs",
+    "slots": 1,
+    "ability": "Inteligence",
+    "modifier": -1,
+    "source": "The Complete Ranger's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Underwater Combat",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Of Ships and the Sea",
+    "group": "warrior"
+  },
+  {
+    "name": "Vehicle Handling",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Option: Combat & Tactics",
+    "group": "warrior"
+  },
+  {
+    "name": "Warrior's Scream",
+    "slots": 2,
+    "ability": "Constitution",
+    "modifier": 0,
+    "source": "Celts Campaign Sourcebook",
+    "group": "warrior"
+  },
+  {
+    "name": "Weapon Improvisation",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Weaponsmithing",
+    "slots": 3,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Player's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Weaponsmithing, Crude",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "The Complete Barbarian's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Wild Fighting",
+    "slots": 2,
+    "ability": "Constitution",
+    "modifier": 0,
+    "source": "The Complete Book of Humanoids",
+    "group": "warrior"
+  },
+  {
+    "name": "Yoke-Pole",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Celts Campaign Sourcebook",
+    "group": "warrior"
+  },
+  {
+    "name": "Zero-Gravity Combat",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "warrior"
+  },
+  {
+    "name": "Alchemy",
+    "slots": 23,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Player's Option: Spells & MagicWarriors & Priests of the Realms",
+    "group": "wizard"
+  },
+  {
+    "name": "Anatomy",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Option: Spells & MagicThe Complete Book of Necromancers",
+    "group": "wizard"
+  },
+  {
+    "name": "Ancient History",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Arcanology",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Artifice",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "Astrology",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Astronomy",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "wizard"
+  },
+  {
+    "name": "Body Manipulation",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": -3,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Bookbinding",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Cartography",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Circuit Tattoo",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "Clockwork Creation",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Sha'ir's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Concentration",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Cryptography",
+    "slots": 1,
+    "ability": "N",
+    "modifier": 0,
+    "source": "Player's Option: Skills & Powers",
+    "group": "wizard"
+  },
+  {
+    "name": "Detect Fumes",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -4,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "Delude Sensors",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "Digital Persuasion",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -4,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "Dowsing",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Dowsing",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Dragon Magazine #229(45)",
+    "group": "wizard"
+  },
+  {
+    "name": "Drake Lore",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Dragon Magazine #245",
+    "group": "wizard"
+  },
+  {
+    "name": "Engineering",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Gem Cutting",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Genie Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Arabian Adventures",
+    "group": "wizard"
+  },
+  {
+    "name": "Glassblowing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Herbalism",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "High Magic",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -3,
+    "source": "Dragon Magazine #242",
+    "group": "wizard"
+  },
+  {
+    "name": "Hypnotism",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Illusion Pierce",
+    "slots": 3,
+    "ability": "N",
+    "modifier": 0,
+    "source": "A Guide to the Ethereal Plane",
+    "group": "wizard"
+  },
+  {
+    "name": "Languages, Ancient",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's HandbookPlayer's Option: Skills & Powers",
+    "group": "wizard"
+  },
+  {
+    "name": "Lower Plane Knowledge",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Dragon Magazine #229(43)",
+    "group": "wizard"
+  },
+  {
+    "name": "Machine Language",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "Magecraft",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Dragon Magazine #242",
+    "group": "wizard"
+  },
+  {
+    "name": "Mental Resistance",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Metaphysical Theory",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "Dragon Magazine #242",
+    "group": "wizard"
+  },
+  {
+    "name": "Navigation",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Navigation (Wildspace)",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Navigation (Phlogiston)",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Necrology",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Book of Necromancers",
+    "group": "wizard"
+  },
+  {
+    "name": "Netherworld Knowledge",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -3,
+    "source": "The Complete Book of Necromancers",
+    "group": "wizard"
+  },
+  {
+    "name": "Numeracy",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Sha'ir's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Numerology",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Complete Sha'ir's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Omen Reading",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Papermaking",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Pharmacy",
+    "slots": 1,
+    "ability": "Intellect",
+    "modifier": 0,
+    "source": "Dragon Magazine #200",
+    "group": "wizard"
+  },
+  {
+    "name": "Planetology",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Planology",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "The Planewalker's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Prestidigitation",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Reading/Writing",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Religion",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Research",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Sage Knowledge",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Salvage",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -6,
+    "source": "Dragon Magazine #258",
+    "group": "wizard"
+  },
+  {
+    "name": "(School) Theory",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Dragon Magazine #242",
+    "group": "wizard"
+  },
+  {
+    "name": "Screed Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Dragon Magazine #241",
+    "group": "wizard"
+  },
+  {
+    "name": "Scribe",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Sorcerous Dueling",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "The Complete Sha'ir's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Spell Recovery",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -5,
+    "source": "The Planewalker's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Spellcraft",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Spelljamming",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "The Complete Spacefarer's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Spirit Lore",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": 4,
+    "source": "The Complete Book of Necromancers",
+    "group": "wizard"
+  },
+  {
+    "name": "Tactics of Magic",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -1,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Tattooing",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "The Complete Sha'ir's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Thaumaturgy",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Player's Option: Spells & Magic",
+    "group": "wizard"
+  },
+  {
+    "name": "Undead Knowledge",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "The Complete Sha'ir's Handbook",
+    "group": "wizard"
+  },
+  {
+    "name": "Underwater Spellcasting",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Sea of Fallen Stars",
+    "group": "wizard"
+  },
+  {
+    "name": "Vapor Weave",
+    "slots": 3,
+    "ability": "Con",
+    "modifier": -3,
+    "source": "A Guide to the Ethereal Plane",
+    "group": "wizard"
+  },
+  {
+    "name": "Venom Handling",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "The Complete Book of Necromancers",
+    "group": "wizard"
+  },
+  {
+    "name": "Body Language",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Dragon Magazine #200",
+    "group": "psionicist"
+  },
+  {
+    "name": "Camouflage",
+    "slots": 1,
+    "ability": "Intellect",
+    "modifier": 0,
+    "source": "Dragon Magazine #200",
+    "group": "psionicist"
+  },
+  {
+    "name": "Crystal Focus",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "The Will and the Way",
+    "group": "psionicist"
+  },
+  {
+    "name": "Explosive Energy",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Dragon Magazine #229",
+    "group": "psionicist"
+  },
+  {
+    "name": "Gem Cutting",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Player's Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Harness Subconscious",
+    "slots": 2,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "The Complete Psionics Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Hypnosis",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "The Complete Psionics Handbook(removed in updated list)",
+    "group": "psionicist"
+  },
+  {
+    "name": "Meditative Focus",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "The Complete Psionics Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Musical Instrument",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Power Manipulation",
+    "slots": 2,
+    "ability": "Intelligence",
+    "modifier": -4,
+    "source": "The Will and the Way",
+    "group": "psionicist"
+  },
+  {
+    "name": "Psionic Lore",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "The Will and the Way",
+    "group": "psionicist"
+  },
+  {
+    "name": "Reading/Writing",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 1,
+    "source": "Player's Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Rejuvenation",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "The Complete Psionics Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Religion",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "psionicist"
+  },
+  {
+    "name": "Seance",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "Dragon Magazine #200",
+    "group": "psionicist"
+  },
+  {
+    "name": "Sleight of Hand",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": -2,
+    "source": "Dragon Magazine #200",
+    "group": "psionicist"
+  },
+  {
+    "name": "Water Divining",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Dragon Magazine #200",
+    "group": "psionicist"
+  },
+  {
+    "name": "Appraising",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Disguise",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": -1,
+    "source": "Player's Handbook",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Future History",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Chronomancer",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Languages, Future",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": 0,
+    "source": "Chronomancer",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Local History",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Player's Handbook",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Prophecy",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -1,
+    "source": "Chronomancer",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Time Sense",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Chronomancer",
+    "group": "chronomancer"
+  },
+  {
+    "name": "Glassworking",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "General",
+    "group": "avariel"
+  },
+  {
+    "name": "Ground combat",
+    "slots": 2,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Warrior",
+    "group": "avariel"
+  },
+  {
+    "name": "Swoop",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Warrior",
+    "group": "avariel"
+  },
+  {
+    "name": "Wing Buffet",
+    "slots": 1,
+    "ability": "Dexterity",
+    "modifier": 0,
+    "source": "Warrior",
+    "group": "avariel"
+  },
+  {
+    "name": "Grab-and-drop",
+    "slots": 1,
+    "ability": "Strength",
+    "modifier": 0,
+    "source": "Warrior",
+    "group": "avariel"
+  },
+  {
+    "name": "Law",
+    "slots": 1,
+    "ability": "Intellect",
+    "modifier": 0,
+    "source": "Tradesman",
+    "group": "other"
+  },
+  {
+    "name": "Thespian",
+    "slots": 1,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Tradesman",
+    "group": "other"
+  },
+  {
+    "name": "Hierarchy contact",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": -2,
+    "source": "Mystic",
+    "group": "other"
+  },
+  {
+    "name": "Meditation",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": 1,
+    "source": "Mystic",
+    "group": "other"
+  },
+  {
+    "name": "Movement meditation",
+    "slots": 1,
+    "ability": "Wisdom",
+    "modifier": -2,
+    "source": "Mystic",
+    "group": "other"
+  },
+  {
+    "name": "Presence",
+    "slots": 2,
+    "ability": "Charisma",
+    "modifier": 0,
+    "source": "Mystic",
+    "group": "other"
+  },
+  {
+    "name": "Concocting (Proficiency)",
+    "slots": 1,
+    "ability": "Intelligence",
+    "modifier": -2,
+    "source": "Sages & Specialists",
+    "group": "other"
+  }
+]
