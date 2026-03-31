@@ -46,7 +46,7 @@ router.get('/', async (req, res) => {
 
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const rows = await db.query(`
+    const { rows } = await db.query(`
       SELECT p.id, p.canonical_id, p.name, p.prof_group, p.slots_required,
              p.check_ability, p.check_modifier, p.source_book, p.source_url,
              p.sp_cp_cost, p.sp_rank, p.sp_stat_1, p.sp_stat_2,
@@ -66,7 +66,7 @@ router.get('/', async (req, res) => {
 // GET /proficiencies/meta
 router.get('/meta', async (req, res) => {
   try {
-    const rows = await db.query(`
+    const { rows } = await db.query(`
       SELECT prof_group,
              COUNT(*)::int AS count,
              COUNT(*) FILTER (WHERE is_sp_native)::int AS sp_native_count,
@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const byNum = /^\d+$/.test(id);
-    const rows = await db.query(`
+    const { rows } = await db.query(`
       SELECT p.*,
         COALESCE(json_agg(DISTINCT jsonb_build_object('alias', a.alias)) FILTER (WHERE a.alias IS NOT NULL), '[]') AS aliases,
         COALESCE(json_agg(DISTINCT jsonb_build_object('class_group', ca.class_group, 'cp_cost_override', ca.cp_cost_override)) FILTER (WHERE ca.class_group IS NOT NULL), '[]') AS class_access
