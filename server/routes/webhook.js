@@ -1,5 +1,5 @@
 /**
- * server/routes/webhook.js — v4
+ * server/routes/webhook.js
  */
 const express  = require('express');
 const crypto   = require('crypto');
@@ -18,16 +18,7 @@ function verifySignature(req) {
   catch { return false; }
 }
 
-function run(cmd) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, { shell: '/bin/bash', env: process.env }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stderr || err.message));
-      else resolve(stdout);
-    });
-  });
-}
-
-router.post('/deploy', async (req, res) => {
+router.post('/deploy', (req, res) => {
   if (!verifySignature(req)) {
     console.warn('[webhook] Bad signature');
     return res.status(401).json({ error: 'Unauthorized' });
@@ -36,24 +27,30 @@ router.post('/deploy', async (req, res) => {
   if (ref && ref !== 'refs/heads/main') {
     return res.status(200).json({ message: 'Ignored: ' + ref });
   }
-  console.log('[webhook] Push to main — deploying...');
+  console.log('[webhook] Push to main detected');
   res.status(202).json({ message: 'Deploy queued' });
 
-  try {
-    console.log('[deploy] git pull...');
-    await run('cd ' + APP + ' && git fetch origin && git reset --hard origin/main');
-    console.log('[deploy] npm ci root...');
-    await run('npm --prefix ' + APP + ' ci');
-    console.log('[deploy] npm ci server...');
-    await run('npm --prefix ' + APP + '/server ci');
-    console.log('[deploy] build...');
-    await run('npm run --prefix ' + APP + ' build');
-    console.log('[deploy] pm2 restart...');
-    await run('pm2 restart adnd-backend && pm2 save');
-    console.log('[deploy] DONE');
-  } catch(e) {
-    console.error('[deploy] FAILED at step:', e.message.substring(0, 1000));
-  }
+  // Build first — WITHOUT pm2 restart (that kills this process)
+  const buildCmd = [
+    'cd ' + APP,
+    'git fetch origin',
+    'git reset --hard origin/main',
+    'npm --prefix ' + APP + ' ci',
+    'npm --prefix ' + APP + '/server ci',
+    'npm run --prefix ' + APP + ' build'
+  ].join(' && ');
+
+  exec(buildCmd, { shell: '/bin/bash', env: process.env }, (err, _out, stderr) => {
+    if (err) {
+      console.error('[webhook] Build failed:', (stderr || err.message).substring(0, 500));
+      return;
+    }
+    console.log('[webhook] Build complete — restarting in 1s...');
+    // Delay restart so this callback can finish before process is killed
+    setTimeout(() => {
+      exec('pm2 restart adnd-backend && pm2 save', { shell: '/bin/bash' }, () => {});
+    }, 1000);
+  });
 });
 
 module.exports = router;
