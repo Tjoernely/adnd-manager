@@ -26,14 +26,14 @@ const characterEquipmentRouter = require('./routes/character-equipment');
 const characterSpellsRouter  = require('./routes/character-spells');
 const weaponsCatalogRouter   = require('./routes/weapons-catalog');
 const armorCatalogRouter     = require('./routes/armor-catalog');
-const webhookRouter         = require('./routes/webhook');
-const proficienciesRouter     = require('./routes/proficiencies');
-const kitsRouter              = require('./routes/kits');
+const webhookRouter          = require('./routes/webhook');
+const proficienciesRouter    = require('./routes/proficiencies');
+const kitsRouter             = require('./routes/kits');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ââ Middleware âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Middleware ─────────────────────────────────────────────────────────────────
 // Explicitly allow Authorization header so JWT tokens pass through all routes
 app.use(cors({
   origin: true,
@@ -41,9 +41,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString(); }, limit: '5mb' }));   // 5 MB â covers portrait URLs + large character state
+// verify captures raw body for webhook HMAC verification
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString(); }, limit: '5mb' }));
 
-// ââ API routes âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── API routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',            authRouter);
 app.use('/api/campaigns',       campaignRouter);
 app.use('/api/characters',      characterRouter);
@@ -65,16 +66,16 @@ app.use('/api/character-equipment',  characterEquipmentRouter);
 app.use('/api/character-spells',     characterSpellsRouter);
 app.use('/api/weapons-catalog',      weaponsCatalogRouter);
 app.use('/api/armor-catalog',        armorCatalogRouter);
-app.use('/api/webhook',               webhookRouter);
-app.use('/api/proficiencies',          proficienciesRouter);
-app.use('/api/kits',                   kitsRouter);
+app.use('/api/webhook',              webhookRouter);
+app.use('/api/proficiencies',        proficienciesRouter);
+app.use('/api/kits',                 kitsRouter);
 
-// ââ Serve React frontend (production build) ââââââââââââââââââââââââââââââââââââ
+// ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');
 app.use(express.static(PUBLIC));
 app.get('*', (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
-// ââ Start ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Start ──────────────────────────────────────────────────────────────────────
 autoMigrate().then(() => {
   app.listen(PORT, () => {
     console.log(`AD&D Manager running on http://localhost:${PORT}`);

@@ -1,11 +1,11 @@
-/**
- * server/routes/webhook.js
- */
-const express  = require('express');
-const crypto   = require('crypto');
-const { exec } = require('child_process');
+const express = require('express');
+const crypto  = require('crypto');
+const { spawn } = require('child_process');
+const fs      = require('fs');
+
 const router   = express.Router();
-const APP      = '/var/www/adnd-manager';
+const APP      = process.env.APP_ROOT || '/var/www/adnd-manager';
+const LOG_FILE = APP + '/deploy.log';
 
 function verifySignature(req) {
   const secret = process.env.WEBHOOK_SECRET;
@@ -23,34 +23,37 @@ router.post('/deploy', (req, res) => {
     console.warn('[webhook] Bad signature');
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
   const ref = req.body && req.body.ref;
   if (ref && ref !== 'refs/heads/main') {
     return res.status(200).json({ message: 'Ignored: ' + ref });
   }
-  console.log('[webhook] Push to main detected');
-  res.status(202).json({ message: 'Deploy queued' });
 
-  // Build first — WITHOUT pm2 restart (that kills this process)
-  const buildCmd = [
+  console.log('[webhook] Push to main — starting detached deploy');
+  // Respond immediately before the process gets killed by pm2 restart
+  res.status(202).json({ message: 'Deploy started' });
+
+  const deployCmd = [
     'cd ' + APP,
-    'git fetch origin',
-    'git reset --hard origin/main',
-    'npm --prefix ' + APP + ' ci',
-    'npm --prefix ' + APP + '/server ci',
-    'npm run --prefix ' + APP + ' build'
+    'git pull --ff-only',
+    'npm ci --prefer-offline',
+    'npm --prefix server ci --prefer-offline',
+    'npm run build',
+    // pm2 restart is last — it kills this process, but the child is already detached
+    'pm2 restart adnd-backend && pm2 save',
   ].join(' && ');
 
-  exec(buildCmd, { shell: '/bin/bash', env: process.env }, (err, _out, stderr) => {
-    if (err) {
-      console.error('[webhook] Build failed:', (stderr || err.message).substring(0, 500));
-      return;
-    }
-    console.log('[webhook] Build complete — restarting in 1s...');
-    // Delay restart so this callback can finish before process is killed
-    setTimeout(() => {
-      exec('pm2 restart adnd-backend && pm2 save', { shell: '/bin/bash' }, () => {});
-    }, 1000);
+  const ts = new Date().toISOString();
+  fs.appendFileSync(LOG_FILE, `\n[${ts}] Deploy triggered\n`);
+
+  // detached: true + unref() → child becomes its own process group and survives
+  // pm2 restarting (and thus killing) the parent Express process
+  const child = spawn('bash', ['-c', deployCmd], {
+    detached: true,
+    stdio: ['ignore', fs.openSync(LOG_FILE, 'a'), fs.openSync(LOG_FILE, 'a')],
+    cwd: APP,
   });
+  child.unref();
 });
 
 module.exports = router;
