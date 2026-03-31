@@ -41,14 +41,11 @@ router.post('/deploy', (req, res) => {
   }
   console.log('[webhook] Push to main — deploying...');
   res.status(202).json({ message: 'Deploy queued' });
-  const env = Object.assign({}, process.env, {
-    PATH: process.env.PATH + ':/usr/local/bin:/usr/bin:/bin' +
-          ':/var/www/adnd-manager/node_modules/.bin'
-  });
-  const child = exec('bash ' + DEPLOY_SCRIPT, { env },
-    (err, stdout, stderr) => {
-      if (err) console.error('[webhook] deploy.sh error:', err.message, stderr?.substring(0,200));
-      else console.log('[webhook] deploy.sh completed');
+  // Run in login shell so nvm/node/tsc/vite are on PATH
+  const child = exec('bash -l ' + DEPLOY_SCRIPT,
+    (err, _stdout, stderr) => {
+      if (err) console.error('[webhook] deploy.sh error:', err.message, (stderr||'').substring(0,300));
+      else     console.log('[webhook] deploy.sh completed successfully');
     });
   child.unref();
 });
