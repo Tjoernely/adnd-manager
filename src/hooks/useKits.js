@@ -70,14 +70,19 @@ export function useKits() {
  * Fetch kits filtered by class (for display in KitsTab).
  * Returns normalized kits or falls back to static bundle on error.
  */
+// App class IDs that differ from the API's CLASS_FILTER_MAP keys
+const CLASS_ID_TO_API = { mage: 'wizard', specialist: 'wizard' };
+
 export function useKitsByClass(kitClass) {
   const [kits,    setKits]    = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!kitClass) { setKits(null); return; }
+    setKits(null);   // clear stale data immediately on class change
     setLoading(true);
-    fetch(`/api/kits?class=${kitClass}`)
+    const apiClass = CLASS_ID_TO_API[kitClass] ?? kitClass;
+    fetch(`/api/kits?class=${apiClass}`)
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => {
         setKits(data.kits.map(normalizeDbKit));
