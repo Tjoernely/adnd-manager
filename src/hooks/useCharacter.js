@@ -23,6 +23,7 @@ import {
 } from "../data/proficiencies.js";
 
 import { useProficiencies, buildProfGroups } from "./useProficiencies.js";
+import { useKits, staticKitsFlat } from "./useKits.js";
 
 import { buildProfIndex, resolveKitProfEntry } from "../rules-engine/profResolver.js";
 
@@ -332,6 +333,15 @@ export function useCharacter() {
     return buildProfGroups(_dbProfs);
   }, [_dbProfs]);
 
+  // ── DB kits (137 kits) — fetched once, falls back to static bundle ──────────
+  const { kits: _dbKits } = useKits();
+
+  // Flat kit list: DB normalized kits when loaded, static bundle otherwise
+  const effectiveKits = useMemo(
+    () => _dbKits ?? staticKitsFlat(),
+    [_dbKits]
+  );
+
   // Resolver index: built once per prof list, O(1) lookups for kit/prof matching
   const _profIndex = useMemo(() => buildProfIndex(effectiveNWP), [effectiveNWP]);
 
@@ -403,9 +413,8 @@ export function useCharacter() {
   // Kit proficiency helpers
   const activeKitObj    = useMemo(() => {
     if (!selectedKit) return null;
-    const classKitsForCls = selectedClass ? (CLASS_KITS[selectedClass] ?? []) : [];
-    return [...SP_KITS, ...classKitsForCls].find(k => k.id === selectedKit) ?? null;
-  }, [selectedKit, selectedClass]);
+    return effectiveKits.find(k => k.id === selectedKit) ?? null;
+  }, [selectedKit, effectiveKits]);
 
   // totalCP here (after activeKitObj) so kitBonusCP from the active kit is included
   const totalCP = baseClassCP + nwpClassPool + weapClassPool + knowledgeCP + disadvPool + dmAwardTotal + (activeKitObj?.kitBonusCP ?? 0);
@@ -894,9 +903,8 @@ export function useCharacter() {
 
   // ── Select / deselect a kit — auto-adds/removes required NWPs
   const handleKitSelect = useCallback((newKitId) => {
-    const classKitsNow = selectedClass ? (CLASS_KITS[selectedClass] ?? []) : [];
-    const nextKit      = newKitId
-      ? [...SP_KITS, ...classKitsNow].find(k => k.id === newKitId)
+    const nextKit = newKitId
+      ? effectiveKits.find(k => k.id === newKitId)
       : null;
 
     // Start from current profs, strip any previously auto-added NWPs
@@ -922,7 +930,7 @@ export function useCharacter() {
     setKitAutoNWPs(newAuto);
     setSelectedKit(newKitId ?? null);
     setKitFreeWeaponPick(null); // clear any free weapon when kit changes
-  }, [selectedClass, kitAutoNWPs, profsPicked, effectiveNWP, _profIndex]);
+  }, [effectiveKits, kitAutoNWPs, profsPicked, effectiveNWP, _profIndex]);
 
   const toggleWeap = (id, name, level) => {
     const already = !!weapPicked[id];
@@ -1214,7 +1222,7 @@ export function useCharacter() {
     DISADVANTAGES, DISADV_POOL_WARN, DISADV_MAX_CP,
     TRAITS, ALL_NWP: effectiveNWP, ALL_PROFS: effectiveNWP, CLASS_ABILITIES,
     effectiveNWPGroups,
-    SP_KITS, CLASS_KITS, ALL_CLASSES,
+    SP_KITS, CLASS_KITS, ALL_CLASSES, effectiveKits,
     RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP,
     PARENT_STATS, SUB_ABILITIES, PARENT_STAT_LABELS, getSubStats, getT44Mod,
     THIEF_SKILLS, THIEF_DISC_POINTS, SKILL_CLASS_ABILS,

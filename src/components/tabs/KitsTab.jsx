@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { C, numInputStyle } from "../../data/constants.js";
 import { SP_KITS, CLASS_KITS } from "../../data/kits.js";
 import { ALL_CLASSES } from "../../data/classes.js";
 import { getRankTable, getSocialRank, SOCIAL_RANKS_DEFAULT } from "../../data/socialStatus.js";
+import { useKitsByClass } from "../../hooks/useKits.js";
 
 import { ChHead } from "../ui/index.js";
 
@@ -40,22 +41,10 @@ export function KitsTab(props) {
 
   const _ALL_PROFS = props.ALL_PROFS ?? [];
 
-  // Fetch kits from API — falls back to bundle data if unavailable
-  const [apiClassKits, setApiClassKits] = useState(null);
-  const [apiSpKits,    setApiSpKits]    = useState(null);
-  useEffect(() => {
-    if (!selectedClass) return;
-    fetch(`/api/kits?class=${selectedClass}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data) return;
-        const universal = data.kits.filter(k => k.is_universal);
-        const classBased = data.kits.filter(k => !k.is_universal);
-        setApiSpKits(universal);
-        setApiClassKits(classBased);
-      })
-      .catch(() => { /* use bundle fallback */ });
-  }, [selectedClass]);
+  // Fetch kits from API (normalized to static shape) — falls back to bundle on error
+  const { kits: _apiKits } = useKitsByClass(selectedClass);
+  const apiClassKits = _apiKits ? _apiKits.filter(k => !k.is_universal) : null;
+  const apiSpKits    = _apiKits ? _apiKits.filter(k =>  k.is_universal) : null;
 
 
   // local variables that were inside the IIFE

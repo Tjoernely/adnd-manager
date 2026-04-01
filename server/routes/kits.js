@@ -55,9 +55,20 @@ router.get('/', async (req, res) => {
              k.is_universal, k.is_racial, k.source_book, k.source_url,
              k.description, k.benefits_text, k.hindrances_text,
              k.requirements_text, k.wealth_text,
-             k.req_race, k.req_alignment, k.req_min_stats, k.prohibited_races
+             k.req_race, k.req_alignment, k.req_min_stats, k.prohibited_races,
+             COALESCE(
+               json_agg(
+                 jsonb_build_object(
+                   'relation_type', kpl.relation_type,
+                   'prof_name_raw',  kpl.prof_name_raw
+                 )
+               ) FILTER (WHERE kpl.id IS NOT NULL),
+               '[]'
+             ) AS proficiency_links
       FROM kits k
+      LEFT JOIN kit_proficiency_links kpl ON kpl.kit_id = k.id
       WHERE ${conditions.join(' AND ')}
+      GROUP BY k.id
       ORDER BY k.is_universal, k.name
     `, params);
 
