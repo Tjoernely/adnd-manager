@@ -14,8 +14,7 @@ node_modules
 dist
 dist-ssr
 
-# Server build output & database
-server/public/
+# Server database
 server/dnd.db
 
 # Vite

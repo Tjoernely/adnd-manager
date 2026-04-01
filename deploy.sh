@@ -12,9 +12,7 @@ if [ ! -f $APP/server/.env ]; then
   exit 1
 fi
 
-NODE_ENV=development npm --prefix $APP ci
 npm --prefix $APP/server ci
-npm run --prefix $APP build
 
 pm2 restart adnd-backend
 pm2 save
