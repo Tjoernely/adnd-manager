@@ -19,8 +19,10 @@ import { TRAITS, DISADVANTAGES, DISADV_POOL_WARN, DISADV_MAX_CP } from "../data/
 
 import {
   CLASS_GROUP_MAP, NWP_CP_POOL, WEAP_CP_POOL,
-  ALL_NWP, PROF_GROUPTAG, ALL_PROFS,
+  ALL_NWP, NWP_GROUPS, PROF_GROUPTAG, ALL_PROFS,
 } from "../data/proficiencies.js";
+
+import { useProficiencies, buildProfGroups } from "./useProficiencies.js";
 
 import {
   getWeapCost, weapSlotCost, specCol,
@@ -315,6 +317,27 @@ export function useCharacter() {
   [disadvPicked, disadvSubChoice]);
   // Cross-class NWP cost: General = listed; own class group = listed; other = listed+2
   const classGroup  = useMemo(() => CLASS_GROUP_MAP[selectedClass] ?? null, [selectedClass]);
+
+  // ── DB proficiencies (311 NWPs) — fetched once, falls back to static bundle ──
+  const { profs: _dbProfs } = useProficiencies();
+
+  // Flat list: DB canonical profs when loaded, static ALL_NWP otherwise
+  const effectiveNWP = useMemo(() => _dbProfs ?? ALL_NWP, [_dbProfs]);
+
+  // Grouped for ProfsTab display
+  const effectiveNWPGroups = useMemo(() => {
+    if (!_dbProfs) return NWP_GROUPS;
+    return buildProfGroups(_dbProfs);
+  }, [_dbProfs]);
+
+  // canonical_id → prof_group lookup (used by nwpEffCp)
+  const _profGroupTag = useMemo(() => {
+    if (!_dbProfs) return PROF_GROUPTAG;
+    const m = {};
+    for (const p of _dbProfs) m[p.id] = p.profGroup;
+    return { ...PROF_GROUPTAG, ...m };
+  }, [_dbProfs]);
+
   // Chapter 6 NWP CP pool + Chapter 7 Weapon CP pool per class group (S&P p.125, p.162)
   const nwpClassPool  = useMemo(() => NWP_CP_POOL[classGroup]  ?? 0, [classGroup]);
   const weapClassPool = useMemo(() => WEAP_CP_POOL[classGroup] ?? 0, [classGroup]);
@@ -326,11 +349,11 @@ export function useCharacter() {
   // Uses PROF_GROUPTAG lookup because individual prof objects don't carry groupTag.
   const nwpEffCp    = useCallback((prof) => {
     if (!classGroup) return prof.cp;               // no class selected — show base cost
-    const tag = PROF_GROUPTAG[prof.id];
+    const tag = _profGroupTag[prof.id];
     if (tag === "general") return prof.cp;         // General: ALWAYS base cost, never modified
     if (tag === classGroup) return prof.cp;        // own class group: base cost
     return prof.cp + 2;                            // cross-class penalty
-  }, [classGroup]);
+  }, [classGroup, _profGroupTag]);
 
   // Weapon slot cost: warrior=2 CP/slot, others=3 CP/slot (S&P Table 48)
   const wSlotCost   = useMemo(() => weapSlotCost(classGroup), [classGroup]);
@@ -399,12 +422,20 @@ export function useCharacter() {
   const kitNWPRecommended = useMemo(() => activeKitObj?.nwpRecommended  ?? [], [activeKitObj]);
   const kitWPRequired     = useMemo(() => activeKitObj?.wpRequired      ?? [], [activeKitObj]);
 
-  // Fuzzy match: does a prof name appear in a list of kit prof strings?
+  // Slug: "Riding (Land-Based)" → "riding-land-based" — used for exact kit/prof matching
+  const toSlug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+  // Match a prof name against a kit's NWP list.
+  // Tries slug equality first (handles case/punctuation variants like
+  // "Riding (land-based)" vs "Riding (Land-Based)"), then falls back
+  // to legacy fuzzy prefix matching for old static kit data.
   const profMatchesKitList = useCallback((profName, list) => {
-    const n = profName.toLowerCase();
+    const profSlug = toSlug(profName);
+    const n        = profName.toLowerCase();
     return list.some(entry => {
+      if (toSlug(entry) === profSlug) return true;          // slug match (reliable)
       const e = entry.toLowerCase();
-      return n.includes(e.split(' ')[0]) || e.includes(n.split(' ')[0]);
+      return n.includes(e.split(" ")[0]) || e.includes(n.split(" ")[0]); // legacy fuzzy
     });
   }, []);
 
@@ -417,18 +448,22 @@ export function useCharacter() {
   const kitRequiredNWPUnmet = useMemo(() => {
     if (kitNWPRequired.length === 0) return [];
     return kitNWPRequired.filter(reqName => {
-      const n = reqName.toLowerCase();
-      return !ALL_PROFS.some(p => profsPicked[p.id] &&
-        (p.name.toLowerCase().includes(n.split(' ')[0]) || n.includes(p.name.toLowerCase().split(' ')[0])));
+      const reqSlug = toSlug(reqName);
+      const n       = reqName.toLowerCase();
+      return !effectiveNWP.some(p => profsPicked[p.id] && (
+        toSlug(p.name) === reqSlug ||                                            // slug match
+        p.name.toLowerCase().includes(n.split(" ")[0]) ||                       // legacy fuzzy
+        n.includes(p.name.toLowerCase().split(" ")[0])
+      ));
     });
-  }, [kitNWPRequired, profsPicked]);
+  }, [kitNWPRequired, profsPicked, effectiveNWP]);
 
   // profCPSp declared here (after activeKitObj + isKitRecommended) so the kit
   // discount can be applied without hitting a temporal dead zone error.
   const profCPSp    = useMemo(() =>
-    ALL_NWP.filter(p => profsPicked[p.id])
+    effectiveNWP.filter(p => profsPicked[p.id])
       .reduce((s, p) => s + Math.max(0, nwpEffCp(p) - (isKitRecommended(p) && activeKitObj ? 1 : 0)), 0),
-    [profsPicked, nwpEffCp, isKitRecommended, activeKitObj]);
+    [profsPicked, effectiveNWP, nwpEffCp, isKitRecommended, activeKitObj]);
 
   const spentCP     = traitCPSp + profCPSp + weapCPSp + classAbilCPSpent + mastCPSp;
   const remainCP    = totalCP - spentCP;
@@ -843,7 +878,7 @@ export function useCharacter() {
     const already = !!profsPicked[prof.id];
     if (already) { setProfsPicked(p => ({ ...p, [prof.id]: false })); return; }
     // Prevent buying same-named prof from a different group
-    const sameNamePicked = ALL_NWP.find(p => p.id !== prof.id && p.name === prof.name && profsPicked[p.id]);
+    const sameNamePicked = effectiveNWP.find(p => p.id !== prof.id && p.name === prof.name && profsPicked[p.id]);
     if (sameNamePicked) return;
     const effCp = Math.max(0, nwpEffCp(prof) - (isKitRecommended(prof) && activeKitObj ? 1 : 0));
     const doIt  = () => setProfsPicked(p => ({ ...p, [prof.id]: true }));
@@ -870,10 +905,12 @@ export function useCharacter() {
     const newAuto = {};
     if (nextKit?.nwpRequired?.length) {
       nextKit.nwpRequired.forEach(reqName => {
-        const rn   = reqName.toLowerCase();
-        const prof = ALL_PROFS.find(pr =>
-          pr.name.toLowerCase() === rn ||
-          pr.name.toLowerCase().includes(rn) ||
+        const reqSlug = toSlug(reqName);
+        const rn      = reqName.toLowerCase();
+        const prof = effectiveNWP.find(pr =>
+          toSlug(pr.name) === reqSlug ||                     // slug match (reliable)
+          pr.name.toLowerCase() === rn ||                    // exact
+          pr.name.toLowerCase().includes(rn) ||              // legacy fuzzy
           rn.includes(pr.name.toLowerCase())
         );
         if (prof && !base[prof.id]) {
@@ -887,7 +924,7 @@ export function useCharacter() {
     setKitAutoNWPs(newAuto);
     setSelectedKit(newKitId ?? null);
     setKitFreeWeaponPick(null); // clear any free weapon when kit changes
-  }, [selectedClass, kitAutoNWPs, profsPicked, ALL_PROFS]);
+  }, [selectedClass, kitAutoNWPs, profsPicked, effectiveNWP]);
 
   const toggleWeap = (id, name, level) => {
     const already = !!weapPicked[id];
@@ -1177,7 +1214,8 @@ export function useCharacter() {
     MAGE_SP_CLASSES, CLERIC_SP_CLASSES,
     WIZARD_SCHOOLS, RACE_CLASS_CAPS,
     DISADVANTAGES, DISADV_POOL_WARN, DISADV_MAX_CP,
-    TRAITS, ALL_NWP, ALL_PROFS, CLASS_ABILITIES,
+    TRAITS, ALL_NWP: effectiveNWP, ALL_PROFS: effectiveNWP, CLASS_ABILITIES,
+    effectiveNWPGroups,
     SP_KITS, CLASS_KITS, ALL_CLASSES,
     RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP,
     PARENT_STATS, SUB_ABILITIES, PARENT_STAT_LABELS, getSubStats, getT44Mod,

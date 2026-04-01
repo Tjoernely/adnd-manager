@@ -1,5 +1,5 @@
 import { C, fmt, statColor, numInputStyle } from "../../data/constants.js";
-import { ALL_NWP, NWP_GROUPS, PROF_GROUPTAG } from "../../data/proficiencies.js";
+import { NWP_GROUPS, ALL_NWP as STATIC_ALL_NWP } from "../../data/proficiencies.js"; // fallback
 
 import { ChHead, IBtn, Checkbox, CpBadge, GroupLabel } from "../ui/index.js";
 
@@ -84,9 +84,13 @@ export function ProfsTab(props) {
 
       {/* Set of all prof names currently picked (any group) — for cross-group dedup */}
       {(() => {
-        const pickedNames = new Set(ALL_NWP.filter(p => profsPicked[p.id]).map(p => p.name));
+        // Use DB-loaded groups when available (passed from useCharacter via effectiveNWPGroups),
+        // fall back to static bundle if not yet loaded.
+        const nwpGroups  = props.effectiveNWPGroups ?? NWP_GROUPS;
+        const allNwpFlat = props.ALL_NWP            ?? STATIC_ALL_NWP;
+        const pickedNames = new Set(allNwpFlat.filter(p => profsPicked[p.id]).map(p => p.name));
 
-        return NWP_GROUPS.map(grp => {
+        return nwpGroups.map(grp => {
         const isSameGroup = grp.groupTag === classGroup || grp.groupTag === "general";
         return (
           <div key={grp.group} style={{ marginBottom:28 }}>
