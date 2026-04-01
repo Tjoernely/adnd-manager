@@ -43,8 +43,8 @@ export function KitsTab(props) {
 
   // Fetch kits from API (normalized to static shape) — falls back to bundle on error
   const { kits: _apiKits } = useKitsByClass(selectedClass);
-  const apiClassKits = _apiKits ? _apiKits.filter(k => !k.is_universal) : null;
-  const apiSpKits    = _apiKits ? _apiKits.filter(k =>  k.is_universal) : null;
+  const apiClassKits = _apiKits ? _apiKits.filter(k => k.is_universal === false) : null;
+  const apiSpKits    = _apiKits ? _apiKits.filter(k => k.is_universal === true)  : null;
 
 
   // local variables that were inside the IIFE
