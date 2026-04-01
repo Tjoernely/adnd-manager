@@ -410,7 +410,7 @@ export function KitsTab(props) {
           ✦ Standard S&P Kits (Chapter 5) — available to any class
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:8 }}>
-          {SP_KITS.map(kit => <KitCard key={kit.id} kit={kit} compact />)}
+          {(apiSpKits ?? SP_KITS).map(kit => <KitCard key={kit.id} kit={kit} compact />)}
         </div>
       </div>
 
