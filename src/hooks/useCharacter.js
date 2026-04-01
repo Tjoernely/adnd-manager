@@ -24,6 +24,8 @@ import {
 
 import { useProficiencies, buildProfGroups } from "./useProficiencies.js";
 
+import { buildProfIndex, resolveKitProfEntry } from "../rules-engine/profResolver.js";
+
 import {
   getWeapCost, weapSlotCost, specCol,
   MASTERY_TIERS, STYLE_SPECS, WOC_CP,
@@ -330,6 +332,9 @@ export function useCharacter() {
     return buildProfGroups(_dbProfs);
   }, [_dbProfs]);
 
+  // Resolver index: built once per prof list, O(1) lookups for kit/prof matching
+  const _profIndex = useMemo(() => buildProfIndex(effectiveNWP), [effectiveNWP]);
+
   // canonical_id → prof_group lookup (used by nwpEffCp)
   const _profGroupTag = useMemo(() => {
     if (!_dbProfs) return PROF_GROUPTAG;
@@ -422,22 +427,23 @@ export function useCharacter() {
   const kitNWPRecommended = useMemo(() => activeKitObj?.nwpRecommended  ?? [], [activeKitObj]);
   const kitWPRequired     = useMemo(() => activeKitObj?.wpRequired      ?? [], [activeKitObj]);
 
-  // Slug: "Riding (Land-Based)" → "riding-land-based" — used for exact kit/prof matching
-  const toSlug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-
-  // Match a prof name against a kit's NWP list.
-  // Tries slug equality first (handles case/punctuation variants like
-  // "Riding (land-based)" vs "Riding (Land-Based)"), then falls back
-  // to legacy fuzzy prefix matching for old static kit data.
+  // Match a prof object against a kit's raw NWP list using the resolver.
+  // Falls back to slug comparison for profs not found by name in effectiveNWP.
   const profMatchesKitList = useCallback((profName, list) => {
-    const profSlug = toSlug(profName);
-    const n        = profName.toLowerCase();
+    const prof = effectiveNWP.find(p => p.name === profName);
+    if (prof) {
+      return list.some(raw => {
+        const r = resolveKitProfEntry(raw, _profIndex);
+        return r.resolved_canonical_id === prof.id;
+      });
+    }
+    // Unknown prof name — fall back to slug comparison
+    const profSlug = profName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     return list.some(entry => {
-      if (toSlug(entry) === profSlug) return true;          // slug match (reliable)
-      const e = entry.toLowerCase();
-      return n.includes(e.split(" ")[0]) || e.includes(n.split(" ")[0]); // legacy fuzzy
+      const eSlug = entry.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      return eSlug === profSlug;
     });
-  }, []);
+  }, [effectiveNWP, _profIndex]);
 
   const isKitRequired    = useCallback(prof =>
     profMatchesKitList(prof.name, kitNWPRequired),   [profMatchesKitList, kitNWPRequired]);
@@ -447,16 +453,12 @@ export function useCharacter() {
   // Rulebreaker: kit has required NWP that are not yet picked
   const kitRequiredNWPUnmet = useMemo(() => {
     if (kitNWPRequired.length === 0) return [];
-    return kitNWPRequired.filter(reqName => {
-      const reqSlug = toSlug(reqName);
-      const n       = reqName.toLowerCase();
-      return !effectiveNWP.some(p => profsPicked[p.id] && (
-        toSlug(p.name) === reqSlug ||                                            // slug match
-        p.name.toLowerCase().includes(n.split(" ")[0]) ||                       // legacy fuzzy
-        n.includes(p.name.toLowerCase().split(" ")[0])
-      ));
+    return kitNWPRequired.filter(raw => {
+      const r = resolveKitProfEntry(raw, _profIndex);
+      if (!r.resolved_canonical_id) return true;   // unresolved → always show as unmet
+      return !profsPicked[r.resolved_canonical_id];
     });
-  }, [kitNWPRequired, profsPicked, effectiveNWP]);
+  }, [kitNWPRequired, profsPicked, _profIndex]);
 
   // profCPSp declared here (after activeKitObj + isKitRecommended) so the kit
   // discount can be applied without hitting a temporal dead zone error.
@@ -905,14 +907,10 @@ export function useCharacter() {
     const newAuto = {};
     if (nextKit?.nwpRequired?.length) {
       nextKit.nwpRequired.forEach(reqName => {
-        const reqSlug = toSlug(reqName);
-        const rn      = reqName.toLowerCase();
-        const prof = effectiveNWP.find(pr =>
-          toSlug(pr.name) === reqSlug ||                     // slug match (reliable)
-          pr.name.toLowerCase() === rn ||                    // exact
-          pr.name.toLowerCase().includes(rn) ||              // legacy fuzzy
-          rn.includes(pr.name.toLowerCase())
-        );
+        const r    = resolveKitProfEntry(reqName, _profIndex);
+        const prof = r.resolved_canonical_id
+          ? effectiveNWP.find(pr => pr.id === r.resolved_canonical_id)
+          : effectiveNWP.find(pr => pr.name.toLowerCase() === reqName.toLowerCase()); // last-resort
         if (prof && !base[prof.id]) {
           base[prof.id] = true;
           newAuto[prof.id] = true;
@@ -924,7 +922,7 @@ export function useCharacter() {
     setKitAutoNWPs(newAuto);
     setSelectedKit(newKitId ?? null);
     setKitFreeWeaponPick(null); // clear any free weapon when kit changes
-  }, [selectedClass, kitAutoNWPs, profsPicked, effectiveNWP]);
+  }, [selectedClass, kitAutoNWPs, profsPicked, effectiveNWP, _profIndex]);
 
   const toggleWeap = (id, name, level) => {
     const already = !!weapPicked[id];
