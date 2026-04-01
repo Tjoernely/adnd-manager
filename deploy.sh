@@ -12,7 +12,7 @@ if [ ! -f $APP/server/.env ]; then
   exit 1
 fi
 
-npm --prefix $APP ci
+NODE_ENV=development npm --prefix $APP ci
 npm --prefix $APP/server ci
 npm run --prefix $APP build
 
