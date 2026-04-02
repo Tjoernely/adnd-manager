@@ -41,6 +41,12 @@ export function preProcess(raw) {
   // Strip "es : X" — garbled "Proficienc-es : X" extraction artifact
   s = s.replace(/^[a-z]+\s*:\s+/, '');
 
+  // Strip "Special Bonus : X" → "X" (kit benefit text embedding a prof name)
+  s = s.replace(/^special\s+bonus\s*:\s*/i, '');
+
+  // Strip "such as X" → "X" (description embedding a prof name)
+  s = s.replace(/^such\s+as\s+/i, '');
+
   // Strip "X slots) Y" / "X) : Y" garbage prefixes (lowercase-only prefix)
   // e.g. "double slot) Musical Instrument" → "Musical Instrument"
   //      "se take 3 slots) : endurance"    → "endurance"
@@ -79,9 +85,15 @@ export function preProcess(raw) {
   // Strip trailing orphaned open-paren fragments: "Artistic Ability (Painting" → "Artistic Ability"
   s = s.replace(/\s*\([^)]*$/, '').trim();
 
-  // Normalize "or" compounds outside parens ("Agriculture or Fishing") → take first
-  if (/\bor\b/i.test(s) && !/\(/.test(s)) {
-    s = s.split(/\s+or\s+/i)[0].trim();
+  // Normalize "or" compounds → take the first option.
+  // Fire when "or" precedes any "(" (e.g. "Weather Sense or Animal Lore (player choice)")
+  // or when there are no parens at all (e.g. "Agriculture or Fishing").
+  {
+    const orIdx    = s.search(/\bor\b/i);
+    const parenIdx = s.indexOf('(');
+    if (orIdx > -1 && (parenIdx === -1 || orIdx < parenIdx)) {
+      s = s.split(/\s+or\s+/i)[0].trim();
+    }
   }
 
   return s.trim() || null;
@@ -220,6 +232,9 @@ export const CURATED_ALIASES = {
   'animal noise':            'Animal Noise',
   'animal sound':            'Animal Noise',
   'noise animal':            'Animal Noise',
+
+  // History (any) — default to Local History (most common for noble/diplomat kits)
+  'any history':             'Local History',
 };
 
 // ── Index builder ─────────────────────────────────────────────────────────────
