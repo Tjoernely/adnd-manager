@@ -29,7 +29,7 @@ async function loadProfs() {
     SELECT p.canonical_id, p.name,
            COALESCE(json_agg(a.alias) FILTER (WHERE a.alias IS NOT NULL), '[]') AS aliases
     FROM nonweapon_proficiencies p
-    LEFT JOIN nwp_aliases a ON a.prof_id = p.id
+    LEFT JOIN proficiency_aliases a ON a.prof_id = p.id
     GROUP BY p.id
     ORDER BY p.name
   `);
