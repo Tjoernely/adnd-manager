@@ -8,10 +8,12 @@
  * Pure functions — no React, no side effects.
  */
 
-import type { MapScope, LocationContext, LocationTags } from './mapTypes';
+import type { MapScope, LocationContext, LocationTags, SettlementData } from './mapTypes';
 import { emptyTags, applyTagRules, inheritTags } from './tagEngine';
 import { validateLocation } from './scopeValidator';
 import type { TagRule, ScopeRule, ValidationResult } from './mapTypes';
+import { buildSettlementData } from './settlementEngine';
+import type { ArchetypeRules } from './settlementEngine';
 
 // ── GeneratedParams shape (matches MapGenerator resolveParams output) ─────────
 
@@ -198,18 +200,42 @@ export interface WorldDataResult {
   context:           LocationContext;
   tags:              LocationTags;
   state:             'pristine';
+  settlement?:       SettlementData;
   validation_errors: string[] | undefined;
 }
 
 export function buildMapWorldData(
-  params:      GeneratedParams,
-  tagRules:    TagRule[],
-  scopeRules:  ScopeRule[],
-  parentTags?: LocationTags,
+  params:          GeneratedParams,
+  tagRules:        TagRule[],
+  scopeRules:      ScopeRule[],
+  parentTags?:     LocationTags,
+  archetypeRules?: ArchetypeRules,
 ): WorldDataResult {
   const scope   = mapTypeToScope(params.mapType);
   const context = generatedParamsToContext(params);
   const ownTags = generatedParamsToTags(params);
+
+  // ── Settlement enrichment ─────────────────────────────────────────────────
+  let settlement: SettlementData | undefined;
+  if (scope === 'settlement' && archetypeRules) {
+    settlement = buildSettlementData(params, archetypeRules);
+    // Merge provides_tags from all features into ownTags (using tagRules for category lookup)
+    const allProvidesTags = settlement.features.flatMap(f => f.provides_tags);
+    for (const tag of allProvidesTags) {
+      const rule = tagRules.find(r => r.tag === tag);
+      if (rule) {
+        const cat = rule.category as keyof LocationTags;
+        if (!ownTags[cat].includes(tag)) ownTags[cat].push(tag);
+      }
+    }
+    // Merge archetype default_tags
+    const archetypeEntry = archetypeRules.archetypes[settlement.archetype];
+    for (const cat of ['origin', 'structure', 'environment'] as const) {
+      for (const tag of archetypeEntry.default_tags[cat]) {
+        if (!ownTags[cat].includes(tag)) ownTags[cat].push(tag);
+      }
+    }
+  }
 
   // Apply tag propagation rules
   const resolvedOwnTags = applyTagRules(ownTags, tagRules);
@@ -235,5 +261,5 @@ export function buildMapWorldData(
     console.warn('[generationMapper] Validation threw:', e);
   }
 
-  return { scope, context, tags, state: 'pristine', validation_errors };
+  return { scope, context, tags, state: 'pristine', settlement, validation_errors };
 }

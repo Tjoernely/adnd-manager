@@ -26,6 +26,14 @@ const fs      = require('fs');
 const crypto  = require('crypto');
 const db      = require('../db');
 const { auth } = require('../middleware/auth');
+const ARCHETYPE_RULES = require('../../src/rulesets/settlementArchetypes.json');
+// tag → category lookup derived from mapTags.json
+const TAG_CATEGORY = (() => {
+  const raw = require('../../src/rulesets/mapTags.json');
+  const m = {};
+  for (const entry of raw) m[entry.tag] = entry.category;
+  return m;
+})();
 
 const router = express.Router();
 
@@ -104,6 +112,64 @@ const INH_SPECIAL = { undead: 'undead_presence', demons: 'planar_rift', fey: 'le
 const ERA_ORIGIN  = { ancient: 'ancient', 'forgotten ruins': 'ancient' };
 const WATER_TERRAINS = new Set(['coastal', 'swamp', 'ocean', 'river', 'jungle']);
 
+// ── Settlement helpers (mirrors settlementEngine.ts) ─────────────────────────
+
+function deriveArchetype(p) {
+  const inh     = (p.inhabitants ?? '').toLowerCase();
+  const atmo    = (p.atmosphere  ?? '').toLowerCase();
+  const size    = (p.size        ?? '').toLowerCase();
+  const terrain = (p.terrain     ?? []).map(t => t.toLowerCase());
+
+  if (inh === 'cult')         return 'religious_center';
+  if (inh === 'undead')       return 'ruins';
+  if (inh === 'demons')       return 'ruins';
+  if (inh === 'dragon lair')  return 'ruins';
+  if (atmo === 'sacred')      return 'religious_center';
+  if (atmo === 'abandoned')   return 'ruins';
+  if (terrain.includes('coastal'))   return 'port_town';
+  if (terrain.includes('mountains')) return 'mining_town';
+  if (inh === 'humanoids' && atmo === 'dangerous') return 'military_outpost';
+  if (size === 'small')       return 'farming_village';
+  return 'trade_town';
+}
+
+function buildSettlementDataJS(p) {
+  const rules    = ARCHETYPE_RULES;
+  const archetype = deriveArchetype(p);
+  const rule      = rules.archetypes[archetype];
+  const allFeats  = rules.features;
+
+  // Required features
+  const selected = rule.required_features.filter(id => id in allFeats);
+
+  // Up to 3 optional features (deterministic first-match)
+  const optional = Object.keys(allFeats).filter(
+    id => !selected.includes(id) && !rule.forbidden_features.includes(id),
+  );
+  let added = 0;
+  for (const id of optional) {
+    if (added >= 3) break;
+    const feat = allFeats[id];
+    if (!feat.requires.every(r => selected.includes(r))) continue;
+    if (feat.forbidden.some(f => selected.includes(f))) continue;
+    if (selected.some(s => allFeats[s]?.forbidden.includes(id))) continue;
+    selected.push(id);
+    added++;
+  }
+
+  const features = selected.map(id => ({ id, ...allFeats[id] }));
+
+  // Districts: typical + feature preferred, dedup, max 6
+  const seen = new Set();
+  const districts = [];
+  for (const d of [...rule.typical_districts, ...features.map(f => f.preferred_district)]) {
+    if (!seen.has(d)) { seen.add(d); districts.push(d); }
+    if (districts.length >= 6) break;
+  }
+
+  return { archetype, features, districts };
+}
+
 function enrichMapData(data, backendType) {
   const p = data.generated_params;
   if (!p) return data; // no generated_params → nothing to derive
@@ -152,6 +218,28 @@ function enrichMapData(data, backendType) {
     const specialTag = INH_SPECIAL[(p.inhabitants ?? '').toLowerCase()];
     if (specialTag && !tags.special.includes(specialTag)) tags.special.push(specialTag);
     data = { ...data, tags };
+  }
+
+  // ── Settlement data ───────────────────────────────────────────────────────
+  if (scope === 'settlement' && !data.settlement) {
+    const settlement = buildSettlementDataJS(p);
+    // Merge provides_tags from features into tags
+    const tagsCopy = data.tags ? { ...data.tags } : EMPTY_TAGS();
+    for (const feat of settlement.features) {
+      for (const tag of (feat.provides_tags ?? [])) {
+        // Find category from ARCHETYPE_RULES (not available here) — use static lookup
+        const cat = TAG_CATEGORY[tag];
+        if (cat && !tagsCopy[cat].includes(tag)) tagsCopy[cat].push(tag);
+      }
+    }
+    // Merge archetype default_tags
+    const archetypeEntry = ARCHETYPE_RULES.archetypes[settlement.archetype];
+    for (const cat of ['origin', 'structure', 'environment']) {
+      for (const tag of (archetypeEntry.default_tags[cat] ?? [])) {
+        if (!tagsCopy[cat].includes(tag)) tagsCopy[cat].push(tag);
+      }
+    }
+    data = { ...data, tags: tagsCopy, settlement };
   }
 
   return { ...data, scope, context, state: data.state ?? 'pristine' };

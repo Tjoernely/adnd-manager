@@ -16,8 +16,9 @@ import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
 import { buildMapWorldData } from '../../rules-engine/generationMapper.ts';
-import tagRules   from '../../rulesets/mapTags.json';
-import scopeRules from '../../rulesets/mapScopes.json';
+import tagRules        from '../../rulesets/mapTags.json';
+import scopeRules      from '../../rulesets/mapScopes.json';
+import archetypeRules  from '../../rulesets/settlementArchetypes.json';
 
 // ── Option lists ──────────────────────────────────────────────────────────────
 const MAP_TYPES = [
@@ -343,7 +344,7 @@ export function MapGenerator({
 
       // ── Build world-engine data (scope, tags, context) ────────────────────
       const parentTags = parentPoiCtx?.tags ?? null;
-      const worldData  = buildMapWorldData(resolved, tagRules, scopeRules, parentTags ?? undefined);
+      const worldData  = buildMapWorldData(resolved, tagRules, scopeRules, parentTags ?? undefined, archetypeRules);
       console.log('[MapGenerator] World data:', worldData);
 
       // ── Create map record (server) ─────────────────────────────────────────
@@ -371,6 +372,7 @@ export function MapGenerator({
           context:           worldData.context,
           tags:              worldData.tags,
           state:             worldData.state,
+          ...(worldData.settlement       ? { settlement:         worldData.settlement }         : {}),
           ...(worldData.validation_errors ? { validation_errors: worldData.validation_errors } : {}),
         },
       });

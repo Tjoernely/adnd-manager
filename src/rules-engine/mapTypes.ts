@@ -75,13 +75,51 @@ export interface MapPOIExtended {
   connections: MapConnection[];
 }
 
+// ── Settlement system ─────────────────────────────────────────────────────────
+
+export type SettlementArchetype =
+  | 'mining_town'
+  | 'trade_town'
+  | 'religious_center'
+  | 'military_outpost'
+  | 'farming_village'
+  | 'port_town'
+  | 'ruins';
+
+export type SettlementDistrict =
+  | 'market'
+  | 'residential'
+  | 'industrial'
+  | 'religious'
+  | 'noble'
+  | 'slums'
+  | 'military'
+  | 'docks';
+
+export interface SettlementFeature {
+  id:                 string;
+  name:               string;
+  category:           'economic' | 'religious' | 'military' | 'civic' | 'criminal' | 'arcane';
+  requires:           string[];
+  forbidden:          string[];
+  provides_tags:      string[];
+  preferred_district: SettlementDistrict;
+}
+
+export interface SettlementData {
+  archetype: SettlementArchetype;
+  features:  SettlementFeature[];
+  districts: SettlementDistrict[];
+}
+
 // ── Extended Location (map-level data additions) ──────────────────────────────
 
 export interface LocationExtended {
-  scope:   MapScope;
-  context: LocationContext;
-  tags:    LocationTags;
-  state:   LocationState;
+  scope:       MapScope;
+  context:     LocationContext;
+  tags:        LocationTags;
+  state:       LocationState;
+  settlement?: SettlementData;
 }
 
 // ── Ruleset types ─────────────────────────────────────────────────────────────

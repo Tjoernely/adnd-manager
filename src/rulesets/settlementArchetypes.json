@@ -1,0 +1,283 @@
+{
+  "archetypes": {
+    "mining_town": {
+      "default_tags": {
+        "origin":      ["dwarven"],
+        "structure":   ["fortified"],
+        "environment": []
+      },
+      "typical_districts":  ["industrial", "residential", "market", "slums"],
+      "required_features":  ["mine_entrance", "smithy"],
+      "forbidden_features": ["grand_temple", "arcane_academy", "harbor"],
+      "typical_inhabitants": ["Dwarves", "Humans", "Gnomes"]
+    },
+    "trade_town": {
+      "default_tags": {
+        "origin":      [],
+        "structure":   ["walled", "open_air"],
+        "environment": []
+      },
+      "typical_districts":  ["market", "residential", "noble", "slums"],
+      "required_features":  ["market_square", "inn", "guildhall"],
+      "forbidden_features": ["mine_entrance"],
+      "typical_inhabitants": ["Humans", "Halflings", "Mixed races"]
+    },
+    "religious_center": {
+      "default_tags": {
+        "origin":      [],
+        "structure":   ["sacred", "walled"],
+        "environment": []
+      },
+      "typical_districts":  ["religious", "residential", "market", "noble"],
+      "required_features":  ["grand_temple", "shrine", "cemetery"],
+      "forbidden_features": ["thieves_guild", "slum_quarter"],
+      "typical_inhabitants": ["Humans", "Clerics", "Pilgrims"]
+    },
+    "military_outpost": {
+      "default_tags": {
+        "origin":      [],
+        "structure":   ["fortified", "walled"],
+        "environment": []
+      },
+      "typical_districts":  ["military", "residential", "market"],
+      "required_features":  ["barracks", "gatehouse", "city_watch"],
+      "forbidden_features": ["arcane_academy", "thieves_guild"],
+      "typical_inhabitants": ["Soldiers", "Humans", "Dwarves"]
+    },
+    "farming_village": {
+      "default_tags": {
+        "origin":      [],
+        "structure":   [],
+        "environment": []
+      },
+      "typical_districts":  ["residential", "market", "industrial"],
+      "required_features":  ["inn", "stables"],
+      "forbidden_features": ["arcane_academy", "harbor", "guildhall", "noble_manor"],
+      "typical_inhabitants": ["Humans", "Halflings", "Gnomes"]
+    },
+    "port_town": {
+      "default_tags": {
+        "origin":      [],
+        "structure":   ["walled"],
+        "environment": []
+      },
+      "typical_districts":  ["docks", "market", "residential", "slums"],
+      "required_features":  ["harbor", "docks_warehouse", "fishmarket"],
+      "forbidden_features": ["mine_entrance"],
+      "typical_inhabitants": ["Humans", "Elves", "Mixed races"]
+    },
+    "ruins": {
+      "default_tags": {
+        "origin":      ["ancient"],
+        "structure":   ["ruined"],
+        "environment": []
+      },
+      "typical_districts":  ["residential", "religious", "industrial"],
+      "required_features":  ["crumbling_walls", "catacombs"],
+      "forbidden_features": ["guildhall", "harbor", "market_square", "barracks"],
+      "typical_inhabitants": ["Undead", "Monsters", "None"]
+    }
+  },
+  "features": {
+    "mine_entrance": {
+      "name":               "Mine Entrance",
+      "category":           "economic",
+      "requires":           [],
+      "forbidden":          ["harbor"],
+      "provides_tags":      [],
+      "preferred_district": "industrial"
+    },
+    "smithy": {
+      "name":               "Smithy",
+      "category":           "economic",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "industrial"
+    },
+    "market_square": {
+      "name":               "Market Square",
+      "category":           "economic",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      ["open_air"],
+      "preferred_district": "market"
+    },
+    "guildhall": {
+      "name":               "Guildhall",
+      "category":           "economic",
+      "requires":           ["market_square"],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "market"
+    },
+    "harbor": {
+      "name":               "Harbor",
+      "category":           "economic",
+      "requires":           [],
+      "forbidden":          ["mine_entrance"],
+      "provides_tags":      [],
+      "preferred_district": "docks"
+    },
+    "docks_warehouse": {
+      "name":               "Docks Warehouse",
+      "category":           "economic",
+      "requires":           ["harbor"],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "docks"
+    },
+    "fishmarket": {
+      "name":               "Fishmarket",
+      "category":           "economic",
+      "requires":           ["harbor"],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "docks"
+    },
+    "inn": {
+      "name":               "Inn & Tavern",
+      "category":           "civic",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "market"
+    },
+    "stables": {
+      "name":               "Stables",
+      "category":           "civic",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "residential"
+    },
+    "apothecary": {
+      "name":               "Apothecary",
+      "category":           "civic",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "market"
+    },
+    "noble_manor": {
+      "name":               "Noble Manor",
+      "category":           "civic",
+      "requires":           [],
+      "forbidden":          ["slum_quarter"],
+      "provides_tags":      [],
+      "preferred_district": "noble"
+    },
+    "library": {
+      "name":               "Library",
+      "category":           "arcane",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "residential"
+    },
+    "arcane_academy": {
+      "name":               "Arcane Academy",
+      "category":           "arcane",
+      "requires":           ["library"],
+      "forbidden":          ["catacombs"],
+      "provides_tags":      [],
+      "preferred_district": "residential"
+    },
+    "magical_shop": {
+      "name":               "Magical Shop",
+      "category":           "arcane",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "market"
+    },
+    "grand_temple": {
+      "name":               "Grand Temple",
+      "category":           "religious",
+      "requires":           [],
+      "forbidden":          ["thieves_guild", "catacombs"],
+      "provides_tags":      ["sacred"],
+      "preferred_district": "religious"
+    },
+    "shrine": {
+      "name":               "Shrine",
+      "category":           "religious",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "religious"
+    },
+    "cemetery": {
+      "name":               "Cemetery",
+      "category":           "religious",
+      "requires":           [],
+      "forbidden":          ["arcane_academy"],
+      "provides_tags":      [],
+      "preferred_district": "religious"
+    },
+    "catacombs": {
+      "name":               "Catacombs",
+      "category":           "religious",
+      "requires":           ["cemetery"],
+      "forbidden":          ["arcane_academy", "grand_temple"],
+      "provides_tags":      [],
+      "preferred_district": "religious"
+    },
+    "barracks": {
+      "name":               "Barracks",
+      "category":           "military",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      ["fortified"],
+      "preferred_district": "military"
+    },
+    "gatehouse": {
+      "name":               "Gatehouse",
+      "category":           "military",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      ["walled", "fortified"],
+      "preferred_district": "military"
+    },
+    "city_watch": {
+      "name":               "City Watch",
+      "category":           "military",
+      "requires":           [],
+      "forbidden":          ["thieves_guild"],
+      "provides_tags":      [],
+      "preferred_district": "military"
+    },
+    "prison": {
+      "name":               "Prison",
+      "category":           "military",
+      "requires":           ["city_watch"],
+      "forbidden":          [],
+      "provides_tags":      [],
+      "preferred_district": "military"
+    },
+    "thieves_guild": {
+      "name":               "Thieves' Guild",
+      "category":           "criminal",
+      "requires":           ["market_square"],
+      "forbidden":          ["grand_temple", "city_watch", "barracks"],
+      "provides_tags":      [],
+      "preferred_district": "slums"
+    },
+    "slum_quarter": {
+      "name":               "Slum Quarter",
+      "category":           "criminal",
+      "requires":           [],
+      "forbidden":          ["noble_manor"],
+      "provides_tags":      [],
+      "preferred_district": "slums"
+    },
+    "crumbling_walls": {
+      "name":               "Crumbling Walls",
+      "category":           "civic",
+      "requires":           [],
+      "forbidden":          [],
+      "provides_tags":      ["ruined"],
+      "preferred_district": "residential"
+    }
+  }
+}
