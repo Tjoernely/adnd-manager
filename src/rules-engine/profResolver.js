@@ -49,7 +49,10 @@ export function preProcess(raw) {
   }
 
   // Strip trailing orphaned close-parens: "Origami)" → "Origami"
-  s = s.replace(/\)+$/, '').trim();
+  // Only strip if the closing paren has no matching opening paren.
+  if ((s.match(/\)/g) || []).length > (s.match(/\(/g) || []).length) {
+    s = s.replace(/\)+$/, '').trim();
+  }
 
   // "(x or y)" qualifier — take the first option so token_key can match
   // e.g. "history (local or ancient)" → "history (local)"
