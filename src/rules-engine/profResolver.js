@@ -22,7 +22,6 @@ const NON_PROF_STARTS = [
   'if the', 'a final', 'another at', 'below', 'but see',
   'numerous', 'one slot', 'cost double', 'double slot',
   'nonweapon proficiencies.', 'anagakok',
-  'es :', // garbled extraction artifact
 ];
 const NON_PROF_CONTAINS = ['slot', ' level', 'unless paladin', 'most often'];
 
@@ -38,6 +37,25 @@ export function preProcess(raw) {
   // Too long — likely rule text embedded in kit data
   if (s.length > 70) return null;
 
+  // ── Early prefix stripping (before non-prof detection) ───────────────────
+  // Strip "es : X" — garbled "Proficienc-es : X" extraction artifact
+  s = s.replace(/^[a-z]+\s*:\s+/, '');
+
+  // Strip "X slots) Y" / "X) : Y" garbage prefixes (lowercase-only prefix)
+  // e.g. "double slot) Musical Instrument" → "Musical Instrument"
+  //      "se take 3 slots) : endurance"    → "endurance"
+  if (/^[a-z]/.test(s)) {
+    s = s.replace(/^[^)]*\)\s*:?\s+/, '');
+  }
+
+  // Strip trailing orphaned close-parens: "Origami)" → "Origami"
+  s = s.replace(/\)+$/, '').trim();
+
+  // "(x or y)" qualifier — take the first option so token_key can match
+  // e.g. "history (local or ancient)" → "history (local)"
+  s = s.replace(/\(\s*(\w[\w\s-]*?)\s+or\s+[\w\s-]*?\)/gi, '($1)').trim();
+
+  // ── Non-prof detection ────────────────────────────────────────────────────
   const lower = s.toLowerCase();
   for (const p of NON_PROF_STARTS)  { if (lower.startsWith(p)) return null; }
   for (const p of NON_PROF_CONTAINS){ if (lower.includes(p))   return null; }
@@ -57,9 +75,7 @@ export function preProcess(raw) {
   // Strip trailing orphaned open-paren fragments: "Artistic Ability (Painting" → "Artistic Ability"
   s = s.replace(/\s*\([^)]*$/, '').trim();
 
-  // Normalize "or" in compound entries ("Agriculture or Fishing") → take first
-  // We handle "or" compounds by returning the first part for resolution
-  // (the resolver will handle multi-candidates via slash splitting anyway)
+  // Normalize "or" compounds outside parens ("Agriculture or Fishing") → take first
   if (/\bor\b/i.test(s) && !/\(/.test(s)) {
     s = s.split(/\s+or\s+/i)[0].trim();
   }
@@ -167,7 +183,37 @@ export const CURATED_ALIASES = {
   // Appraising
   'appraise':                'Appraising',
 
-  // Animal Noise → Animal Sounds / Mimicry — left for fuzzy, too ambiguous
+  // Riding — "Any Riding" or "Riding" alone → Land-Based (most common default)
+  'any riding':              'Riding (Land-Based)',
+  'riding':                  'Riding (Land-Based)',
+
+  // Fire-building — "Firebuilding" as one word (no hyphen/space)
+  'firebuilding':            'Fire-building',
+
+  // Gaming — "Gambling" used as synonym in several kits
+  'gambling':                'Gaming',
+
+  // Veterinary Healing — "Veterinary Medicine" variant
+  'medicine veterinary':     'Veterinary Healing',
+  'veterinary medicine':     'Veterinary Healing',
+
+  // Information Gathering — "Gather Intelligence" / "Gather Info" variants
+  'gather intelligence':     'Information Gathering',
+  'intelligence gather':     'Information Gathering',
+  'gather info':             'Information Gathering',
+  'info gather':             'Information Gathering',
+
+  // Netherworld Knowledge — "Netherworld Lore" / "Lore Netherworld" variants
+  'lore netherworld':        'Netherworld Knowledge',
+  'netherworld lore':        'Netherworld Knowledge',
+
+  // Survival — "Survival Tracking" conflates two profs; treat as Survival
+  'survival tracking':       'Survival',
+
+  // Animal Noise — "Animal Sounds" / "Imitate Animal" variants
+  'animal noise':            'Animal Noise',
+  'animal sound':            'Animal Noise',
+  'noise animal':            'Animal Noise',
 };
 
 // ── Index builder ─────────────────────────────────────────────────────────────
