@@ -957,6 +957,7 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
   const [livePos,    setLivePos]    = useState(null);
   const dragMoved    = useRef(false);
   const dragStartPos = useRef(null);
+  const isDraggingRef = useRef(false); // synchronous flag — state is stale in event handlers
 
   const info = poiInfo(poi.type);
 
@@ -966,13 +967,14 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragMoved.current = false;
+    isDraggingRef.current = true;
     dragStartPos.current = { mx: e.clientX, my: e.clientY, ox: poi.x_percent, oy: poi.y_percent };
     setIsDragging(true);
     setLivePos({ x: poi.x_percent, y: poi.y_percent });
   };
 
   const handlePointerMove = (e) => {
-    if (!isDragging || !containerRef.current) return;
+    if (!isDraggingRef.current || !containerRef.current) return;
     const dx = e.clientX - dragStartPos.current.mx;
     const dy = e.clientY - dragStartPos.current.my;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved.current = true;
@@ -982,17 +984,26 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
     setLivePos({ x: nx, y: ny });
   };
 
-  const handlePointerUp = () => {
-    if (!isDragging) return;
+  const handlePointerUp = (e) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
     setIsDragging(false);
     if (dragMoved.current && livePos) {
       onDragEnd(poi.id, livePos.x, livePos.y);
     } else {
+      e.stopPropagation();
       onSelect(poi.id);
     }
     setLivePos(null);
     dragMoved.current = false;
     dragStartPos.current = null;
+  };
+
+  // Non-DM or playerView: pointer events bail early, use onClick instead
+  const handleClick = (e) => {
+    if (isDM && !playerView) return; // DMs use pointer events
+    e.stopPropagation();
+    onSelect(poi.id);
   };
 
   const pos = (isDragging && livePos) ? livePos : { x: poi.x_percent, y: poi.y_percent };
@@ -1004,6 +1015,7 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onClick={handleClick}
       role="button"
       title={poi.name}
       data-name={poi.name}
