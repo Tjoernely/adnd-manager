@@ -963,7 +963,6 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
 
   const handlePointerDown = (e) => {
     if (!isDM || playerView) return;
-    e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragMoved.current = false;
@@ -984,26 +983,25 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
     setLivePos({ x: nx, y: ny });
   };
 
-  const handlePointerUp = (e) => {
+  const handlePointerUp = () => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     setIsDragging(false);
     if (dragMoved.current && livePos) {
       onDragEnd(poi.id, livePos.x, livePos.y);
-    } else {
-      e.stopPropagation();
-      onSelect(poi.id);
     }
     setLivePos(null);
     dragMoved.current = false;
     dragStartPos.current = null;
   };
 
-  // Non-DM or playerView: pointer events bail early, use onClick instead
+  // onClick is the universal selection path for both DM and player.
+  // dragMoved.current guards against selecting after a drag gesture.
   const handleClick = (e) => {
-    if (isDM && !playerView) return; // DMs use pointer events
     e.stopPropagation();
-    onSelect(poi.id);
+    if (!dragMoved.current) {
+      onSelect(poi.id);
+    }
   };
 
   const pos = (isDragging && livePos) ? livePos : { x: poi.x_percent, y: poi.y_percent };
