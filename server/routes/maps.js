@@ -65,6 +65,98 @@ const upload = multer({
 
 const VALID_TYPES = ['dungeon', 'world', 'region', 'city', 'town', 'interior', 'encounter', 'other'];
 
+// ── Server-side world-engine enrichment ───────────────────────────────────────
+// Mirrors generationMapper.ts logic but in plain JS for the server.
+// Applied on both POST (create) and PUT (update) so data is always enriched
+// regardless of whether the frontend sent the fields.
+
+const EMPTY_TAGS = () => ({ terrain: [], origin: [], depth: [], environment: [], structure: [], hazards: [], special: [] });
+
+const MAP_TYPE_TO_SCOPE = {
+  world: 'world', region: 'region',
+  'city/town': 'settlement', city: 'settlement', town: 'settlement', village: 'settlement',
+  dungeon: 'dungeon_level', 'cave system': 'dungeon_level',
+  ruins: 'local',
+  'castle/keep': 'building', temple: 'building',
+  'tavern/inn': 'interior', interior: 'interior', building: 'interior',
+};
+// backend type → scope fallback
+const BACKEND_TYPE_TO_SCOPE = {
+  world: 'world', region: 'region', city: 'settlement', town: 'settlement',
+  dungeon: 'dungeon_level', interior: 'interior', encounter: 'local', other: 'local',
+};
+const TERRAIN_TAG = {
+  mountains: 'mountainous', hills: 'mountainous',
+  forest: 'forested', 'dense forest': 'forested', jungle: 'forested',
+  plains: 'plains', desert: 'desert', swamp: 'swamp',
+  tundra: 'tundra', coastal: 'coastal', underground: 'subterranean',
+};
+const TERRAIN_BIOME = {
+  mountains: 'alpine', hills: 'highland',
+  forest: 'temperate_forest', 'dense forest': 'temperate_forest', jungle: 'tropical',
+  plains: 'grassland', desert: 'arid', swamp: 'wetland',
+  tundra: 'arctic', coastal: 'coastal', underground: 'subterranean',
+};
+const ATMO_ENV    = { cursed: 'necrotic', sacred: 'consecrated', enchanted: 'unstable_magic', abandoned: 'necrotic' };
+const ATMO_STRUCT = { abandoned: 'ruined', ancient: 'ruined' };
+const INH_ORIGIN  = { humanoids: 'constructed', undead: 'undead_built', demons: 'arcane_nexus', fey: 'elven', 'dragon lair': 'ancient', cult: 'constructed' };
+const INH_SPECIAL = { demons: 'planar_rift', fey: 'ley_line', cult: 'artifact_site' };
+const ERA_ORIGIN  = { ancient: 'ancient', 'forgotten ruins': 'ancient' };
+const WATER_TERRAINS = new Set(['coastal', 'swamp', 'ocean', 'river', 'jungle']);
+
+function enrichMapData(data, backendType) {
+  const p = data.generated_params;
+  if (!p) return data; // no generated_params → nothing to derive
+
+  const mapTypeLower = (p.mapType ?? '').toLowerCase().trim();
+  const scope = data.scope
+    ?? MAP_TYPE_TO_SCOPE[mapTypeLower]
+    ?? BACKEND_TYPE_TO_SCOPE[backendType]
+    ?? 'region';
+
+  // context
+  const primaryTerrain = (p.terrain?.[0] ?? 'unknown').toLowerCase();
+  const context = data.context ?? {
+    terrain:      primaryTerrain,
+    biome:        TERRAIN_BIOME[primaryTerrain],
+    water_access: (p.terrain ?? []).some(t => WATER_TERRAINS.has(t.toLowerCase())) || undefined,
+  };
+
+  // tags
+  if (!data.tags) {
+    const tags = EMPTY_TAGS();
+    for (const t of (p.terrain ?? [])) {
+      const tag = TERRAIN_TAG[t.toLowerCase()];
+      if (tag && !tags.terrain.includes(tag)) tags.terrain.push(tag);
+    }
+    if (scope === 'dungeon_level' || scope === 'interior') {
+      if (!tags.terrain.includes('subterranean')) tags.terrain.push('subterranean');
+      if (!tags.environment.includes('dark'))     tags.environment.push('dark');
+    }
+    const eraTag  = ERA_ORIGIN[(p.era ?? '').toLowerCase()];
+    const inhOrig = INH_ORIGIN[(p.inhabitants ?? '').toLowerCase()];
+    if (eraTag  && !tags.origin.includes(eraTag))  tags.origin.push(eraTag);
+    if (inhOrig && !tags.origin.includes(inhOrig)) tags.origin.push(inhOrig);
+    if (['settlement','building','interior'].includes(scope) && !tags.origin.includes('constructed'))
+      tags.origin.push('constructed');
+    const envTag    = ATMO_ENV[(p.atmosphere ?? '').toLowerCase()];
+    if (envTag && !tags.environment.includes(envTag)) tags.environment.push(envTag);
+    const structTag = ATMO_STRUCT[(p.atmosphere ?? '').toLowerCase()];
+    if (structTag && !tags.structure.includes(structTag)) tags.structure.push(structTag);
+    if (mapTypeLower === 'castle/keep') {
+      if (!tags.structure.includes('fortified')) tags.structure.push('fortified');
+      if (!tags.origin.includes('constructed'))  tags.origin.push('constructed');
+    }
+    if (scope === 'dungeon_level' && !tags.depth.includes('shallow_underground'))
+      tags.depth.push('shallow_underground');
+    const specialTag = INH_SPECIAL[(p.inhabitants ?? '').toLowerCase()];
+    if (specialTag && !tags.special.includes(specialTag)) tags.special.push(specialTag);
+    data = { ...data, tags };
+  }
+
+  return { ...data, scope, context, state: data.state ?? 'pristine' };
+}
+
 // ── List maps ─────────────────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
@@ -141,7 +233,8 @@ router.post('/', auth, async (req, res) => {
     if (!(await isDM(campaign_id, req.user.id)))
       return res.status(403).json({ error: 'DM only' });
 
-    const safeData = { visible_to_players: false, pins: [], pois: [], ...data };
+    const baseData   = { visible_to_players: false, pins: [], pois: [], ...data };
+    const safeData   = enrichMapData(baseData, type);
     const map = await db.one(
       `INSERT INTO maps (campaign_id, name, type, image_url, data, parent_map_id, parent_poi_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
@@ -242,22 +335,19 @@ router.put('/:id', auth, async (req, res) => {
     if (!VALID_TYPES.includes(type))
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
 
-    // ── World-engine: inject defaults for new fields (non-breaking) ──────────
-    const EMPTY_TAGS = { terrain: [], origin: [], depth: [], environment: [], structure: [], hazards: [], special: [] };
-    const TYPE_TO_SCOPE = {
-      world: 'world', region: 'region', city: 'settlement', town: 'settlement',
-      dungeon: 'dungeon_level', interior: 'interior', encounter: 'local', other: 'local',
-    };
+    // ── World-engine: enrich with scope/context/tags from generated_params ───
+    const enriched   = enrichMapData(data, type);
     const mergedData = {
-      ...data,
-      tags:    data.tags    ?? EMPTY_TAGS,
-      state:   data.state   ?? 'pristine',
-      context: data.context ?? { terrain: 'unknown' },
-      scope:   data.scope   ?? (TYPE_TO_SCOPE[type] ?? 'local'),
+      ...enriched,
+      // Ensure these minimal defaults even if no generated_params
+      tags:    enriched.tags    ?? EMPTY_TAGS(),
+      state:   enriched.state   ?? 'pristine',
+      context: enriched.context ?? { terrain: 'unknown' },
+      scope:   enriched.scope   ?? BACKEND_TYPE_TO_SCOPE[type] ?? 'local',
       // Inject defaults on each POI without touching existing fields
-      pois: (data.pois ?? []).map(poi => ({
+      pois: (enriched.pois ?? []).map(poi => ({
         ...poi,
-        tags:        poi.tags        ?? { ...EMPTY_TAGS },
+        tags:        poi.tags        ?? EMPTY_TAGS(),
         state:       poi.state       ?? 'pristine',
         connections: poi.connections ?? [],
       })),
