@@ -80,6 +80,19 @@ const SCOPE_TO_MAP_TYPE: Partial<Record<MapScope, string>> = {
   region:        'Region',
 };
 
+// ── Tag → terrain display option (reverse of TERRAIN_TAG_MAP in generationMapper) ─
+
+const TAG_TO_TERRAIN: Partial<Record<string, string>> = {
+  mountainous:  'Mountains',
+  forested:     'Forest',
+  plains:       'Plains',
+  desert:       'Desert',
+  swamp:        'Swamp',
+  coastal:      'Coastal',
+  tundra:       'Tundra',
+  subterranean: 'Underground',
+};
+
 // ── getChildGenerationParams ───────────────────────────────────────────────────
 // Suggests GeneratedParams for a child map based on parent context + connection.
 // Returns Partial — caller merges with existing presetType (which takes priority
@@ -99,30 +112,38 @@ export function getChildGenerationParams(
   const mapType = SCOPE_TO_MAP_TYPE[connection.to_scope];
   if (mapType) result.mapType = mapType;
 
-  // terrain from parent context (capitalise to match TERRAIN_OPTIONS)
+  // terrain: prefer context.terrain, fall back to tags.terrain[0]
   const rawTerrain = parentLocation.context.terrain;
   if (rawTerrain && rawTerrain !== 'unknown') {
     const cap = rawTerrain.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     result.terrain = [cap];
+  } else {
+    const firstTag = parentLocation.tags.terrain?.[0];
+    const fromTag  = firstTag ? TAG_TO_TERRAIN[firstTag] : undefined;
+    if (fromTag) result.terrain = [fromTag];
   }
 
-  // atmosphere derived from parent environment/special tags
+  // atmosphere derived from merged environment/special tags
   const env     = parentLocation.tags.environment ?? [];
   const special = parentLocation.tags.special     ?? [];
 
-  if (env.includes('necrotic') || special.includes('undead_presence')) {
-    result.atmosphere = 'Abandoned';
-  } else if (env.includes('consecrated')) {
+  if (special.includes('undead_presence') || env.includes('necrotic')) {
+    result.atmosphere = 'Dangerous';
+  } else if (env.includes('consecrated') || special.includes('divine_presence')) {
     result.atmosphere = 'Sacred';
   } else if (env.includes('unstable_magic') || special.includes('ley_line') || special.includes('planar_rift')) {
     result.atmosphere = 'Enchanted';
+  } else if (special.includes('artifact_site') || special.includes('legendary_site')) {
+    result.atmosphere = 'Mysterious';
   }
 
-  // inhabitants from parent special tags
+  // inhabitants derived from special tags
   if (special.includes('undead_presence')) {
     result.inhabitants = 'Undead';
   } else if (special.includes('dragon_lair')) {
     result.inhabitants = 'Dragon Lair';
+  } else if (special.includes('divine_presence')) {
+    result.inhabitants = 'Humanoids';
   }
 
   return result;

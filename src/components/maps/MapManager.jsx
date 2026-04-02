@@ -12,7 +12,7 @@ import { api }            from '../../api/client.js';
 import { callClaude, hasAnthropicKey } from '../../api/aiClient.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import { MapGenerator }   from './MapGenerator.jsx';
-import { getChildGenerationParams } from '../../rules-engine/connectionEngine.ts';
+import { getChildGenerationParams, defaultConnectionForPOI } from '../../rules-engine/connectionEngine.ts';
 import './MapManager.css';
 
 // ── POI type catalogue ────────────────────────────────────────────────────────
@@ -531,22 +531,55 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       ?? POI_TYPE_TO_MAP_TYPE[poi.type]
       ?? null;
 
-    // Pre-fill generation params from parent map context + POI connection
-    let presetParams = null;
     const parentMap = maps.find(m => m.id === activeMapId);
-    const connection = poi.connections?.[0];
-    if (connection && parentMap?.data?.scope) {
-      presetParams = getChildGenerationParams(
-        {
-          scope:   parentMap.data.scope,
-          tags:    parentMap.data.tags   ?? {},
-          context: parentMap.data.context ?? { terrain: 'unknown' },
-        },
-        connection,
-      );
-      // presetType (from POI type) overrides connection-derived mapType
-      if (submapPreset) presetParams = { ...presetParams, mapType: submapPreset };
+
+    // Always derive a connection — use existing one or infer from POI type
+    const connection = poi.connections?.[0] ?? defaultConnectionForPOI(poi);
+
+    // Build parent location context — prefer world-engine data, fall back to generated_params
+    const parentScope = parentMap?.data?.scope ?? 'region';
+    const emptyTagSet = { terrain:[], origin:[], depth:[], environment:[], structure:[], hazards:[], special:[] };
+    let parentTags    = { ...emptyTagSet, ...(parentMap?.data?.tags ?? {}) };
+    let parentCtx     = { ...(parentMap?.data?.context ?? { terrain: 'unknown' }) };
+
+    // Fall back: synthesise terrain from generated_params when engine context absent
+    if (parentCtx.terrain === 'unknown' && parentMap?.data?.generated_params?.terrain?.length) {
+      parentCtx = { ...parentCtx, terrain: parentMap.data.generated_params.terrain[0].toLowerCase() };
     }
+
+    // Merge POI's influence provides_tags into parent tags (POI radiates into child context)
+    if (poi.influence?.provides_tags) {
+      for (const [cat, tags] of Object.entries(poi.influence.provides_tags)) {
+        if (!Array.isArray(tags)) continue;
+        const arr = parentTags[cat] ? [...parentTags[cat]] : [];
+        for (const t of tags) { if (!arr.includes(t)) arr.push(t); }
+        parentTags = { ...parentTags, [cat]: arr };
+      }
+    }
+
+    // Merge POI's own tags into parent tags (local tags affect child atmosphere)
+    if (poi.tags) {
+      for (const [cat, tags] of Object.entries(poi.tags)) {
+        if (!Array.isArray(tags)) continue;
+        const arr = parentTags[cat] ? [...parentTags[cat]] : [];
+        for (const t of tags) { if (!arr.includes(t)) arr.push(t); }
+        parentTags = { ...parentTags, [cat]: arr };
+      }
+    }
+
+    let presetParams = getChildGenerationParams(
+      { scope: parentScope, tags: parentTags, context: parentCtx },
+      connection,
+    );
+
+    // Inherit era from parent generated_params when not Random
+    const parentEra = parentMap?.data?.generated_params?.era;
+    if (!presetParams.era && parentEra && parentEra !== 'Random') {
+      presetParams = { ...presetParams, era: parentEra };
+    }
+
+    // presetType (from POI type) overrides connection-derived mapType
+    if (submapPreset) presetParams = { ...presetParams, mapType: submapPreset };
 
     setGenContext({
       parentMapId:  activeMapId,

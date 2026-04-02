@@ -462,6 +462,23 @@ export function MapGenerator({
           {/* Form */}
           {step === 'form' && (
             <div className="mgn-body">
+
+              {/* Context suggestion note — shown when presetParams has values */}
+              {isDrillDown && presetParams && (() => {
+                const hints = [];
+                if (presetParams.terrain?.length)  hints.push(`Terrain: ${presetParams.terrain.join(', ')}`);
+                if (presetParams.atmosphere && presetParams.atmosphere !== 'Random') hints.push(`Atmosphere: ${presetParams.atmosphere}`);
+                if (presetParams.inhabitants && presetParams.inhabitants !== 'Random') hints.push(`Inhabitants: ${presetParams.inhabitants}`);
+                if (presetParams.era && presetParams.era !== 'Random') hints.push(`Era: ${presetParams.era}`);
+                if (!hints.length) return null;
+                return (
+                  <div className="mgn-context-note">
+                    <span className="mgn-context-icon">🗺</span>
+                    <span>Suggested from parent context — {hints.join(' · ')}</span>
+                  </div>
+                );
+              })()}
+
               <div className="mgn-options-grid">
                 {/* Map Type */}
                 <div className="mgn-field">

@@ -348,6 +348,22 @@
   cursor: not-allowed;
 }
 
+/* ── Context suggestion note (child map pre-fill) ────────── */
+.mgn-context-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 11px;
+  border-radius: 6px;
+  background: rgba(60, 100, 60, 0.15);
+  border: 1px solid rgba(80, 140, 80, 0.35);
+  color: #90c870;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+.mgn-context-icon { flex-shrink: 0; }
+
 /* ── New: warning bar (no OpenAI key) ────────────────────── */
 .mgn-warn {
   display: flex;
