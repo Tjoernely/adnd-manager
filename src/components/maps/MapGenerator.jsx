@@ -234,17 +234,24 @@ async function generateAndSaveImage(map, prompt) {
   const imageUrl = data?.data?.[0]?.url;
   if (!imageUrl) throw new Error('DALL-E returned no image URL.');
 
-  console.log('[Map] DALL-E URL received:', imageUrl);
+  console.log('[Map] DALL-E URL received — persisting to server...');
 
-  // Persist URL to backend (image_url column + data.imageUrl for redundancy)
-  const updated = await api.updateMap(map.id, {
-    name:      map.name,
-    type:      map.type,
-    image_url: imageUrl,
-    data:      { ...map.data, imageUrl },
+  // Download and persist the image server-side so it never expires.
+  // POST /api/maps/:id/image/from-url downloads the DALL-E URL to disk
+  // and returns the map record with a permanent /uploads/maps/... URL.
+  const token = localStorage.getItem('dnd_token');
+  const persistResp = await fetch(`/api/maps/${map.id}/image/from-url`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body:    JSON.stringify({ url: imageUrl }),
   });
+  if (!persistResp.ok) {
+    const err = await persistResp.json().catch(() => ({}));
+    throw new Error(err.error ?? `Failed to persist image (${persistResp.status})`);
+  }
+  const updated = await persistResp.json();
 
-  console.log('[Map] Map record updated with image URL — id:', updated?.id);
+  console.log('[Map] Image persisted permanently — id:', updated?.id);
   return updated;
 }
 

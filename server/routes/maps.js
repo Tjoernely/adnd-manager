@@ -179,6 +179,49 @@ router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
+// ── Persist DALL-E (or any temporary) image URL to disk (DM only) ────────────
+// POST /api/maps/:id/image/from-url  { url: "<temporary-url>" }
+// Downloads the image server-side, saves to UPLOAD_DIR, updates image_url.
+router.post('/:id/image/from-url', auth, async (req, res) => {
+  try {
+    const map = await db.one('SELECT * FROM maps WHERE id=$1', [req.params.id]);
+    if (!map) return res.status(404).json({ error: 'Not found' });
+    if (!(await isDM(map.campaign_id, req.user.id)))
+      return res.status(403).json({ error: 'DM only' });
+
+    const { url } = req.body ?? {};
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
+
+    // Download the image
+    const response = await fetch(url);
+    if (!response.ok) return res.status(502).json({ error: `Failed to fetch image: ${response.status}` });
+
+    const contentType = response.headers.get('content-type') ?? 'image/jpeg';
+    const extMap = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+    const ext = extMap[contentType.split(';')[0].trim()] ?? '.jpg';
+    const filename = `map-${crypto.randomUUID()}${ext}`;
+    const destPath = path.join(UPLOAD_DIR, filename);
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(destPath, buffer);
+
+    // Delete old local image if present
+    if (map.image_url?.startsWith('/uploads/maps/')) {
+      const oldPath = path.join(__dirname, '../public', map.image_url);
+      fs.unlink(oldPath, () => {});
+    }
+
+    const image_url = `/uploads/maps/${filename}`;
+    const updated = await db.one(
+      `UPDATE maps SET image_url=$1, updated_at=NOW() WHERE id=$2
+       RETURNING id, campaign_id, name, type, image_url, data,
+                 parent_map_id, parent_poi_id, created_at, updated_at`,
+      [image_url, req.params.id],
+    );
+    res.json(updated);
+  } catch (e) { next500(e, res); }
+});
+
 // ── Update map (DM only) ──────────────────────────────────────────────────────
 router.put('/:id', auth, async (req, res) => {
   try {
