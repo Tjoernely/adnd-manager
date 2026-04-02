@@ -35,7 +35,12 @@ export function buildMapSpec(
   worldData: WorldDataResult,
   meta:      { title: string; dalle_prompt_additions?: string },
 ): MapSpec {
-  return {
+  // DEBUG — remove after verification
+  console.log('[specBuilder] buildMapSpec input — worldData.state:', worldData.state,
+    '| worldData.scope:', worldData.scope,
+    '| SCOPE_POI_CANDIDATES lookup:', JSON.stringify(SCOPE_POI_CANDIDATES[worldData.scope]));
+
+  const spec: MapSpec = {
     mapType:        params.mapType,
     scope:          worldData.scope,
     size:           params.size,
@@ -58,6 +63,15 @@ export function buildMapSpec(
     ...(meta.dalle_prompt_additions ? { dalle_prompt_additions: meta.dalle_prompt_additions } : {}),
     ...(params.user_description     ? { user_description:       params.user_description     } : {}),
   };
+
+  // DEBUG — remove after verification
+  console.log('[specBuilder] buildMapSpec result — state:', spec.state,
+    '| poi_candidates:', JSON.stringify(spec.poi_candidates),
+    '| constraints:', JSON.stringify(spec.constraints),
+    '| scope:', spec.scope);
+  console.log('[specBuilder] buildMapSpec full spec keys:', Object.keys(spec).join(', '));
+
+  return spec;
 }
 
 // ── withImageContract ─────────────────────────────────────────────────────────

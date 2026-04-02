@@ -350,7 +350,23 @@ router.post('/', auth, async (req, res) => {
       return res.status(403).json({ error: 'DM only' });
 
     const baseData   = { visible_to_players: false, pins: [], pois: [], ...data };
+    // DEBUG — remove after verification
+    if (baseData.spec) {
+      console.log('[maps POST] spec received — keys:', Object.keys(baseData.spec).join(', '));
+      console.log('[maps POST] spec.state:', baseData.spec.state,
+        '| spec.poi_candidates:', JSON.stringify(baseData.spec.poi_candidates),
+        '| spec.constraints:', JSON.stringify(baseData.spec.constraints));
+    } else {
+      console.log('[maps POST] WARNING: no spec in data');
+    }
     const safeData   = enrichMapData(baseData, type);
+    // DEBUG — verify spec survives enrichMapData
+    if (safeData.spec) {
+      console.log('[maps POST] spec after enrichMapData — state:', safeData.spec.state,
+        '| poi_candidates:', JSON.stringify(safeData.spec.poi_candidates));
+    } else {
+      console.log('[maps POST] WARNING: spec lost after enrichMapData');
+    }
     const map = await db.one(
       `INSERT INTO maps (campaign_id, name, type, image_url, data, parent_map_id, parent_poi_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
@@ -403,10 +419,20 @@ router.post('/:id/image/from-url', auth, async (req, res) => {
 
     console.log(`[maps from-url] id=${req.params.id} type=${map.type} url=${url.substring(0, 80)}...`);
 
+    // DEBUG — check fetch availability
+    console.log(`[maps from-url] id=${req.params.id} fetch available: ${typeof fetch}`);
+
     // Download the image
-    const response = await fetch(url);
+    let response;
+    try {
+      response = await fetch(url);
+    } catch (fetchErr) {
+      console.error(`[maps from-url] id=${req.params.id} fetch() threw: ${fetchErr.message}`);
+      return res.status(502).json({ error: `fetch failed: ${fetchErr.message}` });
+    }
     if (!response.ok) {
-      console.error(`[maps from-url] id=${req.params.id} fetch failed: HTTP ${response.status}`);
+      const body = await response.text().catch(() => '');
+      console.error(`[maps from-url] id=${req.params.id} fetch failed: HTTP ${response.status} body=${body.substring(0, 200)}`);
       return res.status(502).json({ error: `Failed to fetch image: ${response.status}` });
     }
 

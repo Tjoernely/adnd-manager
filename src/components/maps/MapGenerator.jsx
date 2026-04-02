@@ -352,6 +352,15 @@ export function MapGenerator({
       spec = withImageContract(spec, dallePrompt);
       console.log('[MapGenerator] DALL-E prompt (%d chars): %s', dallePrompt.length, dallePrompt);
 
+      // DEBUG — remove after verification
+      console.log('[MapGenerator] spec before POST — keys:', Object.keys(spec).join(', '));
+      console.log('[MapGenerator] spec before POST — state:', spec.state,
+        '| poi_candidates:', JSON.stringify(spec.poi_candidates),
+        '| constraints:', JSON.stringify(spec.constraints),
+        '| image_prompt_contract length:', spec.image_prompt_contract?.length);
+      console.log('[MapGenerator] spec.state raw value:', JSON.stringify(spec.state));
+      console.log('[MapGenerator] Full spec JSON:', JSON.stringify(spec));
+
       // ── Create map record (server) ─────────────────────────────────────────
       console.log('[MapGenerator] Creating map record on server...');
       let map = await api.createMap({
