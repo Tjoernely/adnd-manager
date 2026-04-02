@@ -95,11 +95,31 @@ async function main() {
     console.log(`UPDATE [${ids.length}x] "${rawName}" → ${result.resolved_display_name} (${canonicalId}) via ${result.match_method}`);
 
     if (APPLY) {
-      const { rowCount } = await db.query(
-        'UPDATE kit_proficiency_links SET prof_id = $1 WHERE id = ANY($2)',
-        [profRow.id, ids]
-      );
-      updated += rowCount;
+      // For each row individually: update if no duplicate already exists in
+      // the same kit+prof_id+relation_type; otherwise delete it (it's a dup).
+      for (const id of ids) {
+        const { rowCount: upd } = await db.query(`
+          UPDATE kit_proficiency_links kpl
+          SET prof_id = $1
+          WHERE kpl.id = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM kit_proficiency_links x
+              WHERE x.kit_id       = kpl.kit_id
+                AND x.relation_type = kpl.relation_type
+                AND x.prof_id      = $1
+                AND x.id           != $2
+            )
+        `, [profRow.id, id]);
+
+        if (upd === 0) {
+          // A row with this (kit_id, prof_id, relation_type) already exists — delete duplicate
+          await db.query('DELETE FROM kit_proficiency_links WHERE id = $1', [id]);
+          console.log(`  DELETE dup id=${id} (already linked)`);
+          updated++;
+        } else {
+          updated++;
+        }
+      }
     }
   }
 
