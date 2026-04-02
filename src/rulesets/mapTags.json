@@ -1,49 +1,89 @@
 [
-  // ── terrain ───────────────────────────────────────────────────────────────
   {
     "tag": "mountainous",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
-    "forbidden": ["submerged", "swamp"],
+    "forbidden": [
+      "submerged",
+      "swamp"
+    ],
     "adds_tags": []
   },
   {
     "tag": "forested",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
-    "forbidden": ["submerged", "tundra"],
+    "forbidden": [
+      "submerged",
+      "tundra"
+    ],
     "adds_tags": []
   },
   {
     "tag": "plains",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
-    "forbidden": ["submerged"],
+    "forbidden": [
+      "submerged"
+    ],
     "adds_tags": []
   },
   {
     "tag": "desert",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
-    "forbidden": ["swamp", "submerged"],
+    "forbidden": [
+      "swamp",
+      "submerged"
+    ],
     "adds_tags": []
   },
   {
     "tag": "swamp",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
-    "forbidden": ["desert", "tundra", "mountainous"],
-    "adds_tags": ["flooded"]
+    "forbidden": [
+      "desert",
+      "tundra",
+      "mountainous"
+    ],
+    "adds_tags": [
+      "flooded"
+    ]
   },
   {
     "tag": "coastal",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -51,57 +91,112 @@
   {
     "tag": "tundra",
     "category": "terrain",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
-    "forbidden": ["desert", "swamp", "forested"],
-    "adds_tags": ["frozen"]
+    "forbidden": [
+      "desert",
+      "swamp",
+      "forested"
+    ],
+    "adds_tags": [
+      "frozen"
+    ]
   },
   {
     "tag": "subterranean",
     "category": "terrain",
-    "valid_scopes": ["local", "dungeon_level", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["dark"]
+    "adds_tags": [
+      "dark"
+    ]
   },
   {
     "tag": "submerged",
     "category": "terrain",
-    "valid_scopes": ["local", "dungeon_level"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level"
+    ],
     "requires": [],
-    "forbidden": ["mountainous", "desert"],
-    "adds_tags": ["flooded", "dark"]
+    "forbidden": [
+      "mountainous",
+      "desert"
+    ],
+    "adds_tags": [
+      "flooded",
+      "dark"
+    ]
   },
-
-  // ── origin ────────────────────────────────────────────────────────────────
   {
     "tag": "natural_formation",
     "category": "origin",
-    "valid_scopes": ["world", "region", "local", "dungeon_level"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local",
+      "dungeon_level"
+    ],
     "requires": [],
-    "forbidden": ["constructed"],
+    "forbidden": [
+      "constructed"
+    ],
     "adds_tags": []
   },
   {
     "tag": "constructed",
     "category": "origin",
-    "valid_scopes": ["settlement", "district", "building", "interior", "dungeon_level"],
+    "valid_scopes": [
+      "settlement",
+      "district",
+      "building",
+      "interior",
+      "dungeon_level"
+    ],
     "requires": [],
-    "forbidden": ["natural_formation"],
+    "forbidden": [
+      "natural_formation"
+    ],
     "adds_tags": []
   },
   {
     "tag": "ancient",
     "category": "origin",
-    "valid_scopes": ["world", "region", "local", "settlement", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local",
+      "settlement",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["ruined"]
+    "adds_tags": [
+      "ruined"
+    ]
   },
   {
     "tag": "elven",
     "category": "origin",
-    "valid_scopes": ["region", "local", "settlement", "building", "interior", "dungeon_level"],
+    "valid_scopes": [
+      "region",
+      "local",
+      "settlement",
+      "building",
+      "interior",
+      "dungeon_level"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -109,75 +204,138 @@
   {
     "tag": "dwarven",
     "category": "origin",
-    "valid_scopes": ["local", "settlement", "building", "interior", "dungeon_level"],
+    "valid_scopes": [
+      "local",
+      "settlement",
+      "building",
+      "interior",
+      "dungeon_level"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["subterranean"]
+    "adds_tags": [
+      "subterranean"
+    ]
   },
   {
     "tag": "undead_built",
     "category": "origin",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["necrotic"]
+    "adds_tags": [
+      "necrotic"
+    ]
   },
   {
     "tag": "arcane_nexus",
     "category": "origin",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["unstable_magic"]
+    "adds_tags": [
+      "unstable_magic"
+    ]
   },
-
-  // ── depth ─────────────────────────────────────────────────────────────────
   {
     "tag": "surface",
     "category": "depth",
-    "valid_scopes": ["world", "region", "local", "settlement", "district", "building"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local",
+      "settlement",
+      "district",
+      "building"
+    ],
     "requires": [],
-    "forbidden": ["deep_underground", "shallow_underground"],
+    "forbidden": [
+      "deep_underground",
+      "shallow_underground"
+    ],
     "adds_tags": []
   },
   {
     "tag": "shallow_underground",
     "category": "depth",
-    "valid_scopes": ["local", "dungeon_level", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["surface", "deep_underground"],
+    "forbidden": [
+      "surface",
+      "deep_underground"
+    ],
     "adds_tags": []
   },
   {
     "tag": "deep_underground",
     "category": "depth",
-    "valid_scopes": ["dungeon_level"],
+    "valid_scopes": [
+      "dungeon_level"
+    ],
     "requires": [],
-    "forbidden": ["surface", "shallow_underground"],
-    "adds_tags": ["dark"]
+    "forbidden": [
+      "surface",
+      "shallow_underground"
+    ],
+    "adds_tags": [
+      "dark"
+    ]
   },
   {
     "tag": "underdark",
     "category": "depth",
-    "valid_scopes": ["dungeon_level"],
-    "requires": ["deep_underground"],
-    "forbidden": ["surface"],
-    "adds_tags": ["dark", "alien_ecology"]
+    "valid_scopes": [
+      "dungeon_level"
+    ],
+    "requires": [
+      "deep_underground"
+    ],
+    "forbidden": [
+      "surface"
+    ],
+    "adds_tags": [
+      "dark",
+      "alien_ecology"
+    ]
   },
   {
     "tag": "aerial",
     "category": "depth",
-    "valid_scopes": ["local", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["submerged", "deep_underground"],
+    "forbidden": [
+      "submerged",
+      "deep_underground"
+    ],
     "adds_tags": []
   },
-
-  // ── environment ───────────────────────────────────────────────────────────
   {
     "tag": "dark",
     "category": "environment",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -185,7 +343,11 @@
   {
     "tag": "flooded",
     "category": "environment",
-    "valid_scopes": ["local", "dungeon_level", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -193,47 +355,93 @@
   {
     "tag": "frozen",
     "category": "environment",
-    "valid_scopes": ["world", "region", "local", "dungeon_level", "interior"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local",
+      "dungeon_level",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["volcanic", "scorched"],
+    "forbidden": [
+      "volcanic",
+      "scorched"
+    ],
     "adds_tags": []
   },
   {
     "tag": "volcanic",
     "category": "environment",
-    "valid_scopes": ["world", "region", "local", "dungeon_level"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local",
+      "dungeon_level"
+    ],
     "requires": [],
-    "forbidden": ["frozen"],
-    "adds_tags": ["scorched"]
+    "forbidden": [
+      "frozen"
+    ],
+    "adds_tags": [
+      "scorched"
+    ]
   },
   {
     "tag": "necrotic",
     "category": "environment",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["consecrated"],
+    "forbidden": [
+      "consecrated"
+    ],
     "adds_tags": []
   },
   {
     "tag": "consecrated",
     "category": "environment",
-    "valid_scopes": ["local", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["necrotic", "defiled"],
+    "forbidden": [
+      "necrotic",
+      "defiled"
+    ],
     "adds_tags": []
   },
   {
     "tag": "defiled",
     "category": "environment",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["consecrated"],
-    "adds_tags": ["necrotic"]
+    "forbidden": [
+      "consecrated"
+    ],
+    "adds_tags": [
+      "necrotic"
+    ]
   },
   {
     "tag": "unstable_magic",
     "category": "environment",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -241,33 +449,55 @@
   {
     "tag": "alien_ecology",
     "category": "environment",
-    "valid_scopes": ["dungeon_level"],
+    "valid_scopes": [
+      "dungeon_level"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
   },
-
-  // ── structure ─────────────────────────────────────────────────────────────
   {
     "tag": "fortified",
     "category": "structure",
-    "valid_scopes": ["settlement", "district", "building"],
-    "requires": ["constructed"],
-    "forbidden": ["ruined"],
+    "valid_scopes": [
+      "settlement",
+      "district",
+      "building"
+    ],
+    "requires": [
+      "constructed"
+    ],
+    "forbidden": [
+      "ruined"
+    ],
     "adds_tags": []
   },
   {
     "tag": "ruined",
     "category": "structure",
-    "valid_scopes": ["local", "settlement", "district", "building", "interior", "dungeon_level"],
+    "valid_scopes": [
+      "local",
+      "settlement",
+      "district",
+      "building",
+      "interior",
+      "dungeon_level"
+    ],
     "requires": [],
-    "forbidden": ["fortified"],
+    "forbidden": [
+      "fortified"
+    ],
     "adds_tags": []
   },
   {
     "tag": "sacred",
     "category": "structure",
-    "valid_scopes": ["local", "settlement", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "settlement",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -275,7 +505,11 @@
   {
     "tag": "labyrinthine",
     "category": "structure",
-    "valid_scopes": ["dungeon_level", "interior", "building"],
+    "valid_scopes": [
+      "dungeon_level",
+      "interior",
+      "building"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -283,7 +517,11 @@
   {
     "tag": "multi_level",
     "category": "structure",
-    "valid_scopes": ["dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -291,25 +529,39 @@
   {
     "tag": "open_air",
     "category": "structure",
-    "valid_scopes": ["local", "settlement", "district"],
+    "valid_scopes": [
+      "local",
+      "settlement",
+      "district"
+    ],
     "requires": [],
-    "forbidden": ["subterranean"],
+    "forbidden": [
+      "subterranean"
+    ],
     "adds_tags": []
   },
   {
     "tag": "walled",
     "category": "structure",
-    "valid_scopes": ["settlement", "district", "building"],
-    "requires": ["constructed"],
+    "valid_scopes": [
+      "settlement",
+      "district",
+      "building"
+    ],
+    "requires": [
+      "constructed"
+    ],
     "forbidden": [],
     "adds_tags": []
   },
-
-  // ── hazards ───────────────────────────────────────────────────────────────
   {
     "tag": "trapped",
     "category": "hazards",
-    "valid_scopes": ["dungeon_level", "interior", "building"],
+    "valid_scopes": [
+      "dungeon_level",
+      "interior",
+      "building"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -317,7 +569,11 @@
   {
     "tag": "poisonous_atmosphere",
     "category": "hazards",
-    "valid_scopes": ["dungeon_level", "local", "interior"],
+    "valid_scopes": [
+      "dungeon_level",
+      "local",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -325,23 +581,45 @@
   {
     "tag": "unstable_structure",
     "category": "hazards",
-    "valid_scopes": ["dungeon_level", "building", "interior"],
-    "requires": ["ruined"],
-    "forbidden": ["fortified"],
+    "valid_scopes": [
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
+    "requires": [
+      "ruined"
+    ],
+    "forbidden": [
+      "fortified"
+    ],
     "adds_tags": []
   },
   {
     "tag": "cursed",
     "category": "hazards",
-    "valid_scopes": ["dungeon_level", "local", "building", "interior"],
+    "valid_scopes": [
+      "dungeon_level",
+      "local",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["consecrated"],
-    "adds_tags": ["necrotic"]
+    "forbidden": [
+      "consecrated"
+    ],
+    "adds_tags": [
+      "necrotic"
+    ]
   },
   {
     "tag": "monster_infestation",
     "category": "hazards",
-    "valid_scopes": ["dungeon_level", "local", "building", "interior"],
+    "valid_scopes": [
+      "dungeon_level",
+      "local",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -349,33 +627,54 @@
   {
     "tag": "scorched",
     "category": "hazards",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["frozen"],
+    "forbidden": [
+      "frozen"
+    ],
     "adds_tags": []
   },
   {
     "tag": "magical_wards",
     "category": "hazards",
-    "valid_scopes": ["dungeon_level", "building", "interior", "local"],
+    "valid_scopes": [
+      "dungeon_level",
+      "building",
+      "interior",
+      "local"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
   },
-
-  // ── special ───────────────────────────────────────────────────────────────
   {
     "tag": "planar_rift",
     "category": "special",
-    "valid_scopes": ["local", "dungeon_level", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["unstable_magic"]
+    "adds_tags": [
+      "unstable_magic"
+    ]
   },
   {
     "tag": "legendary_site",
     "category": "special",
-    "valid_scopes": ["world", "region", "local", "dungeon_level"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local",
+      "dungeon_level"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -383,7 +682,12 @@
   {
     "tag": "hidden",
     "category": "special",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
     "adds_tags": []
@@ -391,33 +695,61 @@
   {
     "tag": "ley_line",
     "category": "special",
-    "valid_scopes": ["world", "region", "local"],
+    "valid_scopes": [
+      "world",
+      "region",
+      "local"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["unstable_magic"]
+    "adds_tags": [
+      "unstable_magic"
+    ]
   },
   {
     "tag": "lost_knowledge",
     "category": "special",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
-    "requires": ["ancient"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
+    "requires": [
+      "ancient"
+    ],
     "forbidden": [],
     "adds_tags": []
   },
   {
     "tag": "divine_presence",
     "category": "special",
-    "valid_scopes": ["local", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "building",
+      "interior"
+    ],
     "requires": [],
-    "forbidden": ["defiled"],
-    "adds_tags": ["consecrated"]
+    "forbidden": [
+      "defiled"
+    ],
+    "adds_tags": [
+      "consecrated"
+    ]
   },
   {
     "tag": "artifact_site",
     "category": "special",
-    "valid_scopes": ["local", "dungeon_level", "building", "interior"],
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
     "requires": [],
     "forbidden": [],
-    "adds_tags": ["legendary_site"]
+    "adds_tags": [
+      "legendary_site"
+    ]
   }
 ]

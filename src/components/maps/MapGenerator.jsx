@@ -15,6 +15,9 @@ import { useState, useEffect } from 'react';
 import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
+import { buildMapWorldData } from '../../rules-engine/generationMapper.ts';
+import tagRules   from '../../rulesets/mapTags.json';
+import scopeRules from '../../rulesets/mapScopes.json';
 
 // ── Option lists ──────────────────────────────────────────────────────────────
 const MAP_TYPES = [
@@ -338,6 +341,11 @@ export function MapGenerator({
       }));
       setStep2Done(true);
 
+      // ── Build world-engine data (scope, tags, context) ────────────────────
+      const parentTags = parentPoiCtx?.tags ?? null;
+      const worldData  = buildMapWorldData(resolved, tagRules, scopeRules, parentTags ?? undefined);
+      console.log('[MapGenerator] World data:', worldData);
+
       // ── Create map record (server) ─────────────────────────────────────────
       console.log('[MapGenerator] Creating map record on server...');
       let map = await api.createMap({
@@ -358,6 +366,12 @@ export function MapGenerator({
           generated_params:       resolved,
           visible_to_players:     false,
           pins:                   [],
+          // World engine fields
+          scope:             worldData.scope,
+          context:           worldData.context,
+          tags:              worldData.tags,
+          state:             worldData.state,
+          ...(worldData.validation_errors ? { validation_errors: worldData.validation_errors } : {}),
         },
       });
       console.log('[MapGenerator] Map record created — id:', map?.id);

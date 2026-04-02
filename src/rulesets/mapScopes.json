@@ -1,66 +1,261 @@
 [
   {
     "scope": "world",
-    "allowed_child_scopes": ["region"],
-    "allowed_tag_categories": ["terrain", "origin", "environment", "special"],
-    "forbidden_tag_categories": ["depth", "hazards", "structure"],
-    "allowed_poi_types": ["city", "village", "ruins", "landmark", "mystery"],
-    "forbidden_poi_types": ["trap", "treasure", "encounter"]
+    "allowed_child_scopes": [
+      "region"
+    ],
+    "allowed_tag_categories": [
+      "terrain",
+      "origin",
+      "environment",
+      "special"
+    ],
+    "forbidden_tag_categories": [
+      "depth",
+      "hazards",
+      "structure"
+    ],
+    "allowed_poi_types": [
+      "city",
+      "village",
+      "ruins",
+      "landmark",
+      "mystery"
+    ],
+    "forbidden_poi_types": [
+      "trap",
+      "treasure",
+      "encounter"
+    ]
   },
   {
     "scope": "region",
-    "allowed_child_scopes": ["local", "settlement"],
-    "allowed_tag_categories": ["terrain", "origin", "environment", "structure", "special"],
-    "forbidden_tag_categories": ["depth", "hazards"],
-    "allowed_poi_types": ["city", "village", "ruins", "landmark", "mystery", "dungeon", "cave", "temple", "bandit_camp"],
-    "forbidden_poi_types": ["trap", "treasure"]
+    "allowed_child_scopes": [
+      "local",
+      "settlement"
+    ],
+    "allowed_tag_categories": [
+      "terrain",
+      "origin",
+      "environment",
+      "structure",
+      "special"
+    ],
+    "forbidden_tag_categories": [
+      "depth",
+      "hazards"
+    ],
+    "allowed_poi_types": [
+      "city",
+      "village",
+      "ruins",
+      "landmark",
+      "mystery",
+      "dungeon",
+      "cave",
+      "temple",
+      "bandit_camp"
+    ],
+    "forbidden_poi_types": [
+      "trap",
+      "treasure"
+    ]
   },
   {
     "scope": "local",
-    "allowed_child_scopes": ["settlement", "building", "dungeon_level"],
-    "allowed_tag_categories": ["terrain", "origin", "depth", "environment", "structure", "hazards", "special"],
+    "allowed_child_scopes": [
+      "settlement",
+      "building",
+      "dungeon_level"
+    ],
+    "allowed_tag_categories": [
+      "terrain",
+      "origin",
+      "depth",
+      "environment",
+      "structure",
+      "hazards",
+      "special"
+    ],
     "forbidden_tag_categories": [],
-    "allowed_poi_types": ["city", "village", "ruins", "landmark", "mystery", "dungeon", "cave", "encounter", "temple", "bandit_camp", "monster_lair", "npc", "quest"],
-    "forbidden_poi_types": ["trap"]
+    "allowed_poi_types": [
+      "city",
+      "village",
+      "ruins",
+      "landmark",
+      "mystery",
+      "dungeon",
+      "cave",
+      "encounter",
+      "temple",
+      "bandit_camp",
+      "monster_lair",
+      "npc",
+      "quest"
+    ],
+    "forbidden_poi_types": [
+      "trap"
+    ]
   },
   {
     "scope": "settlement",
-    "allowed_child_scopes": ["district", "building"],
-    "allowed_tag_categories": ["origin", "environment", "structure", "special"],
-    "forbidden_tag_categories": ["depth"],
-    "allowed_poi_types": ["npc", "quest", "landmark", "mystery", "temple", "bandit_camp", "encounter"],
-    "forbidden_poi_types": ["dungeon", "cave", "trap"]
+    "allowed_child_scopes": [
+      "district",
+      "building"
+    ],
+    "allowed_tag_categories": [
+      "origin",
+      "environment",
+      "structure",
+      "special"
+    ],
+    "forbidden_tag_categories": [
+      "depth"
+    ],
+    "allowed_poi_types": [
+      "npc",
+      "quest",
+      "landmark",
+      "mystery",
+      "temple",
+      "bandit_camp",
+      "encounter"
+    ],
+    "forbidden_poi_types": [
+      "dungeon",
+      "cave",
+      "trap"
+    ]
   },
   {
     "scope": "district",
-    "allowed_child_scopes": ["building"],
-    "allowed_tag_categories": ["origin", "environment", "structure", "special"],
-    "forbidden_tag_categories": ["terrain", "depth"],
-    "allowed_poi_types": ["npc", "quest", "landmark", "mystery", "temple", "encounter"],
-    "forbidden_poi_types": ["dungeon", "cave", "trap", "monster_lair"]
+    "allowed_child_scopes": [
+      "building"
+    ],
+    "allowed_tag_categories": [
+      "origin",
+      "environment",
+      "structure",
+      "special"
+    ],
+    "forbidden_tag_categories": [
+      "terrain",
+      "depth"
+    ],
+    "allowed_poi_types": [
+      "npc",
+      "quest",
+      "landmark",
+      "mystery",
+      "temple",
+      "encounter"
+    ],
+    "forbidden_poi_types": [
+      "dungeon",
+      "cave",
+      "trap",
+      "monster_lair"
+    ]
   },
   {
     "scope": "building",
-    "allowed_child_scopes": ["interior"],
-    "allowed_tag_categories": ["origin", "depth", "environment", "structure", "hazards", "special"],
-    "forbidden_tag_categories": ["terrain"],
-    "allowed_poi_types": ["npc", "quest", "mystery", "trap", "treasure", "encounter"],
-    "forbidden_poi_types": ["dungeon", "cave", "city", "village", "bandit_camp"]
+    "allowed_child_scopes": [
+      "interior"
+    ],
+    "allowed_tag_categories": [
+      "origin",
+      "depth",
+      "environment",
+      "structure",
+      "hazards",
+      "special"
+    ],
+    "forbidden_tag_categories": [
+      "terrain"
+    ],
+    "allowed_poi_types": [
+      "npc",
+      "quest",
+      "mystery",
+      "trap",
+      "treasure",
+      "encounter"
+    ],
+    "forbidden_poi_types": [
+      "dungeon",
+      "cave",
+      "city",
+      "village",
+      "bandit_camp"
+    ]
   },
   {
     "scope": "interior",
-    "allowed_child_scopes": ["dungeon_level"],
-    "allowed_tag_categories": ["origin", "depth", "environment", "structure", "hazards", "special"],
-    "forbidden_tag_categories": ["terrain"],
-    "allowed_poi_types": ["npc", "quest", "mystery", "trap", "treasure", "encounter"],
-    "forbidden_poi_types": ["dungeon", "cave", "city", "village", "bandit_camp", "landmark"]
+    "allowed_child_scopes": [
+      "dungeon_level"
+    ],
+    "allowed_tag_categories": [
+      "origin",
+      "depth",
+      "environment",
+      "structure",
+      "hazards",
+      "special"
+    ],
+    "forbidden_tag_categories": [
+      "terrain"
+    ],
+    "allowed_poi_types": [
+      "npc",
+      "quest",
+      "mystery",
+      "trap",
+      "treasure",
+      "encounter"
+    ],
+    "forbidden_poi_types": [
+      "dungeon",
+      "cave",
+      "city",
+      "village",
+      "bandit_camp",
+      "landmark"
+    ]
   },
   {
     "scope": "dungeon_level",
-    "allowed_child_scopes": ["dungeon_level", "interior"],
-    "allowed_tag_categories": ["terrain", "origin", "depth", "environment", "structure", "hazards", "special"],
+    "allowed_child_scopes": [
+      "dungeon_level",
+      "interior"
+    ],
+    "allowed_tag_categories": [
+      "terrain",
+      "origin",
+      "depth",
+      "environment",
+      "structure",
+      "hazards",
+      "special"
+    ],
     "forbidden_tag_categories": [],
-    "allowed_poi_types": ["dungeon", "cave", "ruins", "encounter", "trap", "treasure", "mystery", "npc", "quest", "temple", "monster_lair"],
-    "forbidden_poi_types": ["city", "village", "bandit_camp", "landmark"]
+    "allowed_poi_types": [
+      "dungeon",
+      "cave",
+      "ruins",
+      "encounter",
+      "trap",
+      "treasure",
+      "mystery",
+      "npc",
+      "quest",
+      "temple",
+      "monster_lair"
+    ],
+    "forbidden_poi_types": [
+      "city",
+      "village",
+      "bandit_camp",
+      "landmark"
+    ]
   }
 ]
