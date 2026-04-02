@@ -1449,7 +1449,7 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
                   </button>
                 ) : hasSubmap ? (
                   <button className="mm-poi-action-btn mm-poi-action-btn--drill"
-                    onClick={() => onDrillDown(true)}>
+                    onClick={() => onDrillDown(false)}>
                     🗺 Generate {poi.suggested_submap_type ?? poi.drill_down_type ?? 'Sub'}-Map
                   </button>
                 ) : null}
