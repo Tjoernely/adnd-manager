@@ -147,6 +147,13 @@ export interface ScopeRule {
 // Passed to buildImagePrompt() for deterministic DALL-E prompt construction.
 // Optionally enriched by enrichSpecWithAI() when user_description is present.
 
+export interface MapSpecConstraints {
+  max_poi_count:    number;
+  prompt_max_chars: number;
+  style:            string;  // 'parchment_map'
+  view:             string;  // 'top_down'
+}
+
 export interface MapSpec {
   // Core generation params
   mapType:     string;
@@ -158,9 +165,16 @@ export interface MapSpec {
   inhabitants: string;
 
   // World-engine data
+  state:       LocationState;
   tags:        LocationTags;
   context:     LocationContext;
   settlement?: SettlementData;
+
+  // POI types valid for this scope — used by AI enrichment + MapManager
+  poi_candidates: string[];
+
+  // Generation constraints
+  constraints: MapSpecConstraints;
 
   // Claude metadata
   title:                   string;
@@ -172,6 +186,9 @@ export interface MapSpec {
   // AI enrichment (populated by applyEnrichment after enrichSpecWithAI call)
   visual_keywords?:  string[];
   landmark_details?: string[];
+
+  // The exact prompt sent to DALL-E (set by withImageContract before map creation)
+  image_prompt_contract?: string;
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────

@@ -8,8 +8,23 @@
  * Pure functions — no React, no side effects.
  */
 
-import type { MapSpec } from './mapTypes';
+import type { MapSpec, MapScope } from './mapTypes';
 import type { GeneratedParams, WorldDataResult } from './generationMapper';
+
+// ── POI candidates per scope ──────────────────────────────────────────────────
+// Which POI types are valid/expected for each scope.
+// Used in AI enrichment prompts and as a hint for MapManager.
+
+const SCOPE_POI_CANDIDATES: Partial<Record<MapScope, string[]>> = {
+  world:        ['region', 'city', 'village', 'ruins', 'cave', 'dungeon', 'landmark'],
+  region:       ['city', 'village', 'ruins', 'cave', 'dungeon', 'encounter', 'landmark', 'mystery'],
+  local:        ['ruins', 'cave', 'dungeon', 'encounter', 'landmark', 'treasure', 'mystery'],
+  settlement:   ['building', 'temple', 'npc', 'landmark', 'encounter', 'market'],
+  district:     ['building', 'npc', 'encounter', 'landmark', 'market'],
+  building:     ['room', 'npc', 'trap', 'treasure', 'encounter', 'mystery'],
+  interior:     ['npc', 'trap', 'treasure', 'encounter', 'mystery', 'secret'],
+  dungeon_level:['room', 'trap', 'treasure', 'encounter', 'boss', 'secret', 'mystery'],
+};
 
 // ── buildMapSpec ──────────────────────────────────────────────────────────────
 // Assembles a MapSpec from three sources: resolved params, world-engine output,
@@ -21,20 +36,37 @@ export function buildMapSpec(
   meta:      { title: string; dalle_prompt_additions?: string },
 ): MapSpec {
   return {
-    mapType:     params.mapType,
-    scope:       worldData.scope,
-    size:        params.size,
-    terrain:     params.terrain,
-    atmosphere:  params.atmosphere,
-    era:         params.era,
-    inhabitants: params.inhabitants,
-    tags:        worldData.tags,
-    context:     worldData.context,
-    ...(worldData.settlement         ? { settlement:              worldData.settlement }         : {}),
-    title:       meta.title,
-    ...(meta.dalle_prompt_additions  ? { dalle_prompt_additions:  meta.dalle_prompt_additions  } : {}),
-    ...(params.user_description      ? { user_description:        params.user_description      } : {}),
+    mapType:        params.mapType,
+    scope:          worldData.scope,
+    size:           params.size,
+    terrain:        params.terrain,
+    atmosphere:     params.atmosphere,
+    era:            params.era,
+    inhabitants:    params.inhabitants,
+    state:          worldData.state,
+    tags:           worldData.tags,
+    context:        worldData.context,
+    ...(worldData.settlement ? { settlement: worldData.settlement } : {}),
+    poi_candidates: SCOPE_POI_CANDIDATES[worldData.scope] ?? ['landmark', 'encounter', 'mystery'],
+    constraints: {
+      max_poi_count:    6,
+      prompt_max_chars: 900,
+      style:            'parchment_map',
+      view:             'top_down',
+    },
+    title:          meta.title,
+    ...(meta.dalle_prompt_additions ? { dalle_prompt_additions: meta.dalle_prompt_additions } : {}),
+    ...(params.user_description     ? { user_description:       params.user_description     } : {}),
   };
+}
+
+// ── withImageContract ─────────────────────────────────────────────────────────
+// Stamps the final DALL-E prompt string into the spec.
+// Call this after buildImagePrompt() and before creating the map record,
+// so data.spec.image_prompt_contract is always stored in the DB.
+
+export function withImageContract(spec: MapSpec, prompt: string): MapSpec {
+  return { ...spec, image_prompt_contract: prompt };
 }
 
 // ── buildEnrichmentPrompt ─────────────────────────────────────────────────────
@@ -100,7 +132,7 @@ const TYPE_IMAGE_DESCRIPTIONS: Record<string, string> = {
 // ── Settlement archetype visual vocabulary ────────────────────────────────────
 
 const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
-  mining_town:      'mine shaft entrance, ore processing buildings, workers\' quarters',
+  mining_town:      'mine shaft entrance, ore processing buildings, workers quarters',
   trade_town:       'busy market square, merchant warehouses, caravan staging area',
   religious_center: 'grand cathedral, cloisters, religious statuary and gardens',
   military_outpost: 'fortified walls, barracks, training yard, watchtowers',
@@ -111,9 +143,11 @@ const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
 
 // ── buildImagePrompt ──────────────────────────────────────────────────────────
 // Deterministic: same MapSpec → same prompt. Used as the DALL-E 3 input.
+// dalle_prompt_additions from Claude are truncated to 80 chars to prevent
+// policy-triggering content from inflating or altering the core prompt.
 
 export function buildImagePrompt(spec: MapSpec): string {
-  const baseDesc = TYPE_IMAGE_DESCRIPTIONS[spec.mapType] ?? 'fantasy map';
+  const baseDesc = TYPE_IMAGE_DESCRIPTIONS[spec.mapType] ?? 'top-down fantasy map';
 
   const parts: string[] = [
     `A ${baseDesc},`,
@@ -149,11 +183,14 @@ export function buildImagePrompt(spec: MapSpec): string {
     parts.push(spec.landmark_details.slice(0, 2).join(' '));
   }
 
+  // dalle_prompt_additions: truncate to 80 chars to avoid unvetted Claude output
+  // pushing the prompt over limits or triggering content policy.
   if (spec.dalle_prompt_additions) {
-    parts.push(spec.dalle_prompt_additions);
+    const safe = spec.dalle_prompt_additions.trim().substring(0, 80);
+    if (safe) parts.push(safe);
   }
 
-  parts.push('Classic D&D adventure module cartography style.');
+  parts.push('Classic fantasy adventure module cartography style.');
   parts.push('No text or labels. Bird\'s eye view.');
   parts.push('Highly detailed illustration.');
 

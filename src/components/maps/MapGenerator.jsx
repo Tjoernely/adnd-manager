@@ -16,7 +16,7 @@ import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
 import { buildMapWorldData } from '../../rules-engine/generationMapper.ts';
-import { buildMapSpec, buildEnrichmentPrompt, applyEnrichment, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
+import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
 import tagRules        from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
@@ -265,6 +265,7 @@ export function MapGenerator({
   const [step2Done,   setStep2Done]   = useState(false); // POI call
   const [step3Done,   setStep3Done]   = useState(false); // DALL-E image
   const [step3Skip,   setStep3Skip]   = useState(false); // no OpenAI key / failed
+  const [step3Error,  setStep3Error]  = useState('');    // DALL-E error message
   const [error,       setError]       = useState('');
   const [showSettings, setShowSettings] = useState(false);
 
@@ -285,6 +286,7 @@ export function MapGenerator({
     setStep2Done(false);
     setStep3Done(false);
     setStep3Skip(false);
+    setStep3Error('');
     setError('');
 
     try {
@@ -344,6 +346,12 @@ export function MapGenerator({
         }
       }
 
+      // Build DALL-E prompt now — before map creation — so image_prompt_contract
+      // is always stored in data.spec regardless of whether DALL-E succeeds.
+      const dallePrompt = buildImagePrompt(spec);
+      spec = withImageContract(spec, dallePrompt);
+      console.log('[MapGenerator] DALL-E prompt (%d chars): %s', dallePrompt.length, dallePrompt);
+
       // ── Create map record (server) ─────────────────────────────────────────
       console.log('[MapGenerator] Creating map record on server...');
       let map = await api.createMap({
@@ -371,7 +379,7 @@ export function MapGenerator({
           state:             worldData.state,
           ...(worldData.settlement        ? { settlement:         worldData.settlement }        : {}),
           ...(worldData.validation_errors ? { validation_errors: worldData.validation_errors } : {}),
-          // MapSpec (Trin D)
+          // MapSpec (Trin D) — includes image_prompt_contract
           spec,
         },
       });
@@ -381,14 +389,13 @@ export function MapGenerator({
       if (hasOpenAIKey()) {
         console.log('[MapGenerator] Step 3/3 — calling DALL-E...');
         try {
-          const dallePrompt = buildImagePrompt(spec);
-          console.log('[MapGenerator] DALL-E prompt length:', dallePrompt.length);
           const updated = await generateAndSaveImage(map, dallePrompt);
           if (updated) map = updated;
           console.log('[MapGenerator] Step 3/3 done — image_url:', map?.image_url);
           setStep3Done(true);
         } catch (imgErr) {
           console.warn('[MapGenerator] Step 3/3 — DALL-E failed (non-fatal):', imgErr.message);
+          setStep3Error(imgErr.message);
           setStep3Skip(true);
         }
       } else {
@@ -551,11 +558,13 @@ export function MapGenerator({
               {step2Done && (
                 <ProgressRow
                   label={
+                    step3Skip && step3Error ? 'Step 3/3: Image failed' :
                     step3Skip ? 'Step 3/3: Image skipped (no OpenAI key)' :
                     step3Done ? 'Step 3/3: Map painted!' :
                     'Step 3/3: Painting the map image…'
                   }
                   subLabel={
+                    step3Skip && step3Error ? `DALL·E error: ${step3Error}` :
                     step3Skip ? 'You can upload an image manually from the map toolbar' :
                     step3Done ? 'Map image generated — save your campaign to preserve it' :
                     'DALL·E 3 is illustrating your map (up to 60s)'
