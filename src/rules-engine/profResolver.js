@@ -160,13 +160,15 @@ export const CURATED_ALIASES = {
   // Spellcraft — "spell craft" (split spelling)
   'craft spell':             'Spellcraft',
 
-  // Modern Languages — singular "language modern"
+  // Modern Languages — singular and plural variants
   'language modern':         'Modern Languages',
   'modern language':         'Modern Languages',
+  'languages modern':        'Modern Languages',   // "languages (modern)" after tokenKey
 
-  // Ancient Languages — singular
+  // Ancient Languages — singular and plural variants
   'ancient language':        'Ancient Languages',
   'language ancient':        'Ancient Languages',
+  'languages ancient':       'Ancient Languages',  // "languages (ancient)" after tokenKey
 
   // Animal Lore → Animal Handling (most kits use "Animal Lore" to mean this)
   // NOTE: if DB has a canonical "Animal Lore" prof, this alias may be skipped because
