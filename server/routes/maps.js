@@ -285,9 +285,14 @@ router.post('/:id/image/from-url', auth, async (req, res) => {
     const { url } = req.body ?? {};
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
 
+    console.log(`[maps from-url] id=${req.params.id} type=${map.type} url=${url.substring(0, 80)}...`);
+
     // Download the image
     const response = await fetch(url);
-    if (!response.ok) return res.status(502).json({ error: `Failed to fetch image: ${response.status}` });
+    if (!response.ok) {
+      console.error(`[maps from-url] id=${req.params.id} fetch failed: HTTP ${response.status}`);
+      return res.status(502).json({ error: `Failed to fetch image: ${response.status}` });
+    }
 
     const contentType = response.headers.get('content-type') ?? 'image/jpeg';
     const extMap = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
@@ -297,6 +302,7 @@ router.post('/:id/image/from-url', auth, async (req, res) => {
 
     const buffer = Buffer.from(await response.arrayBuffer());
     fs.writeFileSync(destPath, buffer);
+    console.log(`[maps from-url] id=${req.params.id} saved ${buffer.length} bytes → ${filename}`);
 
     // Delete old local image if present
     if (map.image_url?.startsWith('/uploads/maps/')) {
@@ -311,8 +317,12 @@ router.post('/:id/image/from-url', auth, async (req, res) => {
                  parent_map_id, parent_poi_id, created_at, updated_at`,
       [image_url, req.params.id],
     );
+    console.log(`[maps from-url] id=${req.params.id} DB updated image_url=${image_url}`);
     res.json(updated);
-  } catch (e) { next500(e, res); }
+  } catch (e) {
+    console.error(`[maps from-url] id=${req.params.id} FAILED:`, e.message);
+    next500(e, res);
+  }
 });
 
 // ── Update map (DM only) ──────────────────────────────────────────────────────
@@ -331,6 +341,9 @@ router.put('/:id', auth, async (req, res) => {
       parent_map_id = map.parent_map_id,
       parent_poi_id = map.parent_poi_id,
     } = req.body ?? {};
+
+    // DEBUG: trace image_url for every PUT so we can spot any overwrite
+    console.log(`[maps PUT] id=${req.params.id} body.image_url=${JSON.stringify(req.body?.image_url)} db.image_url=${JSON.stringify(map.image_url)} resolved=${JSON.stringify(image_url)}`);
 
     if (!VALID_TYPES.includes(type))
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
