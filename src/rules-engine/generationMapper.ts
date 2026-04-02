@@ -109,12 +109,13 @@ const ATMOSPHERE_STRUCT_MAP: Record<string, string> = {
   ancient:   'ruined',
 };
 
-// Inhabitants → special tag
+// Inhabitants → special tag (all must exist in mapTags.json)
 const INHABITANTS_SPECIAL_MAP: Record<string, string> = {
-  undead:  'divine_presence',   // Closest — undead_presence doesn't exist in rulesets; use actual tags
-  demons:  'planar_rift',
-  fey:     'ley_line',
-  cult:    'artifact_site',
+  undead:      'undead_presence',  // adds necrotic via applyTagRules
+  demons:      'planar_rift',      // adds unstable_magic via applyTagRules
+  fey:         'ley_line',         // adds unstable_magic via applyTagRules
+  cult:        'artifact_site',    // adds legendary_site via applyTagRules
+  'dragon lair': 'dragon_lair',    // adds legendary_site via applyTagRules
 };
 
 // Inhabitants → origin tag

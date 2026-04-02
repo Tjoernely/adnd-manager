@@ -751,5 +751,39 @@
     "adds_tags": [
       "legendary_site"
     ]
+  },
+  {
+    "tag": "undead_presence",
+    "category": "special",
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior",
+      "settlement",
+      "region"
+    ],
+    "requires": [],
+    "forbidden": [
+      "consecrated"
+    ],
+    "adds_tags": [
+      "necrotic"
+    ]
+  },
+  {
+    "tag": "dragon_lair",
+    "category": "special",
+    "valid_scopes": [
+      "local",
+      "dungeon_level",
+      "building",
+      "interior"
+    ],
+    "requires": [],
+    "forbidden": [],
+    "adds_tags": [
+      "legendary_site"
+    ]
   }
 ]

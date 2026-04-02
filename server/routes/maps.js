@@ -100,7 +100,7 @@ const TERRAIN_BIOME = {
 const ATMO_ENV    = { cursed: 'necrotic', sacred: 'consecrated', enchanted: 'unstable_magic', abandoned: 'necrotic' };
 const ATMO_STRUCT = { abandoned: 'ruined', ancient: 'ruined' };
 const INH_ORIGIN  = { humanoids: 'constructed', undead: 'undead_built', demons: 'arcane_nexus', fey: 'elven', 'dragon lair': 'ancient', cult: 'constructed' };
-const INH_SPECIAL = { demons: 'planar_rift', fey: 'ley_line', cult: 'artifact_site' };
+const INH_SPECIAL = { undead: 'undead_presence', demons: 'planar_rift', fey: 'ley_line', cult: 'artifact_site', 'dragon lair': 'dragon_lair' };
 const ERA_ORIGIN  = { ancient: 'ancient', 'forgotten ruins': 'ancient' };
 const WATER_TERRAINS = new Set(['coastal', 'swamp', 'ocean', 'river', 'jungle']);
 
