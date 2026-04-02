@@ -16,6 +16,7 @@ import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
 import { buildMapWorldData } from '../../rules-engine/generationMapper.ts';
+import { buildMapSpec, buildEnrichmentPrompt, applyEnrichment, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
 import tagRules        from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
@@ -52,13 +53,14 @@ function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function resolveParams(p) {
   const resolvedType = p.mapType === 'Random' ? pickRandom(MAP_TYPES.slice(1)) : p.mapType;
   return {
-    mapType:     resolvedType,
-    size:        p.size        === 'Random' ? pickRandom(MAP_SIZES.slice(1))     : p.size,
-    terrain:     p.terrain.length > 0 ? p.terrain : [pickRandom(TERRAIN_OPTIONS)],
-    atmosphere:  p.atmosphere  === 'Random' ? pickRandom(ATMOSPHERES.slice(1))   : p.atmosphere,
-    era:         p.era         === 'Random' ? pickRandom(ERAS.slice(1))          : p.era,
-    inhabitants: p.inhabitants === 'Random' ? pickRandom(INHABITANTS.slice(1))   : p.inhabitants,
-    poiCount:    p.poiCount,
+    mapType:          resolvedType,
+    size:             p.size        === 'Random' ? pickRandom(MAP_SIZES.slice(1))     : p.size,
+    terrain:          p.terrain.length > 0 ? p.terrain : [pickRandom(TERRAIN_OPTIONS)],
+    atmosphere:       p.atmosphere  === 'Random' ? pickRandom(ATMOSPHERES.slice(1))   : p.atmosphere,
+    era:              p.era         === 'Random' ? pickRandom(ERAS.slice(1))          : p.era,
+    inhabitants:      p.inhabitants === 'Random' ? pickRandom(INHABITANTS.slice(1))   : p.inhabitants,
+    poiCount:         p.poiCount,
+    ...(p.user_description?.trim() ? { user_description: p.user_description.trim() } : {}),
   };
 }
 
@@ -76,31 +78,7 @@ function toBackendType(mapTypeStr) {
   return BACKEND_TYPE_MAP[mapTypeStr] ?? 'dungeon';
 }
 
-// ── DALL-E prompt builders ────────────────────────────────────────────────────
-function buildDallePrompt(r) {
-  const typeDescriptions = {
-    'Region':     'top-down regional fantasy cartography map',
-    'City/Town':  'top-down fantasy city map with streets and buildings',
-    'Village':    'top-down fantasy village map with cottages and farms',
-    'Dungeon':    'top-down dungeon floor plan, rooms and corridors',
-    'Cave System':'top-down natural cave system map',
-    'Ruins':      'top-down ancient ruins map, collapsed walls and rubble',
-    'Castle/Keep':'top-down castle and keep floor plan',
-    'Tavern/Inn': 'top-down tavern interior floor plan',
-    'Temple':     'top-down temple interior map',
-  };
-  const terrainStr = Array.isArray(r.terrain) ? r.terrain.slice(0, 2).join(', ') : (r.terrain ?? '');
-  return [
-    `A ${typeDescriptions[r.mapType] || 'fantasy map'},`,
-    `hand-drawn ink style on aged parchment.`,
-    `Forgotten Realms / Faerûn setting.`,
-    terrainStr   ? `Terrain: ${terrainStr}.`          : '',
-    r.atmosphere ? `${r.atmosphere} atmosphere.`       : '',
-    `Classic D&D adventure module cartography style.`,
-    `No text or labels. Bird's eye view.`,
-    `Highly detailed illustration.`,
-  ].filter(Boolean).join(' ').substring(0, 800);
-}
+// buildDallePrompt replaced by specBuilder.buildImagePrompt — see Trin D.
 
 // ── Claude system/user prompts (split into two smaller calls) ─────────────────
 const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. Keep responses concise — maximum 2 sentences per description field. For POI arrays, generate maximum 6 POIs. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
@@ -273,13 +251,14 @@ export function MapGenerator({
 }) {
   // presetType takes priority for mapType; presetParams fills terrain/atmosphere/etc.
   const [params, setParams] = useState({
-    mapType:     presetType ?? presetParams?.mapType ?? 'Random',
-    size:        presetParams?.size        ?? 'Random',
-    terrain:     presetParams?.terrain     ?? [],
-    atmosphere:  presetParams?.atmosphere  ?? 'Random',
-    era:         presetParams?.era         ?? 'Random',
-    inhabitants: presetParams?.inhabitants ?? 'Random',
-    poiCount:    presetParams?.poiCount    ?? 'Random (3-8)',
+    mapType:          presetType ?? presetParams?.mapType ?? 'Random',
+    size:             presetParams?.size        ?? 'Random',
+    terrain:          presetParams?.terrain     ?? [],
+    atmosphere:       presetParams?.atmosphere  ?? 'Random',
+    era:              presetParams?.era         ?? 'Random',
+    inhabitants:      presetParams?.inhabitants ?? 'Random',
+    poiCount:         presetParams?.poiCount    ?? 'Random (3-8)',
+    user_description: '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
   const [step1Done,   setStep1Done]   = useState(false); // metadata call
@@ -349,6 +328,22 @@ export function MapGenerator({
       const worldData  = buildMapWorldData(resolved, tagRules, scopeRules, parentTags ?? undefined, archetypeRules);
       console.log('[MapGenerator] World data:', worldData);
 
+      // ── Build MapSpec (D-pipeline: params + worldData + meta) ─────────────
+      let spec = buildMapSpec(resolved, worldData, meta);
+
+      // Optional AI enrichment when user_description is set (Trin D)
+      if (resolved.user_description) {
+        console.log('[MapGenerator] Enriching spec with AI (user_description present)...');
+        try {
+          const enrichOpts = buildEnrichmentPrompt(spec);
+          const enrichment = await callClaude(enrichOpts);
+          spec = applyEnrichment(spec, enrichment);
+          console.log('[MapGenerator] Spec enriched — visual_keywords:', spec.visual_keywords);
+        } catch (enrichErr) {
+          console.warn('[MapGenerator] Spec enrichment failed (non-fatal):', enrichErr.message);
+        }
+      }
+
       // ── Create map record (server) ─────────────────────────────────────────
       console.log('[MapGenerator] Creating map record on server...');
       let map = await api.createMap({
@@ -374,8 +369,10 @@ export function MapGenerator({
           context:           worldData.context,
           tags:              worldData.tags,
           state:             worldData.state,
-          ...(worldData.settlement       ? { settlement:         worldData.settlement }         : {}),
+          ...(worldData.settlement        ? { settlement:         worldData.settlement }        : {}),
           ...(worldData.validation_errors ? { validation_errors: worldData.validation_errors } : {}),
+          // MapSpec (Trin D)
+          spec,
         },
       });
       console.log('[MapGenerator] Map record created — id:', map?.id);
@@ -384,7 +381,8 @@ export function MapGenerator({
       if (hasOpenAIKey()) {
         console.log('[MapGenerator] Step 3/3 — calling DALL-E...');
         try {
-          const dallePrompt = buildDallePrompt(resolved);
+          const dallePrompt = buildImagePrompt(spec);
+          console.log('[MapGenerator] DALL-E prompt length:', dallePrompt.length);
           const updated = await generateAndSaveImage(map, dallePrompt);
           if (updated) map = updated;
           console.log('[MapGenerator] Step 3/3 done — image_url:', map?.image_url);
@@ -504,6 +502,21 @@ export function MapGenerator({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Optional user description — triggers AI visual enrichment */}
+              <div className="mgn-field">
+                <div className="mgn-field-label">
+                  Visual Description <span className="mgn-field-optional">(optional — enhances map image)</span>
+                </div>
+                <textarea
+                  className="mgn-textarea"
+                  rows={2}
+                  placeholder="e.g. a ruined keep overlooking a frozen lake, haunted by the ghost of its former lord…"
+                  value={params.user_description}
+                  onChange={e => setP('user_description', e.target.value)}
+                  maxLength={300}
+                />
               </div>
 
               {!hasOpenAIKey() && (

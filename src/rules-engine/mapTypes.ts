@@ -142,6 +142,38 @@ export interface ScopeRule {
   forbidden_poi_types:      string[];
 }
 
+// ── MapSpec (image generation specification) ──────────────────────────────────
+// Built from generated_params + world-engine data + Claude metadata.
+// Passed to buildImagePrompt() for deterministic DALL-E prompt construction.
+// Optionally enriched by enrichSpecWithAI() when user_description is present.
+
+export interface MapSpec {
+  // Core generation params
+  mapType:     string;
+  scope:       MapScope;
+  size:        string;
+  terrain:     string[];
+  atmosphere:  string;
+  era:         string;
+  inhabitants: string;
+
+  // World-engine data
+  tags:        LocationTags;
+  context:     LocationContext;
+  settlement?: SettlementData;
+
+  // Claude metadata
+  title:                   string;
+  dalle_prompt_additions?: string;
+
+  // User input (optional — triggers AI enrichment when set)
+  user_description?: string;
+
+  // AI enrichment (populated by applyEnrichment after enrichSpecWithAI call)
+  visual_keywords?:  string[];
+  landmark_details?: string[];
+}
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
 export interface ValidationResult {

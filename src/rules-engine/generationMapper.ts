@@ -18,13 +18,14 @@ import type { ArchetypeRules } from './settlementEngine';
 // ── GeneratedParams shape (matches MapGenerator resolveParams output) ─────────
 
 export interface GeneratedParams {
-  mapType:     string;
-  size:        string;
-  terrain:     string[];
-  atmosphere:  string;
-  era:         string;
-  inhabitants: string;
-  poiCount?:   string;
+  mapType:           string;
+  size:              string;
+  terrain:           string[];
+  atmosphere:        string;
+  era:               string;
+  inhabitants:       string;
+  poiCount?:         string;
+  user_description?: string;
 }
 
 // ── mapTypeToScope ─────────────────────────────────────────────────────────────

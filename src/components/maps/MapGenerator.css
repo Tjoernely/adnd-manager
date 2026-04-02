@@ -49,6 +49,15 @@
 .mgn-field-label {
   font-size: 9px; letter-spacing: 2px; color: #7a6020; text-transform: uppercase;
 }
+.mgn-field-optional { font-size: 9px; letter-spacing: 1px; color: #5a5030; text-transform: none; }
+.mgn-textarea {
+  background: rgba(0,0,0,.5); border: 1px solid rgba(200,168,75,.22);
+  border-radius: 5px; color: #d4c090; font-family: inherit;
+  font-size: 12px; padding: 6px 8px; outline: none; resize: vertical;
+  transition: border-color .15s; width: 100%; box-sizing: border-box;
+}
+.mgn-textarea:focus { border-color: rgba(200,168,75,.6); }
+.mgn-textarea::placeholder { color: #5a5030; }
 .mgn-select {
   background: rgba(0,0,0,.5); border: 1px solid rgba(200,168,75,.22);
   border-radius: 5px; color: #d4c090; font-family: inherit;
