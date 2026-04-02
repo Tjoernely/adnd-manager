@@ -12,6 +12,7 @@ import { api }            from '../../api/client.js';
 import { callClaude, hasAnthropicKey } from '../../api/aiClient.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import { MapGenerator }   from './MapGenerator.jsx';
+import { getChildGenerationParams } from '../../rules-engine/connectionEngine.ts';
 import './MapManager.css';
 
 // ── POI type catalogue ────────────────────────────────────────────────────────
@@ -529,15 +530,34 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       ?? SUBMAP_TYPE_MAP[poi.drill_down_type]
       ?? POI_TYPE_TO_MAP_TYPE[poi.type]
       ?? null;
+
+    // Pre-fill generation params from parent map context + POI connection
+    let presetParams = null;
+    const parentMap = maps.find(m => m.id === activeMapId);
+    const connection = poi.connections?.[0];
+    if (connection && parentMap?.data?.scope) {
+      presetParams = getChildGenerationParams(
+        {
+          scope:   parentMap.data.scope,
+          tags:    parentMap.data.tags   ?? {},
+          context: parentMap.data.context ?? { terrain: 'unknown' },
+        },
+        connection,
+      );
+      // presetType (from POI type) overrides connection-derived mapType
+      if (submapPreset) presetParams = { ...presetParams, mapType: submapPreset };
+    }
+
     setGenContext({
       parentMapId:  activeMapId,
       parentPoiId:  poi.id,
       parentPoiCtx: poi,
       presetType:   submapPreset,
+      presetParams,
       autoGenerate,
     });
     setShowGenerator(true);
-  }, [activeMapId]);
+  }, [activeMapId, maps]);
 
   // ── After map created ────────────────────────────────────────────────────────
   const handleMapCreated = useCallback((newMap) => {
@@ -546,12 +566,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     setShowGenerator(false);
 
     if (genContext?.parentMapId && genContext?.parentPoiId) {
-      // Update parent POI's child_map_id so the link is persisted
+      // Update parent POI: set child_map_id + connections[0].to_location_id
       const parentMap = maps.find(m => m.id === genContext.parentMapId);
       if (parentMap) {
-        const newPois = (parentMap.data?.pois ?? []).map(p =>
-          p.id === genContext.parentPoiId ? { ...p, child_map_id: newMap.id } : p
-        );
+        const newPois = (parentMap.data?.pois ?? []).map(p => {
+          if (p.id !== genContext.parentPoiId) return p;
+          const updatedConnections = (p.connections ?? []).map((c, i) =>
+            i === 0 ? { ...c, to_location_id: newMap.id } : c,
+          );
+          return { ...p, child_map_id: newMap.id, connections: updatedConnections };
+        });
         api.updateMap(parentMap.id, {
           name: parentMap.name, type: parentMap.type, image_url: parentMap.image_url,
           data: { ...parentMap.data, pois: newPois },
@@ -766,6 +790,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           parentPoiId={genContext?.parentPoiId ?? null}
           parentPoiCtx={genContext?.parentPoiCtx ?? null}
           presetType={genContext?.presetType ?? null}
+          presetParams={genContext?.presetParams ?? null}
           autoGenerate={genContext?.autoGenerate ?? false}
         />
       )}

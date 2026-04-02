@@ -112,6 +112,34 @@ const INH_SPECIAL = { undead: 'undead_presence', demons: 'planar_rift', fey: 'le
 const ERA_ORIGIN  = { ancient: 'ancient', 'forgotten ruins': 'ancient' };
 const WATER_TERRAINS = new Set(['coastal', 'swamp', 'ocean', 'river', 'jungle']);
 
+// ── Connection helpers (mirrors connectionEngine.ts) ──────────────────────────
+// to_scope matches mapTypeToScope() so child generation gets correct scope.
+const POI_CONN_MAP = {
+  cave:         { type: 'tunnel',      to_scope: 'dungeon_level' },
+  dungeon:      { type: 'stairs_down', to_scope: 'dungeon_level' },
+  monster_lair: { type: 'tunnel',      to_scope: 'dungeon_level' },
+  ruins:        { type: 'door',        to_scope: 'local'         },
+  temple:       { type: 'door',        to_scope: 'building'      },
+  city:         { type: 'tunnel',      to_scope: 'settlement'    },
+  village:      { type: 'tunnel',      to_scope: 'settlement'    },
+  building:     { type: 'door',        to_scope: 'building'      },
+  interior:     { type: 'door',        to_scope: 'interior'      },
+};
+
+function defaultConnectionForPOI(poi) {
+  const key     = (poi.drill_down_type ?? poi.type ?? '').toLowerCase();
+  const mapping = POI_CONN_MAP[key] ?? { type: 'door', to_scope: 'interior' };
+  return {
+    id:             `conn_${poi.id}_0`,
+    from_poi_id:    poi.id,
+    to_location_id: poi.child_map_id ?? null,
+    to_scope:       mapping.to_scope,
+    type:           mapping.type,
+    bidirectional:  true,
+    state:          'open',
+  };
+}
+
 // ── Settlement helpers (mirrors settlementEngine.ts) ─────────────────────────
 
 function deriveArchetype(p) {
@@ -445,13 +473,19 @@ router.put('/:id', auth, async (req, res) => {
       state:   enriched.state   ?? 'pristine',
       context: enriched.context ?? { terrain: 'unknown' },
       scope:   enriched.scope   ?? BACKEND_TYPE_TO_SCOPE[type] ?? 'local',
-      // Inject defaults on each POI without touching existing fields
-      pois: (enriched.pois ?? []).map(poi => ({
-        ...poi,
-        tags:        poi.tags        ?? EMPTY_TAGS(),
-        state:       poi.state       ?? 'pristine',
-        connections: poi.connections ?? [],
-      })),
+      // Inject defaults on each POI; auto-generate connection for drillable POIs
+      pois: (enriched.pois ?? []).map(poi => {
+        const basePoi = {
+          ...poi,
+          tags:        poi.tags        ?? EMPTY_TAGS(),
+          state:       poi.state       ?? 'pristine',
+          connections: poi.connections ?? [],
+        };
+        if (basePoi.can_drill_down && basePoi.connections.length === 0) {
+          basePoi.connections = [defaultConnectionForPOI(basePoi)];
+        }
+        return basePoi;
+      }),
     };
 
     const updated = await db.one(

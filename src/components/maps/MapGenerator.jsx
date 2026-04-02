@@ -268,16 +268,18 @@ export function MapGenerator({
   parentPoiId  = null,
   parentPoiCtx = null,
   presetType   = null,
+  presetParams = null,  // Partial<GeneratedParams> from connectionEngine
   autoGenerate = false,
 }) {
+  // presetType takes priority for mapType; presetParams fills terrain/atmosphere/etc.
   const [params, setParams] = useState({
-    mapType:     presetType ?? 'Random',
-    size:        'Random',
-    terrain:     [],
-    atmosphere:  'Random',
-    era:         'Random',
-    inhabitants: 'Random',
-    poiCount:    'Random (3-8)',
+    mapType:     presetType ?? presetParams?.mapType ?? 'Random',
+    size:        presetParams?.size        ?? 'Random',
+    terrain:     presetParams?.terrain     ?? [],
+    atmosphere:  presetParams?.atmosphere  ?? 'Random',
+    era:         presetParams?.era         ?? 'Random',
+    inhabitants: presetParams?.inhabitants ?? 'Random',
+    poiCount:    presetParams?.poiCount    ?? 'Random (3-8)',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
   const [step1Done,   setStep1Done]   = useState(false); // metadata call
