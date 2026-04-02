@@ -10,6 +10,7 @@
 
 import type { MapSpec, MapScope } from './mapTypes';
 import type { GeneratedParams, WorldDataResult } from './generationMapper';
+import { applyPOIInfluences, type InfluenceRules } from './influenceEngine';
 
 // ── POI candidates per scope ──────────────────────────────────────────────────
 // Which POI types are valid/expected for each scope.
@@ -129,6 +130,20 @@ export function applyEnrichment(spec: MapSpec, enrichment: unknown): MapSpec {
   };
 }
 
+// ── applyInfluencesToSpec ─────────────────────────────────────────────────────
+// Updates spec.tags by merging POI influences from the generated poi list.
+// Call this after step 2 (pois known) and before buildImagePrompt so that
+// image_prompt_contract reflects POI-derived tags (divine, undead, etc.).
+
+export function applyInfluencesToSpec(
+  spec:           MapSpec,
+  pois:           Array<{ type: string }>,
+  influenceRules: InfluenceRules,
+): MapSpec {
+  const updatedTags = applyPOIInfluences(spec.tags, pois, influenceRules);
+  return { ...spec, tags: updatedTags };
+}
+
 // ── Type image descriptions ───────────────────────────────────────────────────
 
 const TYPE_IMAGE_DESCRIPTIONS: Record<string, string> = {
@@ -187,6 +202,20 @@ export function buildImagePrompt(spec: MapSpec): string {
     if (spec.settlement.districts.length > 0) {
       parts.push(`Districts visible: ${spec.settlement.districts.slice(0, 3).join(', ')}.`);
     }
+  }
+
+  // ── POI influence-derived atmosphere ─────────────────────────────────────
+  if (spec.tags.special?.includes('divine_presence')) {
+    parts.push('Sacred divine atmosphere, holy light filtering through.');
+  }
+  if (spec.tags.special?.includes('undead_presence')) {
+    parts.push('Ominous undead presence, bones and death motifs throughout.');
+  }
+  if (spec.tags.hazards?.includes('monster_infestation')) {
+    parts.push('Dangerous foreboding landscape, signs of creature activity.');
+  }
+  if (spec.tags.environment?.includes('unstable_magic')) {
+    parts.push('Crackling arcane energy, magical distortions visible.');
   }
 
   if (spec.visual_keywords?.length) {

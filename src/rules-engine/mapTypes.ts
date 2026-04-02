@@ -65,6 +65,16 @@ export interface MapConnection {
 
 export type LocationState = 'pristine' | 'abandoned' | 'occupied' | 'cleared';
 
+// ── POI Influence ─────────────────────────────────────────────────────────────
+// Tags a POI "radiates" into its parent location (and optionally ancestors).
+
+export type InfluenceRadius = 'local' | 'region' | 'world';
+
+export interface POIInfluence {
+  provides_tags:     Partial<LocationTags>;
+  influence_radius:  InfluenceRadius;
+}
+
 // ── Extended POI (added fields on top of existing POI shape) ──────────────────
 
 export interface MapPOIExtended {
@@ -73,6 +83,7 @@ export interface MapPOIExtended {
   origin:      'terrain' | 'feature' | 'history' | 'connection';
   state:       LocationState;
   connections: MapConnection[];
+  influence?:  POIInfluence;
 }
 
 // ── Settlement system ─────────────────────────────────────────────────────────

@@ -27,13 +27,47 @@ const crypto  = require('crypto');
 const db      = require('../db');
 const { auth } = require('../middleware/auth');
 const ARCHETYPE_RULES = require('../../src/rulesets/settlementArchetypes.json');
-// tag → category lookup derived from mapTags.json
+// mapTags.json is now { tags: [...], poi_influence_rules: {...} }
+const MAP_TAGS_JSON   = require('../../src/rulesets/mapTags.json');
+// tag → category lookup
 const TAG_CATEGORY = (() => {
-  const raw = require('../../src/rulesets/mapTags.json');
   const m = {};
-  for (const entry of raw) m[entry.tag] = entry.category;
+  for (const entry of (MAP_TAGS_JSON.tags ?? MAP_TAGS_JSON)) m[entry.tag] = entry.category;
   return m;
 })();
+// POI influence rules
+const POI_INFLUENCE_RULES = MAP_TAGS_JSON.poi_influence_rules ?? {};
+
+// ── JS mirror of influenceEngine.ts ──────────────────────────────────────────
+
+function getInfluenceForPOI(poi) {
+  const key  = (poi.type ?? '').toLowerCase().trim();
+  const rule = POI_INFLUENCE_RULES[key];
+  if (!rule) return null;
+  const provides_tags = {};
+  for (const [cat, tags] of Object.entries(rule.provides_tags ?? {})) {
+    if (Array.isArray(tags) && tags.length > 0) provides_tags[cat] = tags;
+  }
+  return { provides_tags, influence_radius: rule.radius ?? 'local' };
+}
+
+function applyPOIInfluencesJS(locationTags, pois) {
+  const result = {};
+  const CATS = ['terrain', 'origin', 'depth', 'environment', 'structure', 'hazards', 'special'];
+  for (const c of CATS) result[c] = [...(locationTags[c] ?? [])];
+
+  for (const poi of pois) {
+    const influence = poi.influence ?? getInfluenceForPOI(poi);
+    if (!influence) continue;
+    for (const [cat, tags] of Object.entries(influence.provides_tags)) {
+      if (!Array.isArray(tags) || !result[cat]) continue;
+      for (const tag of tags) {
+        if (!result[cat].includes(tag)) result[cat].push(tag);
+      }
+    }
+  }
+  return result;
+}
 
 const router = express.Router();
 
@@ -268,6 +302,18 @@ function enrichMapData(data, backendType) {
       }
     }
     data = { ...data, tags: tagsCopy, settlement };
+  }
+
+  // ── POI influence: each POI radiates tags into the location ─────────────────
+  const pois = data.pois ?? [];
+  if (pois.length > 0 && data.tags) {
+    // Stamp influence on each POI (for transparency in GET response)
+    for (const poi of pois) {
+      const influence = getInfluenceForPOI(poi);
+      if (influence) poi.influence = influence;
+    }
+    // Merge all POI influences into location tags
+    data = { ...data, tags: applyPOIInfluencesJS(data.tags, pois) };
   }
 
   return { ...data, scope, context, state: data.state ?? 'pristine' };

@@ -16,10 +16,13 @@ import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
 import { buildMapWorldData } from '../../rules-engine/generationMapper.ts';
-import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
-import tagRules        from '../../rulesets/mapTags.json';
+import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment, applyInfluencesToSpec, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
+import mapTagsJson     from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
+// mapTags.json is now { tags: [...], poi_influence_rules: {...} }
+const tagRules        = mapTagsJson.tags;
+const influenceRules  = mapTagsJson.poi_influence_rules ?? {};
 
 // ── Option lists ──────────────────────────────────────────────────────────────
 const MAP_TYPES = [
@@ -332,6 +335,12 @@ export function MapGenerator({
 
       // ── Build MapSpec (D-pipeline: params + worldData + meta) ─────────────
       let spec = buildMapSpec(resolved, worldData, meta);
+
+      // ── Apply POI influences to spec.tags (Trin E) ────────────────────────
+      // Merge POI influence tags BEFORE building image prompt so that
+      // divine/undead/etc. presence is reflected in image_prompt_contract.
+      spec = applyInfluencesToSpec(spec, pois, influenceRules);
+      console.log('[MapGenerator] spec.tags after POI influences — special:', spec.tags.special, '| hazards:', spec.tags.hazards);
 
       // Optional AI enrichment when user_description is set (Trin D)
       if (resolved.user_description) {
