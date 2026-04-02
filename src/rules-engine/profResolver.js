@@ -70,7 +70,8 @@ export function preProcess(raw) {
   s = s.replace(/\s*\*+$/, '');
 
   // Take only the first part before ". Suggested", ". Forbidden", ". As mentioned"
-  s = s.replace(/\.\s+(?:Suggested|Forbidden|As\s|however)/i, '').trim();
+  // The .* consumes everything after the keyword so we're left with just the lead prof.
+  s = s.replace(/\.\s+(?:Suggested|Forbidden|As\s|however).*/i, '').trim();
 
   // Strip trailing orphaned open-paren fragments: "Artistic Ability (Painting" → "Artistic Ability"
   s = s.replace(/\s*\([^)]*$/, '').trim();
@@ -274,10 +275,19 @@ export function buildProfIndex(proficiencies) {
  * @returns {ResolveResult}
  */
 export function resolveKitProfEntry(rawEntry, index) {
+  // Pre-clean the entry first so prefix-stripped forms (e.g. "Proficiency : Reading/Writing"
+  // → "Reading/Writing") are checked before we decide whether to slash-split.
+  const cleanedForSlashCheck = preProcess(rawEntry);
+
   // Handle slash-compound entries ("Animal Handling/Training") by resolving
   // each part and returning the first that resolves confidently.
-  if (/\//.test(rawEntry) && !rawEntry.match(/^\s*Reading\/Writing/i)) {
-    const parts = rawEntry.split('/').map(p => p.trim()).filter(Boolean);
+  // Exception: "Reading/Writing" is a single canonical name — never split it.
+  if (
+    cleanedForSlashCheck &&
+    /\//.test(cleanedForSlashCheck) &&
+    !cleanedForSlashCheck.match(/^\s*Reading\/Writing/i)
+  ) {
+    const parts = cleanedForSlashCheck.split('/').map(p => p.trim()).filter(Boolean);
     for (const part of parts) {
       const r = _resolveOne(part, index);
       if (!r.requires_review && r.resolved_canonical_id) return r;
@@ -305,7 +315,15 @@ function _resolveOne(rawEntry, index) {
     return _make(rawEntry, exactMatch, 'exact_name', 'high', false);
   }
 
-  // ── Layer B: Token key match ───────────────────────────────────────────────
+  // ── Layer B: Curated alias map (before token_key — aliases are explicit) ───
+  // Checked early so curated entries override ambiguous token_key collisions
+  // (e.g. "Modern Languages" vs "Languages, Modern" share the same token key).
+  const aliasMatch = index.byAliasTK.get(tk);
+  if (aliasMatch) {
+    return _make(rawEntry, aliasMatch, 'curated_alias', 'high', false);
+  }
+
+  // ── Layer C: Token key match ───────────────────────────────────────────────
   const tkMatches = index.byTokenKey.get(tk) ?? [];
   if (tkMatches.length === 1) {
     return _make(rawEntry, tkMatches[0], 'token_key', 'high', false);
@@ -323,12 +341,6 @@ function _resolveOne(rawEntry, index) {
       candidates:             tkMatches.map(_cand),
       note:                   `Ambiguous token key "${tk}" — ${tkMatches.length} matches`,
     };
-  }
-
-  // ── Layer C: Curated alias map ─────────────────────────────────────────────
-  const aliasMatch = index.byAliasTK.get(tk);
-  if (aliasMatch) {
-    return _make(rawEntry, aliasMatch, 'curated_alias', 'high', false);
   }
 
   // ── Layer D: Fuzzy candidates (substring, significant words only) ──────────
