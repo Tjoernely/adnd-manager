@@ -1906,3 +1906,116 @@
   transition: color 0.1s;
 }
 .mm-toast-close:hover { color: #c8a84b; }
+
+/* ── Engine data: badges, tags, connections, influence ──────────────────────── */
+.mm-state-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #111;
+  text-transform: capitalize;
+}
+.mm-scope-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #2a3a2a;
+  color: #90c870;
+  border: 1px solid #4a7a4a;
+  text-transform: capitalize;
+}
+.mm-engine-badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+.mm-engine-subsection {
+  margin-top: 6px;
+}
+.mm-poi-section--engine {
+  border-top: 1px solid #2a2a1e;
+  margin-top: 6px;
+}
+.mm-tags-display {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+.mm-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.mm-tag-cat {
+  font-size: 10px;
+  color: #7a6438;
+  min-width: 72px;
+  text-transform: capitalize;
+}
+.mm-tag-chips {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.mm-tag-chip {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  background: #2a2a1e;
+  color: #c8a84b;
+  border: 1px solid #3a3a28;
+  text-transform: capitalize;
+}
+.mm-tag-chip--influence {
+  background: #1a2a2a;
+  color: #60c0c0;
+  border-color: #2a4a4a;
+}
+.mm-influence-display { margin-top: 2px; }
+.mm-influence-radius {
+  display: block;
+  font-size: 10px;
+  color: #7a6438;
+  margin-bottom: 3px;
+}
+.mm-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: #1c1c14;
+}
+.mm-conn-type  { font-size: 10px; color: #e8d4a0; font-weight: 600; text-transform: capitalize; }
+.mm-conn-scope { font-size: 10px; color: #7a9070; text-transform: capitalize; }
+.mm-conn-exists  { font-size: 10px; color: #4ade80; }
+.mm-conn-missing { font-size: 10px; color: #94a3b8; }
+
+/* ── Location metadata bar ──────────────────────────────────────────────────── */
+.mm-location-meta {
+  padding: 6px 14px;
+  background: #1a1a10;
+  border-bottom: 1px solid #2a2a18;
+  font-size: 11px;
+}
+.mm-location-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mm-location-terrain {
+  color: #7a9070;
+  font-style: italic;
+}

@@ -724,6 +724,10 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                 </div>
               )}
 
+              {activeMap.data?.spec && isDM && !playerView && (
+                <LocationMetaBar spec={activeMap.data.spec} />
+              )}
+
               <div className="mm-viewer-area">
                 <MapCanvas
                   map={activeMap}
@@ -1190,6 +1194,82 @@ function CoinsRow({ coins }) {
   );
 }
 
+// ── StateBadge / ScopeBadge / TagsDisplay / InfluenceDisplay / LocationMetaBar ─
+const STATE_BADGE_COLORS = {
+  pristine: '#4ade80', occupied: '#f87171',
+  abandoned: '#94a3b8', cleared: '#60a5fa',
+};
+function StateBadge({ state }) {
+  if (!state) return null;
+  return (
+    <span className="mm-state-badge" style={{ background: STATE_BADGE_COLORS[state] ?? '#d97706' }}>
+      {state}
+    </span>
+  );
+}
+function ScopeBadge({ scope }) {
+  if (!scope) return null;
+  return <span className="mm-scope-badge">{scope.replace(/_/g, ' ')}</span>;
+}
+const TAG_CAT_ICONS = {
+  terrain:'🏔', origin:'🏛', depth:'⬇',
+  environment:'🌿', structure:'🧱', hazards:'⚠', special:'✨',
+};
+function TagsDisplay({ tags }) {
+  if (!tags || typeof tags !== 'object') return null;
+  const entries = Object.entries(tags).filter(([, a]) => Array.isArray(a) && a.length > 0);
+  if (!entries.length) return null;
+  return (
+    <div className="mm-tags-display">
+      {entries.map(([cat, arr]) => (
+        <div key={cat} className="mm-tag-row">
+          <span className="mm-tag-cat">{TAG_CAT_ICONS[cat] ?? '•'} {cat}</span>
+          <div className="mm-tag-chips">
+            {arr.map(tag => <span key={tag} className="mm-tag-chip">{tag.replace(/_/g, ' ')}</span>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function InfluenceDisplay({ influence }) {
+  if (!influence?.provides_tags) return null;
+  const entries = Object.entries(influence.provides_tags).filter(([, a]) => Array.isArray(a) && a.length > 0);
+  if (!entries.length) return null;
+  return (
+    <div className="mm-influence-display">
+      <span className="mm-influence-radius">radius: {influence.influence_radius ?? 'local'}</span>
+      {entries.map(([cat, arr]) => (
+        <div key={cat} className="mm-tag-row">
+          <span className="mm-tag-cat">{cat}</span>
+          <div className="mm-tag-chips">
+            {arr.map(tag => <span key={tag} className="mm-tag-chip mm-tag-chip--influence">{tag.replace(/_/g, ' ')}</span>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function LocationMetaBar({ spec }) {
+  if (!spec) return null;
+  const terrain = [
+    ...(spec.context?.terrain ? [spec.context.terrain] : []),
+    ...(spec.context?.biome   ? [spec.context.biome]   : []),
+    ...(spec.terrain ?? []).slice(0, 2),
+  ].filter(Boolean);
+  const hasTags = spec.tags && Object.values(spec.tags).some(a => Array.isArray(a) && a.length > 0);
+  return (
+    <div className="mm-location-meta">
+      <div className="mm-location-meta-row">
+        {spec.scope && <ScopeBadge scope={spec.scope} />}
+        {spec.state && <StateBadge state={spec.state} />}
+        {terrain.length > 0 && <span className="mm-location-terrain">{terrain.join(' · ')}</span>}
+      </div>
+      {hasTags && <TagsDisplay tags={spec.tags} />}
+    </div>
+  );
+}
+
 // ── POIPanel ──────────────────────────────────────────────────────────────────
 const POI_PANEL_SYSTEM = `You are an expert AD&D 2nd Edition DM in the Forgotten Realms. Keep responses concise — 1-2 sentences per item. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
@@ -1210,7 +1290,10 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
 
   const info      = poiInfo(poi.type);
   const typeGroup = poiTypeGroup(poi.type);
-  const childMap  = poi.child_map_id ? maps.find(m => m.id === poi.child_map_id) : null;
+  const connMapId = poi.connections?.[0]?.to_location_id;
+  const childMap  = poi.child_map_id
+    ? maps.find(m => m.id === poi.child_map_id)
+    : connMapId ? maps.find(m => m.id === connMapId) : null;
   const hasSubmap = (poi.can_generate_submap || poi.can_drill_down) && !childMap;
 
   const updateD    = (k, v) => setDraft(d => ({ ...d, [k]: v }));
@@ -1728,6 +1811,47 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
                     : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
                 </div>
               </>
+            )}
+
+            {/* ── Engine Data (any type) ───────────────────────────────────── */}
+            {(poi.scope || poi.state || poi.tags || poi.connections?.length || poi.influence || poi.origin) && (
+              <div className="mm-poi-section mm-poi-section--engine">
+                <SectionHead icon="⚙" label="Engine Data" />
+                <div className="mm-engine-badges">
+                  {poi.scope && <ScopeBadge scope={poi.scope} />}
+                  {poi.state && <StateBadge state={poi.state} />}
+                </div>
+                {poi.origin && typeof poi.origin === 'string' && (
+                  <p className="mm-poi-text" style={{ marginTop: 4 }}>{poi.origin}</p>
+                )}
+                {poi.tags && <TagsDisplay tags={poi.tags} />}
+                {poi.connections?.length > 0 && (
+                  <div className="mm-engine-subsection">
+                    <div className="mm-tag-cat" style={{ marginBottom: 3 }}>🔗 connections</div>
+                    {poi.connections.map((conn, i) => {
+                      const tgt = conn.to_location_id ? maps.find(m => m.id === conn.to_location_id) : null;
+                      return (
+                        <div key={i} className="mm-connection-row">
+                          {conn.type     && <span className="mm-conn-type">{conn.type}</span>}
+                          {conn.to_scope && <span className="mm-conn-scope">→ {conn.to_scope.replace(/_/g, ' ')}</span>}
+                          {conn.state    && <StateBadge state={conn.state} />}
+                          {tgt ? (
+                            <span className="mm-conn-exists">✓ {tgt.name}</span>
+                          ) : conn.to_location_id ? (
+                            <span className="mm-conn-missing">? #{conn.to_location_id}</span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {poi.influence && (
+                  <div className="mm-engine-subsection">
+                    <div className="mm-tag-cat" style={{ marginBottom: 3 }}>💫 influence</div>
+                    <InfluenceDisplay influence={poi.influence} />
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── Edit: type + visibility (any type) ───────────────────────── */}
