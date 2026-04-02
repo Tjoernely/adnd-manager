@@ -242,6 +242,27 @@ router.put('/:id', auth, async (req, res) => {
     if (!VALID_TYPES.includes(type))
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
 
+    // ── World-engine: inject defaults for new fields (non-breaking) ──────────
+    const EMPTY_TAGS = { terrain: [], origin: [], depth: [], environment: [], structure: [], hazards: [], special: [] };
+    const TYPE_TO_SCOPE = {
+      world: 'world', region: 'region', city: 'settlement', town: 'settlement',
+      dungeon: 'dungeon_level', interior: 'interior', encounter: 'local', other: 'local',
+    };
+    const mergedData = {
+      ...data,
+      tags:    data.tags    ?? EMPTY_TAGS,
+      state:   data.state   ?? 'pristine',
+      context: data.context ?? { terrain: 'unknown' },
+      scope:   data.scope   ?? (TYPE_TO_SCOPE[type] ?? 'local'),
+      // Inject defaults on each POI without touching existing fields
+      pois: (data.pois ?? []).map(poi => ({
+        ...poi,
+        tags:        poi.tags        ?? { ...EMPTY_TAGS },
+        state:       poi.state       ?? 'pristine',
+        connections: poi.connections ?? [],
+      })),
+    };
+
     const updated = await db.one(
       `UPDATE maps
        SET name=$1, type=$2, image_url=$3, data=$4,
@@ -249,7 +270,7 @@ router.put('/:id', auth, async (req, res) => {
        WHERE id=$7
        RETURNING id, campaign_id, name, type, image_url, data,
                  parent_map_id, parent_poi_id, created_at, updated_at`,
-      [name.trim(), type, image_url, JSON.stringify(data),
+      [name.trim(), type, image_url, JSON.stringify(mergedData),
        parent_map_id || null, parent_poi_id || null, req.params.id],
     );
     res.json(updated);
