@@ -365,6 +365,28 @@
 .mgn-context-icon { flex-shrink: 0; }
 
 /* ── New: warning bar (no OpenAI key) ────────────────────── */
+.mgn-sketch-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 120, 60, 0.10);
+  border: 1px solid rgba(0, 180, 80, 0.3);
+  border-radius: 6px;
+}
+.mgn-sketch-preview-label {
+  font-size: 11px;
+  color: #70c090;
+  font-style: italic;
+}
+.mgn-sketch-thumb {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
 .mgn-warn {
   display: flex;
   align-items: center;

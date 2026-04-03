@@ -627,7 +627,15 @@ export function MapGenerator({
                 />
               </div>
 
-              {!hasOpenAIKey() && (
+              {/* Sketch image preview — shown when image was pre-generated */}
+              {presetImageUrl && (
+                <div className="mgn-sketch-preview">
+                  <div className="mgn-sketch-preview-label">✅ Map image generated from sketch — review settings and confirm</div>
+                  <img src={presetImageUrl} className="mgn-sketch-thumb" alt="Generated map preview" />
+                </div>
+              )}
+
+              {!presetImageUrl && !hasOpenAIKey() && (
                 <div className="mgn-warn">
                   ⚠ No OpenAI key — map will be created without a visual image.
                   You can upload an image later.
@@ -636,7 +644,7 @@ export function MapGenerator({
               )}
 
               <button className="mgn-generate-btn" onClick={handleGenerate}>
-                {isDrillDown ? '✦ Generate Sub-Map' : '✦ Generate Map'}
+                {presetImageUrl ? '✦ Confirm & Create Map' : isDrillDown ? '✦ Generate Sub-Map' : '✦ Generate Map'}
               </button>
             </div>
           )}
