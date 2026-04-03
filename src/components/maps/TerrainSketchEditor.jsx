@@ -90,9 +90,9 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
   const [userPrompt, setUserPrompt] = useState(initialSpec?.user_prompt ?? '');
   const [errors, setErrors]         = useState([]);
 
-  // Overlay path drawing
-  const overlayPath = useRef([]);
-  const painting    = useRef(false);
+  // Live overlay path — state so it renders in real-time during drawing
+  const [liveOverlayPath, setLiveOverlayPath] = useState([]);
+  const painting = useRef(false);
 
   const svgRef = useRef(null);
 
@@ -143,10 +143,12 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
     }
 
     if (tool === 'overlay') {
-      const last = overlayPath.current;
       const coord = { x: cx, y: cy };
-      if (!last.length || last[last.length-1].x !== cx || last[last.length-1].y !== cy)
-        overlayPath.current = [...last, coord];
+      setLiveOverlayPath(prev => {
+        if (prev.length && prev[prev.length-1].x === cx && prev[prev.length-1].y === cy)
+          return prev;
+        return [...prev, coord];
+      });
       return;
     }
 
@@ -159,7 +161,7 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
   function handlePointerDown(e) {
     e.preventDefault();
     painting.current = true;
-    overlayPath.current = [];
+    setLiveOverlayPath([]);
     paintAt(e);
   }
 
@@ -167,9 +169,11 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
 
   function handlePointerUp() {
     painting.current = false;
-    if (tool === 'overlay' && overlayPath.current.length >= 2) {
-      setOverlays(prev => [...prev, { type: overlay, points: overlayPath.current }]);
-      overlayPath.current = [];
+    if (tool === 'overlay' && liveOverlayPath.length >= 2) {
+      setOverlays(prev => [...prev, { type: overlay, points: liveOverlayPath }]);
+      setLiveOverlayPath([]);
+    } else if (tool === 'overlay') {
+      setLiveOverlayPath([]);
     }
   }
 
@@ -180,7 +184,7 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
       grid_size: 32,
       scope,
       cells: Object.values(cells),
-      overlays,
+      overlays: overlays.filter(o => o.points?.length >= 2),
       modifiers,
       climate: climate || undefined,
       scale,
@@ -292,12 +296,20 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
                 r={1.5} fill="rgba(0,0,0,0.5)" />
             ))}
 
-            {/* Overlays */}
-            {overlays.map((ov, i) => ov.points.length > 1 && (
+            {/* Committed overlays */}
+            {overlays.map((ov, i) => ov.points?.length > 1 && (
               <polyline key={i}
                 points={ov.points.map(p => `${p.x*CELL_PX+CELL_PX/2},${p.y*CELL_PX+CELL_PX/2}`).join(' ')}
                 stroke={OVERLAY_COLORS[ov.type]} strokeWidth={2} fill="none" opacity={0.9} />
             ))}
+
+            {/* Live overlay path — drawn in real-time during stroke */}
+            {tool === 'overlay' && liveOverlayPath.length > 1 && (
+              <polyline
+                points={liveOverlayPath.map(p => `${p.x*CELL_PX+CELL_PX/2},${p.y*CELL_PX+CELL_PX/2}`).join(' ')}
+                stroke={OVERLAY_COLORS[overlay]} strokeWidth={2.5} fill="none"
+                opacity={0.7} strokeDasharray="4,2" />
+            )}
 
             {/* Modifiers */}
             {modifiers.map((m, i) => (

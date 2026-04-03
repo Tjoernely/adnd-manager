@@ -84,7 +84,8 @@ export function validateSketchSpec(spec: SketchSpec): ValidationResult {
     seen.add(key);
   });
 
-  (spec.overlays ?? []).forEach((o, i) => errors.push(...validateOverlay(o, i)));
+  // Skip overlays with fewer than 2 points — they are incomplete strokes, not errors
+  (spec.overlays ?? []).filter(o => o.points?.length >= 2).forEach((o, i) => errors.push(...validateOverlay(o, i)));
   (spec.modifiers ?? []).forEach((m, i) => errors.push(...validateModifier(m, i)));
 
   if (spec.user_prompt !== undefined && spec.user_prompt.length > 500)
