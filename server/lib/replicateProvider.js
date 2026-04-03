@@ -1,8 +1,8 @@
 /**
  * server/lib/replicateProvider.js
  *
- * MapRendererProvider — Replicate ControlNet SDXL segmentation.
- * Model: lucataco/controlnet-sdxl-seg (SDXL quality + spatial layout fidelity)
+ * MapRendererProvider — Replicate ControlNet SDXL.
+ * Model: lucataco/sdxl-controlnet
  *
  * Replicate predictions are async:
  *   POST /v1/models/{owner}/{name}/predictions → { id, status }
@@ -15,7 +15,7 @@ const axios = require('axios');
 
 const REPLICATE_API    = 'https://api.replicate.com/v1';
 const MODEL_OWNER      = 'lucataco';
-const MODEL_NAME       = 'controlnet-sdxl-seg';
+const MODEL_NAME       = 'sdxl-controlnet';
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS       = 120_000;
 
@@ -66,12 +66,12 @@ const replicateProvider = {
         `${REPLICATE_API}/models/${MODEL_OWNER}/${MODEL_NAME}/predictions`,
         {
           input: {
-            image:                         controlImage,
+            image:               controlImage,
             prompt,
-            negative_prompt:               NEGATIVE_PROMPT,
-            num_inference_steps:           30,
-            guidance_scale:                7.5,
-            controlnet_conditioning_scale: 0.9,
+            negative_prompt:     NEGATIVE_PROMPT,
+            num_inference_steps: 30,
+            guidance_scale:      7.5,
+            condition_scale:     0.9,
           },
         },
         { headers },
