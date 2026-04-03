@@ -12,7 +12,10 @@ import { api }            from '../../api/client.js';
 import { callClaude, hasAnthropicKey } from '../../api/aiClient.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import { MapGenerator }   from './MapGenerator.jsx';
+import { TerrainSketchEditor } from './TerrainSketchEditor.jsx';
 import { getChildGenerationParams, defaultConnectionForPOI } from '../../rules-engine/connectionEngine.ts';
+import { getPOITerrainAt, sketchToGeneratedParams, sketchToImagePromptAdditions } from '../../rules-engine/sketchToMapSpec.ts';
+import { BIOME_CONFIG }      from './TerrainSketchEditor.jsx';
 import './MapManager.css';
 
 // ── POI type catalogue ────────────────────────────────────────────────────────
@@ -367,6 +370,8 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [addPoiMode,    setAddPoiMode]    = useState(false);
   const [pendingPoiPos, setPendingPoiPos] = useState(null); // { x, y }
   const [showGenerator, setShowGenerator] = useState(false);
+  const [showSketch,    setShowSketch]    = useState(false);
+  const [sketchEditMap, setSketchEditMap] = useState(null); // map being edited (null = new)
   const [genContext,    setGenContext]    = useState(null);
   const [showApiKeys,   setShowApiKeys]   = useState(false);
   const [loading,       setLoading]       = useState(false);
@@ -572,6 +577,14 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       connection,
     );
 
+    // Override terrain from sketch if parent map has sketch data
+    const parentSketch = parentMap?.data?.sketch;
+    if (parentSketch && poi.x_percent != null && poi.y_percent != null) {
+      const sketchTerrain = getPOITerrainAt(parentSketch, poi.x_percent, poi.y_percent);
+      const biomeLabel = BIOME_CONFIG[sketchTerrain.biome]?.label ?? sketchTerrain.biome;
+      presetParams = { ...presetParams, terrain: [biomeLabel] };
+    }
+
     // Inherit era from parent generated_params when not Random
     const parentEra = parentMap?.data?.generated_params?.era;
     if (!presetParams.era && parentEra && parentEra !== 'Random') {
@@ -593,9 +606,23 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
 
   // ── After map created ────────────────────────────────────────────────────────
   const handleMapCreated = useCallback((newMap) => {
+    // Persist sketch into the new map's data if this came from sketch flow
+    const sketchSpec = genContext?.sketchSpec;
+    const savedMap = sketchSpec
+      ? { ...newMap, data: { ...(newMap.data ?? {}), sketch: sketchSpec } }
+      : newMap;
+
     // Add to list WITHOUT switching view — parent map stays active
-    setMaps(prev => [...prev, newMap]);
+    setMaps(prev => [...prev, savedMap]);
     setShowGenerator(false);
+
+    if (sketchSpec) {
+      // Save sketch to server in background
+      api.updateMap(savedMap.id, {
+        name: savedMap.name, type: savedMap.type, image_url: savedMap.image_url,
+        data: savedMap.data,
+      }).then(updated => patchMap(updated)).catch(() => {});
+    }
 
     if (genContext?.parentMapId && genContext?.parentPoiId) {
       // Update parent POI: set child_map_id + connections[0].to_location_id
@@ -629,6 +656,38 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     setActiveMapId(mapId);
     setSelectedPoiId(null);
   }, []);
+
+  // ── Sketch Map: save spec then open generator pre-populated ─────────────────
+  const handleSketchGenerate = useCallback(async (sketchSpec) => {
+    setShowSketch(false);
+
+    // If editing an existing map, save sketch back to its data and done
+    if (sketchEditMap) {
+      try {
+        const updated = await api.updateMap(sketchEditMap.id, {
+          name: sketchEditMap.name, type: sketchEditMap.type,
+          image_url: sketchEditMap.image_url,
+          data: { ...sketchEditMap.data, sketch: sketchSpec },
+        });
+        patchMap(updated);
+      } catch (e) { console.error('[MapManager] sketch save', e.message); }
+      setSketchEditMap(null);
+      return;
+    }
+
+    // New map: derive preset params from sketch then open generator
+    const presetParams = sketchToGeneratedParams(sketchSpec);
+    // Merge sketch image prompt additions into user_description so Claude enrichment uses them
+    const sketchHint = sketchToImagePromptAdditions(sketchSpec);
+    if (sketchHint) {
+      presetParams.user_description = presetParams.user_description
+        ? `${presetParams.user_description}. ${sketchHint}`
+        : sketchHint;
+    }
+    setGenContext({ sketchSpec, presetParams });
+    setShowGenerator(true);
+    setSketchEditMap(null);
+  }, [sketchEditMap, patchMap]);
 
   if (!isOpen) return null;
 
@@ -720,6 +779,19 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                           onClick={() => { setGenContext(null); setShowGenerator(true); }}>
                           ✦ New Map
                         </button>
+                        {activeMap?.data?.sketch ? (
+                          <button className="mm-btn"
+                            onClick={() => { setSketchEditMap(activeMap); setShowSketch(true); }}
+                            title="Edit terrain sketch for this map">
+                            ✏ Sketch
+                          </button>
+                        ) : (
+                          <button className="mm-btn"
+                            onClick={() => { setSketchEditMap(null); setShowSketch(true); }}
+                            title="Create map from terrain sketch">
+                            ◈ Sketch Map
+                          </button>
+                        )}
                         <button
                           className={`mm-btn${activeMap.data?.visible_to_players ? ' mm-btn--shared' : ''}`}
                           onClick={toggleMapVisibility}
@@ -828,6 +900,18 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           presetType={genContext?.presetType ?? null}
           presetParams={genContext?.presetParams ?? null}
         />
+      )}
+
+      {showSketch && (
+        <div className="mm-backdrop mm-backdrop--sketch" onClick={() => setShowSketch(false)}>
+          <div className="mm-sketch-shell" onClick={e => e.stopPropagation()}>
+            <TerrainSketchEditor
+              initialSpec={sketchEditMap?.data?.sketch ?? null}
+              onGenerate={handleSketchGenerate}
+              onCancel={() => { setShowSketch(false); setSketchEditMap(null); }}
+            />
+          </div>
+        </div>
       )}
 
       {showApiKeys && <ApiKeySettings onClose={() => setShowApiKeys(false)} />}

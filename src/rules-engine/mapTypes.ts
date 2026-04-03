@@ -131,6 +131,7 @@ export interface LocationExtended {
   tags:        LocationTags;
   state:       LocationState;
   settlement?: SettlementData;
+  sketch?:     SketchSpec;
 }
 
 // ── Ruleset types ─────────────────────────────────────────────────────────────
@@ -207,4 +208,78 @@ export interface MapSpec {
 export interface ValidationResult {
   valid:  boolean;
   errors: string[];
+}
+
+// ── Terrain Sketch Editor ─────────────────────────────────────────────────────
+
+export type BiomeType =
+  | 'plains'
+  | 'forest'
+  | 'swamp'
+  | 'desert'
+  | 'tundra'
+  | 'volcanic'
+  | 'ocean'
+  | 'coastal'
+  | 'mountains'
+  | 'hills';
+
+export type ReliefType =
+  | 'flat'
+  | 'rolling'
+  | 'hilly'
+  | 'mountainous'
+  | 'cliffs'
+  | 'valley'
+  | 'plateau';
+
+export type OverlayType =
+  | 'river'
+  | 'road'
+  | 'wall'
+  | 'coast'
+  | 'border';
+
+export type ModifierType =
+  | 'cursed'
+  | 'sacred'
+  | 'magical'
+  | 'blighted'
+  | 'fertile'
+  | 'ancient_ruins';
+
+export type AIFreedom = 'strict' | 'balanced' | 'creative';
+
+export type SketchScope = 'world' | 'region' | 'local';
+
+export interface SketchCell {
+  x:       number;   // 0–31
+  y:       number;   // 0–31
+  biome:   BiomeType;
+  relief?: ReliefType;
+}
+
+export interface SketchOverlay {
+  type:   OverlayType;
+  points: Array<{ x: number; y: number }>;  // ordered path
+}
+
+export interface SketchModifier {
+  type: ModifierType;
+  x:    number;
+  y:    number;
+  r:    number;   // radius in cells
+}
+
+export interface SketchSpec {
+  grid_size:   32;                   // always 32×32
+  scope:       SketchScope;
+  cells:       SketchCell[];         // sparse — only painted cells
+  overlays:    SketchOverlay[];
+  modifiers:   SketchModifier[];
+  climate?:    string;               // 'temperate' | 'tropical' | 'arctic' | 'arid'
+  scale?:      string;               // '10mi' | '50mi' | '200mi' | '500mi'
+  ai_freedom:  AIFreedom;
+  lore_mode:   boolean;              // if true, AI adds historical/lore flavour
+  user_prompt?: string;              // free-text appended to image prompt
 }

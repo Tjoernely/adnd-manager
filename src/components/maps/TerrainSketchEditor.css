@@ -1,0 +1,250 @@
+/* ── TerrainSketchEditor ──────────────────────────────────────────────────── */
+
+.tse-root {
+  display: flex;
+  flex-direction: column;
+  background: #1c1c1c;
+  color: #d4c5a0;
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: 'Crimson Text', Georgia, serif;
+  max-height: 90vh;
+}
+
+/* Toolbar */
+.tse-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: #141414;
+  border-bottom: 1px solid #3a3020;
+}
+.tse-title {
+  font-size: 1.1rem;
+  color: #c8a84b;
+  letter-spacing: 0.04em;
+}
+.tse-brush-sizes {
+  display: flex;
+  gap: 4px;
+}
+.tse-sz {
+  padding: 3px 8px;
+  background: #2a2a2a;
+  border: 1px solid #504030;
+  border-radius: 4px;
+  color: #b0a070;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.tse-sz--active {
+  background: #4a3820;
+  border-color: #c8a84b;
+  color: #c8a84b;
+}
+
+/* Body */
+.tse-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Palette */
+.tse-palette {
+  width: 160px;
+  min-width: 160px;
+  overflow-y: auto;
+  background: #181818;
+  border-right: 1px solid #3a3020;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tse-section {
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tse-section--active {
+  border-color: #c8a84b;
+}
+.tse-section-label {
+  padding: 4px 8px;
+  background: #232323;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #907040;
+  cursor: pointer;
+  user-select: none;
+}
+.tse-section--active .tse-section-label {
+  color: #c8a84b;
+  background: #2a1e0a;
+}
+.tse-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 5px;
+}
+.tse-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 1px solid #383828;
+  border-radius: 3px;
+  background: #242424;
+  color: #b0a070;
+  cursor: pointer;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.tse-chip:hover { border-color: #807050; }
+.tse-chip--active {
+  border-color: #c8a84b;
+  background: #3a2a10;
+  color: #f0d890;
+}
+.tse-chip--dimmed { opacity: 0.7; }
+.tse-chip-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.tse-chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+
+.tse-erase-btn {
+  margin-top: 4px;
+  padding: 5px 8px;
+  background: #2a1010;
+  border: 1px solid #603030;
+  border-radius: 4px;
+  color: #c07060;
+  cursor: pointer;
+  font-size: 0.75rem;
+  text-align: center;
+}
+.tse-erase-btn:hover { background: #3a1818; border-color: #c05050; }
+
+/* Canvas */
+.tse-canvas-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: auto;
+  background: #141414;
+}
+.tse-canvas {
+  cursor: crosshair;
+  border: 1px solid #3a3020;
+  border-radius: 2px;
+  touch-action: none;
+}
+.tse-canvas-info {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: #706050;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.tse-clear-link {
+  background: none;
+  border: none;
+  color: #c05050;
+  cursor: pointer;
+  font-size: 0.68rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* Settings sidebar */
+.tse-settings {
+  width: 190px;
+  min-width: 190px;
+  padding: 10px;
+  background: #181818;
+  border-left: 1px solid #3a3020;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tse-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.72rem;
+  color: #907040;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tse-label select,
+.tse-label textarea {
+  background: #222;
+  border: 1px solid #403020;
+  border-radius: 4px;
+  color: #d4c5a0;
+  font-size: 0.82rem;
+  padding: 4px 6px;
+}
+.tse-label select:focus,
+.tse-label textarea:focus { outline: none; border-color: #c8a84b; }
+.tse-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  font-size: 0.8rem;
+  color: #b0a070;
+}
+.tse-prompt { resize: vertical; font-family: inherit; }
+.tse-prompt-label { gap: 5px; }
+
+.tse-errors {
+  background: #2a0808;
+  border: 1px solid #803030;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  color: #d07060;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tse-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #2a2010;
+}
+.tse-btn {
+  padding: 8px 10px;
+  border: 1px solid #504030;
+  border-radius: 4px;
+  background: #262616;
+  color: #c8a84b;
+  cursor: pointer;
+  font-size: 0.82rem;
+  text-align: center;
+}
+.tse-btn:hover { background: #3a3020; }
+.tse-btn--primary {
+  background: #3a2808;
+  border-color: #c8a84b;
+  font-weight: bold;
+}
+.tse-btn--primary:hover { background: #4a3818; }

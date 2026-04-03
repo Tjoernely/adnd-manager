@@ -2019,3 +2019,17 @@
   color: #7a9070;
   font-style: italic;
 }
+
+/* ── Sketch Map modal shell ───────────────────────────────────────────────── */
+.mm-backdrop--sketch {
+  z-index: 400;
+  align-items: center;
+  justify-content: center;
+}
+.mm-sketch-shell {
+  width: min(96vw, 1040px);
+  height: min(90vh, 680px);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.8);
+}
