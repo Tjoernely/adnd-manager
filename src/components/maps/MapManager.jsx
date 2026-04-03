@@ -899,6 +899,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           parentPoiCtx={genContext?.parentPoiCtx ?? null}
           presetType={genContext?.presetType ?? null}
           presetParams={genContext?.presetParams ?? null}
+          fromSketch={!!genContext?.sketchSpec}
         />
       )}
 

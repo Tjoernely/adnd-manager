@@ -270,18 +270,19 @@ export function MapGenerator({
   parentPoiId  = null,
   parentPoiCtx = null,
   presetType   = null,
-  presetParams = null,  // Partial<GeneratedParams> from connectionEngine
+  presetParams = null,  // Partial<GeneratedParams> from connectionEngine or sketchToGeneratedParams
+  fromSketch   = false, // true when opened from TerrainSketchEditor
 }) {
   // presetType takes priority for mapType; presetParams fills terrain/atmosphere/etc.
   const [params, setParams] = useState({
     mapType:          presetType ?? presetParams?.mapType ?? 'Random',
-    size:             presetParams?.size        ?? 'Random',
-    terrain:          presetParams?.terrain     ?? [],
-    atmosphere:       presetParams?.atmosphere  ?? 'Random',
-    era:              presetParams?.era         ?? 'Random',
-    inhabitants:      presetParams?.inhabitants ?? 'Random',
-    poiCount:         presetParams?.poiCount    ?? 'Random (3-8)',
-    user_description: '',
+    size:             presetParams?.size             ?? 'Random',
+    terrain:          presetParams?.terrain          ?? [],
+    atmosphere:       presetParams?.atmosphere       ?? 'Random',
+    era:              presetParams?.era              ?? 'Random',
+    inhabitants:      presetParams?.inhabitants      ?? 'Random',
+    poiCount:         presetParams?.poiCount         ?? 'Random (3-8)',
+    user_description: presetParams?.user_description ?? '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
   const [step1Done,   setStep1Done]   = useState(false); // metadata call
@@ -475,12 +476,15 @@ export function MapGenerator({
           <div className="mgn-header">
             <div>
               <div className="mgn-title">
-                {isDrillDown ? '🔽 Generate Sub-Map' : '✦ AI Map Generator'}
+                {fromSketch ? '◈ Generate Map from Sketch' : isDrillDown ? '🔽 Generate Sub-Map' : '✦ AI Map Generator'}
               </div>
               {isDrillDown && parentPoiCtx && (
                 <div className="mgn-subtitle">
                   From: {parentPoiCtx.name} ({parentPoiCtx.type})
                 </div>
+              )}
+              {fromSketch && (
+                <div className="mgn-subtitle">Terrain sketch pre-populated — review and generate</div>
               )}
             </div>
             <button className="mgn-close-btn" onClick={onClose}>✕</button>
@@ -490,8 +494,8 @@ export function MapGenerator({
           {step === 'form' && (
             <div className="mgn-body">
 
-              {/* Context suggestion note — shown when presetParams has values */}
-              {isDrillDown && presetParams && (() => {
+              {/* Context note — shown for drill-down or sketch-derived params */}
+              {(isDrillDown || fromSketch) && presetParams && (() => {
                 const hints = [];
                 if (presetParams.terrain?.length)  hints.push(`Terrain: ${presetParams.terrain.join(', ')}`);
                 if (presetParams.atmosphere && presetParams.atmosphere !== 'Random') hints.push(`Atmosphere: ${presetParams.atmosphere}`);
@@ -500,8 +504,8 @@ export function MapGenerator({
                 if (!hints.length) return null;
                 return (
                   <div className="mgn-context-note">
-                    <span className="mgn-context-icon">🗺</span>
-                    <span>Suggested from parent context — {hints.join(' · ')}</span>
+                    <span className="mgn-context-icon">{fromSketch ? '◈' : '🗺'}</span>
+                    <span>{fromSketch ? 'Derived from sketch' : 'Suggested from parent context'} — {hints.join(' · ')}</span>
                   </div>
                 );
               })()}
