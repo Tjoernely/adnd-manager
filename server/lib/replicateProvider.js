@@ -5,19 +5,30 @@
  * Model: lucataco/sdxl-controlnet
  *
  * Replicate predictions are async:
- *   POST /v1/models/{owner}/{name}/predictions → { id, status }
- *   GET  /v1/predictions/:id                  → poll until status=succeeded
+ *   POST /v1/predictions → { id, status }
+ *   GET  /v1/predictions/:id → poll until status=succeeded
+ *
+ * NOTE: Replicate requires an accessible URL for the control image — it does
+ * not accept raw base64. We save the PNG to server/public/uploads/maps/ and
+ * pass the public URL, then delete the temp file after the prediction.
  */
 
 const axios = require('axios');
+const fs    = require('fs');
+const path  = require('path');
+const crypto = require('crypto');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const REPLICATE_API    = 'https://api.replicate.com/v1';
-const MODEL_OWNER      = 'lucataco';
-const MODEL_NAME       = 'sdxl-controlnet';
+// Community models require the versioned predictions endpoint.
+// Version hash from: GET /v1/models/lucataco/sdxl-controlnet (latest_version.id)
+const MODEL_VERSION    = '06d6fae3b75ab68a28cd2900afa6033166910dd09fd9751047043a5bbb4c184b';
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS       = 120_000;
+
+const PUBLIC_BASE_URL  = process.env.PUBLIC_BASE_URL || 'http://158.180.63.20';
+const UPLOADS_DIR      = path.join(__dirname, '..', 'public', 'uploads', 'maps');
 
 const STYLE_PROMPT = [
   'top-down fantasy world map, orthographic view, detailed terrain,',
@@ -29,6 +40,22 @@ const NEGATIVE_PROMPT = [
   'text, labels, watermark, blurry, ugly, modern, photorealistic,',
   '3d render, aerial photo, satellite, distorted, low quality',
 ].join(' ');
+
+// ── Helper: save base64 PNG to disk, return public URL ───────────────────────
+
+function saveControlImage(dataUri) {
+  const base64 = dataUri.replace(/^data:image\/png;base64,/, '');
+  const buf    = Buffer.from(base64, 'base64');
+  const fname  = `sketch-control-${crypto.randomUUID()}.png`;
+  const fpath  = path.join(UPLOADS_DIR, fname);
+
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  fs.writeFileSync(fpath, buf);
+
+  const url = `${PUBLIC_BASE_URL}/uploads/maps/${fname}`;
+  console.log(`[replicate] Saved control image → ${url}`);
+  return { fpath, url };
+}
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -58,15 +85,20 @@ const replicateProvider = {
       'Content-Type': 'application/json',
     };
 
+    // Save control image to disk and get a public URL
+    const { fpath: controlFilePath, url: controlImageUrl } = saveControlImage(controlImage);
+
     // ── Start prediction ───────────────────────────────────────────────────────
     console.log(`[replicate] Starting prediction — prompt length: ${prompt.length}`);
+    console.log(`[replicate] Control image URL: ${controlImageUrl}`);
     let prediction;
     try {
       const resp = await axios.post(
-        `${REPLICATE_API}/models/${MODEL_OWNER}/${MODEL_NAME}/predictions`,
+        `${REPLICATE_API}/predictions`,
         {
+          version: MODEL_VERSION,
           input: {
-            image:               controlImage,
+            image:               controlImageUrl,
             prompt,
             negative_prompt:     NEGATIVE_PROMPT,
             num_inference_steps: 30,
@@ -78,6 +110,9 @@ const replicateProvider = {
       );
       prediction = resp.data;
     } catch (err) {
+      fs.unlink(controlFilePath, () => {});
+      console.error(`[replicate] POST failed — HTTP ${err.response?.status}`);
+      console.error(`[replicate] Response body: ${JSON.stringify(err.response?.data)}`);
       const msg = err.response?.data?.detail ?? err.message;
       throw new Error(`Replicate prediction start failed: ${msg}`);
     }
@@ -87,36 +122,41 @@ const replicateProvider = {
     // ── Poll until succeeded or timeout ───────────────────────────────────────
     const deadline = Date.now() + TIMEOUT_MS;
 
-    while (true) {
-      if (Date.now() > deadline) {
-        throw new Error(`Replicate prediction timed out after ${TIMEOUT_MS / 1000}s (id: ${prediction.id})`);
+    try {
+      while (true) {
+        if (Date.now() > deadline) {
+          throw new Error(`Replicate prediction timed out after ${TIMEOUT_MS / 1000}s (id: ${prediction.id})`);
+        }
+
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+        let pollResp;
+        try {
+          pollResp = await axios.get(`${REPLICATE_API}/predictions/${prediction.id}`, { headers });
+        } catch (err) {
+          console.warn(`[replicate] Poll error (will retry): ${err.message}`);
+          continue;
+        }
+
+        const p = pollResp.data;
+        console.log(`[replicate] Poll — status: ${p.status}`);
+
+        if (p.status === 'succeeded') {
+          const output = Array.isArray(p.output) ? p.output[0] : p.output;
+          if (!output) throw new Error('Replicate returned succeeded but no output');
+          console.log(`[replicate] Done — output URL: ${String(output).substring(0, 80)}...`);
+          return output;
+        }
+
+        if (p.status === 'failed' || p.status === 'canceled') {
+          throw new Error(`Replicate prediction ${p.status}: ${p.error ?? 'unknown error'}`);
+        }
+
+        // status: 'starting' | 'processing' — keep polling
       }
-
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-
-      let pollResp;
-      try {
-        pollResp = await axios.get(`${REPLICATE_API}/predictions/${prediction.id}`, { headers });
-      } catch (err) {
-        console.warn(`[replicate] Poll error (will retry): ${err.message}`);
-        continue;
-      }
-
-      const p = pollResp.data;
-      console.log(`[replicate] Poll — status: ${p.status}`);
-
-      if (p.status === 'succeeded') {
-        const output = Array.isArray(p.output) ? p.output[0] : p.output;
-        if (!output) throw new Error('Replicate returned succeeded but no output');
-        console.log(`[replicate] Done — output URL: ${String(output).substring(0, 80)}...`);
-        return output;
-      }
-
-      if (p.status === 'failed' || p.status === 'canceled') {
-        throw new Error(`Replicate prediction ${p.status}: ${p.error ?? 'unknown error'}`);
-      }
-
-      // status: 'starting' | 'processing' — keep polling
+    } finally {
+      // Clean up temp control image regardless of success or failure
+      fs.unlink(controlFilePath, () => {});
     }
   },
 };
