@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { api }             from '../../api/client.js';
 import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
-import { buildMapWorldData } from '../../rules-engine/generationMapper.ts';
+import { buildMapWorldData, mapTypeToScope } from '../../rules-engine/generationMapper.ts';
 import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment, applyInfluencesToSpec, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
 import mapTagsJson     from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
@@ -33,6 +33,25 @@ const MAP_SIZES = ['Random','Small','Medium','Large'];
 const TERRAIN_OPTIONS = [
   'Plains','Forest','Dense Forest','Jungle','Mountains',
   'Hills','Desert','Swamp','Tundra','Coastal','Underground',
+];
+
+// Terrain options filtered by scope ─────────────────────────────────────────
+// 'null' = hide terrain section entirely; use ENVIRONMENT_CHIPS instead
+const TERRAIN_BY_SCOPE = {
+  world:         ['Plains','Forest','Dense Forest','Jungle','Mountains','Hills','Desert','Swamp','Tundra','Coastal'],
+  region:        ['Plains','Forest','Dense Forest','Jungle','Mountains','Hills','Desert','Swamp','Tundra','Coastal'],
+  local:         ['Plains','Forest','Hills','Mountains','Coastal','Desert','Swamp'],
+  settlement:    ['Plains','Forest','Hills','Coastal','Desert','Swamp'],
+  district:      null,  // hide terrain, show environment
+  building:      null,  // hide terrain, show environment
+  interior:      null,  // hide terrain, show environment
+  dungeon_level: ['Underground','Mountains','Swamp','Coastal'], // flooded, volcanic, rocky
+};
+
+// Environment chips shown instead of terrain for interior/building scopes
+const ENVIRONMENT_CHIPS = [
+  'Dark','Damp','Flooded','Ancient','Carved Stone',
+  'Natural Cave','Haunted','Magical','Toxic','Frozen',
 ];
 const ATMOSPHERES = [
   'Random','Dangerous','Mysterious','Peaceful','Ancient',
@@ -54,11 +73,13 @@ const BACKEND_TYPE_MAP = {
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function resolveParams(p) {
-  const resolvedType = p.mapType === 'Random' ? pickRandom(MAP_TYPES.slice(1)) : p.mapType;
+  const resolvedType  = p.mapType === 'Random' ? pickRandom(MAP_TYPES.slice(1)) : p.mapType;
+  const scope         = mapTypeToScope(resolvedType);
+  const terrainPool   = TERRAIN_BY_SCOPE[scope] ?? TERRAIN_OPTIONS;
   return {
     mapType:          resolvedType,
     size:             p.size        === 'Random' ? pickRandom(MAP_SIZES.slice(1))     : p.size,
-    terrain:          p.terrain.length > 0 ? p.terrain : [pickRandom(TERRAIN_OPTIONS)],
+    terrain:          p.terrain.length > 0 ? p.terrain : (terrainPool ? [pickRandom(terrainPool)] : []),
     atmosphere:       p.atmosphere  === 'Random' ? pickRandom(ATMOSPHERES.slice(1))   : p.atmosphere,
     era:              p.era         === 'Random' ? pickRandom(ERAS.slice(1))          : p.era,
     inhabitants:      p.inhabitants === 'Random' ? pickRandom(INHABITANTS.slice(1))   : p.inhabitants,
@@ -277,6 +298,20 @@ export function MapGenerator({
     ...p,
     terrain: p.terrain.includes(t) ? p.terrain.filter(x => x !== t) : [...p.terrain, t],
   }));
+
+  // Derive scope + terrain options from current mapType ──────────────────────
+  const activeScope    = params.mapType === 'Random' ? 'region' : mapTypeToScope(params.mapType);
+  const terrainOptions = TERRAIN_BY_SCOPE[activeScope] ?? TERRAIN_OPTIONS;
+  const showTerrain    = terrainOptions !== null;
+  const showEnvChips   = !showTerrain; // building/interior/district
+
+  // Strip terrain selections that are no longer valid when mapType changes
+  useEffect(() => {
+    if (params.terrain.length === 0) return;
+    if (!showTerrain) { setP('terrain', []); return; }
+    const valid = params.terrain.filter(t => terrainOptions.includes(t));
+    if (valid.length !== params.terrain.length) setP('terrain', valid);
+  }, [params.mapType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = async () => {
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
@@ -521,22 +556,43 @@ export function MapGenerator({
                 </div>
               </div>
 
-              {/* Terrain multi-select */}
-              <div className="mgn-field">
-                <div className="mgn-field-label">Terrain (pick up to 3 — leave empty for Random)</div>
-                <div className="mgn-terrain-grid">
-                  {TERRAIN_OPTIONS.map(t => (
-                    <button
-                      key={t}
-                      className={`mgn-terrain-chip${params.terrain.includes(t) ? ' mgn-terrain-chip--on' : ''}`}
-                      onClick={() => toggleTerrain(t)}
-                      disabled={!params.terrain.includes(t) && params.terrain.length >= 3}
-                    >
-                      {t}
-                    </button>
-                  ))}
+              {/* Terrain multi-select — hidden for building/interior scopes */}
+              {showTerrain && (
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Terrain (pick up to 3 — leave empty for Random)</div>
+                  <div className="mgn-terrain-grid">
+                    {terrainOptions.map(t => (
+                      <button
+                        key={t}
+                        className={`mgn-terrain-chip${params.terrain.includes(t) ? ' mgn-terrain-chip--on' : ''}`}
+                        onClick={() => toggleTerrain(t)}
+                        disabled={!params.terrain.includes(t) && params.terrain.length >= 3}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Environment chips — shown instead of terrain for building/interior */}
+              {showEnvChips && (
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Environment (pick up to 3 — shapes the atmosphere)</div>
+                  <div className="mgn-terrain-grid">
+                    {ENVIRONMENT_CHIPS.map(e => (
+                      <button
+                        key={e}
+                        className={`mgn-terrain-chip${params.terrain.includes(e) ? ' mgn-terrain-chip--on' : ''}`}
+                        onClick={() => toggleTerrain(e)}
+                        disabled={!params.terrain.includes(e) && params.terrain.length >= 3}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Optional user description — triggers AI visual enrichment */}
               <div className="mgn-field">
