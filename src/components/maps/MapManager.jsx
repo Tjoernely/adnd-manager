@@ -525,7 +525,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   }, [activeMap]);
 
   // ── Drill-down sub-map (auto or manual) ──────────────────────────────────────
-  const handleDrillDown = useCallback((poi, autoGenerate = false) => {
+  const handleDrillDown = useCallback((poi) => {
     const submapPreset = SUBMAP_TYPE_MAP[poi.suggested_submap_type]
       ?? SUBMAP_TYPE_MAP[poi.drill_down_type]
       ?? POI_TYPE_TO_MAP_TYPE[poi.type]
@@ -587,7 +587,6 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       parentPoiCtx: poi,
       presetType:   submapPreset,
       presetParams,
-      autoGenerate,
     });
     setShowGenerator(true);
   }, [activeMapId, maps]);
@@ -784,7 +783,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                     onClose={() => setSelectedPoiId(null)}
                     onUpdate={(updates) => handleUpdatePoi(selectedPoi.id, updates)}
                     onDelete={() => handleDeletePoi(selectedPoi.id)}
-                    onDrillDown={(autoGen) => handleDrillDown(selectedPoi, autoGen)}
+                    onDrillDown={() => handleDrillDown(selectedPoi)}
                     onNavigate={navigateToMap}
                     onShowApiKeys={() => setShowApiKeys(true)}
                   />
@@ -828,7 +827,6 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           parentPoiCtx={genContext?.parentPoiCtx ?? null}
           presetType={genContext?.presetType ?? null}
           presetParams={genContext?.presetParams ?? null}
-          autoGenerate={genContext?.autoGenerate ?? false}
         />
       )}
 
@@ -1449,7 +1447,7 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
                   </button>
                 ) : hasSubmap ? (
                   <button className="mm-poi-action-btn mm-poi-action-btn--drill"
-                    onClick={() => onDrillDown(false)}>
+                    onClick={() => onDrillDown()}>
                     🗺 Generate {poi.suggested_submap_type ?? poi.drill_down_type ?? 'Sub'}-Map
                   </button>
                 ) : null}

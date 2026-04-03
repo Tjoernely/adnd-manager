@@ -250,7 +250,6 @@ export function MapGenerator({
   parentPoiCtx = null,
   presetType   = null,
   presetParams = null,  // Partial<GeneratedParams> from connectionEngine
-  autoGenerate = false,
 }) {
   // presetType takes priority for mapType; presetParams fills terrain/atmosphere/etc.
   const [params, setParams] = useState({
@@ -429,13 +428,6 @@ export function MapGenerator({
       setStep('error');
     }
   };
-
-  // Auto-start generation on mount when opened from a POI drill-down
-  useEffect(() => {
-    if (autoGenerate) {
-      handleGenerate();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDrillDown = !!(parentMapId && parentPoiId);
 
