@@ -30,9 +30,10 @@ const PUBLIC_BASE_URL  = process.env.PUBLIC_BASE_URL || 'http://158.180.63.20';
 const UPLOADS_DIR      = path.join(__dirname, '..', 'public', 'uploads', 'maps');
 
 const STYLE_PROMPT = [
-  'top-down fantasy world map, orthographic view, detailed terrain,',
-  'parchment paper texture, hand-drawn ink style, Forgotten Realms aesthetic,',
-  'natural earth tones, cartographic illustration, high detail',
+  'top-down fantasy cartography map, hand-drawn ink style,',
+  'Tolkien-style illustrated map, parchment texture,',
+  'medieval fantasy aesthetic, detailed terrain illustration,',
+  'birds eye view, warm earth tones, Forgotten Realms style',
 ].join(' ');
 
 // ── Helper: save base64 PNG to disk, return public URL ───────────────────────
@@ -95,12 +96,12 @@ const replicateProvider = {
             prompt,
             num_samples:      '1',
             image_resolution: '768',
-            ddim_steps:       20,
+            ddim_steps:       30,
             scale:            9.0,
             seed:             -1,
             eta:              0.0,
-            a_prompt:         'best quality, extremely detailed',
-            n_prompt:         'longbody, lowres, bad anatomy, bad hands, missing fingers, cropped, worst quality, low quality',
+            a_prompt:         'masterpiece, best quality, highly detailed cartographic illustration',
+            n_prompt:         'photorealistic, photograph, 3d render, satellite imagery, modern, ugly, watermark, text, labels, blurry, low quality, isometric, perspective view',
           },
         },
         { headers },
