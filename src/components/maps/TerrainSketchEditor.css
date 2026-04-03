@@ -223,6 +223,21 @@
   gap: 3px;
 }
 
+.tse-gen-status {
+  font-size: 0.75rem;
+  color: #c8a84b;
+  background: #1a1400;
+  border: 1px solid #4a3820;
+  border-radius: 4px;
+  padding: 5px 8px;
+  text-align: center;
+  animation: tse-pulse 1.5s ease-in-out infinite;
+}
+@keyframes tse-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
 .tse-actions {
   display: flex;
   flex-direction: column;

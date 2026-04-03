@@ -594,6 +594,91 @@ router.delete('/:id', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
+// ── Generate map image from terrain sketch ────────────────────────────────────
+// POST /api/maps/generate-from-sketch
+// Body: { sketchSpec, renderer?, campaignId }
+// Returns: { imageUrl, renderer_used, spec }
+//
+// Generates a map image via ControlNet (Replicate) or DALL-E based on
+// the painted SketchSpec. Does NOT create a map record — caller does that
+// via the normal POST / flow after choosing a name and params.
+
+const { generateFromSketch } = require('../lib/rendererFactory');
+
+router.post('/generate-from-sketch', auth, async (req, res) => {
+  try {
+    const { sketchSpec, renderer = 'auto', controlImage } = req.body ?? {};
+
+    // ── Validate ─────────────────────────────────────────────────────────────
+    if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
+    if (!controlImage || typeof controlImage !== 'string')
+      return res.status(400).json({ error: 'controlImage (base64 PNG) required' });
+
+    const cells = sketchSpec.cells ?? [];
+    if (!Array.isArray(cells) || cells.length === 0)
+      return res.status(400).json({ error: 'Sketch has no painted cells — paint some terrain first' });
+
+    // ── Build prompt additions from sketch ────────────────────────────────────
+    // Derive dominant biomes from cell counts
+    const biomeCounts = {};
+    for (const c of cells) biomeCounts[c.biome] = (biomeCounts[c.biome] ?? 0) + 1;
+    const topBiomes = Object.entries(biomeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([b]) => b);
+
+    const BIOME_LABEL = {
+      plains:'plains', forest:'dense forest', swamp:'swamp', desert:'desert',
+      tundra:'tundra', volcanic:'volcanic wasteland', ocean:'ocean', coastal:'coastal shores',
+      mountains:'mountains', hills:'rolling hills',
+    };
+
+    const overlayLabels = [...new Set((sketchSpec.overlays ?? []).map(o => o.type))];
+    const modLabels     = [...new Set((sketchSpec.modifiers ?? []).map(m => m.type.replace(/_/g, ' ')))];
+
+    const parts = [`Terrain: ${topBiomes.map(b => BIOME_LABEL[b] ?? b).join(', ')}`];
+    if (overlayLabels.length) parts.push(`Features: ${overlayLabels.join(', ')}`);
+    if (modLabels.length)     parts.push(`Special: ${modLabels.join(', ')}`);
+    if (sketchSpec.climate)   parts.push(`Climate: ${sketchSpec.climate}`);
+    if (sketchSpec.lore_mode) parts.push('historical lore, aged cartographic style');
+    if (sketchSpec.user_prompt) parts.push(sketchSpec.user_prompt);
+
+    const promptAdditions = parts.join('. ');
+    console.log(`[generate-from-sketch] renderer=${renderer} cells=${cells.length} prompt="${promptAdditions.substring(0, 100)}..."`);
+
+    // ── Generate image ────────────────────────────────────────────────────────
+    const { imageUrl, renderer_used } = await generateFromSketch({
+      controlImage,
+      promptAdditions,
+      renderer,
+    });
+
+    // ── Persist image to uploads (Replicate/DALL-E URLs are temporary) ────────
+    let localImageUrl = imageUrl;
+    if (imageUrl.startsWith('http')) {
+      try {
+        const response = await fetch(imageUrl);
+        if (response.ok) {
+          const buffer   = Buffer.from(await response.arrayBuffer());
+          const filename = `map-sketch-${crypto.randomUUID()}.png`;
+          const destPath = path.join(UPLOAD_DIR, filename);
+          fs.writeFileSync(destPath, buffer);
+          localImageUrl = `/uploads/maps/${filename}`;
+          console.log(`[generate-from-sketch] Saved ${buffer.length} bytes → ${filename}`);
+        }
+      } catch (saveErr) {
+        console.warn(`[generate-from-sketch] Could not persist image locally: ${saveErr.message}`);
+        // Return the temporary URL anyway — better than failing
+      }
+    }
+
+    res.json({ imageUrl: localImageUrl, renderer_used, spec: sketchSpec });
+  } catch (e) {
+    console.error('[generate-from-sketch]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isDM(campaignId, userId) {
   return db.one('SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2', [campaignId, userId]);

@@ -3,11 +3,13 @@
  *
  * Props:
  *   initialSpec   SketchSpec | null   — existing sketch to edit (or null for new)
- *   onGenerate    fn(spec: SketchSpec) — called when user clicks "Generate Map from Sketch"
+ *   onGenerate    fn(spec, imageUrl)   — called after successful image generation
  *   onCancel      fn()
  */
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { validateSketchSpec } from '../../rules-engine/sketchValidator.ts';
+import { useState, useRef, useCallback } from 'react';
+import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
+import { renderSketchToControlImage }   from '../../utils/canvas/sketchToPng.ts';
+import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -88,7 +90,10 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
   const [aiFreedom, setAiFreedom]   = useState(initialSpec?.ai_freedom ?? 'balanced');
   const [loreMode, setLoreMode]     = useState(initialSpec?.lore_mode ?? false);
   const [userPrompt, setUserPrompt] = useState(initialSpec?.user_prompt ?? '');
+  const [renderer, setRenderer]     = useState('auto');  // 'auto' | 'controlnet' | 'dalle'
   const [errors, setErrors]         = useState([]);
+  const [generating, setGenerating] = useState(false);
+  const [genStatus, setGenStatus]   = useState('');
 
   // Live overlay path — state so it renders in real-time during drawing
   const [liveOverlayPath, setLiveOverlayPath] = useState([]);
@@ -194,12 +199,50 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
     };
   }
 
-  function handleGenerate() {
+  async function handleGenerate() {
     const spec = buildSpec();
     const result = validateSketchSpec(spec);
     if (!result.valid) { setErrors(result.errors); return; }
     setErrors([]);
-    onGenerate(spec);
+    setGenerating(true);
+
+    try {
+      // 1. Render sketch → segmentation PNG (browser OffscreenCanvas)
+      setGenStatus('Rendering terrain sketch…');
+      const controlImage = await renderSketchToControlImage(spec);
+
+      // 2. POST to server → image generation (ControlNet or DALL-E)
+      const rendererLabel = renderer === 'controlnet' ? 'ControlNet'
+                          : renderer === 'dalle'      ? 'DALL-E'
+                          : 'AI renderer';
+      setGenStatus(`Generating with ${rendererLabel}…`);
+
+      const response = await fetch('/api/maps/generate-from-sketch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('dnd_token') ?? ''}`,
+        },
+        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(err.error ?? 'Generation failed');
+      }
+
+      const { imageUrl, renderer_used } = await response.json();
+      setGenStatus(`Done (${renderer_used})`);
+
+      // 3. Hand off to parent with spec + imageUrl
+      onGenerate(spec, imageUrl);
+
+    } catch (err) {
+      setErrors([err.message]);
+    } finally {
+      setGenerating(false);
+      setGenStatus('');
+    }
   }
 
   function clearModifiers() { setModifiers([]); }
@@ -375,17 +418,29 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
               value={userPrompt} onChange={e => setUserPrompt(e.target.value)} />
           </label>
 
+          <label className="tse-label">Renderer
+            <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
+              <option value="auto">🎨 Auto (ControlNet → DALL-E)</option>
+              <option value="controlnet">🗺 ControlNet (Replicate)</option>
+              <option value="dalle">🖼 DALL-E (OpenAI)</option>
+            </select>
+          </label>
+
           {errors.length > 0 && (
             <div className="tse-errors">
               {errors.map((e,i) => <div key={i}>⚠ {e}</div>)}
             </div>
           )}
 
+          {generating && genStatus && (
+            <div className="tse-gen-status">⏳ {genStatus}</div>
+          )}
+
           <div className="tse-actions">
-            <button className="tse-btn tse-btn--primary" onClick={handleGenerate}>
-              Generate Map from Sketch
+            <button className="tse-btn tse-btn--primary" onClick={handleGenerate} disabled={generating}>
+              {generating ? 'Generating…' : 'Generate Map from Sketch'}
             </button>
-            <button className="tse-btn" onClick={onCancel}>Cancel</button>
+            <button className="tse-btn" onClick={onCancel} disabled={generating}>Cancel</button>
           </div>
         </div>
       </div>
