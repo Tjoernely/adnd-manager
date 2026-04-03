@@ -1,8 +1,8 @@
 /**
  * server/lib/replicateProvider.js
  *
- * MapRendererProvider — Replicate ControlNet SDXL.
- * Model: lucataco/sdxl-controlnet
+ * MapRendererProvider — Replicate ControlNet Segmentation.
+ * Model: jagilley/controlnet-seg
  *
  * Replicate predictions are async:
  *   POST /v1/predictions → { id, status }
@@ -13,17 +13,16 @@
  * pass the public URL, then delete the temp file after the prediction.
  */
 
-const axios = require('axios');
-const fs    = require('fs');
-const path  = require('path');
+const axios  = require('axios');
+const fs     = require('fs');
+const path   = require('path');
 const crypto = require('crypto');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const REPLICATE_API    = 'https://api.replicate.com/v1';
-// Community models require the versioned predictions endpoint.
-// Version hash from: GET /v1/models/lucataco/sdxl-controlnet (latest_version.id)
-const MODEL_VERSION    = '06d6fae3b75ab68a28cd2900afa6033166910dd09fd9751047043a5bbb4c184b';
+// Version hash from: GET /v1/models/jagilley/controlnet-seg (latest_version.id)
+const MODEL_VERSION    = 'f967b165f4cd2e151d11e7450a8214e5d22ad2007f042f2f891ca3981dbfba0d';
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS       = 120_000;
 
@@ -34,11 +33,6 @@ const STYLE_PROMPT = [
   'top-down fantasy world map, orthographic view, detailed terrain,',
   'parchment paper texture, hand-drawn ink style, Forgotten Realms aesthetic,',
   'natural earth tones, cartographic illustration, high detail',
-].join(' ');
-
-const NEGATIVE_PROMPT = [
-  'text, labels, watermark, blurry, ugly, modern, photorealistic,',
-  '3d render, aerial photo, satellite, distorted, low quality',
 ].join(' ');
 
 // ── Helper: save base64 PNG to disk, return public URL ───────────────────────
@@ -67,15 +61,14 @@ const replicateProvider = {
   },
 
   /**
-   * @param {string} controlImage  base64 data-URI PNG (data:image/png;base64,...)
-   * @param {string} promptAdditions  sketch-derived terrain/feature description
+   * @param {string} controlImage    base64 data-URI PNG (data:image/png;base64,...)
+   * @param {string} promptAdditions sketch-derived terrain/feature description
    * @returns {Promise<string>}  URL of the generated image
    */
   async render(controlImage, promptAdditions) {
     const apiKey = process.env.REPLICATE_API_KEY;
     if (!apiKey) throw new Error('REPLICATE_API_KEY not set');
 
-    // Build full prompt: style + spatial description
     const prompt = promptAdditions
       ? `${STYLE_PROMPT}. ${promptAdditions}`
       : STYLE_PROMPT;
@@ -98,12 +91,16 @@ const replicateProvider = {
         {
           version: MODEL_VERSION,
           input: {
-            image:               controlImageUrl,
+            input_image:      controlImageUrl,
             prompt,
-            negative_prompt:     NEGATIVE_PROMPT,
-            num_inference_steps: 30,
-            guidance_scale:      7.5,
-            condition_scale:     0.9,
+            num_samples:      '1',
+            image_resolution: '768',
+            ddim_steps:       20,
+            scale:            9.0,
+            seed:             -1,
+            eta:              0.0,
+            a_prompt:         'best quality, extremely detailed',
+            n_prompt:         'longbody, lowres, bad anatomy, bad hands, missing fingers, cropped, worst quality, low quality',
           },
         },
         { headers },
