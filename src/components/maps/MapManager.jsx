@@ -692,8 +692,8 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="mm-backdrop" onClick={onClose}>
-      <div className="mm-shell" onClick={e => e.stopPropagation()}>
+    <div className="mm-backdrop">
+      <div className="mm-shell">
 
         {/* ── Left sidebar ── */}
         <aside className="mm-sidebar">
