@@ -16,7 +16,7 @@ if [ ! -f $APP/server/.env ]; then
 fi
 
 # Install server-side dependencies only (no frontend build)
-npm --prefix $APP/server ci
+npm --prefix $APP/server install
 
 pm2 restart adnd-backend
 pm2 save
