@@ -62,7 +62,7 @@ const CELL_PX   = OUTPUT_PX / GRID; // 24px per cell
 // ── Relief hatch helpers ────────────────────────────────────────────────────
 
 function drawReliefHatch(
-  ctx: OffscreenCanvasRenderingContext2D,
+  ctx: CanvasRenderingContext2D,
   px: number, py: number,
   color: string, opacity: number,
   style: 'diagonal' | 'vertical' | 'light',
@@ -100,9 +100,12 @@ function drawReliefHatch(
 
 // ── Main export ─────────────────────────────────────────────────────────────
 
-export async function renderSketchToControlImage(spec: SketchSpec): Promise<string> {
-  const canvas = new OffscreenCanvas(OUTPUT_PX, OUTPUT_PX);
-  const ctx    = canvas.getContext('2d')!;
+export function renderSketchToControlImage(spec: SketchSpec): string {
+  // Use a regular HTMLCanvasElement — works in all browsers, no worker required
+  const canvas = document.createElement('canvas');
+  canvas.width  = OUTPUT_PX;
+  canvas.height = OUTPUT_PX;
+  const ctx = canvas.getContext('2d')!;
 
   // Disable ALL smoothing — ControlNet needs crisp segmentation edges
   ctx.imageSmoothingEnabled = false;
@@ -184,15 +187,10 @@ export async function renderSketchToControlImage(spec: SketchSpec): Promise<stri
     ctx.stroke();
   }
 
-  // 5. Export to base64 PNG
-  const blob   = await canvas.convertToBlob({ type: 'image/png' });
-  const buffer = await blob.arrayBuffer();
-  const bytes  = new Uint8Array(buffer);
-  let binary   = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  const b64 = btoa(binary);
+  // 5. Export to base64 PNG via toDataURL (synchronous, universally supported)
+  const dataUrl = canvas.toDataURL('image/png');
 
-  console.log(`[sketchToPng] Rendered ${OUTPUT_PX}×${OUTPUT_PX} PNG — ${bytes.byteLength} bytes, base64 ${b64.length} chars`);
+  console.log(`[sketchToPng] Rendered ${OUTPUT_PX}×${OUTPUT_PX} PNG — dataURL length: ${dataUrl.length} chars`);
 
-  return `data:image/png;base64,${b64}`;
+  return dataUrl;
 }

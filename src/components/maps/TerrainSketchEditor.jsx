@@ -201,15 +201,27 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
 
   async function handleGenerate() {
     const spec = buildSpec();
-    const result = validateSketchSpec(spec);
-    if (!result.valid) { setErrors(result.errors); return; }
-    setErrors([]);
+
+    // Show loading immediately so user sees feedback even before validation
     setGenerating(true);
+    setGenStatus('Validating sketch…');
+    setErrors([]);
+
+    // Defer to next tick so React flushes the loading state before heavy work
+    await new Promise(r => setTimeout(r, 0));
+
+    const result = validateSketchSpec(spec);
+    if (!result.valid) {
+      setErrors(result.errors);
+      setGenerating(false);
+      setGenStatus('');
+      return;
+    }
 
     try {
-      // 1. Render sketch → segmentation PNG (browser OffscreenCanvas)
+      // 1. Render sketch → segmentation PNG (HTMLCanvasElement, works in all browsers)
       setGenStatus('Rendering terrain sketch…');
-      const controlImage = await renderSketchToControlImage(spec);
+      const controlImage = renderSketchToControlImage(spec);
 
       // 2. POST to server → image generation (ControlNet or DALL-E)
       const rendererLabel = renderer === 'controlnet' ? 'ControlNet'
