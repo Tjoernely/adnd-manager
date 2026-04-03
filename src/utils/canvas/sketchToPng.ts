@@ -10,17 +10,19 @@ import type { SketchSpec, BiomeType, OverlayType, ModifierType } from '../../rul
 
 // ── Colour tables (flat HEX, no gradients) ─────────────────────────────────
 
+// ADE20K segmentation palette — jagilley/controlnet-seg is trained on these
+// specific RGB values. Using arbitrary colours causes the model to ignore zones.
 const BIOME_COLOR: Record<BiomeType | 'null', string> = {
-  plains:    '#9dc183',
-  forest:    '#228b22',
-  swamp:     '#4a5d23',
-  desert:    '#edc9af',
-  tundra:    '#e0f7fa',
-  volcanic:  '#332222',
-  ocean:     '#1a237e',
-  coastal:   '#4db6ac',
-  mountains: '#9e9e9e',
-  hills:     '#a5d6a7',
+  plains:    '#1d911d',  // grass    class  9
+  forest:    '#b26b42',  // tree     class  4
+  swamp:     '#53683f',  // grass+tree mix
+  desert:    '#ffe599',  // sand     class 46
+  tundra:    '#cce5ff',  // snow     class 17
+  volcanic:  '#400000',  // earth    class 13
+  ocean:     '#0066cc',  // water    class 21
+  coastal:   '#00a8a8',  // sea      class 26
+  mountains: '#808080',  // mountain class 16
+  hills:     '#1d911d',  // treat as grass (closest ADE20K match)
   null:      '#cccccc',
 };
 
