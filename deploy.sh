@@ -15,7 +15,8 @@ if [ ! -f $APP/server/.env ]; then
   exit 1
 fi
 
-# Install server-side dependencies only (no frontend build)
+# Clean install — avoids ENOTEMPTY errors from concurrent webhook/PM2 activity
+rm -rf $APP/server/node_modules
 npm --prefix $APP/server install
 
 pm2 restart adnd-backend
