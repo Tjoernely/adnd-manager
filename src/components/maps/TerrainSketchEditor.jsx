@@ -24,16 +24,16 @@ export const BIOME_CONFIG = {
   ocean:     { label: 'Ocean',     color: '#1a5080' },
   coastal:   { label: 'Coastal',   color: '#4a90a0' },
   mountains: { label: 'Mountains', color: '#8a7868' },
-  hills:     { label: 'Hills',     color: '#a89060' },
+  lake:      { label: 'Lake',      color: '#1976d2' },
 };
 
-const RELIEF_OPTIONS = ['flat','rolling','hilly','mountainous','cliffs','valley','plateau'];
-const OVERLAY_OPTIONS = ['river','road','wall','coast','border'];
+const RELIEF_OPTIONS = ['flat','rolling','hills','mountainous','cliffs','valley','plateau'];
+const OVERLAY_OPTIONS = ['river','road','wall','border','canyon','chasm'];
 const MODIFIER_OPTIONS = ['cursed','sacred','magical','blighted','fertile','ancient_ruins'];
 
 const OVERLAY_COLORS = {
   river: '#3a90d0', road: '#c0a060', wall: '#808080',
-  coast: '#4ab0c0', border: '#c05050',
+  border: '#c05050', canyon: '#8d5030', chasm: '#222222',
 };
 
 const MODIFIER_COLORS = {
@@ -69,10 +69,20 @@ function getCellsInBrush(cx, cy, size) {
 export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
   const [cells, setCells]           = useState(() => {
     const map = {};
-    (initialSpec?.cells ?? []).forEach(c => { map[cellKey(c.x, c.y)] = c; });
+    (initialSpec?.cells ?? []).forEach(c => {
+      // Backwards compat: biome='hills' → biome='plains' + relief='hills'
+      const cell = { ...c };
+      if (cell.biome === 'hills') { cell.biome = 'plains'; cell.relief = 'hills'; }
+      // Backwards compat: relief='hilly' → relief='hills'
+      if (cell.relief === 'hilly') cell.relief = 'hills';
+      map[cellKey(cell.x, cell.y)] = cell;
+    });
     return map;
   });
-  const [overlays, setOverlays]     = useState(initialSpec?.overlays ?? []);
+  const [overlays, setOverlays]     = useState(
+    // Backwards compat: drop legacy 'coast' overlays (now implicit in biome boundary)
+    (initialSpec?.overlays ?? []).filter(o => o.type !== 'coast'),
+  );
   const [modifiers, setModifiers]   = useState(initialSpec?.modifiers ?? []);
 
   // Brush state

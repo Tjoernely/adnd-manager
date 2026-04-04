@@ -10,41 +10,38 @@ import type { SketchSpec, BiomeType, OverlayType, ModifierType } from '../../rul
 
 // ── Colour tables (flat HEX, no gradients) ─────────────────────────────────
 
-// ADE20K segmentation palette — jagilley/controlnet-seg is trained on these
-// specific RGB values. Using arbitrary colours causes the model to ignore zones.
+// Flat colours for segmentation control image (no gradients, no anti-aliasing)
 const BIOME_COLOR: Record<BiomeType | 'null', string> = {
-  plains:    '#1d911d',  // grass    class  9
-  forest:    '#b26b42',  // tree     class  4
-  swamp:     '#53683f',  // grass+tree mix
-  desert:    '#ffe599',  // sand     class 46
-  tundra:    '#cce5ff',  // snow     class 17
-  volcanic:  '#400000',  // earth    class 13
-  ocean:     '#0066cc',  // water    class 21
-  coastal:   '#00a8a8',  // sea      class 26
-  mountains: '#808080',  // mountain class 16
-  hills:     '#1d911d',  // treat as grass (closest ADE20K match)
+  plains:    '#9dc183',
+  forest:    '#228b22',
+  swamp:     '#4a5d23',
+  desert:    '#edc9af',
+  tundra:    '#e0f7fa',
+  volcanic:  '#332222',
+  ocean:     '#1a237e',
+  coastal:   '#4db6ac',
+  mountains: '#9e9e9e',
+  lake:      '#1976d2',
   null:      '#cccccc',
 };
 
 const OVERLAY_COLOR: Record<OverlayType, string> = {
-  river:  '#2196f3',
+  river:  '#0000ff',
   road:   '#8d6e63',
   wall:   '#607d8b',
-  coast:  '#4db6ac',
-  border: '#f44336',
+  border: '#333333',
+  canyon: '#5d4037',
+  chasm:  '#000000',
 };
 
 const OVERLAY_WIDTH: Record<OverlayType, number> = {
-  river:  6,
-  road:   4,
+  river:  8,
+  road:   5,
   wall:   5,
-  coast:  6,
-  border: 3,
+  border: 4,
+  canyon: 10,
+  chasm:  12,
 };
-
-// canyon / chasm are not in OverlayType but may appear via user data
-const EXTRA_OVERLAY_COLOR: Record<string, string>  = { canyon: '#5d4037', chasm: '#000000' };
-const EXTRA_OVERLAY_WIDTH: Record<string, number>  = { canyon: 8,         chasm: 10       };
 
 const MODIFIER_COLOR: Record<ModifierType | string, string> = {
   cursed:       'rgba(33,33,33,0.30)',
@@ -133,7 +130,7 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
         case 'cliffs':
           drawReliefHatch(ctx, px, py, '#444444', 0.30, 'vertical');
           break;
-        case 'hilly':
+        case 'hills':
           drawReliefHatch(ctx, px, py, '#666666', 0.15, 'light');
           break;
         // flat / rolling / valley / plateau: no overlay
@@ -164,12 +161,8 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
   for (const ov of spec.overlays) {
     if (!ov.points || ov.points.length < 2) continue;
 
-    const color = OVERLAY_COLOR[ov.type as OverlayType]
-               ?? EXTRA_OVERLAY_COLOR[ov.type]
-               ?? '#ffffff';
-    const width = OVERLAY_WIDTH[ov.type as OverlayType]
-               ?? EXTRA_OVERLAY_WIDTH[ov.type]
-               ?? 4;
+    const color = OVERLAY_COLOR[ov.type as OverlayType] ?? '#333333';
+    const width = OVERLAY_WIDTH[ov.type as OverlayType] ?? 5;
 
     ctx.strokeStyle = color;
     ctx.lineWidth   = width;
@@ -204,7 +197,6 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
 const OVERLAY_SCRIBBLE_WIDTH: Record<string, number> = {
   river:  12,
   road:   10,
-  coast:  12,
   wall:   10,
   border:  8,
   canyon: 14,

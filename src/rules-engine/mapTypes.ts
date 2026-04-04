@@ -222,12 +222,12 @@ export type BiomeType =
   | 'ocean'
   | 'coastal'
   | 'mountains'
-  | 'hills';
+  | 'lake';
 
 export type ReliefType =
   | 'flat'
   | 'rolling'
-  | 'hilly'
+  | 'hills'
   | 'mountainous'
   | 'cliffs'
   | 'valley'
@@ -237,8 +237,9 @@ export type OverlayType =
   | 'river'
   | 'road'
   | 'wall'
-  | 'coast'
-  | 'border';
+  | 'border'
+  | 'canyon'
+  | 'chasm';
 
 export type ModifierType =
   | 'cursed'

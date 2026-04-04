@@ -22,7 +22,7 @@ const BIOME_TO_TERRAIN: Record<BiomeType, string> = {
   ocean:     'Coastal',
   coastal:   'Coastal',
   mountains: 'Mountains',
-  hills:     'Hills',
+  lake:      'Coastal',
 };
 
 // ── Biome → atmosphere hint ───────────────────────────────────────────────────
@@ -57,7 +57,7 @@ const SCOPE_TO_MAP_TYPE: Record<string, string> = {
 
 const RELIEF_SUFFIX: Partial<Record<ReliefType, string>> = {
   mountainous: 'Mountains',
-  hilly:       'Hills',
+  hills:       'Hills',
   cliffs:      'Cliffs',
   valley:      'Valley',
   plateau:     'Plateau',
