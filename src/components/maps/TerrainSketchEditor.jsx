@@ -241,18 +241,29 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
       }
       const { jobId } = await startResp.json();
 
-      // 3. Poll GET /api/maps/sketch-job/:jobId every 3s until done
+      // 3. Poll GET /api/maps/sketch-job/:jobId every 3s until done (max 180s)
       setGenStatus(`Generating with ${rendererLabel}…`);
       let elapsed = 0;
-      while (true) {
+      const MAX_WAIT = 180;
+      while (elapsed < MAX_WAIT) {
         await new Promise(r => setTimeout(r, 3000));
         elapsed += 3;
 
-        const pollResp = await fetch(`/api/maps/sketch-job/${jobId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!pollResp.ok) throw new Error('Lost track of generation job');
-        const job = await pollResp.json();
+        let job;
+        try {
+          const pollResp = await fetch(`/api/maps/sketch-job/${jobId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!pollResp.ok) {
+            // Transient error — keep polling, don't abort
+            console.warn(`[sketch] Poll ${elapsed}s: HTTP ${pollResp.status} — retrying`);
+            continue;
+          }
+          job = await pollResp.json();
+        } catch (networkErr) {
+          console.warn(`[sketch] Poll ${elapsed}s: network error — retrying`, networkErr.message);
+          continue;
+        }
 
         if (job.status === 'succeeded') {
           setGenStatus(`Done (${job.renderer_used})`);
@@ -262,9 +273,12 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
         if (job.status === 'failed') {
           throw new Error(job.error ?? 'Generation failed');
         }
-        // pending/processing — update status with elapsed time
-        setGenStatus(`Generating with ${rendererLabel}… (${elapsed}s)`);
+
+        // pending / starting / processing — show elapsed time with hint after 90s
+        const hint = elapsed >= 90 ? ' — this may take a while' : '';
+        setGenStatus(`Generating with ${rendererLabel}… (${elapsed}s${hint})`);
       }
+      throw new Error(`Generation timed out after ${MAX_WAIT}s — check back later or retry`);
 
     } catch (err) {
       setErrors([err.message]);
