@@ -8,7 +8,7 @@
  */
 import { useState, useRef, useCallback } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
-import { renderSketchToControlImage }   from '../../utils/canvas/sketchToPng.ts';
+import { renderSketchToControlImage, renderSketchToScribble } from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
@@ -219,9 +219,14 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
     }
 
     try {
-      // 1. Render sketch → segmentation PNG
+      // 1. Render sketch → control PNG
+      // Scribble (black outlines on white) for ControlNet — colour-agnostic, layout-faithful
+      // Seg (ADE20K flat colours) for DALL-E fallback (unused by DALL-E but kept for debug)
       setGenStatus('Rendering terrain sketch…');
-      const controlImage = renderSketchToControlImage(spec);
+      const useScribble  = renderer !== 'dalle';
+      const controlImage = useScribble
+        ? renderSketchToScribble(spec)
+        : renderSketchToControlImage(spec);
 
       // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'controlnet' ? 'ControlNet'

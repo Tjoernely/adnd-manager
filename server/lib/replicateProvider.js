@@ -1,8 +1,12 @@
 /**
  * server/lib/replicateProvider.js
  *
- * MapRendererProvider — Replicate ControlNet Segmentation.
- * Model: jagilley/controlnet-seg
+ * MapRendererProvider — Replicate ControlNet Scribble.
+ * Model: jagilley/controlnet-scribble
+ *
+ * Scribble mode is colour-agnostic: it reads black outlines on white and
+ * respects zone boundaries directly without re-segmenting the input image.
+ * This is the correct approach for our hand-drawn terrain zone maps.
  *
  * Replicate predictions are async:
  *   POST /v1/predictions → { id, status }
@@ -21,8 +25,9 @@ const crypto = require('crypto');
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const REPLICATE_API    = 'https://api.replicate.com/v1';
-// Version hash from: GET /v1/models/jagilley/controlnet-seg (latest_version.id)
-const MODEL_VERSION    = 'f967b165f4cd2e151d11e7450a8214e5d22ad2007f042f2f891ca3981dbfba0d';
+// Version hash from: GET /v1/models/jagilley/controlnet-scribble (latest_version.id)
+// Scribble reads black-on-white outlines directly — colour-agnostic, layout-faithful.
+const MODEL_VERSION    = '435061a1b5a4c1e26740464bf786efdfa9cb3a3ac488595a2de23e143fdb0117';
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS       = 150_000;
 
@@ -30,10 +35,9 @@ const PUBLIC_BASE_URL  = process.env.PUBLIC_BASE_URL || 'http://158.180.63.20';
 const UPLOADS_DIR      = path.join(__dirname, '..', 'public', 'uploads', 'maps');
 
 const STYLE_PROMPT = [
-  'top-down fantasy cartography map, hand-drawn ink style,',
-  'Tolkien-style illustrated map, parchment texture,',
-  'medieval fantasy aesthetic, detailed terrain illustration,',
-  'birds eye view, warm earth tones, Forgotten Realms style',
+  'top-down fantasy cartography map, hand-drawn ink illustration,',
+  'Tolkien-style map, parchment paper texture, medieval fantasy,',
+  'birds eye view, warm earth tones, detailed terrain, Forgotten Realms',
 ].join(' ');
 
 // ── Helper: save base64 PNG to disk, return public URL ───────────────────────
@@ -100,8 +104,8 @@ const replicateProvider = {
             scale:            9.0,
             seed:             -1,
             eta:              0.0,
-            a_prompt:         'masterpiece, best quality, highly detailed cartographic illustration',
-            n_prompt:         'photorealistic, photograph, 3d render, satellite imagery, modern, ugly, watermark, text, labels, blurry, low quality, isometric, perspective view',
+            a_prompt:         'masterpiece, best quality, highly detailed cartographic illustration, fantasy art',
+            n_prompt:         'photorealistic, photograph, 3d render, satellite imagery, modern, ugly, watermark, text, labels, blurry, low quality, isometric, nsfw',
           },
         },
         { headers },
@@ -141,8 +145,8 @@ const replicateProvider = {
         if (onStatus) onStatus(p.status);
 
         if (p.status === 'succeeded') {
-          // jagilley/controlnet-seg returns [seg_visualization, generated_image]
-          // output[0] is the tiny segmentation debug image; output[1] is the actual result
+          // jagilley/controlnet-scribble returns [scribble_visualization, generated_image]
+          // output[0] is the processed scribble preview; output[1] is the actual generated result
           const output = Array.isArray(p.output) ? (p.output[1] ?? p.output[0]) : p.output;
           if (!output) throw new Error('Replicate returned succeeded but no output');
           console.log(`[replicate] Done — output URL: ${String(output).substring(0, 80)}...`);

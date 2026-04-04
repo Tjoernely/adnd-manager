@@ -192,7 +192,88 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
   // 5. Export to base64 PNG via toDataURL (synchronous, universally supported)
   const dataUrl = canvas.toDataURL('image/png');
 
-  console.log(`[sketchToPng] Rendered ${OUTPUT_PX}×${OUTPUT_PX} PNG — dataURL length: ${dataUrl.length} chars`);
+  console.log(`[sketchToPng] Rendered ${OUTPUT_PX}×${OUTPUT_PX} seg PNG — dataURL length: ${dataUrl.length} chars`);
 
+  return dataUrl;
+}
+
+// ── Scribble renderer ────────────────────────────────────────────────────────
+// For jagilley/controlnet-scribble: white background, black zone outlines.
+// Colour-agnostic — only shape/boundary matters, layout respected directly.
+
+export function renderSketchToScribble(spec: SketchSpec): string {
+  const canvas = document.createElement('canvas');
+  canvas.width  = OUTPUT_PX;
+  canvas.height = OUTPUT_PX;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+
+  // White background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, OUTPUT_PX, OUTPUT_PX);
+
+  // Build lookup for painted cells
+  const cellMap = new Map<string, string>();
+  for (const cell of spec.cells) cellMap.set(`${cell.x},${cell.y}`, cell.biome);
+
+  // Draw zone boundaries — black line wherever adjacent cells differ (or edge of painted region)
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth   = 3;
+  ctx.lineCap     = 'square';
+
+  for (const cell of spec.cells) {
+    const px = cell.x * CELL_PX;
+    const py = cell.y * CELL_PX;
+
+    // Check all 4 neighbours; draw edge if biome differs or neighbour unpainted
+    const neighbours: [dx: number, dy: number, x0: number, y0: number, x1: number, y1: number][] = [
+      [ 1,  0,  px + CELL_PX, py,          px + CELL_PX, py + CELL_PX ], // right
+      [-1,  0,  px,           py,          px,           py + CELL_PX ], // left
+      [ 0,  1,  px,           py + CELL_PX, px + CELL_PX, py + CELL_PX ], // bottom
+      [ 0, -1,  px,           py,          px + CELL_PX, py           ], // top
+    ];
+    for (const [dx, dy, x0, y0, x1, y1] of neighbours) {
+      const nb = cellMap.get(`${cell.x + dx},${cell.y + dy}`);
+      if (nb === undefined || nb !== cell.biome) {
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Overlay lines — thick black strokes
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth   = 7;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+
+  for (const ov of spec.overlays) {
+    if (!ov.points || ov.points.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo((ov.points[0].x / GRID) * OUTPUT_PX, (ov.points[0].y / GRID) * OUTPUT_PX);
+    for (let i = 1; i < ov.points.length; i++) {
+      ctx.lineTo((ov.points[i].x / GRID) * OUTPUT_PX, (ov.points[i].y / GRID) * OUTPUT_PX);
+    }
+    ctx.stroke();
+  }
+
+  // Modifier circles — dashed black outlines
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth   = 3;
+  ctx.setLineDash([8, 4]);
+  for (const mod of spec.modifiers) {
+    const cx = (mod.x + 0.5) * CELL_PX;
+    const cy = (mod.y + 0.5) * CELL_PX;
+    const r  = mod.r * CELL_PX;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  const dataUrl = canvas.toDataURL('image/png');
+  console.log(`[sketchToPng] Rendered ${OUTPUT_PX}×${OUTPUT_PX} scribble PNG — dataURL length: ${dataUrl.length} chars`);
   return dataUrl;
 }
