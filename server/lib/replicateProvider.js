@@ -140,7 +140,9 @@ const replicateProvider = {
         console.log(`[replicate] Poll — status: ${p.status}`);
 
         if (p.status === 'succeeded') {
-          const output = Array.isArray(p.output) ? p.output[0] : p.output;
+          // jagilley/controlnet-seg returns [seg_visualization, generated_image]
+          // output[0] is the tiny segmentation debug image; output[1] is the actual result
+          const output = Array.isArray(p.output) ? (p.output[1] ?? p.output[0]) : p.output;
           if (!output) throw new Error('Replicate returned succeeded but no output');
           console.log(`[replicate] Done — output URL: ${String(output).substring(0, 80)}...`);
           return output;
