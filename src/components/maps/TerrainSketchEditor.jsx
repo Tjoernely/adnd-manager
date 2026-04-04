@@ -265,9 +265,14 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
           continue;
         }
 
+        console.log(`[poll ${elapsed}s] status=${job.status} imageUrl=${job.imageUrl ?? 'none'}`);
+
         if (job.status === 'succeeded') {
+          console.log('[poll] SUCCEEDED — imageUrl:', job.imageUrl);
+          console.log('[poll] calling onGenerate with imageUrl:', job.imageUrl);
           setGenStatus(`Done (${job.renderer_used})`);
           onGenerate(spec, job.imageUrl);
+          console.log('[poll] onGenerate called — returning');
           return;
         }
         if (job.status === 'failed') {
