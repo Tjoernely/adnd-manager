@@ -201,68 +201,108 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
 // For jagilley/controlnet-scribble: white background, black zone outlines.
 // Colour-agnostic — only shape/boundary matters, layout respected directly.
 
+const OVERLAY_SCRIBBLE_WIDTH: Record<string, number> = {
+  river:  12,
+  road:   10,
+  coast:  12,
+  wall:   10,
+  border:  8,
+  canyon: 14,
+  chasm:  14,
+};
+
 export function renderSketchToScribble(spec: SketchSpec): string {
   const canvas = document.createElement('canvas');
   canvas.width  = OUTPUT_PX;
   canvas.height = OUTPUT_PX;
   const ctx = canvas.getContext('2d')!;
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true; // allow sub-pixel for organic look
 
   // White background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, OUTPUT_PX, OUTPUT_PX);
 
-  // Build lookup for painted cells
+  // Build biome lookup
   const cellMap = new Map<string, string>();
   for (const cell of spec.cells) cellMap.set(`${cell.x},${cell.y}`, cell.biome);
 
-  // Draw zone boundaries — black line wherever adjacent cells differ (or edge of painted region)
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth   = 3;
-  ctx.lineCap     = 'square';
+  // ── Zone boundaries ────────────────────────────────────────────────────────
+  // Draw only edges between different biomes or at the painted region border.
+  // Collect unique edges first to avoid double-drawing shared edges.
+  type Edge = { x0: number; y0: number; x1: number; y1: number };
+  const edges: Edge[] = [];
+  const edgeSeen = new Set<string>();
 
   for (const cell of spec.cells) {
     const px = cell.x * CELL_PX;
     const py = cell.y * CELL_PX;
 
-    // Check all 4 neighbours; draw edge if biome differs or neighbour unpainted
     const neighbours: [dx: number, dy: number, x0: number, y0: number, x1: number, y1: number][] = [
-      [ 1,  0,  px + CELL_PX, py,          px + CELL_PX, py + CELL_PX ], // right
-      [-1,  0,  px,           py,          px,           py + CELL_PX ], // left
+      [ 1,  0,  px + CELL_PX, py,           px + CELL_PX, py + CELL_PX ], // right
+      [-1,  0,  px,           py,           px,           py + CELL_PX ], // left
       [ 0,  1,  px,           py + CELL_PX, px + CELL_PX, py + CELL_PX ], // bottom
-      [ 0, -1,  px,           py,          px + CELL_PX, py           ], // top
+      [ 0, -1,  px,           py,           px + CELL_PX, py           ], // top
     ];
+
     for (const [dx, dy, x0, y0, x1, y1] of neighbours) {
       const nb = cellMap.get(`${cell.x + dx},${cell.y + dy}`);
-      if (nb === undefined || nb !== cell.biome) {
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
-        ctx.stroke();
+      if (nb !== cell.biome) {
+        // Normalise edge key so (A→B) and (B→A) share the same key
+        const key = `${Math.min(x0,x1)},${Math.min(y0,y1)},${Math.max(x0,x1)},${Math.max(y0,y1)}`;
+        if (!edgeSeen.has(key)) {
+          edgeSeen.add(key);
+          edges.push({ x0, y0, x1, y1 });
+        }
       }
     }
   }
 
-  // Overlay lines — thick black strokes
+  // Draw edges with thick, round, slightly organic strokes
   ctx.strokeStyle = '#000000';
-  ctx.lineWidth   = 7;
+  ctx.lineWidth   = 8;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+
+  for (const { x0, y0, x1, y1 } of edges) {
+    // Add a small organic offset at the midpoint (±3px) to soften staircase aliasing
+    const mx  = (x0 + x1) / 2 + (Math.random() - 0.5) * 3;
+    const my  = (y0 + y1) / 2 + (Math.random() - 0.5) * 3;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo(mx, my, x1, y1);
+    ctx.stroke();
+  }
+
+  // ── Overlay lines ──────────────────────────────────────────────────────────
+  ctx.strokeStyle = '#000000';
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
 
   for (const ov of spec.overlays) {
     if (!ov.points || ov.points.length < 2) continue;
+    ctx.lineWidth = OVERLAY_SCRIBBLE_WIDTH[ov.type] ?? 10;
+
+    const pts = ov.points.map(p => ({
+      x: (p.x / GRID) * OUTPUT_PX,
+      y: (p.y / GRID) * OUTPUT_PX,
+    }));
+
     ctx.beginPath();
-    ctx.moveTo((ov.points[0].x / GRID) * OUTPUT_PX, (ov.points[0].y / GRID) * OUTPUT_PX);
-    for (let i = 1; i < ov.points.length; i++) {
-      ctx.lineTo((ov.points[i].x / GRID) * OUTPUT_PX, (ov.points[i].y / GRID) * OUTPUT_PX);
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      // Smooth through intermediate points with quadratic curves
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
     }
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
     ctx.stroke();
   }
 
-  // Modifier circles — dashed black outlines
+  // ── Modifier circles ───────────────────────────────────────────────────────
   ctx.strokeStyle = '#000000';
-  ctx.lineWidth   = 3;
-  ctx.setLineDash([8, 4]);
+  ctx.lineWidth   = 6;
+  ctx.setLineDash([10, 5]);
   for (const mod of spec.modifiers) {
     const cx = (mod.x + 0.5) * CELL_PX;
     const cy = (mod.y + 0.5) * CELL_PX;
