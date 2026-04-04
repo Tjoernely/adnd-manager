@@ -24,7 +24,7 @@ const REPLICATE_API    = 'https://api.replicate.com/v1';
 // Version hash from: GET /v1/models/jagilley/controlnet-seg (latest_version.id)
 const MODEL_VERSION    = 'f967b165f4cd2e151d11e7450a8214e5d22ad2007f042f2f891ca3981dbfba0d';
 const POLL_INTERVAL_MS = 2000;
-const TIMEOUT_MS       = 120_000;
+const TIMEOUT_MS       = 150_000;
 
 const PUBLIC_BASE_URL  = process.env.PUBLIC_BASE_URL || 'http://158.180.63.20';
 const UPLOADS_DIR      = path.join(__dirname, '..', 'public', 'uploads', 'maps');
