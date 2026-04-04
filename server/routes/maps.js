@@ -594,89 +594,125 @@ router.delete('/:id', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
-// ── Generate map image from terrain sketch ────────────────────────────────────
-// POST /api/maps/generate-from-sketch
-// Body: { sketchSpec, renderer?, campaignId }
-// Returns: { imageUrl, renderer_used, spec }
-//
-// Generates a map image via ControlNet (Replicate) or DALL-E based on
-// the painted SketchSpec. Does NOT create a map record — caller does that
-// via the normal POST / flow after choosing a name and params.
+// ── Sketch-generation async job store ────────────────────────────────────────
+// In-memory map: jobId → { status, imageUrl, renderer_used, error, createdAt }
+// Jobs expire after 30 minutes; cleanup runs every 10 minutes.
 
 const { generateFromSketch } = require('../lib/rendererFactory');
 
-router.post('/generate-from-sketch', auth, async (req, res) => {
-  try {
-    const { sketchSpec, renderer = 'auto', controlImage } = req.body ?? {};
+const sketchJobs = new Map();
 
-    // ── Validate ─────────────────────────────────────────────────────────────
-    if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
-    if (!controlImage || typeof controlImage !== 'string')
-      return res.status(400).json({ error: 'controlImage (base64 PNG) required' });
-
-    const cells = sketchSpec.cells ?? [];
-    if (!Array.isArray(cells) || cells.length === 0)
-      return res.status(400).json({ error: 'Sketch has no painted cells — paint some terrain first' });
-
-    // ── Build prompt additions from sketch ────────────────────────────────────
-    // Derive dominant biomes from cell counts
-    const biomeCounts = {};
-    for (const c of cells) biomeCounts[c.biome] = (biomeCounts[c.biome] ?? 0) + 1;
-    const topBiomes = Object.entries(biomeCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([b]) => b);
-
-    const BIOME_LABEL = {
-      plains:'plains', forest:'dense forest', swamp:'swamp', desert:'desert',
-      tundra:'tundra', volcanic:'volcanic wasteland', ocean:'ocean', coastal:'coastal shores',
-      mountains:'mountains', hills:'rolling hills',
-    };
-
-    const overlayLabels = [...new Set((sketchSpec.overlays ?? []).map(o => o.type))];
-    const modLabels     = [...new Set((sketchSpec.modifiers ?? []).map(m => m.type.replace(/_/g, ' ')))];
-
-    const parts = [`Terrain: ${topBiomes.map(b => BIOME_LABEL[b] ?? b).join(', ')}`];
-    if (overlayLabels.length) parts.push(`Features: ${overlayLabels.join(', ')}`);
-    if (modLabels.length)     parts.push(`Special: ${modLabels.join(', ')}`);
-    if (sketchSpec.climate)   parts.push(`Climate: ${sketchSpec.climate}`);
-    if (sketchSpec.lore_mode) parts.push('historical lore, aged cartographic style');
-    if (sketchSpec.user_prompt) parts.push(sketchSpec.user_prompt);
-
-    const promptAdditions = parts.join('. ');
-    console.log(`[generate-from-sketch] renderer=${renderer} cells=${cells.length} prompt="${promptAdditions.substring(0, 100)}..."`);
-
-    // ── Generate image ────────────────────────────────────────────────────────
-    const { imageUrl, renderer_used } = await generateFromSketch({
-      controlImage,
-      promptAdditions,
-      renderer,
-    });
-
-    // ── Persist image to uploads (Replicate/DALL-E URLs are temporary) ────────
-    let localImageUrl = imageUrl;
-    if (imageUrl.startsWith('http')) {
-      try {
-        const response = await fetch(imageUrl);
-        if (response.ok) {
-          const buffer   = Buffer.from(await response.arrayBuffer());
-          const filename = `map-sketch-${crypto.randomUUID()}.png`;
-          const destPath = path.join(UPLOAD_DIR, filename);
-          fs.writeFileSync(destPath, buffer);
-          localImageUrl = `/uploads/maps/${filename}`;
-          console.log(`[generate-from-sketch] Saved ${buffer.length} bytes → ${filename}`);
-        }
-      } catch (saveErr) {
-        console.warn(`[generate-from-sketch] Could not persist image locally: ${saveErr.message}`);
-        // Return the temporary URL anyway — better than failing
-      }
-    }
-
-    res.json({ imageUrl: localImageUrl, renderer_used, spec: sketchSpec });
-  } catch (e) {
-    console.error('[generate-from-sketch]', e.message);
-    res.status(500).json({ error: e.message });
+setInterval(() => {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [id, job] of sketchJobs) {
+    if (job.createdAt < cutoff) sketchJobs.delete(id);
   }
+}, 10 * 60 * 1000);
+
+// ── Build prompt additions from a sketchSpec ──────────────────────────────────
+function buildPromptAdditions(sketchSpec) {
+  const cells = sketchSpec.cells ?? [];
+  const biomeCounts = {};
+  for (const c of cells) biomeCounts[c.biome] = (biomeCounts[c.biome] ?? 0) + 1;
+  const topBiomes = Object.entries(biomeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([b]) => b);
+
+  const BIOME_LABEL = {
+    plains:'plains', forest:'dense forest', swamp:'swamp', desert:'desert',
+    tundra:'tundra', volcanic:'volcanic wasteland', ocean:'ocean', coastal:'coastal shores',
+    mountains:'mountains', hills:'rolling hills',
+  };
+
+  const overlayLabels = [...new Set((sketchSpec.overlays ?? []).map(o => o.type))];
+  const modLabels     = [...new Set((sketchSpec.modifiers ?? []).map(m => m.type.replace(/_/g, ' ')))];
+
+  const parts = [`Terrain: ${topBiomes.map(b => BIOME_LABEL[b] ?? b).join(', ')}`];
+  if (overlayLabels.length) parts.push(`Features: ${overlayLabels.join(', ')}`);
+  if (modLabels.length)     parts.push(`Special: ${modLabels.join(', ')}`);
+  if (sketchSpec.climate)   parts.push(`Climate: ${sketchSpec.climate}`);
+  if (sketchSpec.lore_mode) parts.push('historical lore, aged cartographic style');
+  if (sketchSpec.user_prompt) parts.push(sketchSpec.user_prompt);
+
+  return parts.join('. ');
+}
+
+// ── POST /api/maps/generate-from-sketch ──────────────────────────────────────
+// Starts a background generation job and returns { jobId } immediately.
+// Body: { sketchSpec, renderer?, controlImage }
+
+router.post('/generate-from-sketch', auth, (req, res) => {
+  const { sketchSpec, renderer = 'auto', controlImage } = req.body ?? {};
+
+  if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
+  if (!controlImage || typeof controlImage !== 'string')
+    return res.status(400).json({ error: 'controlImage (base64 PNG) required' });
+
+  const cells = sketchSpec.cells ?? [];
+  if (!Array.isArray(cells) || cells.length === 0)
+    return res.status(400).json({ error: 'Sketch has no painted cells — paint some terrain first' });
+
+  const jobId = crypto.randomUUID();
+  sketchJobs.set(jobId, { status: 'pending', createdAt: Date.now() });
+
+  const promptAdditions = buildPromptAdditions(sketchSpec);
+  console.log(`[generate-from-sketch] job=${jobId} renderer=${renderer} cells=${cells.length} prompt="${promptAdditions.substring(0, 80)}..."`);
+
+  // Run generation in background — do not await
+  (async () => {
+    try {
+      const { imageUrl, renderer_used } = await generateFromSketch({
+        controlImage,
+        promptAdditions,
+        renderer,
+      });
+
+      // Persist image locally (Replicate/DALL-E URLs are temporary)
+      let localImageUrl = imageUrl;
+      if (imageUrl.startsWith('http')) {
+        try {
+          const dlResp = await fetch(imageUrl);
+          if (dlResp.ok) {
+            const buffer   = Buffer.from(await dlResp.arrayBuffer());
+            const filename = `map-sketch-${crypto.randomUUID()}.png`;
+            fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+            localImageUrl = `/uploads/maps/${filename}`;
+            console.log(`[sketch-job ${jobId}] Saved ${buffer.length} bytes → ${filename}`);
+          }
+        } catch (saveErr) {
+          console.warn(`[sketch-job ${jobId}] Could not persist image: ${saveErr.message}`);
+        }
+      }
+
+      sketchJobs.set(jobId, {
+        status: 'succeeded',
+        imageUrl: localImageUrl,
+        renderer_used,
+        spec: sketchSpec,
+        createdAt: sketchJobs.get(jobId)?.createdAt ?? Date.now(),
+      });
+      console.log(`[sketch-job ${jobId}] succeeded — ${localImageUrl}`);
+    } catch (err) {
+      console.error(`[sketch-job ${jobId}] failed:`, err.message);
+      sketchJobs.set(jobId, {
+        status: 'failed',
+        error: err.message,
+        createdAt: sketchJobs.get(jobId)?.createdAt ?? Date.now(),
+      });
+    }
+  })();
+
+  res.json({ jobId, status: 'pending' });
+});
+
+// ── GET /api/maps/sketch-job/:jobId ──────────────────────────────────────────
+// Poll for job status. Returns { status, imageUrl?, renderer_used?, error? }
+
+router.get('/sketch-job/:jobId', auth, (req, res) => {
+  const job = sketchJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  res.json(job);
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

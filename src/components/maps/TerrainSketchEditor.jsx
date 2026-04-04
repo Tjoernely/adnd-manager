@@ -219,35 +219,52 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
     }
 
     try {
-      // 1. Render sketch → segmentation PNG (HTMLCanvasElement, works in all browsers)
+      // 1. Render sketch → segmentation PNG
       setGenStatus('Rendering terrain sketch…');
       const controlImage = renderSketchToControlImage(spec);
 
-      // 2. POST to server → image generation (ControlNet or DALL-E)
+      // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'controlnet' ? 'ControlNet'
                           : renderer === 'dalle'      ? 'DALL-E'
                           : 'AI renderer';
-      setGenStatus(`Generating with ${rendererLabel}…`);
+      setGenStatus(`Queuing ${rendererLabel} job…`);
 
-      const response = await fetch('/api/maps/generate-from-sketch', {
+      const token = localStorage.getItem('dnd_token') ?? '';
+      const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('dnd_token') ?? ''}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ sketchSpec: spec, renderer, controlImage }),
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(err.error ?? 'Generation failed');
+      if (!startResp.ok) {
+        const err = await startResp.json().catch(() => ({ error: startResp.statusText }));
+        throw new Error(err.error ?? 'Failed to start generation');
       }
+      const { jobId } = await startResp.json();
 
-      const { imageUrl, renderer_used } = await response.json();
-      setGenStatus(`Done (${renderer_used})`);
+      // 3. Poll GET /api/maps/sketch-job/:jobId every 3s until done
+      setGenStatus(`Generating with ${rendererLabel}…`);
+      let elapsed = 0;
+      while (true) {
+        await new Promise(r => setTimeout(r, 3000));
+        elapsed += 3;
 
-      // 3. Hand off to parent with spec + imageUrl
-      onGenerate(spec, imageUrl);
+        const pollResp = await fetch(`/api/maps/sketch-job/${jobId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!pollResp.ok) throw new Error('Lost track of generation job');
+        const job = await pollResp.json();
+
+        if (job.status === 'succeeded') {
+          setGenStatus(`Done (${job.renderer_used})`);
+          onGenerate(spec, job.imageUrl);
+          return;
+        }
+        if (job.status === 'failed') {
+          throw new Error(job.error ?? 'Generation failed');
+        }
+        // pending/processing — update status with elapsed time
+        setGenStatus(`Generating with ${rendererLabel}… (${elapsed}s)`);
+      }
 
     } catch (err) {
       setErrors([err.message]);
