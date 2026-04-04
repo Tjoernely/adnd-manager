@@ -92,7 +92,7 @@ const replicateProvider = {
         {
           version: MODEL_VERSION,
           input: {
-            input_image:      controlImageUrl,
+            image:            controlImageUrl,
             prompt,
             num_samples:      '1',
             image_resolution: '768',
