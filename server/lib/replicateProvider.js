@@ -84,35 +84,36 @@ const replicateProvider = {
     };
 
     // Save control image to disk and get a public URL
+    // DEBUG: file is kept for inspection (not deleted in finally) when DEBUG_KEEP_CONTROL=true
     const { fpath: controlFilePath, url: controlImageUrl } = saveControlImage(controlImage);
+    console.log(`[replicate] Control image saved for inspection: ${controlImageUrl}`);
+    console.log(`[replicate] Control image file size: ${fs.statSync(controlFilePath).size} bytes`);
 
     // ── Start prediction ───────────────────────────────────────────────────────
+    const inputPayload = {
+      image:            controlImageUrl,
+      prompt,
+      num_samples:      '1',
+      image_resolution: '768',
+      ddim_steps:       30,
+      scale:            9.0,
+      seed:             -1,
+      eta:              0.0,
+      a_prompt:         'masterpiece, best quality, highly detailed cartographic illustration, fantasy art',
+      n_prompt:         'photorealistic, photograph, 3d render, satellite imagery, modern, ugly, watermark, text, labels, blurry, low quality, isometric, nsfw',
+    };
+    console.log(`[replicate] Payload: version=${MODEL_VERSION.substring(0,12)}... inputKeys=${Object.keys(inputPayload).join(',')} imageUrlLength=${controlImageUrl.length}`);
     console.log(`[replicate] Starting prediction — prompt length: ${prompt.length}`);
-    console.log(`[replicate] Control image URL: ${controlImageUrl}`);
+
     let prediction;
     try {
       const resp = await axios.post(
         `${REPLICATE_API}/predictions`,
-        {
-          version: MODEL_VERSION,
-          input: {
-            image:            controlImageUrl,
-            prompt,
-            num_samples:      '1',
-            image_resolution: '768',
-            ddim_steps:       30,
-            scale:            9.0,
-            seed:             -1,
-            eta:              0.0,
-            a_prompt:         'masterpiece, best quality, highly detailed cartographic illustration, fantasy art',
-            n_prompt:         'photorealistic, photograph, 3d render, satellite imagery, modern, ugly, watermark, text, labels, blurry, low quality, isometric, nsfw',
-          },
-        },
+        { version: MODEL_VERSION, input: inputPayload },
         { headers },
       );
       prediction = resp.data;
     } catch (err) {
-      fs.unlink(controlFilePath, () => {});
       console.error(`[replicate] POST failed — HTTP ${err.response?.status}`);
       console.error(`[replicate] Response body: ${JSON.stringify(err.response?.data)}`);
       const msg = err.response?.data?.detail ?? err.message;
@@ -160,8 +161,9 @@ const replicateProvider = {
         // status: 'starting' | 'processing' — keep polling
       }
     } finally {
-      // Clean up temp control image regardless of success or failure
-      fs.unlink(controlFilePath, () => {});
+      // DEBUG: keep control image on disk for inspection
+      // TODO: restore cleanup: fs.unlink(controlFilePath, () => {});
+      console.log(`[replicate] DEBUG — control image kept at: ${controlFilePath}`);
     }
   },
 };
