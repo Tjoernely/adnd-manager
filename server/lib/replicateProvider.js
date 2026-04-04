@@ -66,7 +66,7 @@ const replicateProvider = {
    * @param {string} promptAdditions sketch-derived terrain/feature description
    * @returns {Promise<string>}  URL of the generated image
    */
-  async render(controlImage, promptAdditions) {
+  async render(controlImage, promptAdditions, { onStatus } = {}) {
     const apiKey = process.env.REPLICATE_API_KEY;
     if (!apiKey) throw new Error('REPLICATE_API_KEY not set');
 
@@ -138,6 +138,7 @@ const replicateProvider = {
 
         const p = pollResp.data;
         console.log(`[replicate] Poll — status: ${p.status}`);
+        if (onStatus) onStatus(p.status);
 
         if (p.status === 'succeeded') {
           // jagilley/controlnet-seg returns [seg_visualization, generated_image]

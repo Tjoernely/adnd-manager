@@ -661,11 +661,17 @@ router.post('/generate-from-sketch', auth, (req, res) => {
 
   // Run generation in background — do not await
   (async () => {
+    console.log(`[job-worker] Starting Replicate job ${jobId}`);
     try {
       const { imageUrl, renderer_used } = await generateFromSketch({
         controlImage,
         promptAdditions,
         renderer,
+        onStatus: (status) => {
+          // Bubble Replicate's internal status up to the job store so frontend can show it
+          const job = sketchJobs.get(jobId);
+          if (job) sketchJobs.set(jobId, { ...job, status: status === 'succeeded' ? 'pending' : status });
+        },
       });
 
       // Persist image locally (Replicate/DALL-E URLs are temporary)
@@ -692,9 +698,9 @@ router.post('/generate-from-sketch', auth, (req, res) => {
         spec: sketchSpec,
         createdAt: sketchJobs.get(jobId)?.createdAt ?? Date.now(),
       });
-      console.log(`[sketch-job ${jobId}] succeeded — ${localImageUrl}`);
+      console.log(`[job-worker] Replicate done ${jobId} succeeded — ${localImageUrl}`);
     } catch (err) {
-      console.error(`[sketch-job ${jobId}] failed:`, err.message);
+      console.error(`[job-worker] Replicate done ${jobId} failed:`, err.message);
       sketchJobs.set(jobId, {
         status: 'failed',
         error: err.message,

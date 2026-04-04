@@ -23,7 +23,7 @@ const MOCK_PLACEHOLDER = 'https://placehold.co/1024x1024/4a5d23/ffffff/png?text=
  * @param {'auto'|'controlnet'|'dalle'} opts.renderer  user preference
  * @returns {Promise<{ imageUrl: string, renderer_used: string }>}
  */
-async function generateFromSketch({ controlImage, promptAdditions, renderer = 'auto' }) {
+async function generateFromSketch({ controlImage, promptAdditions, renderer = 'auto', onStatus }) {
 
   // ── Mock mode ──────────────────────────────────────────────────────────────
   if (process.env.CONTROLNET_MOCK === 'true') {
@@ -37,7 +37,7 @@ async function generateFromSketch({ controlImage, promptAdditions, renderer = 'a
     if (replicateProvider.isAvailable()) {
       try {
         console.log('[rendererFactory] Using Replicate ControlNet');
-        const imageUrl = await replicateProvider.render(controlImage, promptAdditions);
+        const imageUrl = await replicateProvider.render(controlImage, promptAdditions, { onStatus });
         return { imageUrl, renderer_used: replicateProvider.name };
       } catch (err) {
         if (renderer === 'controlnet') throw err; // explicit request — don't silently fall back
