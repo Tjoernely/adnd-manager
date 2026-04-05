@@ -233,7 +233,9 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
       // Scribble (black outlines on white) for ControlNet — colour-agnostic, layout-faithful
       // Seg (ADE20K flat colours) for DALL-E fallback (unused by DALL-E but kept for debug)
       setGenStatus('Rendering terrain sketch…');
-      const useScribble  = renderer !== 'dalle';
+      // Scribble (black outlines on white) for ControlNet — shape-based
+      // Coloured seg PNG for Vision/DALL-E — Claude reads biome colours by position
+      const useScribble  = renderer === 'controlnet' || renderer === 'auto';
       const controlImage = useScribble
         ? renderSketchToScribble(spec)
         : renderSketchToControlImage(spec);
@@ -241,6 +243,7 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
       // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'controlnet' ? 'ControlNet'
                           : renderer === 'dalle'      ? 'DALL-E'
+                          : renderer === 'vision'     ? 'Vision (Claude→DALL-E)'
                           : 'AI renderer';
       setGenStatus(`Queuing ${rendererLabel} job…`);
 
@@ -485,6 +488,7 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
             <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
               <option value="auto">🎨 Auto (ControlNet → DALL-E)</option>
               <option value="controlnet">🗺 ControlNet (Replicate)</option>
+              <option value="vision">🧠 Vision (Claude → DALL·E)</option>
               <option value="dalle">🖼 DALL-E (OpenAI)</option>
             </select>
           </label>
