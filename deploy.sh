@@ -1,13 +1,16 @@
 #!/bin/bash
 # Deploy script — runs ON THE SERVER (called via SSH or webhook).
-# Frontend is pre-built locally and committed to git (server/public/).
-# Server NEVER runs npm run build — saves ~500 MB RAM on 1 GB instance.
+# Builds frontend on server so bundle hash always matches index.html.
 set -e
 
 APP=/var/www/adnd-manager
 
 cd $APP
-git fetch origin
+
+echo "=== Deploy started ==="
+
+# 1. Pull latest code
+git fetch origin main
 git reset --hard origin/main
 
 if [ ! -f $APP/server/.env ]; then
@@ -15,11 +18,23 @@ if [ ! -f $APP/server/.env ]; then
   exit 1
 fi
 
-# Clean install — avoids ENOTEMPTY errors from concurrent webhook/PM2 activity
-rm -rf $APP/server/node_modules
-npm --prefix $APP/server install
+# 2. Install frontend deps and build
+npm install
+npm run build
 
-pm2 restart adnd-backend
+# 3. Copy built assets to server public dir
+cp -r dist/* server/public/
+
+# 4. Install server deps (clean install avoids ENOTEMPTY from concurrent activity)
+rm -rf $APP/server/node_modules
+npm install --prefix server
+
+# 5. Restart PM2 with --update-env so new env-vars are loaded
+pm2 restart adnd-backend --update-env
 pm2 save
 
-echo "Deploy complete"
+# 6. Wait for server to be healthy
+sleep 2
+curl -s -o /dev/null -w "Server status: %{http_code}\n" http://localhost:3001/api/maps
+
+echo "=== Deploy complete. Bundle: $(ls dist/assets/index-*.js 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo 'unknown') ==="
