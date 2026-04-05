@@ -379,8 +379,9 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
   const [savingPoi,     setSavingPoi]     = useState(false);
   const [uploadingImg,  setUploadingImg]  = useState(false);
   const [randEnc,       setRandEnc]       = useState(null);
-  const fileRef    = useRef(null);
-  const toastTimer = useRef(null);
+  const fileRef          = useRef(null);
+  const toastTimer       = useRef(null);
+  const sketchEditorRef  = useRef(null);
 
   const [toast, setToast] = useState(null);
 
@@ -909,9 +910,11 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       )}
 
       {showSketch && (
-        <div className="mm-backdrop mm-backdrop--sketch" onClick={() => setShowSketch(false)}>
+        <div className="mm-backdrop mm-backdrop--sketch"
+          onClick={() => sketchEditorRef.current?.requestClose()}>
           <div className="mm-sketch-shell" onClick={e => e.stopPropagation()}>
             <TerrainSketchEditor
+              ref={sketchEditorRef}
               initialSpec={sketchEditMap?.data?.sketch ?? null}
               onGenerate={handleSketchGenerate}
               onCancel={() => { setShowSketch(false); setSketchEditMap(null); }}

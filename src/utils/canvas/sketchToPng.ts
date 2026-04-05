@@ -50,6 +50,9 @@ const MODIFIER_COLOR: Record<ModifierType | string, string> = {
   blighted:     'rgba(244,67,54,0.25)',
   fertile:      'rgba(76,175,80,0.18)',
   ancient_ruins:'rgba(121,85,72,0.25)',
+  enchanted:    'rgba(64,224,192,0.25)',
+  corrupted:    'rgba(192,64,64,0.30)',
+  divine:       'rgba(255,215,0,0.22)',
 };
 
 // ── Size constants ──────────────────────────────────────────────────────────

@@ -13,10 +13,10 @@ import type {
   ValidationResult,
 } from './mapTypes';
 
-const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','volcanic','ocean','coastal','mountains','hills']);
-const VALID_RELIEFS   = new Set(['flat','rolling','hilly','mountainous','cliffs','valley','plateau']);
-const VALID_OVERLAYS  = new Set(['river','road','wall','coast','border']);
-const VALID_MODIFIERS = new Set(['cursed','sacred','magical','blighted','fertile','ancient_ruins']);
+const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','volcanic','ocean','coastal','mountains','lake']);
+const VALID_RELIEFS   = new Set(['flat','rolling','hills','mountainous','cliffs','valley','plateau']);
+const VALID_OVERLAYS  = new Set(['river','road','wall','border','canyon','chasm']);
+const VALID_MODIFIERS = new Set(['cursed','sacred','magical','blighted','fertile','ancient_ruins','enchanted','corrupted','divine']);
 const VALID_SCOPES    = new Set(['world','region','local']);
 const VALID_FREEDOM   = new Set(['strict','balanced','creative']);
 const VALID_CLIMATES  = new Set(['temperate','tropical','arctic','arid']);

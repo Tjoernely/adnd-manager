@@ -247,7 +247,10 @@ export type ModifierType =
   | 'magical'
   | 'blighted'
   | 'fertile'
-  | 'ancient_ruins';
+  | 'ancient_ruins'
+  | 'enchanted'
+  | 'corrupted'
+  | 'divine';
 
 export type AIFreedom = 'strict' | 'balanced' | 'creative';
 

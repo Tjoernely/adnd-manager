@@ -6,7 +6,7 @@
  *   onGenerate    fn(spec, imageUrl)   — called after successful image generation
  *   onCancel      fn()
  */
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
 import { renderSketchToControlImage, renderSketchToScribble } from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
@@ -28,8 +28,10 @@ export const BIOME_CONFIG = {
 };
 
 const RELIEF_OPTIONS = ['flat','rolling','hills','mountainous','cliffs','valley','plateau'];
-const OVERLAY_OPTIONS = ['river','road','wall','border','canyon','chasm'];
-const MODIFIER_OPTIONS = ['cursed','sacred','magical','blighted','fertile','ancient_ruins'];
+const OVERLAY_CONNECTORS = ['river', 'road'];
+const OVERLAY_DIVIDERS   = ['canyon', 'chasm'];
+
+const MODIFIER_OPTIONS = ['enchanted','corrupted','cursed','magical','divine','fertile','ancient_ruins'];
 
 const OVERLAY_COLORS = {
   river: '#3a90d0', road: '#c0a060', wall: '#808080',
@@ -37,8 +39,13 @@ const OVERLAY_COLORS = {
 };
 
 const MODIFIER_COLORS = {
-  cursed: '#8000c0', sacred: '#e0c000', magical: '#40c0e0',
-  blighted: '#805030', fertile: '#40c060', ancient_ruins: '#a07850',
+  enchanted:    '#40e0c0',
+  corrupted:    '#c04040',
+  cursed:       '#8000c0',
+  magical:      '#40c0e0',
+  divine:       '#ffd700',
+  fertile:      '#40c060',
+  ancient_ruins:'#a07850',
 };
 
 const GRID = 32;
@@ -66,7 +73,7 @@ function getCellsInBrush(cx, cy, size) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
+export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }, ref) {
   const [cells, setCells]           = useState(() => {
     const map = {};
     (initialSpec?.cells ?? []).forEach(c => {
@@ -85,13 +92,13 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
   );
   const [modifiers, setModifiers]   = useState(initialSpec?.modifiers ?? []);
 
-  // Brush state
-  const [tool, setTool]             = useState('biome');     // 'biome'|'relief'|'overlay'|'modifier'|'erase'
-  const [biome, setBiome]           = useState('plains');
-  const [relief, setRelief]         = useState('flat');
-  const [overlay, setOverlay]       = useState('river');
-  const [modifier, setModifier]     = useState('sacred');
-  const [brushSize, setBrushSize]   = useState(1);
+  // Brush state — biome and relief are independent toggles (null = inactive)
+  const [activeBiome, setActiveBiome] = useState('plains');   // null | biomeKey
+  const [activeRelief, setActiveRelief] = useState(null);     // null | reliefKey
+  const [tool, setTool]               = useState(null);       // null | 'overlay' | 'modifier' | 'erase'
+  const [overlay, setOverlay]         = useState('river');
+  const [modifier, setModifier]       = useState('enchanted');
+  const [brushSize, setBrushSize]     = useState(1);
 
   // Settings
   const [scope, setScope]           = useState(initialSpec?.scope ?? 'region');
@@ -133,30 +140,6 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
       return;
     }
 
-    if (tool === 'biome') {
-      setCells(prev => {
-        const next = { ...prev };
-        getCellsInBrush(cx, cy, brushSize).forEach(([x,y]) => {
-          const key = cellKey(x, y);
-          next[key] = { ...(prev[key] ?? {}), x, y, biome };
-        });
-        return next;
-      });
-      return;
-    }
-
-    if (tool === 'relief') {
-      setCells(prev => {
-        const next = { ...prev };
-        getCellsInBrush(cx, cy, brushSize).forEach(([x,y]) => {
-          const key = cellKey(x, y);
-          if (next[key]) next[key] = { ...next[key], relief };
-        });
-        return next;
-      });
-      return;
-    }
-
     if (tool === 'overlay') {
       const coord = { x: cx, y: cy };
       setLiveOverlayPath(prev => {
@@ -170,8 +153,28 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
     if (tool === 'modifier') {
       const r = Math.max(1, Math.floor(brushSize * 2));
       setModifiers(prev => [...prev, { type: modifier, x: cx, y: cy, r }]);
+      return;
     }
-  }, [tool, biome, relief, overlay, modifier, brushSize]);
+
+    // Paint mode: biome and/or relief simultaneously
+    if (activeBiome !== null || activeRelief !== null) {
+      setCells(prev => {
+        const next = { ...prev };
+        getCellsInBrush(cx, cy, brushSize).forEach(([x, y]) => {
+          const key = cellKey(x, y);
+          if (activeBiome !== null) {
+            // Biome paint always creates/updates cell
+            next[key] = { ...(prev[key] ?? {}), x, y, biome: activeBiome };
+          }
+          if (activeRelief !== null && next[key]) {
+            // Relief only applies to cells that have a biome
+            next[key] = { ...next[key], relief: activeRelief };
+          }
+        });
+        return next;
+      });
+    }
+  }, [tool, activeBiome, activeRelief, overlay, modifier, brushSize]);
 
   function handlePointerDown(e) {
     e.preventDefault();
@@ -314,6 +317,14 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
   function clearModifiers() { setModifiers([]); }
   function clearOverlays()  { setOverlays([]);  }
 
+  function handleCancel() {
+    const hasContent = Object.keys(cells).length > 0 || overlays.length > 0;
+    if (hasContent && !window.confirm('Discard terrain sketch? All changes will be lost.')) return;
+    onCancel();
+  }
+
+  useImperativeHandle(ref, () => ({ requestClose: handleCancel }));
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const cellArr = Object.values(cells);
@@ -334,31 +345,45 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
       <div className="tse-body">
         {/* ── Left palette ── */}
         <div className="tse-palette">
-          <ToolSection label="Biome" active={tool==='biome'} onActivate={() => setTool('biome')}>
+          <ToolSection label="Biome" active={activeBiome !== null}>
             {Object.entries(BIOME_CONFIG).map(([key, cfg]) => (
               <PaletteChip key={key} color={cfg.color} label={cfg.label}
-                active={tool==='biome' && biome===key}
-                onClick={() => { setTool('biome'); setBiome(key); }} />
+                active={activeBiome === key}
+                onClick={() => {
+                  setActiveBiome(prev => prev === key ? null : key);
+                  setTool(null);
+                }} />
             ))}
           </ToolSection>
 
-          <ToolSection label="Relief" active={tool==='relief'} onActivate={() => setTool('relief')}>
+          <ToolSection label="Relief" active={activeRelief !== null}>
             {RELIEF_OPTIONS.map(r => (
               <PaletteChip key={r} color="#a09080" label={r} dimmed
-                active={tool==='relief' && relief===r}
-                onClick={() => { setTool('relief'); setRelief(r); }} />
+                active={activeRelief === r}
+                onClick={() => {
+                  setActiveRelief(prev => prev === r ? null : r);
+                  setTool(null);
+                }} />
             ))}
           </ToolSection>
 
-          <ToolSection label="Overlay" active={tool==='overlay'} onActivate={() => setTool('overlay')}>
-            {OVERLAY_OPTIONS.map(o => (
+          <ToolSection label="Connectors" active={tool==='overlay' && OVERLAY_CONNECTORS.includes(overlay)}>
+            {OVERLAY_CONNECTORS.map(o => (
               <PaletteChip key={o} color={OVERLAY_COLORS[o]} label={o}
                 active={tool==='overlay' && overlay===o}
                 onClick={() => { setTool('overlay'); setOverlay(o); }} />
             ))}
           </ToolSection>
 
-          <ToolSection label="Modifier" active={tool==='modifier'} onActivate={() => setTool('modifier')}>
+          <ToolSection label="Dividers" active={tool==='overlay' && OVERLAY_DIVIDERS.includes(overlay)}>
+            {OVERLAY_DIVIDERS.map(o => (
+              <PaletteChip key={o} color={OVERLAY_COLORS[o]} label={o}
+                active={tool==='overlay' && overlay===o}
+                onClick={() => { setTool('overlay'); setOverlay(o); }} />
+            ))}
+          </ToolSection>
+
+          <ToolSection label="Modifier" active={tool==='modifier'}>
             {MODIFIER_OPTIONS.map(m => (
               <PaletteChip key={m} color={MODIFIER_COLORS[m]} label={m.replace('_',' ')}
                 active={tool==='modifier' && modifier===m}
@@ -507,20 +532,20 @@ export function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }) {
             <button className="tse-btn tse-btn--primary" onClick={handleGenerate} disabled={generating}>
               {generating ? 'Generating…' : 'Generate Map from Sketch'}
             </button>
-            <button className="tse-btn" onClick={onCancel} disabled={generating}>Cancel</button>
+            <button className="tse-btn" onClick={handleCancel} disabled={generating}>Cancel</button>
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function ToolSection({ label, active, onActivate, children }) {
+function ToolSection({ label, active, children }) {
   return (
     <div className={`tse-section ${active ? 'tse-section--active' : ''}`}>
-      <div className="tse-section-label" onClick={onActivate}>{label}</div>
+      <div className="tse-section-label">{label}</div>
       <div className="tse-chips">{children}</div>
     </div>
   );
