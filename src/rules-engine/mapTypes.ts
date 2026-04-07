@@ -221,7 +221,6 @@ export type BiomeType =
   | 'volcanic'
   | 'ocean'
   | 'coastal'
-  | 'mountains'
   | 'lake';
 
 export type ReliefType =

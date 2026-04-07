@@ -13,7 +13,7 @@ import type {
   ValidationResult,
 } from './mapTypes';
 
-const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','volcanic','ocean','coastal','mountains','lake']);
+const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','volcanic','ocean','coastal','lake']);
 const VALID_RELIEFS   = new Set(['flat','rolling','hills','mountainous','cliffs','valley','plateau']);
 const VALID_OVERLAYS  = new Set(['river','road','wall','border','canyon','chasm']);
 const VALID_MODIFIERS = new Set(['cursed','sacred','magical','blighted','fertile','ancient_ruins','enchanted','corrupted','divine']);

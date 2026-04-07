@@ -640,10 +640,10 @@ function buildPromptAdditions(sketchSpec) {
 
 // ── POST /api/maps/generate-from-sketch ──────────────────────────────────────
 // Starts a background generation job and returns { jobId } immediately.
-// Body: { sketchSpec, renderer?, controlImage }
+// Body: { sketchSpec, renderer?, controlImage, style_preset? }
 
 router.post('/generate-from-sketch', auth, (req, res) => {
-  const { sketchSpec, renderer = 'auto', controlImage } = req.body ?? {};
+  const { sketchSpec, renderer = 'auto', controlImage, style_preset = 'parchment' } = req.body ?? {};
 
   if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
   if (!controlImage || typeof controlImage !== 'string')
@@ -667,6 +667,7 @@ router.post('/generate-from-sketch', auth, (req, res) => {
         controlImage,
         promptAdditions,
         renderer,
+        stylePreset: style_preset,
         onStatus: (status) => {
           // Bubble Replicate's internal status up to the job store so frontend can show it
           const job = sketchJobs.get(jobId);

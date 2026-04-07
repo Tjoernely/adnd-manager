@@ -25,7 +25,7 @@ const MOCK_PLACEHOLDER = 'https://placehold.co/1024x1024/4a5d23/ffffff/png?text=
  * @param {function} opts.onStatus  optional status callback (controlnet only)
  * @returns {Promise<{ imageUrl: string, renderer_used: string }>}
  */
-async function generateFromSketch({ controlImage, promptAdditions, renderer = 'auto', onStatus }) {
+async function generateFromSketch({ controlImage, promptAdditions, renderer = 'auto', stylePreset = 'parchment', onStatus }) {
 
   // ── Mock mode ──────────────────────────────────────────────────────────────
   if (process.env.CONTROLNET_MOCK === 'true') {
@@ -40,7 +40,7 @@ async function generateFromSketch({ controlImage, promptAdditions, renderer = 'a
       throw new Error('Vision renderer requires ANTHROPIC_API_KEY and OPENAI_API_KEY');
     }
     console.log('[rendererFactory] Using Vision (Claude → DALL-E)');
-    const imageUrl = await visionProvider.render(controlImage, promptAdditions);
+    const imageUrl = await visionProvider.render(controlImage, promptAdditions, { stylePreset });
     return { imageUrl, renderer_used: visionProvider.name };
   }
 
@@ -61,7 +61,7 @@ async function generateFromSketch({ controlImage, promptAdditions, renderer = 'a
     // auto fallback: try Vision, then plain DALL-E
     if (visionProvider.isAvailable()) {
       console.log('[rendererFactory] Auto fallback: Using Vision (Claude → DALL-E)');
-      const imageUrl = await visionProvider.render(controlImage, promptAdditions);
+      const imageUrl = await visionProvider.render(controlImage, promptAdditions, { stylePreset });
       return { imageUrl, renderer_used: visionProvider.name };
     }
   }

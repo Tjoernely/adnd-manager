@@ -21,7 +21,6 @@ const BIOME_TO_TERRAIN: Record<BiomeType, string> = {
   volcanic:  'Volcanic',
   ocean:     'Coastal',
   coastal:   'Coastal',
-  mountains: 'Mountains',
   lake:      'Coastal',
 };
 

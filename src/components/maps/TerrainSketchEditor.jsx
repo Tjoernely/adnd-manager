@@ -15,16 +15,15 @@ import './TerrainSketchEditor.css';
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 export const BIOME_CONFIG = {
-  plains:    { label: 'Plains',    color: '#c8d88a' },
-  forest:    { label: 'Forest',    color: '#3a7a3a' },
-  swamp:     { label: 'Swamp',     color: '#5a7a4a' },
-  desert:    { label: 'Desert',    color: '#d4b060' },
-  tundra:    { label: 'Tundra',    color: '#b0c8d8' },
-  volcanic:  { label: 'Volcanic',  color: '#a03020' },
-  ocean:     { label: 'Ocean',     color: '#1a5080' },
-  coastal:   { label: 'Coastal',   color: '#4a90a0' },
-  mountains: { label: 'Mountains', color: '#8a7868' },
-  lake:      { label: 'Lake',      color: '#1976d2' },
+  plains:   { label: 'Plains',   color: '#c8d88a' },
+  forest:   { label: 'Forest',   color: '#3a7a3a' },
+  swamp:    { label: 'Swamp',    color: '#5a7a4a' },
+  desert:   { label: 'Desert',   color: '#d4b060' },
+  tundra:   { label: 'Tundra',   color: '#b0c8d8' },
+  volcanic: { label: 'Volcanic', color: '#a03020' },
+  ocean:    { label: 'Ocean',    color: '#1a5080' },
+  coastal:  { label: 'Coastal',  color: '#4a90a0' },
+  lake:     { label: 'Lake',     color: '#1976d2' },
 };
 
 const RELIEF_OPTIONS = ['flat','rolling','hills','mountainous','cliffs','valley','plateau'];
@@ -77,9 +76,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [cells, setCells]           = useState(() => {
     const map = {};
     (initialSpec?.cells ?? []).forEach(c => {
-      // Backwards compat: biome='hills' → biome='plains' + relief='hills'
       const cell = { ...c };
-      if (cell.biome === 'hills') { cell.biome = 'plains'; cell.relief = 'hills'; }
+      // Backwards compat: biome='hills' → biome='plains' + relief='hills'
+      if (cell.biome === 'hills')     { cell.biome = 'plains'; cell.relief = 'hills'; }
+      // Backwards compat: biome='mountains' → biome='plains' + relief='mountainous'
+      if (cell.biome === 'mountains') { cell.biome = 'plains'; cell.relief = 'mountainous'; }
       // Backwards compat: relief='hilly' → relief='hills'
       if (cell.relief === 'hilly') cell.relief = 'hills';
       map[cellKey(cell.x, cell.y)] = cell;
@@ -107,7 +108,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [aiFreedom, setAiFreedom]   = useState(initialSpec?.ai_freedom ?? 'balanced');
   const [loreMode, setLoreMode]     = useState(initialSpec?.lore_mode ?? false);
   const [userPrompt, setUserPrompt] = useState(initialSpec?.user_prompt ?? '');
-  const [renderer, setRenderer]     = useState('auto');  // 'auto' | 'controlnet' | 'dalle'
+  const [renderer, setRenderer]     = useState('auto');  // 'auto' | 'controlnet' | 'vision' | 'dalle'
+  const [mapStyle, setMapStyle]     = useState('parchment'); // 'parchment'|'fantasy'|'ink'|'classic'
   const [errors, setErrors]         = useState([]);
   const [generating, setGenerating] = useState(false);
   const [genStatus, setGenStatus]   = useState('');
@@ -254,7 +256,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage }),
+        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, style_preset: mapStyle }),
       });
       if (!startResp.ok) {
         const err = await startResp.json().catch(() => ({ error: startResp.statusText }));
@@ -507,6 +509,15 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             <textarea className="tse-prompt" rows={3} maxLength={500}
               placeholder="Describe unique features…"
               value={userPrompt} onChange={e => setUserPrompt(e.target.value)} />
+          </label>
+
+          <label className="tse-label">Map Style
+            <select value={mapStyle} onChange={e => setMapStyle(e.target.value)} disabled={generating}>
+              <option value="parchment">📜 Parchment Atlas</option>
+              <option value="fantasy">🎨 Fantasy Illustrated</option>
+              <option value="ink">🖋 Hand-drawn Ink</option>
+              <option value="classic">🗺 Classic D&amp;D</option>
+            </select>
           </label>
 
           <label className="tse-label">Renderer
