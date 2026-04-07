@@ -38,12 +38,11 @@ class GptImageRenderer extends IMapRenderer {
     const imageStream = fs.createReadStream(controlImagePath);
 
     const result = await client.images.edit({
-      model:   'gpt-image-1',
-      image:   imageStream,
+      model:  'gpt-image-1',
+      image:  imageStream,
       prompt,
-      size:    '1024x1024',
-      quality: 'medium',
-      n:       1,
+      size:   '1024x1024',
+      n:      1,
     });
 
     const imageBase64 = result.data[0].b64_json;
