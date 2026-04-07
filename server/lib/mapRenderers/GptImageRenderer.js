@@ -117,11 +117,10 @@ class GptImageRenderer extends IMapRenderer {
     // ── Step 3: gpt-image-1 generate ─────────────────────────────────────────
     console.log(`[${this.name}] Sending prompt to gpt-image-1...`);
     const result = await this._getOpenAI().images.generate({
-      model:           'gpt-image-1',
-      prompt:          imagePrompt,
-      size:            '1024x1024',
-      n:               1,
-      response_format: 'b64_json',
+      model:  'gpt-image-1',
+      prompt: imagePrompt,
+      size:   '1024x1024',
+      n:      1,
     });
 
     const imageBase64 = result.data[0].b64_json;
