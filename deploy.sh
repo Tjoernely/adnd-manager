@@ -19,12 +19,15 @@ if [ ! -f $APP/server/.env ]; then
   exit 1
 fi
 
-# 2. Install server deps (clean to avoid ENOTEMPTY from concurrent activity)
+# 2. Stop PM2 before touching node_modules to prevent crash-loop during install
+pm2 stop adnd-backend 2>/dev/null || true
+
+# 3. Install server deps (clean to avoid ENOTEMPTY from concurrent activity)
 rm -rf $APP/server/node_modules
 npm install --prefix server
 
-# 3. Restart PM2 with --update-env so new env-vars are loaded
-pm2 restart adnd-backend --update-env
+# 4. Start PM2 with --update-env so new env-vars are loaded
+pm2 start adnd-backend --update-env
 pm2 save
 
 echo "=== Deploy complete ==="
