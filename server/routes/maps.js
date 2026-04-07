@@ -598,7 +598,7 @@ router.delete('/:id', auth, async (req, res) => {
 // In-memory map: jobId → { status, imageUrl, renderer_used, error, createdAt }
 // Jobs expire after 30 minutes; cleanup runs every 10 minutes.
 
-const { generateFromSketch } = require('../lib/rendererFactory');
+const { getRenderer } = require('../lib/mapRenderers/rendererFactory');
 
 const sketchJobs = new Map();
 
@@ -640,10 +640,16 @@ function buildPromptAdditions(sketchSpec) {
 
 // ── POST /api/maps/generate-from-sketch ──────────────────────────────────────
 // Starts a background generation job and returns { jobId } immediately.
-// Body: { sketchSpec, renderer?, controlImage, style_preset? }
+// Body: { sketchSpec, renderer?, controlImage, stylePreset?, userPrompt? }
 
 router.post('/generate-from-sketch', auth, (req, res) => {
-  const { sketchSpec, renderer = 'auto', controlImage, style_preset = 'parchment' } = req.body ?? {};
+  const {
+    sketchSpec,
+    renderer:     rendererName = 'auto',
+    controlImage,
+    stylePreset   = 'parchment',
+    userPrompt    = '',
+  } = req.body ?? {};
 
   if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
   if (!controlImage || typeof controlImage !== 'string')
@@ -653,64 +659,53 @@ router.post('/generate-from-sketch', auth, (req, res) => {
   if (!Array.isArray(cells) || cells.length === 0)
     return res.status(400).json({ error: 'Sketch has no painted cells — paint some terrain first' });
 
+  // Validate renderer is available before queuing
+  let renderer;
+  try {
+    renderer = getRenderer(rendererName);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+
   const jobId = crypto.randomUUID();
   sketchJobs.set(jobId, { status: 'pending', createdAt: Date.now() });
 
-  const promptAdditions = buildPromptAdditions(sketchSpec);
-  console.log(`[generate-from-sketch] job=${jobId} renderer=${renderer} cells=${cells.length} prompt="${promptAdditions.substring(0, 80)}..."`);
+  console.log(`[generate-from-sketch] job=${jobId} renderer=${renderer.name} style=${stylePreset} cells=${cells.length}`);
+  res.json({ jobId, status: 'pending' });
 
   // Run generation in background — do not await
   (async () => {
-    console.log(`[job-worker] Starting Replicate job ${jobId}`);
+    // Save base64 control image to disk so renderer can read it as a file stream
+    const controlFilename = `sketch-control-${crypto.randomUUID()}.png`;
+    const controlPath     = path.join(UPLOAD_DIR, controlFilename);
     try {
-      const { imageUrl, renderer_used } = await generateFromSketch({
-        controlImage,
-        promptAdditions,
-        renderer,
-        stylePreset: style_preset,
-        onStatus: (status) => {
-          // Bubble Replicate's internal status up to the job store so frontend can show it
-          const job = sketchJobs.get(jobId);
-          if (job) sketchJobs.set(jobId, { ...job, status: status === 'succeeded' ? 'pending' : status });
-        },
-      });
+      const base64Data = controlImage.replace(/^data:image\/[^;]+;base64,/, '');
+      fs.writeFileSync(controlPath, Buffer.from(base64Data, 'base64'));
 
-      // Persist image locally (Replicate/DALL-E URLs are temporary)
-      let localImageUrl = imageUrl;
-      if (imageUrl.startsWith('http')) {
-        try {
-          const dlResp = await fetch(imageUrl);
-          if (dlResp.ok) {
-            const buffer   = Buffer.from(await dlResp.arrayBuffer());
-            const filename = `map-sketch-${crypto.randomUUID()}.png`;
-            fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
-            localImageUrl = `/uploads/maps/${filename}`;
-            console.log(`[sketch-job ${jobId}] Saved ${buffer.length} bytes → ${filename}`);
-          }
-        } catch (saveErr) {
-          console.warn(`[sketch-job ${jobId}] Could not persist image: ${saveErr.message}`);
-        }
-      }
+      // Renderer writes the output image to UPLOAD_DIR and returns the absolute path
+      const outputPath     = await renderer.render(controlPath, stylePreset, userPrompt);
+      const localImageUrl  = `/uploads/maps/${path.basename(outputPath)}`;
 
       sketchJobs.set(jobId, {
-        status: 'succeeded',
-        imageUrl: localImageUrl,
-        renderer_used,
-        spec: sketchSpec,
-        createdAt: sketchJobs.get(jobId)?.createdAt ?? Date.now(),
+        status:        'succeeded',
+        imageUrl:      localImageUrl,
+        renderer_used: renderer.name,
+        spec:          sketchSpec,
+        createdAt:     sketchJobs.get(jobId)?.createdAt ?? Date.now(),
       });
-      console.log(`[job-worker] Replicate done ${jobId} succeeded — ${localImageUrl}`);
+      console.log(`[job-worker] ${jobId} succeeded — ${localImageUrl}`);
     } catch (err) {
-      console.error(`[job-worker] Replicate done ${jobId} failed:`, err.message);
+      console.error(`[job-worker] ${jobId} failed:`, err.message);
       sketchJobs.set(jobId, {
-        status: 'failed',
-        error: err.message,
+        status:    'failed',
+        error:     err.message,
         createdAt: sketchJobs.get(jobId)?.createdAt ?? Date.now(),
       });
+    } finally {
+      // Clean up temporary control image
+      try { fs.unlinkSync(controlPath); } catch {}
     }
   })();
-
-  res.json({ jobId, status: 'pending' });
 });
 
 // ── GET /api/maps/sketch-job/:jobId ──────────────────────────────────────────

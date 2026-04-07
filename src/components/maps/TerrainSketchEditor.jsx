@@ -234,21 +234,14 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     try {
-      // 1. Render sketch → control PNG
-      // Scribble (black outlines on white) for ControlNet — colour-agnostic, layout-faithful
-      // Seg (ADE20K flat colours) for DALL-E fallback (unused by DALL-E but kept for debug)
+      // Render sketch → coloured segmentation PNG
+      // gpt-image-1 and Gemini read biome colours directly — no scribble needed
       setGenStatus('Rendering terrain sketch…');
-      // Scribble (black outlines on white) for ControlNet — shape-based
-      // Coloured seg PNG for Vision/DALL-E — Claude reads biome colours by position
-      const useScribble  = renderer === 'controlnet' || renderer === 'auto';
-      const controlImage = useScribble
-        ? renderSketchToScribble(spec)
-        : renderSketchToControlImage(spec);
+      const controlImage = renderSketchToControlImage(spec);
 
       // 2. POST to server → returns jobId immediately (non-blocking)
-      const rendererLabel = renderer === 'controlnet' ? 'ControlNet'
-                          : renderer === 'dalle'      ? 'DALL-E'
-                          : renderer === 'vision'     ? 'Vision (Claude→DALL-E)'
+      const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'
+                          : renderer === 'gemini'     ? 'Gemini Image'
                           : 'AI renderer';
       setGenStatus(`Queuing ${rendererLabel} job…`);
 
@@ -256,7 +249,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, style_preset: mapStyle }),
+        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt }),
       });
       if (!startResp.ok) {
         const err = await startResp.json().catch(() => ({ error: startResp.statusText }));
@@ -522,10 +515,9 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
           <label className="tse-label">Renderer
             <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
-              <option value="auto">🎨 Auto (ControlNet → DALL-E)</option>
-              <option value="controlnet">🗺 ControlNet (Replicate)</option>
-              <option value="vision">🧠 Vision (Claude → DALL·E)</option>
-              <option value="dalle">🖼 DALL-E (OpenAI)</option>
+              <option value="auto">🤖 Auto</option>
+              <option value="gpt-image-1">🖼 GPT-Image-1 (OpenAI)</option>
+              <option value="gemini">🟦 Gemini Image (Google)</option>
             </select>
           </label>
 
