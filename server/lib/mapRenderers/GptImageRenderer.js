@@ -68,7 +68,10 @@ Do not invent major new regions or relocate terrain.
 Only add minor landmarks and small lore-friendly details.
 Even in strict mode: render as fully illustrated fantasy cartography,
 not a beautified copy of the sketch.
-Priority: high structural fidelity + high render quality.`,
+Priority: high structural fidelity + high render quality.
+The overall composition and proportions must closely match the sketch.
+Major terrain zones must occupy the same relative areas as in the grid.
+Do not relocate, resize, or omit any terrain zone present in the grid.`,
 
   balanced: `Freedom mode: BALANCED
 Preserve core geography and regional layout.
@@ -252,6 +255,15 @@ function buildMustKeepFacts(spec) {
     facts.push(`A distinct inland lake exists in the ${pos} region`);
   }
 
+  // Swamp visibility instruction
+  const swampCount = cells.filter(c => c.biome === 'swamp').length;
+  if (swampCount > 50) {
+    facts.push(
+      'Swamp must be rendered as a VISIBLE marsh/wetland zone with ' +
+      'distinctive visual texture — not just labeled as text',
+    );
+  }
+
   // D. Negative constraints — ocean absent from specific edges
   const allBiomes = new Set(cells.map(c => c.biome));
   if (allBiomes.has('ocean') || allBiomes.has('coastal')) {
@@ -338,7 +350,7 @@ class GptImageRenderer extends IMapRenderer {
           { type: 'input_text',  text: fullPrompt },
         ],
       }],
-      tools: [{ type: 'image_generation' }],
+      tools: [{ type: 'image_generation', size: '1024x1024' }],
     });
 
     const imageData = response.output
