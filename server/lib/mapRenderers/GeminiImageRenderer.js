@@ -1,6 +1,6 @@
 /**
  * GeminiImageRenderer — Google Gemini image generation.
- * Model: gemini-2.0-flash-preview-image-generation
+ * Model: gemini-2.5-flash-image
  * Requires: GOOGLE_AI_API_KEY in server/.env
  *
  * Prompt logic lives in promptBuilder.js.
@@ -26,14 +26,14 @@ class GeminiImageRenderer extends IMapRenderer {
     const fullPrompt  = buildFullPrompt(spec, aiFredom, userPrompt);
     const imageBase64 = fs.readFileSync(controlImagePath).toString('base64');
 
-    console.log('[gemini] gemini-2.0-flash-preview-image-generation');
+    console.log('[gemini] gemini-2.5-flash-image');
     console.log(`[gemini] Cells: ${spec?.cells?.length ?? 0} / Overlays: ${spec?.overlays?.length ?? 0}`);
     console.log(`[gemini] Prompt length: ${fullPrompt.length} chars`);
 
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY });
 
     const result = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-preview-image-generation',
+      model: 'gemini-2.5-flash-image',
       contents: [{
         role: 'user',
         parts: [
