@@ -6,7 +6,7 @@
  * Prompt logic lives in promptBuilder.js.
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const fs           = require('fs');
 const path         = require('path');
 const crypto       = require('crypto');
@@ -30,20 +30,23 @@ class GeminiImageRenderer extends IMapRenderer {
     console.log(`[gemini] Cells: ${spec?.cells?.length ?? 0} / Overlays: ${spec?.overlays?.length ?? 0}`);
     console.log(`[gemini] Prompt length: ${fullPrompt.length} chars`);
 
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-    const model = genAI.getGenerativeModel({
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY });
+
+    const result = await ai.models.generateContent({
       model: 'gemini-2.0-flash-preview-image-generation',
-      generationConfig: {
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: 'image/png', data: imageBase64 } },
+          { text: fullPrompt },
+        ],
+      }],
+      config: {
         responseModalities: ['TEXT', 'IMAGE'],
       },
     });
 
-    const result = await model.generateContent([
-      { inlineData: { mimeType: 'image/png', data: imageBase64 } },
-      { text: fullPrompt },
-    ]);
-
-    const parts = result.response.candidates[0].content.parts;
+    const parts = result.candidates[0].content.parts;
     const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
     if (!imagePart) throw new Error('Gemini returned no image part in response');
 
