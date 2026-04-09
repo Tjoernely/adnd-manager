@@ -1,11 +1,5 @@
 /**
- * GptImageRenderer — OpenAI Responses API with gpt-4o + image_generation tool.
- *
- * Flow:
- *   1. Build semantic grid + relief grid + connector grid + must-keep facts
- *   2. Build full 9-part prompt
- *   3. Send sketch PNG + prompt to gpt-4o via responses.create
- *   4. Extract image_generation_call result → save to disk
+ * GptImageRenderer — OpenAI Responses API, gpt-4o + image_generation tool.
  */
 
 const OpenAI       = require('openai');
@@ -15,20 +9,6 @@ const crypto       = require('crypto');
 const IMapRenderer = require('./IMapRenderer');
 
 const UPLOADS_DIR = path.join(__dirname, '../../public/uploads/maps');
-
-// ── Biome character encoding ───────────────────────────────────────────────────
-
-const BIOME_CHAR = {
-  plains:   'P',
-  forest:   'F',
-  swamp:    'S',
-  desert:   'D',
-  tundra:   'T',
-  volcanic: 'V',
-  ocean:    'O',
-  coastal:  'C',
-  lake:     'L',
-};
 
 // ── Base prompt ────────────────────────────────────────────────────────────────
 
@@ -71,13 +51,13 @@ Avoid:
 
 // ── Priority order block ───────────────────────────────────────────────────────
 
-const PRIORITY_ORDER = `Rendering priority order (follow strictly):
-1. Must-keep facts below are HARD constraints — never violate them
-2. Terrain grid defines exact biome placement — treat as authoritative
-3. Relief and connector grids refine terrain — apply where shown
-4. Freedom mode governs artistic latitude beyond the constraints above
-5. Style suffix defines visual aesthetic
-6. User instructions are additive — do not override constraints 1–3`;
+const PRIORITY_ORDER = `Priority order:
+ 1. Biome and relief grids are authoritative for terrain placement
+ 2. Must-keep facts are non-negotiable constraints
+ 3. Connector paths define exact river/road routes
+ 4. Sketch image is compositional reference only
+ 5. Translate to organic illustrated fantasy cartography
+    — preserve cell semantics, NOT cell boundaries visually`;
 
 // ── Freedom modes ──────────────────────────────────────────────────────────────
 
@@ -103,232 +83,200 @@ Add subregions, landmarks, ruins, roads, settlements, and terrain drama.
 Result should feel like a finished fantasy sourcebook map inspired by the sketch.`,
 };
 
-// ── Semantic grid builder ──────────────────────────────────────────────────────
+// ── Biome grid builder ─────────────────────────────────────────────────────────
 
-function buildSemanticGrid(spec) {
-  const rows = spec.grid?.rows || 32;
-  const cols = spec.grid?.cols || 32;
+const BIOME_CHAR = {
+  plains: 'P', forest: 'F', swamp: 'S', desert: 'D',
+  tundra: 'T', volcanic: 'V', ocean: 'O', coastal: 'C', lake: 'L',
+};
+
+function buildBiomeGrid(spec) {
+  const rows = 32, cols = 32;
   const grid = Array.from({ length: rows }, () => Array(cols).fill('.'));
 
   for (const cell of (spec.cells ?? [])) {
-    if (cell.biome && cell.y < rows && cell.x < cols) {
-      grid[cell.y][cell.x] = BIOME_CHAR[cell.biome] ?? '.';
+    // Skip mountains/hills stored as biome (backwards compat) — shown in relief grid
+    if (cell.biome === 'mountains' || cell.biome === 'hills') continue;
+    const ch = BIOME_CHAR[cell.biome];
+    if (ch && cell.y < rows && cell.x < cols) {
+      grid[cell.y][cell.x] = ch;
     }
   }
 
-  const lines = [];
-  lines.push('Terrain grid (32×32, origin top-left, X=west→east, Y=north→south):');
-  lines.push('Legend: P=plains F=forest S=swamp D=desert T=tundra V=volcanic O=ocean C=coastal L=lake .=empty');
-  lines.push('');
-
+  const lines = [
+    'Biome grid (32×32). West=left East=right North=top South=bottom.',
+    'Key: P=plains F=forest S=swamp D=desert T=tundra V=volcanic O=ocean C=coastal L=lake .=empty',
+  ];
   for (let r = 0; r < rows; r++) {
-    if (grid[r].every(v => v === '.')) continue;  // skip fully-empty rows
-    lines.push(`Y${String(r).padStart(2,'0')}: ${grid[r].join('')}`);
+    if (grid[r].every(v => v === '.')) continue;
+    lines.push(`${String(r).padStart(2)}: ${grid[r].join('')}`);
   }
-
   return lines.join('\n');
 }
 
 // ── Relief grid builder ────────────────────────────────────────────────────────
 
 function buildReliefGrid(spec) {
-  const rows = spec.grid?.rows || 32;
-  const cols = spec.grid?.cols || 32;
+  const rows = 32, cols = 32;
   const grid = Array.from({ length: rows }, () => Array(cols).fill('.'));
-
   let hasRelief = false;
+
   for (const cell of (spec.cells ?? [])) {
-    if (cell.relief && cell.relief !== 'flat' && cell.y < rows && cell.x < cols) {
-      if (cell.relief === 'mountainous') { grid[cell.y][cell.x] = 'M'; hasRelief = true; }
-      else if (cell.relief === 'hills')  { grid[cell.y][cell.x] = 'H'; hasRelief = true; }
+    let ch = null;
+    if (cell.relief === 'mountains' || cell.relief === 'mountainous') ch = 'M';
+    else if (cell.relief === 'hills') ch = 'H';
+    else if (cell.biome === 'mountains') ch = 'M'; // backwards compat
+    else if (cell.biome === 'hills')     ch = 'H'; // backwards compat
+
+    if (ch && cell.y < rows && cell.x < cols) {
+      grid[cell.y][cell.x] = ch;
+      hasRelief = true;
     }
   }
 
   if (!hasRelief) return null;
 
-  const lines = [];
-  lines.push('Relief grid (same coordinate system):');
-  lines.push('Legend: M=mountains H=hills .=flat/unspecified');
-  lines.push('');
-
+  const lines = [
+    'Relief grid (same coordinates as biome grid):',
+    'Key: M=mountains H=hills .=flat',
+  ];
   for (let r = 0; r < rows; r++) {
     if (grid[r].every(v => v === '.')) continue;
-    lines.push(`Y${String(r).padStart(2,'0')}: ${grid[r].join('')}`);
+    lines.push(`${String(r).padStart(2)}: ${grid[r].join('')}`);
   }
-
   return lines.join('\n');
 }
 
-// ── Connector grid builder ─────────────────────────────────────────────────────
+// ── Connector paths builder ────────────────────────────────────────────────────
 
-function buildConnectorGrid(spec) {
-  const rows = spec.grid?.rows || 32;
-  const cols = spec.grid?.cols || 32;
-  const grid = Array.from({ length: rows }, () => Array(cols).fill('.'));
-
-  const OVERLAY_CHAR = {
-    river:  '~',
-    road:   '=',
-    canyon: '|',
-    chasm:  '#',
-  };
-
-  const overlays = spec.overlays ?? [];
+function buildConnectorPaths(spec) {
+  const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   if (!overlays.length) return null;
 
-  let hasConnector = false;
-  for (const overlay of overlays) {
-    const ch = OVERLAY_CHAR[overlay.type];
-    if (!ch) continue;
-    for (const pt of (overlay.points ?? [])) {
-      if (pt.y < rows && pt.x < cols) {
-        grid[pt.y][pt.x] = ch;
-        hasConnector = true;
-      }
-    }
+  const lines = ['Connector paths (x=east y=south, origin top-left):'];
+  for (const ov of overlays) {
+    const pts   = ov.points;
+    const start = pts[0];
+    const end   = pts[pts.length - 1];
+    const dirX  = end.x > start.x ? 'east' : 'west';
+    const dirY  = end.y > start.y ? 'south' : 'north';
+    const path  = pts.map(p => `(${p.x},${p.y})`).join('→');
+    lines.push(`- ${ov.type}: flows ${dirY}-${dirX}, path: ${path}`);
   }
-
-  if (!hasConnector) return null;
-
-  const lines = [];
-  lines.push('Connector grid (same coordinate system):');
-  lines.push('Legend: ~=river ==road |=canyon #=chasm .=none');
-  lines.push('');
-
-  for (let r = 0; r < rows; r++) {
-    if (grid[r].every(v => v === '.')) continue;
-    lines.push(`Y${String(r).padStart(2,'0')}: ${grid[r].join('')}`);
-  }
-
+  lines.push('Paths are authoritative. Biome grid is preserved unchanged on connector cells.');
   return lines.join('\n');
 }
 
 // ── Must-keep facts builder ────────────────────────────────────────────────────
 
 function buildMustKeepFacts(spec) {
-  const cells   = spec.cells ?? [];
-  const overlays = spec.overlays ?? [];
+  const cells   = (spec.cells ?? []).filter(c => BIOME_CHAR[c.biome]); // only real biomes
+  const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   const facts   = [];
 
   if (!cells.length) return null;
 
-  // Edge zone analysis (N: y<8, S: y≥24, E: x≥24, W: x<8, center: 8–23)
-  const edges = { N: [], S: [], E: [], W: [], center: [] };
-  for (const cell of cells) {
-    if (cell.y < 8)       edges.N.push(cell.biome);
-    if (cell.y >= 24)     edges.S.push(cell.biome);
-    if (cell.x >= 24)     edges.E.push(cell.biome);
-    if (cell.x < 8)       edges.W.push(cell.biome);
-    if (cell.x >= 8 && cell.x < 24 && cell.y >= 8 && cell.y < 24)
-                          edges.center.push(cell.biome);
-  }
-
-  const uniqueBiomesIn = arr => [...new Set(arr)];
-  const dominantIn = arr => {
-    if (!arr.length) return null;
-    const counts = {};
-    for (const b of arr) counts[b] = (counts[b] ?? 0) + 1;
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-  };
-
-  // Biomes exclusive to specific edges (exist on that edge, absent from center)
-  const centerBiomes = new Set(uniqueBiomesIn(edges.center));
-  for (const [edge, edgeCells] of Object.entries(edges)) {
-    if (edge === 'center') continue;
-    const edgeBiomes = uniqueBiomesIn(edgeCells);
-    const exclusive  = edgeBiomes.filter(b => !centerBiomes.has(b));
-    if (exclusive.length) {
-      const dir = { N:'north', S:'south', E:'east', W:'west' }[edge];
-      facts.push(`- ${exclusive.join('/')} exists only along the ${dir} edge — do not place it in the center`);
-    }
-  }
-
-  // Dominant biome per edge
-  for (const [edge, edgeCells] of Object.entries(edges)) {
-    if (edge === 'center' || !edgeCells.length) continue;
-    const dom = dominantIn(edgeCells);
-    if (dom) {
-      const dir = { N:'north', S:'south', E:'east', W:'west' }[edge];
-      facts.push(`- ${dir} edge is dominated by ${dom}`);
-    }
-  }
-
-  // Forest-ocean/coastal adjacency
-  const WATER_BIOMES = new Set(['ocean', 'coastal', 'lake']);
+  // Build a lookup map
   const cellMap = new Map();
-  for (const cell of cells) cellMap.set(`${cell.x},${cell.y}`, cell);
+  for (const c of cells) cellMap.set(`${c.x},${c.y}`, c);
 
+  // Edge zone membership per cell
+  function edgeLabels(c) {
+    const labels = [];
+    if (c.y < 8)   labels.push('north');
+    if (c.y >= 24) labels.push('south');
+    if (c.x >= 24) labels.push('east');
+    if (c.x < 8)   labels.push('west');
+    return labels;
+  }
+
+  // A. Biomes exclusive to specific edge zones
+  const biomeEdges = {}; // biome → Set of edge labels where it appears
+  const biomeInCenter = new Set();
+  for (const c of cells) {
+    const edges = edgeLabels(c);
+    if (edges.length === 0) {
+      biomeInCenter.add(c.biome);
+    } else {
+      if (!biomeEdges[c.biome]) biomeEdges[c.biome] = new Set();
+      edges.forEach(e => biomeEdges[c.biome].add(e));
+    }
+  }
+
+  for (const [biome, edgeSet] of Object.entries(biomeEdges)) {
+    if (biomeInCenter.has(biome)) continue; // not exclusive to edges
+    const edgeArr = [...edgeSet];
+    // Combine adjacent edges into quadrant names
+    const hasN = edgeArr.includes('north'), hasS = edgeArr.includes('south');
+    const hasE = edgeArr.includes('east'),  hasW = edgeArr.includes('west');
+    let where;
+    if (hasN && hasE && !hasS && !hasW)      where = 'the northeast';
+    else if (hasN && hasW && !hasS && !hasE) where = 'the northwest';
+    else if (hasS && hasE && !hasN && !hasW) where = 'the southeast';
+    else if (hasS && hasW && !hasN && !hasE) where = 'the southwest';
+    else                                     where = edgeArr.join(' and ');
+
+    facts.push(`${biome.charAt(0).toUpperCase() + biome.slice(1)} terrain exists only in ${where}`);
+    if (facts.length >= 3) break;
+  }
+
+  // B. Forest-ocean/coastal adjacency
+  const WATER = new Set(['ocean', 'coastal']);
   const forestCells = cells.filter(c => c.biome === 'forest');
   for (const fc of forestCells) {
-    const neighbors = [
-      [fc.x, fc.y - 1], [fc.x, fc.y + 1],
-      [fc.x - 1, fc.y], [fc.x + 1, fc.y],
-    ];
-    const waterNeighbor = neighbors.find(([nx, ny]) => {
-      const n = cellMap.get(`${nx},${ny}`);
-      return n && WATER_BIOMES.has(n.biome);
-    });
-    if (waterNeighbor) {
-      facts.push(`- forest meets water at approximately (${fc.x},${fc.y}) — render as wooded coastline`);
-      break; // one representative fact is enough
+    const dirs = [[0,-1,'northern'],[0,1,'southern'],[-1,0,'western'],[1,0,'eastern']];
+    for (const [dx, dy, dir] of dirs) {
+      const n = cellMap.get(`${fc.x+dx},${fc.y+dy}`);
+      if (n && WATER.has(n.biome)) {
+        facts.push(`Forest reaches the ${dir} coastline`);
+        break;
+      }
     }
+    if (facts.length >= 5) break;
   }
 
-  // Isolated inland lakes (lake cells not adjacent to ocean/coastal)
+  // C. Isolated inland lakes
   const lakeCells = cells.filter(c => c.biome === 'lake');
   const isolatedLakes = lakeCells.filter(lc => {
-    const neighbors = [
-      [lc.x, lc.y - 1], [lc.x, lc.y + 1],
-      [lc.x - 1, lc.y], [lc.x + 1, lc.y],
-    ];
-    return !neighbors.some(([nx, ny]) => {
-      const n = cellMap.get(`${nx},${ny}`);
+    const neighbors = [[0,-1],[0,1],[-1,0],[1,0]];
+    return !neighbors.some(([dx,dy]) => {
+      const n = cellMap.get(`${lc.x+dx},${lc.y+dy}`);
       return n && (n.biome === 'ocean' || n.biome === 'coastal');
     });
   });
   if (isolatedLakes.length) {
-    facts.push(`- ${isolatedLakes.length} inland lake(s) present — render as landlocked, not connected to ocean`);
+    // Find centroid of isolated lake cells
+    const avgX = isolatedLakes.reduce((s,c) => s+c.x, 0) / isolatedLakes.length;
+    const avgY = isolatedLakes.reduce((s,c) => s+c.y, 0) / isolatedLakes.length;
+    const pos  = avgY < 12 ? 'northern' : avgY > 20 ? 'southern' : avgX < 12 ? 'western' : avgX > 20 ? 'eastern' : 'central';
+    facts.push(`A distinct inland lake exists in the ${pos} region`);
   }
 
-  // Overlay path facts (river/road origin→destination)
-  const OVERLAY_LABELS = { river: 'river', road: 'road', canyon: 'canyon', chasm: 'chasm' };
-  for (const overlay of overlays) {
-    const pts = overlay.points ?? [];
-    if (pts.length < 2) continue;
-    const label = OVERLAY_LABELS[overlay.type] ?? overlay.type;
+  // D. Negative constraints — ocean absent from specific edges
+  const allBiomes = new Set(cells.map(c => c.biome));
+  if (allBiomes.has('ocean') || allBiomes.has('coastal')) {
+    const oceanCells = cells.filter(c => c.biome === 'ocean' || c.biome === 'coastal');
+    const oceanEdges = new Set(oceanCells.flatMap(c => edgeLabels(c)));
+    const absent = ['north','south','east','west'].filter(e => !oceanEdges.has(e));
+    if (absent.length > 0 && absent.length <= 3) {
+      facts.push(`No ocean in the ${absent.join(' or ')}`);
+    }
+  }
+
+  // E. Overlay summary
+  for (const ov of overlays.slice(0, 2)) {
+    const pts   = ov.points;
     const start = pts[0];
     const end   = pts[pts.length - 1];
-    facts.push(`- ${label} runs from (${start.x},${start.y}) to (${end.x},${end.y})`);
-  }
-
-  // Negative constraints — biomes absent from edge zones
-  const allBiomes = uniqueBiomesIn(cells.map(c => c.biome));
-  for (const [edge, edgeCells] of Object.entries(edges)) {
-    if (edge === 'center' || !edgeCells.length) continue;
-    const edgeBiomeSet = new Set(edgeCells);
-    const dir = { N:'north', S:'south', E:'east', W:'west' }[edge];
-    // Only emit for dramatic mismatches (ocean/volcanic absent from an edge with many cells)
-    for (const b of ['ocean', 'volcanic']) {
-      if (allBiomes.includes(b) && !edgeBiomeSet.has(b) && edgeCells.length > 4) {
-        facts.push(`- no ${b} along ${dir} edge`);
-      }
-    }
+    const dirX  = end.x > start.x ? 'east' : 'west';
+    const dirY  = end.y > start.y ? 'south' : 'north';
+    facts.push(`A major ${ov.type} flows from (${start.x},${start.y}) toward (${end.x},${end.y}) — ${dirY}-${dirX}`);
   }
 
   if (!facts.length) return null;
 
-  return 'Must-keep structural facts (hard constraints):\n' + facts.join('\n');
-}
-
-// ── Style suffix ───────────────────────────────────────────────────────────────
-
-function buildStyleSuffix(spec) {
-  const parts = [];
-  if (spec.scope)  parts.push(`Scope: ${spec.scope}`);
-  if (spec.scale)  parts.push(`Scale: ${spec.scale}`);
-  if (spec.climate) parts.push(`Climate: ${spec.climate}`);
-  if (spec.lore_mode) parts.push('Style: rich historical lore, aged cartography');
-  return parts.length ? parts.join('. ') : null;
+  const capped = facts.slice(0, 8);
+  return 'Must preserve (non-negotiable):\n' + capped.map(f => `- ${f}`).join('\n');
 }
 
 // ── Full prompt builder ────────────────────────────────────────────────────────
@@ -338,22 +286,16 @@ function buildFullPrompt(spec, aiFredom, userPrompt) {
   const freedomBlock = FREEDOM_MODES[freedomKey] ?? FREEDOM_MODES.balanced;
 
   const mustKeep      = buildMustKeepFacts(spec);
-  const terrainGrid   = buildSemanticGrid(spec);
+  const biomeGrid     = buildBiomeGrid(spec);
   const reliefGrid    = buildReliefGrid(spec);
-  const connectorGrid = buildConnectorGrid(spec);
-  const styleSuffix   = buildStyleSuffix(spec);
+  const connectors    = buildConnectorPaths(spec);
 
-  const sections = [
-    BASE_PROMPT,
-    PRIORITY_ORDER,
-  ];
-
-  if (mustKeep)      sections.push(mustKeep);
-  sections.push(terrainGrid);
-  if (reliefGrid)    sections.push(reliefGrid);
-  if (connectorGrid) sections.push(connectorGrid);
+  const sections = [BASE_PROMPT, PRIORITY_ORDER];
+  if (mustKeep)   sections.push(mustKeep);
+  sections.push(biomeGrid);
+  if (reliefGrid) sections.push(reliefGrid);
+  if (connectors) sections.push(connectors);
   sections.push(freedomBlock);
-  if (styleSuffix)   sections.push(styleSuffix);
   if (userPrompt?.trim()) sections.push('Additional user instructions:\n' + userPrompt.trim());
 
   return sections.join('\n\n');
@@ -379,13 +321,13 @@ class GptImageRenderer extends IMapRenderer {
   }
 
   async render(controlImagePath, stylePreset = 'schley', userPrompt = '', spec = null, aiFredom = 'balanced') {
-    console.log('[gpt-image-1] Using Responses API with gpt-4o + image_generation tool');
-    console.log('[gpt-image-1] Grid size:', spec?.cells?.length ?? 0, 'cells');
+    console.log('[gpt-image-1] Responses API — gpt-4o + image_generation tool');
+    console.log('[gpt-image-1] Cells:', spec?.cells?.length ?? 0, '/ Overlays:', spec?.overlays?.length ?? 0);
 
     const fullPrompt  = buildFullPrompt(spec, aiFredom, userPrompt);
     const imageBase64 = fs.readFileSync(controlImagePath).toString('base64');
 
-    console.log('[gpt-image-1] Prompt length:', fullPrompt.length);
+    console.log('[gpt-image-1] Prompt length:', fullPrompt.length, 'chars');
 
     const response = await this._getOpenAI().responses.create({
       model: 'gpt-4o',
@@ -412,7 +354,7 @@ class GptImageRenderer extends IMapRenderer {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
     fs.writeFileSync(outputPath, imageBytes);
 
-    console.log(`[gpt-image-1] Done — saved: ${filename} (${imageBytes.length} bytes)`);
+    console.log(`[gpt-image-1] Saved: ${filename} (${imageBytes.length} bytes)`);
     return outputPath;
   }
 }

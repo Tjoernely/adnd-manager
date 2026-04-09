@@ -13,8 +13,11 @@ import type {
   ValidationResult,
 } from './mapTypes';
 
-const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','volcanic','ocean','coastal','lake']);
-const VALID_RELIEFS   = new Set(['flat','rolling','hills','mountainous','cliffs','valley','plateau']);
+// mountains/hills added for backwards compat with sketches that stored relief as biome
+const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','volcanic','ocean','coastal','lake','mountains','hills']);
+// Include legacy values (rolling, cliffs, valley, plateau) for backwards compat with saved sketches
+// mountains added as new canonical value; mountainous kept for backwards compat
+const VALID_RELIEFS   = new Set(['flat','hills','mountains','mountainous','rolling','cliffs','valley','plateau']);
 const VALID_OVERLAYS  = new Set(['river','road','wall','border','canyon','chasm']);
 const VALID_MODIFIERS = new Set(['cursed','sacred','magical','blighted','fertile','ancient_ruins','enchanted','corrupted','divine']);
 const VALID_SCOPES    = new Set(['world','region','local']);

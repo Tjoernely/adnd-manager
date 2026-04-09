@@ -8,7 +8,6 @@
  */
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
-import { renderSketchToControlImage, renderSketchToScribble } from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
@@ -26,26 +25,44 @@ export const BIOME_CONFIG = {
   lake:     { label: 'Lake',     color: '#1976d2' },
 };
 
-const RELIEF_OPTIONS = ['flat','rolling','hills','mountainous','cliffs','valley','plateau'];
+const RELIEF_CONFIG = {
+  flat:      { label: 'Flat',         color: '#c8b89a' },
+  hills:     { label: '∩ Hills',      color: '#8B7355' },
+  mountains: { label: '△ Mountains', color: '#888888' },
+};
+const RELIEF_OPTIONS = Object.keys(RELIEF_CONFIG);
 const OVERLAY_CONNECTORS = ['river', 'road'];
 const OVERLAY_DIVIDERS   = ['canyon', 'chasm'];
 
-const MODIFIER_OPTIONS = ['enchanted','corrupted','cursed','magical','divine','fertile','ancient_ruins'];
-
-const OVERLAY_COLORS = {
-  river: '#3a90d0', road: '#c0a060', wall: '#808080',
-  border: '#c05050', canyon: '#8d5030', chasm: '#222222',
+const OVERLAY_STYLE = {
+  river:  { color: '#2196f3', width: 3 },
+  road:   { color: '#8d6e63', width: 2, dash: '6,3' },
+  canyon: { color: '#5d4037', width: 4 },
+  chasm:  { color: '#111111', width: 5 },
+  wall:   { color: '#808080', width: 2 },
+  border: { color: '#c05050', width: 2, dash: '4,2' },
 };
+// Keep OVERLAY_COLORS for live-path preview (uses active overlay type)
+const OVERLAY_COLORS = Object.fromEntries(
+  Object.entries(OVERLAY_STYLE).map(([k, v]) => [k, v.color]),
+);
 
-const MODIFIER_COLORS = {
-  enchanted:    '#40e0c0',
-  corrupted:    '#c04040',
-  cursed:       '#8000c0',
-  magical:      '#40c0e0',
-  divine:       '#ffd700',
-  fertile:      '#40c060',
-  ancient_ruins:'#a07850',
-};
+function ReliefMarker({ c }) {
+  const x = c.x * CELL_PX, y = c.y * CELL_PX;
+  const cx = x + CELL_PX / 2;
+  const C = CELL_PX;
+  switch (c.relief) {
+    case 'hills':
+      return <path d={`M ${x+2},${y+C-3} Q ${cx},${y+3} ${x+C-2},${y+C-3}`}
+        fill="none" stroke="#5a3e1e" strokeWidth={1.4} opacity={0.65} />;
+    case 'mountains':
+    case 'mountainous':
+      return <polygon points={`${cx},${y+3} ${x+2},${y+C-2} ${x+C-2},${y+C-2}`}
+        fill="none" stroke="#444" strokeWidth={1.2} opacity={0.7} />;
+    default:
+      return null;
+  }
+}
 
 const GRID = 32;
 const CELL_PX = 14; // display pixel size per cell
@@ -79,10 +96,12 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       const cell = { ...c };
       // Backwards compat: biome='hills' → biome='plains' + relief='hills'
       if (cell.biome === 'hills')     { cell.biome = 'plains'; cell.relief = 'hills'; }
-      // Backwards compat: biome='mountains' → biome='plains' + relief='mountainous'
-      if (cell.biome === 'mountains') { cell.biome = 'plains'; cell.relief = 'mountainous'; }
+      // Backwards compat: biome='mountains' → biome='plains' + relief='mountains'
+      if (cell.biome === 'mountains') { cell.biome = 'plains'; cell.relief = 'mountains'; }
       // Backwards compat: relief='hilly' → relief='hills'
       if (cell.relief === 'hilly') cell.relief = 'hills';
+      // Backwards compat: relief='mountainous' → relief='mountains'
+      if (cell.relief === 'mountainous') cell.relief = 'mountains';
       map[cellKey(cell.x, cell.y)] = cell;
     });
     return map;
@@ -96,9 +115,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   // Brush state — biome and relief are independent toggles (null = inactive)
   const [activeBiome, setActiveBiome] = useState('plains');   // null | biomeKey
   const [activeRelief, setActiveRelief] = useState(null);     // null | reliefKey
-  const [tool, setTool]               = useState(null);       // null | 'overlay' | 'modifier' | 'erase'
+  const [tool, setTool]               = useState(null);       // null | 'overlay' | 'erase'
   const [overlay, setOverlay]         = useState('river');
-  const [modifier, setModifier]       = useState('enchanted');
   const [brushSize, setBrushSize]     = useState(1);
 
   // Settings
@@ -109,10 +127,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [loreMode, setLoreMode]     = useState(initialSpec?.lore_mode ?? false);
   const [userPrompt, setUserPrompt] = useState(initialSpec?.user_prompt ?? '');
   const [renderer, setRenderer]     = useState('auto');  // 'auto' | 'controlnet' | 'vision' | 'dalle'
-  const [mapStyle, setMapStyle]     = useState('parchment'); // 'parchment'|'fantasy'|'ink'|'classic'
+  const [mapStyle, setMapStyle]     = useState('schley');
   const [errors, setErrors]         = useState([]);
   const [generating, setGenerating] = useState(false);
   const [genStatus, setGenStatus]   = useState('');
+  const [fillDialog, setFillDialog] = useState(null); // null | { emptyCount, mode, biome }
 
   // Live overlay path — state so it renders in real-time during drawing
   const [liveOverlayPath, setLiveOverlayPath] = useState([]);
@@ -152,31 +171,28 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       return;
     }
 
-    if (tool === 'modifier') {
-      const r = Math.max(1, Math.floor(brushSize * 2));
-      setModifiers(prev => [...prev, { type: modifier, x: cx, y: cy, r }]);
-      return;
-    }
-
-    // Paint mode: biome and/or relief simultaneously
+    // Paint mode: biome and relief are independent
     if (activeBiome !== null || activeRelief !== null) {
       setCells(prev => {
         const next = { ...prev };
         getCellsInBrush(cx, cy, brushSize).forEach(([x, y]) => {
           const key = cellKey(x, y);
           if (activeBiome !== null) {
-            // Biome paint always creates/updates cell
+            // Biome paint creates/updates cell; relief unchanged
             next[key] = { ...(prev[key] ?? {}), x, y, biome: activeBiome };
           }
-          if (activeRelief !== null && next[key]) {
-            // Relief only applies to cells that have a biome
-            next[key] = { ...next[key], relief: activeRelief };
+          if (activeRelief !== null) {
+            // Relief only modifies existing cells (or cells just created by biome above)
+            if (next[key]) {
+              const reliefVal = activeRelief === 'flat' ? null : activeRelief;
+              next[key] = { ...next[key], relief: reliefVal };
+            }
           }
         });
         return next;
       });
     }
-  }, [tool, activeBiome, activeRelief, overlay, modifier, brushSize]);
+  }, [tool, activeBiome, activeRelief, overlay, brushSize]);
 
   function handlePointerDown(e) {
     e.preventDefault();
@@ -197,13 +213,51 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
   }
 
+
+
+  // ── Fill helpers (for empty cell handling) ───────────────────────────────
+
+  function nearestNeighborFill(sourceCells) {
+    const filled = { ...sourceCells };
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        const key = cellKey(x, y);
+        if (filled[key]) continue;
+        let bestBiome = 'plains';
+        outer: for (let r = 1; r <= 5; r++) {
+          for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+              if (Math.abs(dx) + Math.abs(dy) !== r) continue;
+              const nx = x + dx, ny = y + dy;
+              if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID) continue;
+              const nk = cellKey(nx, ny);
+              if (sourceCells[nk]?.biome) { bestBiome = sourceCells[nk].biome; break outer; }
+            }
+          }
+        }
+        filled[key] = { x, y, biome: bestBiome };
+      }
+    }
+    return filled;
+  }
+
+  function fillWithBiome(sourceCells, biome) {
+    const filled = { ...sourceCells };
+    for (let y = 0; y < GRID; y++)
+      for (let x = 0; x < GRID; x++) {
+        const key = cellKey(x, y);
+        if (!filled[key]) filled[key] = { x, y, biome };
+      }
+    return filled;
+  }
+
   // ── Build spec + generate ──────────────────────────────────────────────────
 
-  function buildSpec() {
+  function buildSpec(overrideCells) {
     return {
       grid_size: 32,
       scope,
-      cells: Object.values(cells),
+      cells: Object.values(overrideCells ?? cells),
       overlays: overlays.filter(o => o.points?.length >= 2),
       modifiers,
       climate: climate || undefined,
@@ -215,7 +269,27 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   }
 
   async function handleGenerate() {
-    const spec = buildSpec();
+    const emptyCount = GRID * GRID - Object.keys(cells).length;
+    if (emptyCount > 0) {
+      setFillDialog({ emptyCount, mode: 'nearest', biome: 'plains' });
+      return;
+    }
+    await runGeneration(cells);
+  }
+
+  async function confirmFill() {
+    const { mode, biome } = fillDialog;
+    setFillDialog(null);
+    const workingCells = mode === 'nearest' ? nearestNeighborFill(cells)
+                       : mode === 'biome'   ? fillWithBiome(cells, biome)
+                       : cells;
+    // Update cells state so canvas reflects the fill before/during generation
+    if (mode !== 'leave') setCells(workingCells);
+    await runGeneration(workingCells);
+  }
+
+  async function runGeneration(workingCells) {
+    const spec = buildSpec(workingCells);
 
     // Show loading immediately so user sees feedback even before validation
     setGenerating(true);
@@ -234,10 +308,24 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     try {
-      // Render sketch → coloured segmentation PNG
-      // gpt-image-1 and Gemini read biome colours directly — no scribble needed
-      setGenStatus('Rendering terrain sketch…');
-      const controlImage = renderSketchToControlImage(spec);
+      // Capture SVG editor as 1024×1024 PNG — exactly what the user sees
+      setGenStatus('Capturing sketch…');
+      const svgEl  = svgRef.current;
+      const svgStr = new XMLSerializer().serializeToString(svgEl);
+      const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url    = URL.createObjectURL(blob);
+      const controlImage = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          c.width = c.height = 1024;
+          c.getContext('2d').drawImage(img, 0, 0, 1024, 1024);
+          URL.revokeObjectURL(url);
+          resolve(c.toDataURL('image/png'));
+        };
+        img.onerror = err => { URL.revokeObjectURL(url); reject(err); };
+        img.src = url;
+      });
 
       // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'
@@ -249,7 +337,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt }),
+        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced' }),
       });
       if (!startResp.ok) {
         const err = await startResp.json().catch(() => ({ error: startResp.statusText }));
@@ -353,7 +441,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
           <ToolSection label="Relief" active={activeRelief !== null}>
             {RELIEF_OPTIONS.map(r => (
-              <PaletteChip key={r} color="#a09080" label={r} dimmed
+              <PaletteChip key={r} color={RELIEF_CONFIG[r].color} label={RELIEF_CONFIG[r].label}
                 active={activeRelief === r}
                 onClick={() => {
                   setActiveRelief(prev => prev === r ? null : r);
@@ -375,14 +463,6 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
               <PaletteChip key={o} color={OVERLAY_COLORS[o]} label={o}
                 active={tool==='overlay' && overlay===o}
                 onClick={() => { setTool('overlay'); setOverlay(o); }} />
-            ))}
-          </ToolSection>
-
-          <ToolSection label="Modifier" active={tool==='modifier'}>
-            {MODIFIER_OPTIONS.map(m => (
-              <PaletteChip key={m} color={MODIFIER_COLORS[m]} label={m.replace('_',' ')}
-                active={tool==='modifier' && modifier===m}
-                onClick={() => { setTool('modifier'); setModifier(m); }} />
             ))}
           </ToolSection>
 
@@ -418,19 +498,29 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
                 opacity={0.85} />
             ))}
 
-            {/* Relief hatching dots */}
+            {/* Relief — per-type markers */}
             {cellArr.filter(c => c.relief && c.relief !== 'flat').map(c => (
-              <circle key={'r'+cellKey(c.x,c.y)}
-                cx={c.x*CELL_PX + CELL_PX/2} cy={c.y*CELL_PX + CELL_PX/2}
-                r={1.5} fill="rgba(0,0,0,0.5)" />
+              <ReliefMarker key={'r'+cellKey(c.x,c.y)} c={c} />
             ))}
 
-            {/* Committed overlays */}
-            {overlays.map((ov, i) => ov.points?.length > 1 && (
-              <polyline key={i}
-                points={ov.points.map(p => `${p.x*CELL_PX+CELL_PX/2},${p.y*CELL_PX+CELL_PX/2}`).join(' ')}
-                stroke={OVERLAY_COLORS[ov.type]} strokeWidth={2} fill="none" opacity={0.9} />
-            ))}
+            {/* Committed overlays — per-type style */}
+            {overlays.map((ov, i) => {
+              if (!ov.points?.length || ov.points.length < 2) return null;
+              const pts = ov.points.map(p => `${p.x*CELL_PX+CELL_PX/2},${p.y*CELL_PX+CELL_PX/2}`).join(' ');
+              const s = OVERLAY_STYLE[ov.type] ?? { color: '#888', width: 2 };
+              return (
+                <g key={i}>
+                  {/* chasm: outer thick line for double-line effect */}
+                  {ov.type === 'chasm' && (
+                    <polyline points={pts} stroke="#555" strokeWidth={9} fill="none" opacity={0.6} strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                  <polyline points={pts}
+                    stroke={s.color} strokeWidth={s.width} fill="none" opacity={0.95}
+                    strokeLinecap="round" strokeLinejoin="round"
+                    strokeDasharray={s.dash ?? undefined} />
+                </g>
+              );
+            })}
 
             {/* Live overlay path — drawn in real-time during stroke */}
             {tool === 'overlay' && liveOverlayPath.length > 1 && (
@@ -440,19 +530,10 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
                 opacity={0.7} strokeDasharray="4,2" />
             )}
 
-            {/* Modifiers */}
-            {modifiers.map((m, i) => (
-              <circle key={i}
-                cx={m.x*CELL_PX+CELL_PX/2} cy={m.y*CELL_PX+CELL_PX/2}
-                r={m.r*CELL_PX*0.6}
-                fill={MODIFIER_COLORS[m.type]} opacity={0.25}
-                stroke={MODIFIER_COLORS[m.type]} strokeWidth={1} />
-            ))}
           </svg>
           <div className="tse-canvas-info">
-            {cellArr.length} cells painted · {overlays.length} overlays · {modifiers.length} modifiers
+            {cellArr.length} cells painted · {overlays.length} overlays
             {overlays.length > 0 && <button className="tse-clear-link" onClick={clearOverlays}>clear overlays</button>}
-            {modifiers.length > 0 && <button className="tse-clear-link" onClick={clearModifiers}>clear modifiers</button>}
           </div>
         </div>
 
@@ -506,10 +587,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
           <label className="tse-label">Map Style
             <select value={mapStyle} onChange={e => setMapStyle(e.target.value)} disabled={generating}>
+              <option value="schley">🏔 Modern Classical Fantasy</option>
+              <option value="handwritten">✏️ Crude Handwritten</option>
               <option value="parchment">📜 Parchment Atlas</option>
-              <option value="fantasy">🎨 Fantasy Illustrated</option>
               <option value="ink">🖋 Hand-drawn Ink</option>
-              <option value="classic">🗺 Classic D&amp;D</option>
+              <option value="classic">🗺 Classic D&amp;D Module</option>
             </select>
           </label>
 
@@ -539,6 +621,46 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
           </div>
         </div>
       </div>
+
+      {/* ── Fill dialog ── */}
+      {fillDialog && (
+        <div className="tse-fill-overlay">
+          <div className="tse-fill-dialog">
+            <h3>Unfilled Cells</h3>
+            <p>Your map has <strong>{fillDialog.emptyCount}</strong> unfilled cell{fillDialog.emptyCount !== 1 ? 's' : ''} (shown as black). How should they be handled?</p>
+            <div className="tse-fill-options">
+              <label className={`tse-fill-opt ${fillDialog.mode === 'nearest' ? 'tse-fill-opt--active' : ''}`}>
+                <input type="radio" name="fillMode" value="nearest"
+                  checked={fillDialog.mode === 'nearest'}
+                  onChange={() => setFillDialog(d => ({ ...d, mode: 'nearest' }))} />
+                Fill with nearest neighbor biome <span className="tse-fill-rec">(recommended)</span>
+              </label>
+              <label className={`tse-fill-opt ${fillDialog.mode === 'biome' ? 'tse-fill-opt--active' : ''}`}>
+                <input type="radio" name="fillMode" value="biome"
+                  checked={fillDialog.mode === 'biome'}
+                  onChange={() => setFillDialog(d => ({ ...d, mode: 'biome' }))} />
+                Fill all with:&nbsp;
+                <select value={fillDialog.biome}
+                  onChange={e => setFillDialog(d => ({ ...d, biome: e.target.value, mode: 'biome' }))}>
+                  {Object.entries(BIOME_CONFIG).map(([k, v]) => (
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={`tse-fill-opt ${fillDialog.mode === 'leave' ? 'tse-fill-opt--active' : ''}`}>
+                <input type="radio" name="fillMode" value="leave"
+                  checked={fillDialog.mode === 'leave'}
+                  onChange={() => setFillDialog(d => ({ ...d, mode: 'leave' }))} />
+                Leave empty <span className="tse-fill-warn">(may affect quality)</span>
+              </label>
+            </div>
+            <div className="tse-fill-btns">
+              <button className="tse-btn" onClick={() => setFillDialog(null)}>Cancel</button>
+              <button className="tse-btn tse-btn--primary" onClick={confirmFill}>Continue →</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
