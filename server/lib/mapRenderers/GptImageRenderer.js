@@ -156,6 +156,17 @@ function buildConnectorPaths(spec) {
   const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   if (!overlays.length) return null;
 
+  // Build cell lookup for biome context at path endpoints
+  const cellMap = new Map();
+  for (const c of (spec.cells ?? [])) cellMap.set(`${c.x},${c.y}`, c);
+
+  function biomeLabelAt(pt) {
+    const c = cellMap.get(`${pt.x},${pt.y}`);
+    return c?.biome ?? 'unknown terrain';
+  }
+
+  const WATER_BIOMES = new Set(['ocean', 'coastal', 'lake']);
+
   const lines = ['Connector paths (x=east y=south, origin top-left):'];
   for (const ov of overlays) {
     const pts   = ov.points;
@@ -164,9 +175,19 @@ function buildConnectorPaths(spec) {
     const dirX  = end.x > start.x ? 'east' : 'west';
     const dirY  = end.y > start.y ? 'south' : 'north';
     const path  = pts.map(p => `(${p.x},${p.y})`).join('→');
-    lines.push(`- ${ov.type}: flows ${dirY}-${dirX}, path: ${path}`);
+    const startBiome = biomeLabelAt(start);
+    const endBiome   = biomeLabelAt(end);
+    lines.push(`- ${ov.type}: flows ${dirY}-${dirX}, starts in ${startBiome}, ends in ${endBiome}, path: ${path}`);
+
+    // Warn explicitly if either endpoint is on water (common source of road-into-sea bug)
+    if (ov.type === 'road' || ov.type === 'canyon' || ov.type === 'chasm') {
+      if (WATER_BIOMES.has(startBiome) || WATER_BIOMES.has(endBiome)) {
+        lines.push(`  ⚠ This ${ov.type} passes near water — DO NOT draw it into the sea. Terminate on land.`);
+      }
+    }
   }
-  lines.push('Paths are authoritative. Biome grid is preserved unchanged on connector cells.');
+  lines.push('CRITICAL: Roads, canyons, and chasms never enter water. Rivers flow into water (sea/lake), not across land arbitrarily.');
+  lines.push('Biome grid is preserved unchanged on connector cells.');
   return lines.join('\n');
 }
 
@@ -255,13 +276,30 @@ function buildMustKeepFacts(spec) {
     facts.push(`A distinct inland lake exists in the ${pos} region`);
   }
 
-  // Swamp visibility instruction
-  const swampCount = cells.filter(c => c.biome === 'swamp').length;
+  // C2. Biome proportions — give the model a size anchor per biome
+  const totalCells = cells.length || 1;
+  const biomeCounts = {};
+  for (const c of cells) biomeCounts[c.biome] = (biomeCounts[c.biome] ?? 0) + 1;
+  const majorBiomes = Object.entries(biomeCounts)
+    .filter(([, n]) => n / totalCells >= 0.05)   // ≥5% of painted area
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  for (const [biome, count] of majorBiomes) {
+    const pct = Math.round(count / totalCells * 100);
+    facts.push(`${biome.charAt(0).toUpperCase() + biome.slice(1)} covers ~${pct}% of the map — preserve this proportion`);
+    if (facts.length >= 5) break;
+  }
+
+  // C3. Single-feature constraint for small volcanic zones
+  const volcanicCount = biomeCounts['volcanic'] ?? 0;
+  if (volcanicCount > 0 && volcanicCount < 25) {
+    facts.push(`Volcanic zone is small (${volcanicCount} cells) — render as a SINGLE volcano, not multiple`);
+  }
+
+  // C4. Swamp visibility
+  const swampCount = biomeCounts['swamp'] ?? 0;
   if (swampCount > 50) {
-    facts.push(
-      'Swamp must be rendered as a VISIBLE marsh/wetland zone with ' +
-      'distinctive visual texture — not just labeled as text',
-    );
+    facts.push('Swamp must be rendered as a VISIBLE marsh/wetland zone with distinctive visual texture — not just labeled as text');
   }
 
   // D. Negative constraints — ocean absent from specific edges
@@ -275,14 +313,20 @@ function buildMustKeepFacts(spec) {
     }
   }
 
-  // E. Overlay summary
+  // E. Connector constraints — roads must not enter water
+  const roadOverlays = overlays.filter(o => o.type === 'road' || o.type === 'canyon' || o.type === 'chasm');
+  if (roadOverlays.length > 0) {
+    facts.push('Roads, canyons, and chasms are land features — they NEVER enter water or the sea');
+  }
+
+  // F. Overlay summary
   for (const ov of overlays.slice(0, 2)) {
     const pts   = ov.points;
     const start = pts[0];
     const end   = pts[pts.length - 1];
     const dirX  = end.x > start.x ? 'east' : 'west';
     const dirY  = end.y > start.y ? 'south' : 'north';
-    facts.push(`A major ${ov.type} flows from (${start.x},${start.y}) toward (${end.x},${end.y}) — ${dirY}-${dirX}`);
+    facts.push(`A major ${ov.type} runs from (${start.x},${start.y}) toward (${end.x},${end.y}) — ${dirY}-${dirX}`);
   }
 
   if (!facts.length) return null;
@@ -294,8 +338,8 @@ function buildMustKeepFacts(spec) {
 // ── Full prompt builder ────────────────────────────────────────────────────────
 
 function buildFullPrompt(spec, aiFredom, userPrompt) {
-  const freedomKey   = (aiFredom || 'balanced').toLowerCase();
-  const freedomBlock = FREEDOM_MODES[freedomKey] ?? FREEDOM_MODES.balanced;
+  const freedomKey   = (aiFredom || 'strict').toLowerCase();
+  const freedomBlock = FREEDOM_MODES[freedomKey] ?? FREEDOM_MODES.strict;
 
   const mustKeep      = buildMustKeepFacts(spec);
   const biomeGrid     = buildBiomeGrid(spec);
