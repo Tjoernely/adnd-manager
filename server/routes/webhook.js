@@ -48,8 +48,9 @@ router.post('/deploy', (req, res) => {
     'cd ' + APP,
     'touch ' + LOCK_FILE,
     'git pull --ff-only',
-    'npm --prefix server ci --omit=dev',
-    'npm run build',
+    // npm install (NOT npm ci) — incremental, never wipes node_modules
+    // npm run build is skipped — server/public is pre-built and committed to git
+    'npm --prefix server install --omit=dev --prefer-offline',
     // pm2 restart is last — child is detached so it survives the restart
     'pm2 restart adnd-backend && pm2 save',
     'rm -f ' + LOCK_FILE,
