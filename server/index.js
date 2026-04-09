@@ -73,7 +73,11 @@ app.use('/api/kits',                 kitsRouter);
 // ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');
 app.use(express.static(PUBLIC));
-app.get('*', (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(PUBLIC, 'index.html'), err => {
+    if (err) res.status(503).send('App is deploying — please refresh in a moment.');
+  });
+});
 
 // ── Start ──────────────────────────────────────────────────────────────────────
 autoMigrate().then(() => {
