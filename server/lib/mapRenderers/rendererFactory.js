@@ -8,14 +8,14 @@ const renderers = {
 
 /**
  * Returns the renderer for the given name, or auto-selects.
- * Priority: gpt-image-1 → gemini → error.
+ * Priority: gemini → gpt-image-1 → error.
  *
  * @param {string} name  'auto' | 'gpt-image-1' | 'gemini'
  * @returns {IMapRenderer}
  */
 function getRenderer(name = 'auto') {
   if (name === 'auto') {
-    const preferred = ['gpt-image-1', 'gemini'];
+    const preferred = ['gemini', 'gpt-image-1'];
     const available = preferred.find(r => renderers[r]?.isAvailable());
     if (!available) {
       throw new Error('No image renderer available. Set OPENAI_API_KEY or GOOGLE_AI_API_KEY in server/.env');
