@@ -3,9 +3,10 @@ const crypto  = require('crypto');
 const { spawn } = require('child_process');
 const fs      = require('fs');
 
-const router   = express.Router();
-const APP      = process.env.APP_ROOT || '/var/www/adnd-manager';
-const LOG_FILE = APP + '/deploy.log';
+const router    = express.Router();
+const APP       = process.env.APP_ROOT || '/var/www/adnd-manager';
+const LOG_FILE  = APP + '/deploy.log';
+const LOCK_FILE = APP + '/deploy.lock';
 
 function verifySignature(req) {
   const secret = process.env.WEBHOOK_SECRET;
@@ -29,25 +30,31 @@ router.post('/deploy', (req, res) => {
     return res.status(200).json({ message: 'Ignored: ' + ref });
   }
 
-  console.log('[webhook] Push to main — starting detached deploy');
-  // Respond immediately before the process gets killed by pm2 restart
-  res.status(202).json({ message: 'Deploy started' });
+  // Prevent concurrent deploys — if lock file exists, a deploy is already running
+  if (fs.existsSync(LOCK_FILE)) {
+    console.log('[webhook] Deploy already in progress — skipping');
+    return res.status(202).json({ message: 'Deploy already in progress — skipped' });
+  }
 
-  const deployCmd = [
-    'cd ' + APP,
-    'git pull --ff-only',
-    'npm ci --prefer-offline',
-    'npm --prefix server ci --prefer-offline',
-    'npm run build',
-    // pm2 restart is last — it kills this process, but the child is already detached
-    'pm2 restart adnd-backend && pm2 save',
-  ].join(' && ');
+  console.log('[webhook] Push to main — starting detached deploy');
+  res.status(202).json({ message: 'Deploy started' });
 
   const ts = new Date().toISOString();
   fs.appendFileSync(LOG_FILE, `\n[${ts}] Deploy triggered\n`);
 
-  // detached: true + unref() → child becomes its own process group and survives
-  // pm2 restarting (and thus killing) the parent Express process
+  // flock ensures only one deploy runs at a time even if lock check races
+  // Lock is created before npm steps and removed after pm2 restart
+  const deployCmd = [
+    'cd ' + APP,
+    'touch ' + LOCK_FILE,
+    'git pull --ff-only',
+    'npm --prefix server ci --omit=dev',
+    'npm run build',
+    // pm2 restart is last — child is detached so it survives the restart
+    'pm2 restart adnd-backend && pm2 save',
+    'rm -f ' + LOCK_FILE,
+  ].join(' && ') + '; rm -f ' + LOCK_FILE; // also remove lock on failure
+
   const child = spawn('bash', ['-c', deployCmd], {
     detached: true,
     stdio: ['ignore', fs.openSync(LOG_FILE, 'a'), fs.openSync(LOG_FILE, 'a')],
