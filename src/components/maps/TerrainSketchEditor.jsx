@@ -184,8 +184,13 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
           if (activeRelief !== null) {
             // Relief only modifies existing cells (or cells just created by biome above)
             if (next[key]) {
-              const reliefVal = activeRelief === 'flat' ? null : activeRelief;
-              next[key] = { ...next[key], relief: reliefVal };
+              if (activeRelief === 'flat') {
+                // Remove relief key entirely so it never serialises as null/"null"
+                const { relief: _r, ...rest } = next[key];
+                next[key] = rest;
+              } else {
+                next[key] = { ...next[key], relief: activeRelief };
+              }
             }
           }
         });

@@ -34,7 +34,10 @@ function validateCell(c: SketchCell, i: number): string[] {
   if (!inRange(c.x, 0, 31)) errs.push(`cells[${i}].x out of range (${c.x})`);
   if (!inRange(c.y, 0, 31)) errs.push(`cells[${i}].y out of range (${c.y})`);
   if (!VALID_BIOMES.has(c.biome)) errs.push(`cells[${i}].biome invalid: "${c.biome}"`);
-  if (c.relief !== undefined && !VALID_RELIEFS.has(c.relief))
+  // Accept null / undefined / "" / "null" as "no relief" (DB may round-trip null as string)
+  const reliefRaw = c.relief as unknown;
+  const hasRelief = reliefRaw != null && reliefRaw !== '' && reliefRaw !== 'null';
+  if (hasRelief && !VALID_RELIEFS.has(c.relief as string))
     errs.push(`cells[${i}].relief invalid: "${c.relief}"`);
   return errs;
 }

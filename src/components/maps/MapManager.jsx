@@ -674,6 +674,9 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           data:      { ...sketchEditMap.data, sketch: sketchSpec },
         });
         patchMap(updated);
+        // Navigate to the map (handles both new pre-created and re-edited maps)
+        setActiveMapId(updated.id);
+        setSelectedPoiId(null);
       } catch (e) { console.error('[MapManager] sketch save', e.message); }
       setSketchEditMap(null);
       return;
@@ -693,6 +696,23 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     setShowGenerator(true);
     setSketchEditMap(null);
   }, [sketchEditMap, patchMap]);
+
+  // ── Draw a Map: pre-create stub map, then open sketch editor ────────────────
+  const handleOpenDrawEditor = useCallback(async () => {
+    try {
+      const newMap = await api.createMap({
+        campaign_id: campaignId,
+        name:        'New Sketch Map',
+        type:        'region',
+        data:        {},
+      });
+      setMaps(prev => [...prev, newMap]);
+      setSketchEditMap(newMap);
+      setShowSketch(true);
+    } catch (e) {
+      console.error('[MapManager] create sketch map failed', e.message);
+    }
+  }, [campaignId]);
 
   if (!isOpen) return null;
 
@@ -741,7 +761,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                 ✦ Generate from Prompt
               </button>
               <button className="mm-sidebar-new-btn mm-sidebar-new-btn--draw"
-                onClick={() => { setSketchEditMap(null); setShowSketch(true); }}>
+                onClick={handleOpenDrawEditor}>
                 ✏ Draw a Map
               </button>
             </div>
@@ -798,7 +818,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                           </button>
                         ) : (
                           <button className="mm-btn"
-                            onClick={() => { setSketchEditMap(null); setShowSketch(true); }}
+                            onClick={handleOpenDrawEditor}
                             title="Create map from terrain sketch">
                             ◈ Sketch Map
                           </button>
@@ -888,7 +908,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                     ✦ Generate from Prompt
                   </button>
                   <button className="mm-empty-btn mm-empty-btn--draw"
-                    onClick={() => { setSketchEditMap(null); setShowSketch(true); }}>
+                    onClick={handleOpenDrawEditor}>
                     ✏ Draw a Map
                   </button>
                 </div>
