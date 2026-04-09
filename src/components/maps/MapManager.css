@@ -1471,12 +1471,18 @@
 }
 
 /* Sidebar "New Map" button at bottom */
+.mm-sidebar-new-btns {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-top: 1px solid #3a2e18;
+}
 .mm-sidebar-new-btn {
   width: 100%;
   padding: 9px 14px;
   background: rgba(200, 168, 75, 0.07);
   border: none;
-  border-top: 1px solid #3a2e18;
+  border-top: 1px solid #2a2010;
   color: #c8a84b;
   font-family: inherit;
   font-size: 11px;
@@ -1487,9 +1493,20 @@
   transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
 }
+.mm-sidebar-new-btns .mm-sidebar-new-btn:first-child {
+  border-top: none;
+}
 .mm-sidebar-new-btn:hover {
   background: rgba(200, 168, 75, 0.18);
   color: #f0d480;
+}
+.mm-sidebar-new-btn--draw {
+  color: #8ab4c8;
+  background: rgba(100, 160, 200, 0.06);
+}
+.mm-sidebar-new-btn--draw:hover {
+  background: rgba(100, 160, 200, 0.16);
+  color: #b0d8f0;
 }
 
 /* ── Tree redesign ───────────────────────────────────────────────────────────── */
@@ -1844,6 +1861,24 @@
   background: rgba(200, 168, 75, 0.24);
   color: #f0d480;
   border-color: #c8a84b;
+}
+.mm-empty-btns {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+.mm-empty-btn--draw {
+  color: #8ab4c8;
+  border-color: rgba(100, 160, 200, 0.45);
+  background: rgba(100, 160, 200, 0.08);
+}
+.mm-empty-btn--draw:hover {
+  background: rgba(100, 160, 200, 0.2);
+  color: #b0d8f0;
+  border-color: #8ab4c8;
 }
 
 /* Compass rose SVG floating animation */

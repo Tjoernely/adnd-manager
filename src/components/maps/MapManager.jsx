@@ -735,10 +735,16 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           </div>
 
           {isDM && (
-            <button className="mm-sidebar-new-btn"
-              onClick={() => { setGenContext(null); setShowGenerator(true); }}>
-              ✦ New Map
-            </button>
+            <div className="mm-sidebar-new-btns">
+              <button className="mm-sidebar-new-btn"
+                onClick={() => { setGenContext(null); setShowGenerator(true); }}>
+                ✦ Generate from Prompt
+              </button>
+              <button className="mm-sidebar-new-btn mm-sidebar-new-btn--draw"
+                onClick={() => { setSketchEditMap(null); setShowSketch(true); }}>
+                ✏ Draw a Map
+              </button>
+            </div>
           )}
 
           <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
@@ -782,7 +788,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                       <>
                         <button className="mm-btn mm-btn--ai"
                           onClick={() => { setGenContext(null); setShowGenerator(true); }}>
-                          ✦ New Map
+                          ✦ Generate from Prompt
                         </button>
                         {activeMap?.data?.sketch ? (
                           <button className="mm-btn"
@@ -871,13 +877,21 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             <div className="mm-empty">
               <CompassRoseSVG />
               <div className="mm-empty-text">
-                {isDM ? 'No maps yet — begin your adventure' : 'No maps have been shared with you yet.'}
+                {isDM
+                  ? 'Begin your adventure — generate a map from a prompt, or draw one yourself.'
+                  : 'No maps have been shared with you yet.'}
               </div>
               {isDM && (
-                <button className="mm-empty-btn"
-                  onClick={() => { setGenContext(null); setShowGenerator(true); }}>
-                  🗺 Generate Your First Map
-                </button>
+                <div className="mm-empty-btns">
+                  <button className="mm-empty-btn"
+                    onClick={() => { setGenContext(null); setShowGenerator(true); }}>
+                    ✦ Generate from Prompt
+                  </button>
+                  <button className="mm-empty-btn mm-empty-btn--draw"
+                    onClick={() => { setSketchEditMap(null); setShowSketch(true); }}>
+                    ✏ Draw a Map
+                  </button>
+                </div>
               )}
             </div>
           )}
