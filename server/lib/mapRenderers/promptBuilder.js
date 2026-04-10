@@ -162,7 +162,9 @@ function buildConnectorPaths(spec) {
   const cells = spec.cells ?? [];
 
   const lines = [
-    'Connectors — render as natural organic features only:',
+    'Connectors:',
+    'The input image does NOT show rivers or roads —',
+    'they are described below. Add them yourself as natural organic features at the described locations.',
     'Rivers must be gently winding. Roads must be gently curving.',
     'Do NOT draw straight lines, right angles, or stepped geometry.',
     '',

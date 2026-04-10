@@ -123,9 +123,9 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
     ctx.fillStyle = BIOME_COLOR[cell.biome] ?? BIOME_COLOR.null;
     ctx.fillRect(px, py, CELL_PX, CELL_PX);
 
-    // Relief overlay
+    // Relief overlay (legacy values handled via string cast for backwards compat)
     if (cell.relief) {
-      switch (cell.relief) {
+      switch (cell.relief as string) {
         case 'mountainous':
           drawReliefHatch(ctx, px, py, '#555555', 0.30, 'diagonal');
           break;
@@ -135,7 +135,6 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
         case 'hills':
           drawReliefHatch(ctx, px, py, '#666666', 0.15, 'light');
           break;
-        // flat / rolling / valley / plateau: no overlay
       }
     }
   }
@@ -189,6 +188,317 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
 
   console.log(`[sketchToPng] Rendered ${OUTPUT_PX}×${OUTPUT_PX} seg PNG — dataURL length: ${dataUrl.length} chars`);
 
+  return dataUrl;
+}
+
+// ── AI render — flat colours, no symbols, machine-friendly ──────────────────
+// Sent to gpt-image-1. Natural terrain colours + thick overlays + subtle relief.
+// No icons, patterns or grid — deterministic output the model can read as zones.
+
+const AI_PX   = 1024;
+const AI_CELL = AI_PX / GRID; // 32px
+
+const AI_BIOME_COLOR: Record<string, string> = {
+  plains:      'rgb(180,200,120)',
+  forest:      'rgb(34,100,34)',
+  ocean:       'rgb(30,80,180)',
+  coastal:     'rgb(100,180,180)',
+  lake:        'rgb(60,140,200)',
+  mountainous: 'rgb(130,110,90)',
+  hills:       'rgb(150,130,100)',
+  desert:      'rgb(210,180,120)',
+  swamp:       'rgb(80,100,60)',
+  tundra:      'rgb(200,220,230)',
+  volcanic:    'rgb(80,40,40)',
+  null:        'rgb(80,80,80)',
+};
+
+export interface RenderForAIOptions {
+  includeOverlays?: boolean; // default false — omit to prevent staircase copying
+}
+
+export function renderSketchForAI(spec: SketchSpec, options: RenderForAIOptions = {}): string {
+  const { includeOverlays = false } = options;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = AI_PX;
+  canvas.height = AI_PX;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+
+  // Background
+  ctx.fillStyle = AI_BIOME_COLOR.null;
+  ctx.fillRect(0, 0, AI_PX, AI_PX);
+
+  // Flat biome fills
+  for (const cell of spec.cells) {
+    const px = cell.x * AI_CELL, py = cell.y * AI_CELL;
+    ctx.fillStyle = AI_BIOME_COLOR[cell.biome] ?? AI_BIOME_COLOR.null;
+    ctx.fillRect(px, py, AI_CELL, AI_CELL);
+  }
+
+  // Relief — subtle dark overlay only (no symbols)
+  for (const cell of spec.cells) {
+    if (!cell.relief || (cell.relief as string) === 'flat') continue;
+    const r = cell.relief as string;
+    const opacity = (r === 'mountains' || r === 'mountainous') ? 0.25 : 0.15;
+    ctx.fillStyle = `rgba(0,0,0,${opacity})`;
+    ctx.fillRect(cell.x * AI_CELL, cell.y * AI_CELL, AI_CELL, AI_CELL);
+  }
+
+  // Overlays — only drawn when explicitly requested
+  if (includeOverlays) {
+    ctx.lineCap  = 'round';
+    ctx.lineJoin = 'round';
+    for (const ov of spec.overlays) {
+      if (!ov.points || ov.points.length < 2) continue;
+      switch (ov.type) {
+        case 'river':  ctx.strokeStyle = 'rgb(0,100,255)';   ctx.lineWidth = 8;  ctx.setLineDash([]);    break;
+        case 'road':   ctx.strokeStyle = 'rgb(150,100,50)';  ctx.lineWidth = 5;  ctx.setLineDash([8,4]); break;
+        case 'canyon': ctx.strokeStyle = 'rgb(100,60,20)';   ctx.lineWidth = 10; ctx.setLineDash([]);    break;
+        case 'chasm':  ctx.strokeStyle = 'rgb(0,0,0)';       ctx.lineWidth = 12; ctx.setLineDash([]);    break;
+        default:       ctx.strokeStyle = 'rgb(100,100,100)'; ctx.lineWidth = 5;  ctx.setLineDash([]);
+      }
+      ctx.beginPath();
+      ctx.moveTo((ov.points[0].x + 0.5) * AI_CELL, (ov.points[0].y + 0.5) * AI_CELL);
+      for (let i = 1; i < ov.points.length; i++)
+        ctx.lineTo((ov.points[i].x + 0.5) * AI_CELL, (ov.points[i].y + 0.5) * AI_CELL);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  return canvas.toDataURL('image/png');
+}
+
+// ── Preview renderer (for humans) ────────────────────────────────────────────
+// 1024×1024, biome fills with textures, styled overlays, grid, border.
+// Display only — never sent to AI.
+
+const PREVIEW_PX   = 1024;
+const PREVIEW_CELL = PREVIEW_PX / GRID; // 32px per cell
+
+// Biome fill colors for preview (match editor palette)
+const PREVIEW_BIOME_COLOR: Record<string, string> = {
+  plains:   '#c8d88a',
+  forest:   '#3a7a3a',
+  swamp:    '#5a7a4a',
+  desert:   '#d4b060',
+  tundra:   '#b0c8d8',
+  volcanic: '#a03020',
+  ocean:    '#1a5080',
+  coastal:  '#4a90a0',
+  lake:     '#1976d2',
+  null:     '#2a2a2a',
+};
+
+const PREVIEW_OVERLAY: Record<string, { color: string; width: number; dash?: number[] }> = {
+  river:  { color: '#2196f3', width: 5 },
+  road:   { color: '#c0a060', width: 4, dash: [12, 6] },
+  canyon: { color: '#5d4037', width: 7 },
+  chasm:  { color: '#111111', width: 9 },
+  wall:   { color: '#808080', width: 4 },
+  border: { color: '#c05050', width: 4, dash: [8, 4] },
+};
+
+function drawPreviewTexture(ctx: CanvasRenderingContext2D, biome: string, px: number, py: number) {
+  const c = PREVIEW_CELL;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px, py, c, c);
+  ctx.clip();
+
+  switch (biome) {
+    case 'forest': {
+      // Small triangle tree symbols, 3 per cell
+      ctx.strokeStyle = 'rgba(0,40,0,0.35)';
+      ctx.lineWidth = 1;
+      const treePts = [[0.25, 0.75], [0.6, 0.5], [0.45, 0.85]];
+      for (const [tx, ty] of treePts) {
+        const cx = px + tx * c, cy = py + ty * c, h = c * 0.22;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - h);
+        ctx.lineTo(cx - h * 0.7, cy + h * 0.4);
+        ctx.lineTo(cx + h * 0.7, cy + h * 0.4);
+        ctx.closePath();
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'ocean':
+    case 'lake':
+    case 'coastal': {
+      // Horizontal sine-wave lines
+      ctx.strokeStyle = 'rgba(180,220,255,0.30)';
+      ctx.lineWidth = 1;
+      for (let row = 0.25; row <= 0.85; row += 0.25) {
+        ctx.beginPath();
+        for (let dx = 0; dx <= c; dx += 2) {
+          const wx = px + dx;
+          const wy = py + row * c + Math.sin((dx / c) * Math.PI * 3) * (c * 0.05);
+          dx === 0 ? ctx.moveTo(wx, wy) : ctx.lineTo(wx, wy);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'swamp': {
+      // Cross-hatch marks
+      ctx.strokeStyle = 'rgba(0,0,0,0.20)';
+      ctx.lineWidth = 1;
+      const marks = [[0.3, 0.3], [0.65, 0.5], [0.4, 0.75]];
+      for (const [mx, my] of marks) {
+        const qx = px + mx * c, qy = py + my * c, d = c * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(qx - d, qy - d); ctx.lineTo(qx + d, qy + d);
+        ctx.moveTo(qx + d, qy - d); ctx.lineTo(qx - d, qy + d);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'plains': {
+      // Very faint diagonal lines
+      ctx.strokeStyle = 'rgba(160,150,60,0.12)';
+      ctx.lineWidth = 1;
+      for (let d = -c; d < c; d += 8) {
+        ctx.beginPath();
+        ctx.moveTo(px + d, py); ctx.lineTo(px + d + c, py + c);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'volcanic': {
+      // Radial crack lines from center
+      ctx.strokeStyle = 'rgba(255,80,0,0.20)';
+      ctx.lineWidth = 1;
+      const vx = px + c * 0.5, vy = py + c * 0.5;
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(vx + Math.cos(a) * c * 0.45, vy + Math.sin(a) * c * 0.45);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'tundra': {
+      // Sparse dots
+      ctx.fillStyle = 'rgba(200,230,255,0.25)';
+      for (const [dx, dy] of [[0.3,0.3],[0.6,0.55],[0.4,0.7],[0.7,0.25]]) {
+        ctx.beginPath();
+        ctx.arc(px + dx * c, py + dy * c, c * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'desert': {
+      // Gentle curve dunes
+      ctx.strokeStyle = 'rgba(160,100,20,0.15)';
+      ctx.lineWidth = 1;
+      for (let row = 0.3; row <= 0.8; row += 0.3) {
+        ctx.beginPath();
+        ctx.moveTo(px, py + row * c);
+        ctx.bezierCurveTo(
+          px + c * 0.3, py + (row - 0.06) * c,
+          px + c * 0.7, py + (row + 0.06) * c,
+          px + c, py + row * c,
+        );
+        ctx.stroke();
+      }
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+export function renderSketchToPreview(spec: SketchSpec): string {
+  const canvas = document.createElement('canvas');
+  canvas.width  = PREVIEW_PX;
+  canvas.height = PREVIEW_PX;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = true;
+
+  // 1. Dark background for unpainted area
+  ctx.fillStyle = PREVIEW_BIOME_COLOR.null;
+  ctx.fillRect(0, 0, PREVIEW_PX, PREVIEW_PX);
+
+  // 2. Biome cells with textures
+  for (const cell of spec.cells) {
+    const px = cell.x * PREVIEW_CELL;
+    const py = cell.y * PREVIEW_CELL;
+    ctx.fillStyle = PREVIEW_BIOME_COLOR[cell.biome] ?? PREVIEW_BIOME_COLOR.null;
+    ctx.fillRect(px, py, PREVIEW_CELL, PREVIEW_CELL);
+    drawPreviewTexture(ctx, cell.biome, px, py);
+
+    // Relief indicator: small dot overlay
+    if (cell.relief && cell.relief !== 'flat') {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath();
+      ctx.arc(px + PREVIEW_CELL * 0.5, py + PREVIEW_CELL * 0.5, PREVIEW_CELL * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // 3. Light grid overlay
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= GRID; i++) {
+    const pos = i * PREVIEW_CELL;
+    ctx.beginPath(); ctx.moveTo(pos, 0);    ctx.lineTo(pos, PREVIEW_PX); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, pos);    ctx.lineTo(PREVIEW_PX, pos); ctx.stroke();
+  }
+  ctx.restore();
+
+  // 4. Modifier circles
+  for (const mod of spec.modifiers) {
+    const color = MODIFIER_COLOR[mod.type];
+    if (!color) continue;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc((mod.x + 0.5) * PREVIEW_CELL, (mod.y + 0.5) * PREVIEW_CELL, mod.r * PREVIEW_CELL, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 5. Overlay lines with distinct per-type styles
+  ctx.lineCap  = 'round';
+  ctx.lineJoin = 'round';
+  for (const ov of spec.overlays) {
+    if (!ov.points || ov.points.length < 2) continue;
+    const s = PREVIEW_OVERLAY[ov.type as OverlayType] ?? { color: '#888', width: 4 };
+    const pts = ov.points.map(p => ({ x: p.x * PREVIEW_CELL + PREVIEW_CELL / 2, y: p.y * PREVIEW_CELL + PREVIEW_CELL / 2 }));
+
+    // chasm: thick outer stroke for double-line effect
+    if (ov.type === 'chasm') {
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth   = s.width * 2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth   = s.width;
+    ctx.setLineDash(s.dash ?? []);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // 6. Border
+  ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+  ctx.lineWidth   = 3;
+  ctx.strokeRect(1.5, 1.5, PREVIEW_PX - 3, PREVIEW_PX - 3);
+
+  const dataUrl = canvas.toDataURL('image/png');
+  console.log(`[sketchToPng] Rendered ${PREVIEW_PX}×${PREVIEW_PX} preview PNG — dataURL length: ${dataUrl.length} chars`);
   return dataUrl;
 }
 

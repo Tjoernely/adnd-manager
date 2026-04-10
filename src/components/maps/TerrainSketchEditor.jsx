@@ -8,6 +8,7 @@
  */
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
+import { renderSketchForAI }            from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
@@ -313,24 +314,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     try {
-      // Capture SVG editor as 1024×1024 PNG — exactly what the user sees
+      // Render clean AI control image — biome colours + relief only, NO overlays.
+      // Overlays (rivers, roads) are described in the prompt as semantic text only,
+      // preventing the model from copying stepped grid geometry into the output.
       setGenStatus('Capturing sketch…');
-      const svgEl  = svgRef.current;
-      const svgStr = new XMLSerializer().serializeToString(svgEl);
-      const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-      const url    = URL.createObjectURL(blob);
-      const controlImage = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          const c = document.createElement('canvas');
-          c.width = c.height = 1024;
-          c.getContext('2d').drawImage(img, 0, 0, 1024, 1024);
-          URL.revokeObjectURL(url);
-          resolve(c.toDataURL('image/png'));
-        };
-        img.onerror = err => { URL.revokeObjectURL(url); reject(err); };
-        img.src = url;
-      });
+      const controlImage = renderSketchForAI(spec, { includeOverlays: false });
 
       // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'
