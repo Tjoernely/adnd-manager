@@ -11,12 +11,23 @@ The sketch is a symbolic terrain-layout plan only.
 Preserve its structural geography — coastlines, water bodies, river paths,
 biome placement, and major regional relationships.
 
+CRITICAL — PATHS AND RIVERS IN THE SKETCH:
+The sketch is drawn on a pixel grid, so ALL rivers, roads, and paths in the
+sketch image appear as stepped, staircase-like, right-angled zigzag lines.
+This is a technical artifact of the grid — it does NOT mean the features are
+straight or angular in reality.
+You MUST ignore the visual staircase shape of any path or river in the sketch.
+Instead, render every river as a naturally winding organic watercourse and
+every road as a gently curving dirt trail. No right angles. No zigzags.
+No stepped geometry. Smooth organic curves only.
+
 Do NOT preserve the sketch's visual appearance.
 Do NOT keep:
 - square cell edges or blocky pixel shapes
 - flat color regions or game-editor appearance
 - prototype terrain rendering or abstract diagram aesthetics
 - mobile game style, board-game tile look, or strategy-game terrain overlay look
+- stepped, staircase, or zigzag lines for rivers or roads
 
 Translate the sketch into finished fantasy cartography with:
 - organic land and biome shapes with natural boundaries
