@@ -318,7 +318,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       // Overlays (rivers, roads) are described in the prompt as semantic text only,
       // preventing the model from copying stepped grid geometry into the output.
       setGenStatus('Capturing sketch…');
-      const controlImage = renderSketchForAI(spec, { includeOverlays: false });
+      const controlImage = renderSketchForAI(spec);
 
       // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'

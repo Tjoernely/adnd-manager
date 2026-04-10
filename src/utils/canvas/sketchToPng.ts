@@ -191,84 +191,66 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
   return dataUrl;
 }
 
-// ── AI render — flat colours, no symbols, machine-friendly ──────────────────
-// Sent to gpt-image-1. Natural terrain colours + thick overlays + subtle relief.
-// No icons, patterns or grid — deterministic output the model can read as zones.
+// ── AI render — blurred biome zones, no overlays, no symbols ─────────────────
+// Sent to Gemini/GPT. Biome colours only + subtle relief darkening + Gaussian
+// blur to soften cell edges. No overlays, no symbols — nothing for the model
+// to copy geometrically. Connectors described only in prompt text.
 
 const AI_PX   = 1024;
 const AI_CELL = AI_PX / GRID; // 32px
 
 const AI_BIOME_COLOR: Record<string, string> = {
-  plains:      'rgb(180,200,120)',
-  forest:      'rgb(34,100,34)',
-  ocean:       'rgb(30,80,180)',
-  coastal:     'rgb(100,180,180)',
-  lake:        'rgb(60,140,200)',
-  mountainous: 'rgb(130,110,90)',
-  hills:       'rgb(150,130,100)',
-  desert:      'rgb(210,180,120)',
-  swamp:       'rgb(80,100,60)',
-  tundra:      'rgb(200,220,230)',
-  volcanic:    'rgb(80,40,40)',
-  null:        'rgb(80,80,80)',
+  plains:   '#c8d49a',
+  forest:   '#2d6a2d',
+  ocean:    '#1a4a7a',
+  coastal:  '#5b9ea0',
+  lake:     '#2a6090',
+  desert:   '#d4b483',
+  swamp:    '#4a6741',
+  tundra:   '#b8d4d4',
+  volcanic: '#4a1c1c',
+  null:     '#1a1a1a',
 };
 
-export interface RenderForAIOptions {
-  includeOverlays?: boolean; // default false — omit to prevent staircase copying
-}
-
-export function renderSketchForAI(spec: SketchSpec, options: RenderForAIOptions = {}): string {
-  const { includeOverlays = false } = options;
-
-  const canvas = document.createElement('canvas');
-  canvas.width  = AI_PX;
-  canvas.height = AI_PX;
-  const ctx = canvas.getContext('2d')!;
-  ctx.imageSmoothingEnabled = false;
+export function renderSketchForAI(spec: SketchSpec): string {
+  // Step 1: draw sharp biome + relief to a temp canvas
+  const sharp = document.createElement('canvas');
+  sharp.width  = AI_PX;
+  sharp.height = AI_PX;
+  const sCtx = sharp.getContext('2d')!;
+  sCtx.imageSmoothingEnabled = false;
 
   // Background
-  ctx.fillStyle = AI_BIOME_COLOR.null;
-  ctx.fillRect(0, 0, AI_PX, AI_PX);
+  sCtx.fillStyle = AI_BIOME_COLOR.null;
+  sCtx.fillRect(0, 0, AI_PX, AI_PX);
 
-  // Flat biome fills
+  // Biome fills — no overlays, no symbols
   for (const cell of spec.cells) {
     const px = cell.x * AI_CELL, py = cell.y * AI_CELL;
-    ctx.fillStyle = AI_BIOME_COLOR[cell.biome] ?? AI_BIOME_COLOR.null;
-    ctx.fillRect(px, py, AI_CELL, AI_CELL);
+    sCtx.fillStyle = AI_BIOME_COLOR[cell.biome] ?? AI_BIOME_COLOR.null;
+    sCtx.fillRect(px, py, AI_CELL, AI_CELL);
   }
 
-  // Relief — subtle dark overlay only (no symbols)
+  // Relief — subtle dark overlay only
   for (const cell of spec.cells) {
-    if (!cell.relief || (cell.relief as string) === 'flat') continue;
     const r = cell.relief as string;
-    const opacity = (r === 'mountains' || r === 'mountainous') ? 0.25 : 0.15;
-    ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-    ctx.fillRect(cell.x * AI_CELL, cell.y * AI_CELL, AI_CELL, AI_CELL);
+    if (!r || r === 'flat') continue;
+    const opacity = (r === 'mountains' || r === 'mountainous') ? 0.25 : 0.12;
+    sCtx.fillStyle = `rgba(0,0,0,${opacity})`;
+    sCtx.fillRect(cell.x * AI_CELL, cell.y * AI_CELL, AI_CELL, AI_CELL);
   }
 
-  // Overlays — only drawn when explicitly requested
-  if (includeOverlays) {
-    ctx.lineCap  = 'round';
-    ctx.lineJoin = 'round';
-    for (const ov of spec.overlays) {
-      if (!ov.points || ov.points.length < 2) continue;
-      switch (ov.type) {
-        case 'river':  ctx.strokeStyle = 'rgb(0,100,255)';   ctx.lineWidth = 8;  ctx.setLineDash([]);    break;
-        case 'road':   ctx.strokeStyle = 'rgb(150,100,50)';  ctx.lineWidth = 5;  ctx.setLineDash([8,4]); break;
-        case 'canyon': ctx.strokeStyle = 'rgb(100,60,20)';   ctx.lineWidth = 10; ctx.setLineDash([]);    break;
-        case 'chasm':  ctx.strokeStyle = 'rgb(0,0,0)';       ctx.lineWidth = 12; ctx.setLineDash([]);    break;
-        default:       ctx.strokeStyle = 'rgb(100,100,100)'; ctx.lineWidth = 5;  ctx.setLineDash([]);
-      }
-      ctx.beginPath();
-      ctx.moveTo((ov.points[0].x + 0.5) * AI_CELL, (ov.points[0].y + 0.5) * AI_CELL);
-      for (let i = 1; i < ov.points.length; i++)
-        ctx.lineTo((ov.points[i].x + 0.5) * AI_CELL, (ov.points[i].y + 0.5) * AI_CELL);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }
+  // Step 2: copy to output canvas with blur applied
+  // blur(12px) softens hard cell edges so model uses its own organic interpretation
+  const out = document.createElement('canvas');
+  out.width  = AI_PX;
+  out.height = AI_PX;
+  const oCtx = out.getContext('2d')!;
+  oCtx.filter = 'blur(12px)';
+  oCtx.drawImage(sharp, 0, 0);
 
-  return canvas.toDataURL('image/png');
+  console.log('[sketchToPng] renderSketchForAI: blurred biome zones, no overlays');
+  return out.toDataURL('image/png');
 }
 
 // ── Preview renderer (for humans) ────────────────────────────────────────────
