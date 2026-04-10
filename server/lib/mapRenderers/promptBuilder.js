@@ -206,8 +206,12 @@ function buildMustKeepFacts(spec) {
   const facts   = [];
   if (!cells.length) return null;
 
+  // Include mountain/hill relief cells (not in BIOME_CHAR filter above)
+  const allCells = spec.cells ?? [];
   const cellMap = new Map();
-  for (const c of cells) cellMap.set(`${c.x},${c.y}`, c);
+  for (const c of allCells) cellMap.set(`${c.x},${c.y}`, c);
+  // Also index biome cells
+  for (const c of cells) if (!cellMap.has(`${c.x},${c.y}`)) cellMap.set(`${c.x},${c.y}`, c);
 
   function edgeLabels(c) {
     const l = [];
@@ -279,7 +283,24 @@ function buildMustKeepFacts(spec) {
   if (volCount > 0 && volCount < 25) facts.push(`Volcanic zone is small (${volCount} cells) — render as a SINGLE volcano, not multiple`);
 
   // F. Swamp visibility
-  if ((counts['swamp'] ?? 0) > 50) facts.push('Swamp must be rendered as a VISIBLE marsh/wetland zone with distinctive visual texture — not just labeled as text');
+  if ((counts['swamp'] ?? 0) > 50) facts.push('Swamp must be rendered as a VISIBLE marsh/wetland zone with distinctive visual texture — not just labeled as text (do NOT omit)');
+
+  // J. Northeast mountain range
+  const isMountainCell = c => c.relief === 'mountains' || c.relief === 'mountainous' ||
+                               c.biome === 'mountains';
+  const neMountains = allCells.filter(c => isMountainCell(c) && c.y < 8 && c.x > 20);
+  if (neMountains.length >= 2) {
+    facts.push('Mountain range in the NORTHEAST corner (top-right area) MUST be rendered. This is NOT optional — show illustrated mountain peaks (do NOT omit)');
+  }
+
+  // K. Swamp adjacent to mountain cells
+  const mountainCells = new Set(allCells.filter(isMountainCell).map(c => `${c.x},${c.y}`));
+  const swampNextToMountain = cells.filter(c => c.biome === 'swamp' &&
+    [[0,-1],[0,1],[-1,0],[1,0]].some(([dx,dy]) => mountainCells.has(`${c.x+dx},${c.y+dy}`))
+  );
+  if (swampNextToMountain.length > 0) {
+    facts.push('A swamp/marsh zone exists directly adjacent to a mountain range. Render as dark wetland terrain breaking through mountain foothills (do NOT omit)');
+  }
 
   // G. Ocean negative constraints
   if (counts['ocean'] || counts['coastal']) {
@@ -292,14 +313,8 @@ function buildMustKeepFacts(spec) {
   if (overlays.some(o => o.type === 'road' || o.type === 'canyon' || o.type === 'chasm'))
     facts.push('Roads, canyons, and chasms are land features — they NEVER enter water or the sea');
 
-  // I. Overlay summary
-  for (const ov of overlays.slice(0, 2)) {
-    const pts = ov.points, s = pts[0], e = pts[pts.length-1];
-    facts.push(`A major ${ov.type} runs from (${s.x},${s.y}) toward (${e.x},${e.y}) — ${e.y>s.y?'south':'north'}-${e.x>s.x?'east':'west'}`);
-  }
-
   if (!facts.length) return null;
-  return 'Must preserve (non-negotiable):\n' + facts.slice(0, 8).map(f => `- ${f}`).join('\n');
+  return 'Must preserve (non-negotiable):\n' + facts.slice(0, 10).map(f => `- ${f}`).join('\n');
 }
 
 // ── Full prompt ────────────────────────────────────────────────────────────────

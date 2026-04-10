@@ -200,7 +200,7 @@ const AI_PX   = 1024;
 const AI_CELL = AI_PX / GRID; // 32px
 
 const AI_BIOME_COLOR: Record<string, string> = {
-  plains:   '#c8d49a',
+  plains:   '#a8b870',
   forest:   '#2d6a2d',
   ocean:    '#1a4a7a',
   coastal:  '#5b9ea0',
