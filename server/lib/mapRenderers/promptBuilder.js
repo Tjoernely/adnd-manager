@@ -136,17 +136,6 @@ function buildCombinedGrid(spec) {
 
 // ── Connector paths ────────────────────────────────────────────────────────────
 
-function smoothAndNormalizePath(points) {
-  if (!points || points.length === 0) return [];
-  const sampled = points.filter((_, i) =>
-    i === 0 || i === points.length - 1 || i % 3 === 0
-  );
-  return sampled.map(p => ({
-    x: Math.round((p.x / 31) * 100 / 5) * 5,
-    y: Math.round((p.y / 31) * 100 / 5) * 5,
-  }));
-}
-
 function getZoneDescription(x, y, cells) {
   const cell = cells.find(c => c.x === x && c.y === y);
   const biome = cell?.biome || 'terrain';
@@ -159,38 +148,40 @@ function getZoneDescription(x, y, cells) {
 function buildConnectorPaths(spec) {
   const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   if (!overlays.length) return null;
-
   const cells = spec.cells ?? [];
 
   const lines = [
-    'Connectors (percentage positions, west=0% east=100% north=0% south=100%):',
-    'Do NOT render as stepped lines or pixel paths.',
-    'Translate each path into a naturally curved organic feature.',
+    'Connectors — render as natural organic features only:',
+    'Rivers must be gently winding. Roads must be gently curving.',
+    'Do NOT draw straight lines, right angles, or stepped geometry.',
     '',
   ];
 
   for (const ov of overlays) {
-    const rawPts  = ov.points;
-    const pts     = smoothAndNormalizePath(rawPts);
-    const startZone = getZoneDescription(rawPts[0].x, rawPts[0].y, cells);
-    const endZone   = getZoneDescription(rawPts[rawPts.length - 1].x, rawPts[rawPts.length - 1].y, cells);
-    const pathStr   = pts.map(p => `(${p.x}%,${p.y}%)`).join(' → ');
+    const pts = ov.points;
+    const start = pts[0];
+    const end   = pts[pts.length - 1];
+    const mid   = pts[Math.floor(pts.length / 2)];
 
-    const type = ov.type;
-    lines.push(`- ${type[0].toUpperCase() + type.slice(1)}: ${pathStr}`);
-    lines.push(`  Flows from ${startZone} toward ${endZone}.`);
+    const startZone = getZoneDescription(start.x, start.y, cells);
+    const endZone   = getZoneDescription(end.x,   end.y,   cells);
+    const midZone   = getZoneDescription(mid.x,   mid.y,   cells);
 
-    if (type === 'river' || type === 'stream') {
-      lines.push(`  Render as a naturally winding watercourse with smooth organic curves.`);
-    } else if (type === 'road' || type === 'trail') {
-      lines.push(`  Render as a dirt trail with natural gentle curves — not straight.`);
-    } else if (type === 'canyon' || type === 'chasm') {
-      lines.push(`  Render as a jagged geological feature — never enters water.`);
+    const dirX = end.x > start.x ? 'east' : end.x < start.x ? 'west' : '';
+    const dirY = end.y > start.y ? 'south' : end.y < start.y ? 'north' : '';
+    const dir  = [dirY, dirX].filter(Boolean).join('-') || 'across the region';
+
+    if (ov.type === 'river') {
+      lines.push(`- River: originates in the ${startZone}, flows ${dir} through the ${midZone}, reaches the ${endZone}. Draw as a gently winding natural river.`);
+    } else if (ov.type === 'road') {
+      lines.push(`- Road: runs from the ${startZone} ${dir} to the ${endZone} through the ${midZone}. Draw as a gently curving dirt trail.`);
+    } else if (ov.type === 'canyon') {
+      lines.push(`- Canyon: cuts from the ${startZone} ${dir} to the ${endZone}. Draw as a natural rocky ravine.`);
+    } else if (ov.type === 'chasm') {
+      lines.push(`- Chasm: extends from the ${startZone} ${dir} to the ${endZone}. Draw as a dramatic natural fissure.`);
     }
-    lines.push('');
   }
 
-  lines.push('CRITICAL: Roads, canyons, and chasms never enter water. Rivers flow into water (sea/lake), not across land arbitrarily.');
   return lines.join('\n');
 }
 
