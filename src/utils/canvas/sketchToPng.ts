@@ -191,66 +191,76 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
   return dataUrl;
 }
 
-// ── AI render — blurred biome zones, no overlays, no symbols ─────────────────
-// Sent to Gemini/GPT. Biome colours only + subtle relief darkening + Gaussian
-// blur to soften cell edges. No overlays, no symbols — nothing for the model
-// to copy geometrically. Connectors described only in prompt text.
+// ── AI render — neon data-mask palette, crosshatch relief ────────────────────
+// Uses impossible-to-confuse-with-nature neon colours so Gemini reads the
+// image as a pure data mask and doesn't copy natural-looking colours.
+// No overlays, no text symbols — connectors described in prompt only.
 
 const AI_PX   = 1024;
 const AI_CELL = AI_PX / GRID; // 32px
 
 const AI_BIOME_COLOR: Record<string, string> = {
-  plains:   '#a8b870',
-  forest:   '#2d6a2d',
-  ocean:    '#1a4a7a',
-  coastal:  '#5b9ea0',
-  lake:     '#2a6090',
-  desert:   '#d4b483',
-  swamp:    '#4a6741',
-  tundra:   '#b8d4d4',
-  volcanic: '#4a1c1c',
-  null:     '#1a1a1a',
+  plains:   '#FFFF00',  // neon yellow
+  forest:   '#FF00FF',  // magenta
+  ocean:    '#000000',  // black
+  coastal:  '#FF8000',  // neon orange
+  lake:     '#AA00FF',  // purple
+  desert:   '#0000FF',  // pure blue
+  swamp:    '#00FFFF',  // cyan
+  tundra:   '#FF0080',  // hot pink
+  volcanic: '#FFFFFF',  // white
+  null:     '#333333',  // dark grey
 };
 
+function drawCrosshatch(ctx: CanvasRenderingContext2D, px: number, py: number, opacity: number) {
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth   = 1.5;
+  const step = 6;
+  ctx.beginPath();
+  // diagonal \
+  for (let d = -AI_CELL; d < AI_CELL * 2; d += step) {
+    ctx.moveTo(px + d,           py);
+    ctx.lineTo(px + d + AI_CELL, py + AI_CELL);
+  }
+  // diagonal /
+  for (let d = -AI_CELL; d < AI_CELL * 2; d += step) {
+    ctx.moveTo(px + d + AI_CELL, py);
+    ctx.lineTo(px + d,           py + AI_CELL);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function renderSketchForAI(spec: SketchSpec): string {
-  // Step 1: draw sharp biome + relief to a temp canvas
-  const sharp = document.createElement('canvas');
-  sharp.width  = AI_PX;
-  sharp.height = AI_PX;
-  const sCtx = sharp.getContext('2d')!;
-  sCtx.imageSmoothingEnabled = false;
+  const canvas = document.createElement('canvas');
+  canvas.width  = AI_PX;
+  canvas.height = AI_PX;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
 
   // Background
-  sCtx.fillStyle = AI_BIOME_COLOR.null;
-  sCtx.fillRect(0, 0, AI_PX, AI_PX);
+  ctx.fillStyle = AI_BIOME_COLOR.null;
+  ctx.fillRect(0, 0, AI_PX, AI_PX);
 
-  // Biome fills — no overlays, no symbols
+  // Neon biome fills
   for (const cell of spec.cells) {
     const px = cell.x * AI_CELL, py = cell.y * AI_CELL;
-    sCtx.fillStyle = AI_BIOME_COLOR[cell.biome] ?? AI_BIOME_COLOR.null;
-    sCtx.fillRect(px, py, AI_CELL, AI_CELL);
+    ctx.fillStyle = AI_BIOME_COLOR[cell.biome] ?? AI_BIOME_COLOR.null;
+    ctx.fillRect(px, py, AI_CELL, AI_CELL);
   }
 
-  // Relief — subtle dark overlay only
+  // Relief — crosshatch pattern (mountains heavy, hills light)
   for (const cell of spec.cells) {
     const r = cell.relief as string;
     if (!r || r === 'flat') continue;
-    const opacity = (r === 'mountains' || r === 'mountainous') ? 0.25 : 0.12;
-    sCtx.fillStyle = `rgba(0,0,0,${opacity})`;
-    sCtx.fillRect(cell.x * AI_CELL, cell.y * AI_CELL, AI_CELL, AI_CELL);
+    const opacity = (r === 'mountains' || r === 'mountainous') ? 0.6 : 0.3;
+    drawCrosshatch(ctx, cell.x * AI_CELL, cell.y * AI_CELL, opacity);
   }
 
-  // Step 2: copy to output canvas with blur applied
-  // blur(12px) softens hard cell edges so model uses its own organic interpretation
-  const out = document.createElement('canvas');
-  out.width  = AI_PX;
-  out.height = AI_PX;
-  const oCtx = out.getContext('2d')!;
-  oCtx.filter = 'blur(12px)';
-  oCtx.drawImage(sharp, 0, 0);
-
-  console.log('[sketchToPng] renderSketchForAI: blurred biome zones, no overlays');
-  return out.toDataURL('image/png');
+  console.log('[sketchToPng] renderSketchForAI: neon data-mask palette');
+  return canvas.toDataURL('image/png');
 }
 
 // ── Preview renderer (for humans) ────────────────────────────────────────────

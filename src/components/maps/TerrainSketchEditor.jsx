@@ -8,6 +8,7 @@
  */
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
+import { renderSketchForAI }            from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
@@ -313,8 +314,12 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     try {
+      // Render neon data-mask control image — impossible colours Gemini reads as
+      // a pure spatial data mask rather than natural terrain to copy.
+      setGenStatus('Capturing sketch…');
+      const controlImage = renderSketchForAI(spec);
+
       // 2. POST to server → returns jobId immediately (non-blocking)
-      // No control image sent — terrain grid in prompt is sole layout reference.
       const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'
                           : renderer === 'gemini'     ? 'Gemini Image'
                           : 'AI renderer';
@@ -324,7 +329,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sketchSpec: spec, renderer, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced' }),
+        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced' }),
       });
       if (!startResp.ok) {
         const err = await startResp.json().catch(() => ({ error: startResp.statusText }));

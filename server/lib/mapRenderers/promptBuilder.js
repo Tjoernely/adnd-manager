@@ -5,32 +5,33 @@
 
 // ── Base prompt ────────────────────────────────────────────────────────────────
 
-const BASE_PROMPT = `The following character grid is the SOLE source of truth for this map's layout.
-Translate it into a high-quality, organic fantasy map.
+const BASE_PROMPT = `You are given a colour-coded data mask image and a character grid.
+Both encode the same terrain layout — use them together.
 
-Row 0 = North edge. Row 31 = South edge.
-Col 0 = West edge. Col 31 = East edge.
+COLOUR KEY for the data mask image:
+- Neon yellow (#FFFF00) = Plains / Grasslands
+- Magenta (#FF00FF) = Forest / Woodland
+- Black (#000000) = Ocean / Deep water
+- Orange (#FF8000) = Coastal / Shoreline
+- Cyan (#00FFFF) = Swamp / Marsh
+- Blue (#0000FF) = Desert / Arid terrain
+- Hot pink (#FF0080) = Tundra / Snow
+- White (#FFFFFF) = Volcanic terrain
+- Purple (#AA00FF) = Inland lake
+- Dark crosshatch pattern over a colour = Mountains or Hills relief
+- Dark grey (#333333) = Unpainted / empty
 
+These are deliberate data colours — ignore them aesthetically.
+Translate each colour zone into its corresponding natural illustrated terrain.
+
+CHARACTER GRID — same layout as the image, row 0 = North, row 31 = South:
 Each cell code = [biome][relief]:
-P. = Lush green plains (flat)
-F. = Dense forest (flat)
-S. = Muddy swamp / wetland
-D. = Arid desert / sandy terrain
-T. = Frozen tundra / snow
-V. = Volcanic terrain / lava fields
-O. = Deep ocean / open sea
-C. = Coastal shallows / shoreline
-L. = Inland lake / freshwater
-PM = Plains with mountain peaks
-FM = Forest with mountain peaks
-SM = Swamp with mountain peaks
-VM = Volcanic terrain with mountains
-PH = Plains with rolling hills
-FH = Forest with hills
-.. = Empty / ocean fill
+P. = Plains  F. = Forest  S. = Swamp  D. = Desert  T. = Tundra
+V. = Volcanic  O. = Ocean  C. = Coastal  L. = Lake
+M suffix = mountain peaks  H suffix = hills  .. = empty
 
-Render each cell as its natural illustrated terrain equivalent.
-Do NOT render the codes as text or labels on the map.
+Render each zone as its natural illustrated terrain equivalent.
+Do NOT render any colour, code, or label on the map surface.
 
 Translate the grid into finished fantasy cartography with:
 - organic land and biome shapes with natural boundaries

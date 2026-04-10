@@ -1,10 +1,10 @@
 /**
- * GeminiImageRenderer — Google Gemini image generation (text-only mode).
+ * GeminiImageRenderer — Google Gemini image generation.
  * Model: gemini-2.5-flash-image
  * Requires: GOOGLE_AI_API_KEY in server/.env
  *
- * No control image sent — the 2-char terrain grid in the prompt is the
- * sole source of truth for layout.
+ * Sends neon data-mask control image + text prompt with colour key and
+ * 2-char terrain grid. Image gives spatial layout; grid is authoritative.
  */
 
 const { GoogleGenAI } = require('@google/genai');
@@ -23,10 +23,11 @@ class GeminiImageRenderer extends IMapRenderer {
     return !!process.env.GOOGLE_AI_API_KEY;
   }
 
-  async render(_controlImagePath, stylePreset = 'schley', userPrompt = '', spec = null, aiFredom = 'strict') {
-    const fullPrompt = buildFullPrompt(spec, aiFredom, userPrompt);
+  async render(controlImagePath, stylePreset = 'schley', userPrompt = '', spec = null, aiFredom = 'strict') {
+    const fullPrompt  = buildFullPrompt(spec, aiFredom, userPrompt);
+    const imageBase64 = fs.readFileSync(controlImagePath).toString('base64');
 
-    console.log('[gemini] gemini-2.5-flash-image (text-only, no control image)');
+    console.log('[gemini] gemini-2.5-flash-image (neon data-mask + grid)');
     console.log(`[gemini] Cells: ${spec?.cells?.length ?? 0} / Overlays: ${spec?.overlays?.length ?? 0}`);
     console.log(`[gemini] Prompt length: ${fullPrompt.length} chars`);
 
@@ -36,7 +37,10 @@ class GeminiImageRenderer extends IMapRenderer {
       model: 'gemini-2.5-flash-image',
       contents: [{
         role: 'user',
-        parts: [{ text: fullPrompt }],
+        parts: [
+          { inlineData: { mimeType: 'image/png', data: imageBase64 } },
+          { text: fullPrompt },
+        ],
       }],
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
