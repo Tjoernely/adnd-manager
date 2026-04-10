@@ -51,7 +51,10 @@ Avoid:
 - blocky biome rendering or pixel-like edges
 - flat terrain fills or abstract schematic appearance
 - game-board look, mobile game style, strategy overlay look
-- modern UI, photorealism, or GIS rendering`;
+- modern UI, photorealism, or GIS rendering
+- icons, symbols, letters, or markers placed on terrain
+- settlement, ruin, or landmark icons
+- any text rendered directly on the terrain surface`;
 
 // ── Priority order ─────────────────────────────────────────────────────────────
 
@@ -75,13 +78,27 @@ not a beautified copy of the sketch.
 Priority: high structural fidelity + high render quality.
 The overall composition and proportions must closely match the sketch.
 Major terrain zones must occupy the same relative areas as in the grid.
-Do not relocate, resize, or omit any terrain zone present in the grid.`,
+Do not relocate, resize, or omit any terrain zone present in the grid.
+Do NOT add any of the following to the map:
+- Icons, symbols, letters, runes, or glyphs on terrain
+- Settlement icons, castle symbols, tower markers
+- Ruin markers, battle markers, X marks
+- Roman numerals or any text labels on terrain
+- Decorative markers of any kind
+The map must show ONLY natural terrain: mountains, forests, water, plains, swamp, volcanic terrain, rivers, roads.`,
 
   balanced: `Freedom mode: BALANCED
 Preserve core geography and regional layout.
 Allow moderate refinement of coastlines, terrain transitions, and landmarks.
 Add logical fantasy-map detail where it improves believability.
-Keep the sketch recognizable but render as a polished campaign-setting map.`,
+Keep the sketch recognizable but render as a polished campaign-setting map.
+Do NOT add any of the following to the map:
+- Icons, symbols, letters, runes, or glyphs on terrain
+- Settlement icons, castle symbols, tower markers
+- Ruin markers, battle markers, X marks
+- Roman numerals or any text labels on terrain
+- Decorative markers of any kind
+The map must show ONLY natural terrain: mountains, forests, water, plains, swamp, volcanic terrain, rivers, roads.`,
 
   creative: `Freedom mode: CREATIVE
 Use the sketch as structural foundation but allow bold lore-friendly enhancement.
