@@ -136,31 +136,61 @@ function buildCombinedGrid(spec) {
 
 // ── Connector paths ────────────────────────────────────────────────────────────
 
+function smoothAndNormalizePath(points) {
+  if (!points || points.length === 0) return [];
+  const sampled = points.filter((_, i) =>
+    i === 0 || i === points.length - 1 || i % 3 === 0
+  );
+  return sampled.map(p => ({
+    x: Math.round((p.x / 31) * 100 / 5) * 5,
+    y: Math.round((p.y / 31) * 100 / 5) * 5,
+  }));
+}
+
+function getZoneDescription(x, y, cells) {
+  const cell = cells.find(c => c.x === x && c.y === y);
+  const biome = cell?.biome || 'terrain';
+  const posX = x < 11 ? 'west' : x > 21 ? 'east' : 'central';
+  const posY = y < 11 ? 'north' : y > 21 ? 'south' : 'central';
+  const pos = [posY, posX].filter(p => p !== 'central').join('-') || 'central';
+  return `${pos} ${biome}`;
+}
+
 function buildConnectorPaths(spec) {
   const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   if (!overlays.length) return null;
 
-  const cellMap = new Map();
-  for (const c of (spec.cells ?? [])) cellMap.set(`${c.x},${c.y}`, c);
+  const cells = spec.cells ?? [];
 
-  const WATER_BIOMES = new Set(['ocean', 'coastal', 'lake']);
-  function biomeLabelAt(pt) { return cellMap.get(`${pt.x},${pt.y}`)?.biome ?? 'unknown terrain'; }
+  const lines = [
+    'Connectors (percentage positions, west=0% east=100% north=0% south=100%):',
+    'Do NOT render as stepped lines or pixel paths.',
+    'Translate each path into a naturally curved organic feature.',
+    '',
+  ];
 
-  const lines = ['Connector paths (x=east y=south, origin top-left):'];
   for (const ov of overlays) {
-    const pts = ov.points;
-    const start = pts[0], end = pts[pts.length - 1];
-    const dirX = end.x > start.x ? 'east' : 'west';
-    const dirY = end.y > start.y ? 'south' : 'north';
-    const startBiome = biomeLabelAt(start), endBiome = biomeLabelAt(end);
-    lines.push(`- ${ov.type}: flows ${dirY}-${dirX}, starts in ${startBiome}, ends in ${endBiome}, path: ${pts.map(p => `(${p.x},${p.y})`).join('→')}`);
-    if ((ov.type === 'road' || ov.type === 'canyon' || ov.type === 'chasm') &&
-        (WATER_BIOMES.has(startBiome) || WATER_BIOMES.has(endBiome))) {
-      lines.push(`  ⚠ This ${ov.type} passes near water — DO NOT draw it into the sea. Terminate on land.`);
+    const rawPts  = ov.points;
+    const pts     = smoothAndNormalizePath(rawPts);
+    const startZone = getZoneDescription(rawPts[0].x, rawPts[0].y, cells);
+    const endZone   = getZoneDescription(rawPts[rawPts.length - 1].x, rawPts[rawPts.length - 1].y, cells);
+    const pathStr   = pts.map(p => `(${p.x}%,${p.y}%)`).join(' → ');
+
+    const type = ov.type;
+    lines.push(`- ${type[0].toUpperCase() + type.slice(1)}: ${pathStr}`);
+    lines.push(`  Flows from ${startZone} toward ${endZone}.`);
+
+    if (type === 'river' || type === 'stream') {
+      lines.push(`  Render as a naturally winding watercourse with smooth organic curves.`);
+    } else if (type === 'road' || type === 'trail') {
+      lines.push(`  Render as a dirt trail with natural gentle curves — not straight.`);
+    } else if (type === 'canyon' || type === 'chasm') {
+      lines.push(`  Render as a jagged geological feature — never enters water.`);
     }
+    lines.push('');
   }
+
   lines.push('CRITICAL: Roads, canyons, and chasms never enter water. Rivers flow into water (sea/lake), not across land arbitrarily.');
-  lines.push('Biome grid is preserved unchanged on connector cells.');
   return lines.join('\n');
 }
 
