@@ -86,53 +86,51 @@ const BIOME_CHAR = {
   tundra: 'T', volcanic: 'V', ocean: 'O', coastal: 'C', lake: 'L',
 };
 
-// ── Biome grid ─────────────────────────────────────────────────────────────────
+// ── Combined terrain grid (biome + relief, 2 chars per cell) ──────────────────
+//
+// Each cell = biomeChar + reliefChar, e.g.:
+//   P. = plains flat    FM = forest mountains    O. = ocean flat
+//   FH = forest hills   S. = swamp flat          .. = empty cell
+//
+// All 32 rows are always output (no skipping) so the AI can count coordinates.
 
-function buildBiomeGrid(spec) {
-  const rows = 32, cols = 32;
-  const grid = Array.from({ length: rows }, () => Array(cols).fill('.'));
+function buildCombinedGrid(spec) {
+  const ROWS = 32, COLS = 32;
+
+  // biome[r][c] and relief[r][c]
+  const biome  = Array.from({ length: ROWS }, () => Array(COLS).fill('.'));
+  const relief = Array.from({ length: ROWS }, () => Array(COLS).fill('.'));
 
   for (const cell of (spec.cells ?? [])) {
-    if (cell.biome === 'mountains' || cell.biome === 'hills') continue;
-    const ch = BIOME_CHAR[cell.biome];
-    if (ch && cell.y < rows && cell.x < cols) grid[cell.y][cell.x] = ch;
+    const { x, y } = cell;
+    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) continue;
+
+    // biome
+    if (cell.biome !== 'mountains' && cell.biome !== 'hills') {
+      const ch = BIOME_CHAR[cell.biome];
+      if (ch) biome[y][x] = ch;
+    }
+
+    // relief
+    const r = cell.relief;
+    if (r === 'mountains' || r === 'mountainous' || cell.biome === 'mountains') relief[y][x] = 'M';
+    else if (r === 'hills' || cell.biome === 'hills')                           relief[y][x] = 'H';
   }
 
   const lines = [
-    'Biome grid (32×32). West=left East=right North=top South=bottom.',
-    'Key: P=plains F=forest S=swamp D=desert T=tundra V=volcanic O=ocean C=coastal L=lake .=empty',
+    'Terrain grid (32×32). West=left East=right North=top South=bottom.',
+    'Each cell = 2 chars: [biome][relief]',
+    'Biome:  P=plains F=forest S=swamp D=desert T=tundra V=volcanic O=ocean C=coastal L=lake .=unset',
+    'Relief: M=mountains H=hills .=flat',
+    'Examples: P.=plains-flat  FM=forest-mountains  FH=forest-hills  O.=ocean  ..=empty',
   ];
-  for (let r = 0; r < rows; r++) {
-    if (grid[r].every(v => v === '.')) continue;
-    lines.push(`${String(r).padStart(2)}: ${grid[r].join('')}`);
-  }
-  return lines.join('\n');
-}
 
-// ── Relief grid ────────────────────────────────────────────────────────────────
-
-function buildReliefGrid(spec) {
-  const rows = 32, cols = 32;
-  const grid = Array.from({ length: rows }, () => Array(cols).fill('.'));
-  let hasRelief = false;
-
-  for (const cell of (spec.cells ?? [])) {
-    let ch = null;
-    if (cell.relief === 'mountains' || cell.relief === 'mountainous') ch = 'M';
-    else if (cell.relief === 'hills') ch = 'H';
-    else if (cell.biome === 'mountains') ch = 'M';
-    else if (cell.biome === 'hills')     ch = 'H';
-
-    if (ch && cell.y < rows && cell.x < cols) { grid[cell.y][cell.x] = ch; hasRelief = true; }
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) row.push(biome[r][c] + relief[r][c]);
+    lines.push(`${String(r).padStart(2)}: ${row.join(' ')}`);
   }
 
-  if (!hasRelief) return null;
-
-  const lines = ['Relief grid (same coordinates as biome grid):', 'Key: M=mountains H=hills .=flat'];
-  for (let r = 0; r < rows; r++) {
-    if (grid[r].every(v => v === '.')) continue;
-    lines.push(`${String(r).padStart(2)}: ${grid[r].join('')}`);
-  }
   return lines.join('\n');
 }
 
@@ -276,16 +274,14 @@ function buildFullPrompt(spec, aiFredom, userPrompt) {
   const freedomKey   = (aiFredom || 'strict').toLowerCase();
   const freedomBlock = FREEDOM_MODES[freedomKey] ?? FREEDOM_MODES.strict;
 
-  const mustKeep  = buildMustKeepFacts(spec);
-  const biomeGrid = buildBiomeGrid(spec);
-  const relief    = buildReliefGrid(spec);
-  const connectors = buildConnectorPaths(spec);
+  const mustKeep     = buildMustKeepFacts(spec);
+  const combinedGrid = buildCombinedGrid(spec);
+  const connectors   = buildConnectorPaths(spec);
 
   const sections = [BASE_PROMPT, PRIORITY_ORDER];
-  if (mustKeep)    sections.push(mustKeep);
-  sections.push(biomeGrid);
-  if (relief)      sections.push(relief);
-  if (connectors)  sections.push(connectors);
+  if (mustKeep)   sections.push(mustKeep);
+  sections.push(combinedGrid);
+  if (connectors) sections.push(connectors);
   sections.push(freedomBlock);
   if (userPrompt?.trim()) sections.push('Additional user instructions:\n' + userPrompt.trim());
 
@@ -294,6 +290,6 @@ function buildFullPrompt(spec, aiFredom, userPrompt) {
 
 module.exports = {
   BASE_PROMPT, PRIORITY_ORDER, FREEDOM_MODES, BIOME_CHAR,
-  buildBiomeGrid, buildReliefGrid, buildConnectorPaths,
+  buildCombinedGrid, buildConnectorPaths,
   buildMustKeepFacts, buildFullPrompt,
 };
