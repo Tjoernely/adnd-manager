@@ -123,6 +123,7 @@ const BIOME_CHAR = {
 // All 32 rows are always output (no skipping) so the AI can count coordinates.
 
 function buildCombinedGrid(spec) {
+  if (!spec?.cells) return '';
   const ROWS = 32, COLS = 32;
 
   // biome[r][c] and relief[r][c]
@@ -174,6 +175,7 @@ function getZoneDescription(x, y, cells) {
 }
 
 function buildConnectorPaths(spec) {
+  if (!spec) return null;
   const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   if (!overlays.length) return null;
   const cells = spec.cells ?? [];
@@ -218,6 +220,7 @@ function buildConnectorPaths(spec) {
 // ── Must-keep facts ────────────────────────────────────────────────────────────
 
 function buildMustKeepFacts(spec) {
+  if (!spec?.cells) return null;
   const cells   = (spec.cells ?? []).filter(c => BIOME_CHAR[c.biome]);
   const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
   const facts   = [];
@@ -337,6 +340,7 @@ function buildMustKeepFacts(spec) {
 // ── Full prompt ────────────────────────────────────────────────────────────────
 
 function buildFullPrompt(spec, aiFredom, userPrompt) {
+  if (!spec) console.warn('[promptBuilder] spec is null — grid/facts will be empty');
   const freedomKey   = (aiFredom || 'strict').toLowerCase();
   const freedomBlock = FREEDOM_MODES[freedomKey] ?? FREEDOM_MODES.strict;
 
