@@ -5,31 +5,34 @@
 
 // ── Base prompt ────────────────────────────────────────────────────────────────
 
-const BASE_PROMPT = `Create a fully illustrated regional fantasy map from the provided sketch.
+const BASE_PROMPT = `The following character grid is the SOLE source of truth for this map's layout.
+Translate it into a high-quality, organic fantasy map.
 
-The sketch is a symbolic terrain-layout plan only.
-Preserve its structural geography — coastlines, water bodies, river paths,
-biome placement, and major regional relationships.
+Row 0 = North edge. Row 31 = South edge.
+Col 0 = West edge. Col 31 = East edge.
 
-CRITICAL — PATHS AND RIVERS IN THE SKETCH:
-The sketch is drawn on a pixel grid, so ALL rivers, roads, and paths in the
-sketch image appear as stepped, staircase-like, right-angled zigzag lines.
-This is a technical artifact of the grid — it does NOT mean the features are
-straight or angular in reality.
-You MUST ignore the visual staircase shape of any path or river in the sketch.
-Instead, render every river as a naturally winding organic watercourse and
-every road as a gently curving dirt trail. No right angles. No zigzags.
-No stepped geometry. Smooth organic curves only.
+Each cell code = [biome][relief]:
+P. = Lush green plains (flat)
+F. = Dense forest (flat)
+S. = Muddy swamp / wetland
+D. = Arid desert / sandy terrain
+T. = Frozen tundra / snow
+V. = Volcanic terrain / lava fields
+O. = Deep ocean / open sea
+C. = Coastal shallows / shoreline
+L. = Inland lake / freshwater
+PM = Plains with mountain peaks
+FM = Forest with mountain peaks
+SM = Swamp with mountain peaks
+VM = Volcanic terrain with mountains
+PH = Plains with rolling hills
+FH = Forest with hills
+.. = Empty / ocean fill
 
-Do NOT preserve the sketch's visual appearance.
-Do NOT keep:
-- square cell edges or blocky pixel shapes
-- flat color regions or game-editor appearance
-- prototype terrain rendering or abstract diagram aesthetics
-- mobile game style, board-game tile look, or strategy-game terrain overlay look
-- stepped, staircase, or zigzag lines for rivers or roads
+Render each cell as its natural illustrated terrain equivalent.
+Do NOT render the codes as text or labels on the map.
 
-Translate the sketch into finished fantasy cartography with:
+Translate the grid into finished fantasy cartography with:
 - organic land and biome shapes with natural boundaries
 - believable coastlines and shorelines
 - hand-painted terrain textures and surfaces
@@ -39,13 +42,11 @@ Translate the sketch into finished fantasy cartography with:
 - water with depth gradients and shoreline variation
 - swamps with marsh texture and wetland detail
 - volcanic areas as dramatic fantasy terrain with distinct mood
-- readable cartographic symbols throughout
 - soft relief shading and strong visual hierarchy
 - polished published campaign-book map finish
 
 The final image must clearly read as a professionally illustrated
-tabletop fantasy regional map — not a terrain mockup, editor screenshot,
-abstract biome diagram, mobile game map, or strategy-game terrain layer.
+tabletop fantasy regional map — not a terrain mockup, game-board tile, or diagram.
 
 Avoid:
 - blocky biome rendering or pixel-like edges
@@ -59,11 +60,10 @@ Avoid:
 // ── Priority order ─────────────────────────────────────────────────────────────
 
 const PRIORITY_ORDER = `Priority order:
- 1. Biome and relief grids are authoritative for terrain placement
+ 1. The terrain grid is authoritative for all terrain placement
  2. Must-keep facts are non-negotiable constraints
- 3. Connector paths define exact river/road routes
- 4. Sketch image is compositional reference only
- 5. Translate to organic illustrated fantasy cartography
+ 3. Connector descriptions define river/road routes — render as organic curves
+ 4. Translate to organic illustrated fantasy cartography
     — preserve cell semantics, NOT cell boundaries visually`;
 
 // ── Freedom modes ──────────────────────────────────────────────────────────────

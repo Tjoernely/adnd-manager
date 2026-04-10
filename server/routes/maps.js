@@ -647,13 +647,12 @@ router.post('/generate-from-sketch', auth, (req, res) => {
     sketchSpec,
     renderer:     rendererName = 'auto',
     controlImage,
-    stylePreset   = 'parchment',
+    stylePreset   = 'schley',
     userPrompt    = '',
+    aiFredom      = 'balanced',
   } = req.body ?? {};
 
   if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
-  if (!controlImage || typeof controlImage !== 'string')
-    return res.status(400).json({ error: 'controlImage (base64 PNG) required' });
 
   const cells = sketchSpec.cells ?? [];
   if (!Array.isArray(cells) || cells.length === 0)
@@ -675,15 +674,10 @@ router.post('/generate-from-sketch', auth, (req, res) => {
 
   // Run generation in background — do not await
   (async () => {
-    // Save base64 control image to disk so renderer can read it as a file stream
-    const controlFilename = `sketch-control-${crypto.randomUUID()}.png`;
-    const controlPath     = path.join(UPLOAD_DIR, controlFilename);
     try {
-      const base64Data = controlImage.replace(/^data:image\/[^;]+;base64,/, '');
-      fs.writeFileSync(controlPath, Buffer.from(base64Data, 'base64'));
-
       // Renderer writes the output image to UPLOAD_DIR and returns the absolute path
-      const outputPath     = await renderer.render(controlPath, stylePreset, userPrompt);
+      // controlImagePath is null — Gemini uses text-only prompt; GPT renderers may still use it
+      const outputPath     = await renderer.render(null, stylePreset, userPrompt, sketchSpec, aiFredom);
       const localImageUrl  = `/uploads/maps/${path.basename(outputPath)}`;
 
       sketchJobs.set(jobId, {
