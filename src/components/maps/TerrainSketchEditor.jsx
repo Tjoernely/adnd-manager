@@ -145,14 +145,27 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const cellArr2 = Object.values(cells);
+    console.log('[sketch] Canvas mounted, cells:', cellArr2.length);
 
     // Dark background for unpainted area
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, totalPx, totalPx);
 
-    // Draw cells with symbol-based renderCell
-    for (const cell of Object.values(cells)) {
-      renderCell(ctx, cell.x, cell.y, CELL_PX, cell.biome, cell.relief);
+    // Draw cells with symbol-based renderCell (with fallback on error)
+    const FALLBACK_COLORS = {
+      plains: '#c8d878', forest: '#2a6e2a', ocean: '#1a3e7e',
+      coastal: '#3a8898', lake: '#1a5ea2', desert: '#d4b060',
+      swamp: '#3a5a2a', tundra: '#b8cede', volcanic: '#3c1818',
+    };
+    for (const cell of cellArr2) {
+      try {
+        renderCell(ctx, cell.x, cell.y, CELL_PX, cell.biome, cell.relief);
+      } catch (e) {
+        console.error('[sketch] renderCell failed for cell', cell.x, cell.y, e);
+        ctx.fillStyle = FALLBACK_COLORS[cell.biome] ?? '#888888';
+        ctx.fillRect(cell.x * CELL_PX, cell.y * CELL_PX, CELL_PX, CELL_PX);
+      }
     }
 
     // Subtle grid overlay
