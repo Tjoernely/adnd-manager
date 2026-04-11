@@ -145,26 +145,11 @@
   overflow: auto;
   background: #141414;
 }
-/* Canvas area: stacks symbol canvas + SVG interaction layer */
-.tse-canvas-area {
-  position: relative;
-  border: 1px solid #3a3020;
-  border-radius: 2px;
-  display: inline-block;
-  line-height: 0;
-}
-.tse-canvas-bg {
-  display: block;
-}
 .tse-canvas {
   cursor: crosshair;
+  border: 1px solid #3a3020;
+  border-radius: 2px;
   touch-action: none;
-}
-.tse-canvas--overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  background: transparent;
 }
 .tse-canvas-info {
   margin-top: 6px;
