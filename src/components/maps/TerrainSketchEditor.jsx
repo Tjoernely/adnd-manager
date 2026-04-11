@@ -6,9 +6,9 @@
  *   onGenerate    fn(spec, imageUrl)   — called after successful image generation
  *   onCancel      fn()
  */
-import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
-import { renderSketchForAI }            from '../../utils/canvas/sketchToPng.ts';
+import { renderSketchForAI, renderCell } from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
@@ -136,9 +136,34 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
   // Live overlay path — state so it renders in real-time during drawing
   const [liveOverlayPath, setLiveOverlayPath] = useState([]);
-  const painting = useRef(false);
+  const painting  = useRef(false);
+  const svgRef    = useRef(null);
+  const canvasRef = useRef(null);
 
-  const svgRef = useRef(null);
+  // Redraw canvas whenever cells change
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Dark background for unpainted area
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, totalPx, totalPx);
+
+    // Draw cells with symbol-based renderCell
+    for (const cell of Object.values(cells)) {
+      renderCell(ctx, cell.x, cell.y, CELL_PX, cell.biome, cell.relief);
+    }
+
+    // Subtle grid overlay
+    ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+    ctx.lineWidth   = 0.5;
+    for (let i = 0; i <= GRID; i++) {
+      const pos = i * CELL_PX;
+      ctx.beginPath(); ctx.moveTo(pos, 0);    ctx.lineTo(pos, totalPx); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,   pos);  ctx.lineTo(totalPx, pos); ctx.stroke();
+    }
+  }, [cells, totalPx]);
 
   // ── Canvas interaction ─────────────────────────────────────────────────────
 
@@ -465,35 +490,16 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
         {/* ── Canvas ── */}
         <div className="tse-canvas-wrap">
+          {/* Canvas area: symbol canvas behind transparent SVG interaction layer */}
+          <div className="tse-canvas-area">
+          <canvas ref={canvasRef} width={totalPx} height={totalPx}
+            className="tse-canvas-bg" />
           <svg ref={svgRef} width={totalPx} height={totalPx}
-            className="tse-canvas"
+            className="tse-canvas tse-canvas--overlay"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}>
-
-            {/* Grid background */}
-            <rect width={totalPx} height={totalPx} fill="#1a1a1a" />
-            <defs>
-              <pattern id="tse-grid" width={CELL_PX} height={CELL_PX} patternUnits="userSpaceOnUse">
-                <path d={`M ${CELL_PX} 0 L 0 0 0 ${CELL_PX}`} fill="none" stroke="#333" strokeWidth="0.5"/>
-              </pattern>
-            </defs>
-            <rect width={totalPx} height={totalPx} fill="url(#tse-grid)" />
-
-            {/* Painted biome cells */}
-            {cellArr.map(c => (
-              <rect key={cellKey(c.x,c.y)}
-                x={c.x*CELL_PX} y={c.y*CELL_PX}
-                width={CELL_PX} height={CELL_PX}
-                fill={BIOME_CONFIG[c.biome]?.color ?? '#888'}
-                opacity={0.85} />
-            ))}
-
-            {/* Relief — per-type markers */}
-            {cellArr.filter(c => c.relief && c.relief !== 'flat').map(c => (
-              <ReliefMarker key={'r'+cellKey(c.x,c.y)} c={c} />
-            ))}
 
             {/* Committed overlays — per-type style */}
             {overlays.map((ov, i) => {
@@ -523,6 +529,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             )}
 
           </svg>
+          </div>{/* tse-canvas-area */}
           <div className="tse-canvas-info">
             {cellArr.length} cells painted · {overlays.length} overlays
             {overlays.length > 0 && <button className="tse-clear-link" onClick={clearOverlays}>clear overlays</button>}

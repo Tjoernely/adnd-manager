@@ -5,35 +5,27 @@
 
 // ── Base prompt ────────────────────────────────────────────────────────────────
 
-const BASE_PROMPT = `You are given a colour-coded data mask image and a character grid.
-Both encode the same terrain layout — use them together.
+const BASE_PROMPT = `You are given a sketch of a fantasy map region.
+The image uses natural-looking terrain symbols on coloured cells.
 
-COLOUR KEY for the data mask image:
-- Neon yellow (#FFFF00) = Plains / Grasslands
-- Magenta (#FF00FF) = Forest / Woodland
-- Black (#000000) = Ocean / Deep water
-- Orange (#FF8000) = Coastal / Shoreline
-- Cyan (#00FFFF) = Swamp / Marsh
-- Blue (#0000FF) = Desert / Arid terrain
-- Hot pink (#FF0080) = Tundra / Snow
-- White (#FFFFFF) = Volcanic terrain
-- Purple (#AA00FF) = Inland lake
-- Dark crosshatch pattern over a colour = Mountains or Hills relief
-- Dark grey (#333333) = Unpainted / empty
+SYMBOL KEY — what each cell type looks like in the image:
+- Warm yellow-green cells with short vertical grass strokes = Plains / Grasslands
+- Dark green cells with small filled triangle tree shapes = Forest / Woodland
+- Deep navy cells with curved horizontal wave lines = Ocean / Deep water
+- Teal cells with lighter wave lines = Coastal / Shoreline
+- Medium blue cells with wave lines = Inland lake
+- Sandy tan cells with curved dune arc lines = Desert / Arid terrain
+- Dark grey-green cells with × cross marks = Swamp / Marsh
+- Pale blue-grey cells with small white dots = Tundra / Snow
+- Very dark red-brown cells with radial crack lines = Volcanic terrain
+- Triangle peak symbol overlaid on a cell = Mountain relief
+- Arced hill shape overlaid on a cell = Hills relief
+- Dark (nearly black) cells = Unpainted / empty — ignore these
 
-These are deliberate data colours — ignore them aesthetically.
-Translate each colour zone into its corresponding natural illustrated terrain.
+Do NOT copy or reproduce these sketch symbols literally on the output map.
+Translate each symbol type into its corresponding natural illustrated terrain.
 
-CHARACTER GRID — same layout as the image, row 0 = North, row 31 = South:
-Each cell code = [biome][relief]:
-P. = Plains  F. = Forest  S. = Swamp  D. = Desert  T. = Tundra
-V. = Volcanic  O. = Ocean  C. = Coastal  L. = Lake
-M suffix = mountain peaks  H suffix = hills  .. = empty
-
-Render each zone as its natural illustrated terrain equivalent.
-Do NOT render any colour, code, or label on the map surface.
-
-Translate the grid into finished fantasy cartography with:
+Render the map as finished fantasy cartography with:
 - organic land and biome shapes with natural boundaries
 - believable coastlines and shorelines
 - hand-painted terrain textures and surfaces
@@ -61,11 +53,11 @@ Avoid:
 // ── Priority order ─────────────────────────────────────────────────────────────
 
 const PRIORITY_ORDER = `Priority order:
- 1. The terrain grid is authoritative for all terrain placement
+ 1. The sketch image is authoritative for terrain placement and proportions
  2. Must-keep facts are non-negotiable constraints
  3. Connector descriptions define river/road routes — render as organic curves
  4. Translate to organic illustrated fantasy cartography
-    — preserve cell semantics, NOT cell boundaries visually`;
+    — preserve regional layout, NOT sketch cell boundaries visually`;
 
 // ── Freedom modes ──────────────────────────────────────────────────────────────
 
@@ -345,13 +337,11 @@ function buildFullPrompt(spec, aiFredom, userPrompt) {
   const freedomKey   = (aiFredom || 'strict').toLowerCase();
   const freedomBlock = FREEDOM_MODES[freedomKey] ?? FREEDOM_MODES.strict;
 
-  const mustKeep     = buildMustKeepFacts(spec);
-  const combinedGrid = buildCombinedGrid(spec);
-  const connectors   = buildConnectorPaths(spec);
+  const mustKeep   = buildMustKeepFacts(spec);
+  const connectors = buildConnectorPaths(spec);
 
   const sections = [BASE_PROMPT, PRIORITY_ORDER];
   if (mustKeep)   sections.push(mustKeep);
-  sections.push(combinedGrid);
   if (connectors) sections.push(connectors);
   sections.push(freedomBlock);
   if (userPrompt?.trim()) sections.push('Additional user instructions:\n' + userPrompt.trim());

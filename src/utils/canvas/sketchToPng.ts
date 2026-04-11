@@ -191,75 +191,247 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
   return dataUrl;
 }
 
-// ── AI render — neon data-mask palette, crosshatch relief ────────────────────
-// Uses impossible-to-confuse-with-nature neon colours so Gemini reads the
-// image as a pure data mask and doesn't copy natural-looking colours.
-// No overlays, no text symbols — connectors described in prompt only.
+// ── Symbol-based cell renderer ────────────────────────────────────────────────
+// Works at any cellSize. Used for both editor canvas (14px) and AI input (32px).
+// Same visual vocabulary: each biome gets natural hand-drawn symbols on a
+// natural-looking base colour so both the editor and Gemini see the same image.
+
+const SYMBOL_BASE: Record<string, string> = {
+  plains:   '#c8d878',  // warm yellow-green
+  forest:   '#2a6e2a',  // dark green
+  ocean:    '#1a3e7e',  // deep navy
+  coastal:  '#3a8898',  // teal
+  lake:     '#1a5ea2',  // medium blue
+  desert:   '#d4b060',  // sandy tan
+  swamp:    '#3a5a2a',  // dark grey-green
+  tundra:   '#b8cede',  // pale blue-grey
+  volcanic: '#3c1818',  // very dark red-brown
+  null:     '#2a2a2a',  // dark (unpainted)
+};
+
+function seededRng(seed: number): () => number {
+  let s = seed;
+  return () => {
+    const v = Math.sin(s++) * 10000;
+    return v - Math.floor(v);
+  };
+}
+
+/**
+ * Render a single terrain cell at grid position (gridX, gridY) with given cellSize.
+ * Draws natural-looking terrain symbols: grass strokes, tree triangles, waves, etc.
+ * Deterministic — same (gridX, gridY) always produces the same symbol layout.
+ * Exported so TerrainSketchEditor can use it for its own canvas display.
+ */
+export function renderCell(
+  ctx: CanvasRenderingContext2D,
+  gridX: number, gridY: number,
+  cellSize: number,
+  biome: string,
+  relief?: string,
+): void {
+  const px  = gridX * cellSize;
+  const py  = gridY * cellSize;
+  const s   = cellSize;
+  const rng = seededRng(gridX * 31 + gridY);
+
+  // 1. Base fill
+  ctx.fillStyle = SYMBOL_BASE[biome] ?? SYMBOL_BASE.null;
+  ctx.fillRect(px, py, s, s);
+
+  // 2. Biome symbols — clipped to cell
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px, py, s, s);
+  ctx.clip();
+
+  switch (biome) {
+    case 'plains': {
+      // Short vertical grass strokes
+      ctx.strokeStyle = '#5a7a28';
+      ctx.lineWidth   = Math.max(0.8, s * 0.06);
+      const n = Math.floor(3 + rng() * 3);
+      for (let i = 0; i < n; i++) {
+        const gx = px + (0.12 + rng() * 0.76) * s;
+        const gy = py + (0.42 + rng() * 0.33) * s;
+        const h  = s * (0.14 + rng() * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(gx, gy + h);
+        ctx.lineTo(gx + (rng() - 0.5) * s * 0.08, gy);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'forest': {
+      // Filled triangle tree tops
+      ctx.fillStyle = '#1a4a18';
+      const n = Math.floor(1.5 + rng() * 1.5);  // 1–2 trees per cell
+      for (let i = 0; i < n; i++) {
+        const tx = px + (0.18 + rng() * 0.64) * s;
+        const ty = py + (0.46 + rng() * 0.28) * s;
+        const th = s * (0.28 + rng() * 0.12);
+        const tw = th * 0.70;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty - th);
+        ctx.lineTo(tx - tw, ty + th * 0.35);
+        ctx.lineTo(tx + tw, ty + th * 0.35);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+    case 'ocean':
+    case 'lake': {
+      // Horizontal sine-wave arcs
+      ctx.strokeStyle = 'rgba(100,160,255,0.42)';
+      ctx.lineWidth   = Math.max(0.7, s * 0.045);
+      const n = Math.floor(1.5 + rng() * 1.5);
+      for (let i = 0; i < n; i++) {
+        const wy    = py + (0.22 + rng() * 0.54) * s;
+        const phase = rng() * Math.PI;
+        ctx.beginPath();
+        for (let dx = 0; dx <= s; dx += 2) {
+          const fy = wy + Math.sin((dx / s) * Math.PI * 2 + phase) * s * 0.07;
+          dx === 0 ? ctx.moveTo(px + dx, fy) : ctx.lineTo(px + dx, fy);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'coastal': {
+      // Lighter wave arcs
+      ctx.strokeStyle = 'rgba(200,240,240,0.50)';
+      ctx.lineWidth   = Math.max(0.7, s * 0.045);
+      const n = Math.floor(1.5 + rng() * 1.5);
+      for (let i = 0; i < n; i++) {
+        const wy    = py + (0.22 + rng() * 0.54) * s;
+        const phase = rng() * Math.PI;
+        ctx.beginPath();
+        for (let dx = 0; dx <= s; dx += 2) {
+          const fy = wy + Math.sin((dx / s) * Math.PI * 2 + phase) * s * 0.07;
+          dx === 0 ? ctx.moveTo(px + dx, fy) : ctx.lineTo(px + dx, fy);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'swamp': {
+      // × cross marks (reeds)
+      ctx.strokeStyle = '#2a4a18';
+      ctx.lineWidth   = Math.max(0.8, s * 0.06);
+      const n = Math.floor(2 + rng() * 2);
+      for (let i = 0; i < n; i++) {
+        const mx = px + (0.18 + rng() * 0.64) * s;
+        const my = py + (0.22 + rng() * 0.55) * s;
+        const d  = s * 0.10;
+        ctx.beginPath();
+        ctx.moveTo(mx - d, my - d); ctx.lineTo(mx + d, my + d);
+        ctx.moveTo(mx + d, my - d); ctx.lineTo(mx - d, my + d);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'desert': {
+      // Gentle dune arcs
+      ctx.strokeStyle = '#907030';
+      ctx.lineWidth   = Math.max(0.7, s * 0.045);
+      const n = Math.floor(1.5 + rng() * 1.5);
+      for (let i = 0; i < n; i++) {
+        const dy    = py + (0.26 + rng() * 0.48) * s;
+        const swing = s * (0.06 + rng() * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(px + s * 0.05, dy);
+        ctx.bezierCurveTo(
+          px + s * 0.30, dy - swing,
+          px + s * 0.70, dy + swing,
+          px + s * 0.95, dy,
+        );
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'tundra': {
+      // Sparse snowflake dots
+      ctx.fillStyle = 'rgba(200,225,245,0.68)';
+      const n = Math.floor(3 + rng() * 3);
+      for (let i = 0; i < n; i++) {
+        const dx = px + (0.10 + rng() * 0.80) * s;
+        const dy = py + (0.10 + rng() * 0.80) * s;
+        ctx.beginPath();
+        ctx.arc(dx, dy, Math.max(1, s * 0.07), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'volcanic': {
+      // Radial crack lines from cell centre
+      ctx.strokeStyle = 'rgba(220,70,10,0.52)';
+      ctx.lineWidth   = Math.max(0.8, s * 0.055);
+      const cx = px + s * 0.5, cy = py + s * 0.5;
+      const n  = Math.floor(3 + rng() * 3);
+      for (let i = 0; i < n; i++) {
+        const angle = (i / n) * Math.PI * 2 + rng() * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(angle) * s * 0.44, cy + Math.sin(angle) * s * 0.44);
+        ctx.stroke();
+      }
+      break;
+    }
+  }
+
+  // 3. Relief overlay — drawn on top of biome symbols
+  if (relief && relief !== 'flat') {
+    if (relief === 'mountains' || relief === 'mountainous') {
+      const mx  = px + s * 0.5;
+      const hw  = s * 0.40;
+      ctx.fillStyle   = 'rgba(65,65,65,0.22)';
+      ctx.strokeStyle = 'rgba(45,45,45,0.80)';
+      ctx.lineWidth   = Math.max(0.8, s * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(mx,      py + s * 0.10);
+      ctx.lineTo(mx - hw, py + s * 0.88);
+      ctx.lineTo(mx + hw, py + s * 0.88);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (relief === 'hills') {
+      ctx.strokeStyle = 'rgba(65,50,22,0.58)';
+      ctx.lineWidth   = Math.max(0.8, s * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(px + s * 0.05, py + s * 0.78);
+      ctx.quadraticCurveTo(px + s * 0.5, py + s * 0.12, px + s * 0.95, py + s * 0.78);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+// ── AI render — symbol-based (same as editor display) ─────────────────────────
+// Uses renderCell so the image Gemini receives looks identical to what the user
+// painted in the editor. No neon palette, no data-mask — just natural symbols.
 
 const AI_PX   = 1024;
 const AI_CELL = AI_PX / GRID; // 32px
-
-const AI_BIOME_COLOR: Record<string, string> = {
-  plains:   '#FFFF00',  // neon yellow
-  forest:   '#FF00FF',  // magenta
-  ocean:    '#000000',  // black
-  coastal:  '#FF8000',  // neon orange
-  lake:     '#AA00FF',  // purple
-  desert:   '#0000FF',  // pure blue
-  swamp:    '#00FFFF',  // cyan
-  tundra:   '#FF0080',  // hot pink
-  volcanic: '#FFFFFF',  // white
-  null:     '#333333',  // dark grey
-};
-
-function drawCrosshatch(ctx: CanvasRenderingContext2D, px: number, py: number, opacity: number) {
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth   = 1.5;
-  const step = 6;
-  ctx.beginPath();
-  // diagonal \
-  for (let d = -AI_CELL; d < AI_CELL * 2; d += step) {
-    ctx.moveTo(px + d,           py);
-    ctx.lineTo(px + d + AI_CELL, py + AI_CELL);
-  }
-  // diagonal /
-  for (let d = -AI_CELL; d < AI_CELL * 2; d += step) {
-    ctx.moveTo(px + d + AI_CELL, py);
-    ctx.lineTo(px + d,           py + AI_CELL);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
 
 export function renderSketchForAI(spec: SketchSpec): string {
   const canvas = document.createElement('canvas');
   canvas.width  = AI_PX;
   canvas.height = AI_PX;
   const ctx = canvas.getContext('2d')!;
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true;
 
-  // Background
-  ctx.fillStyle = AI_BIOME_COLOR.null;
+  // Background for unpainted cells
+  ctx.fillStyle = SYMBOL_BASE.null;
   ctx.fillRect(0, 0, AI_PX, AI_PX);
 
-  // Neon biome fills
+  // Draw each cell using the symbol renderer
   for (const cell of spec.cells) {
-    const px = cell.x * AI_CELL, py = cell.y * AI_CELL;
-    ctx.fillStyle = AI_BIOME_COLOR[cell.biome] ?? AI_BIOME_COLOR.null;
-    ctx.fillRect(px, py, AI_CELL, AI_CELL);
+    renderCell(ctx, cell.x, cell.y, AI_CELL, cell.biome, cell.relief as string | undefined);
   }
 
-  // Relief — crosshatch pattern (mountains heavy, hills light)
-  for (const cell of spec.cells) {
-    const r = cell.relief as string;
-    if (!r || r === 'flat') continue;
-    const opacity = (r === 'mountains' || r === 'mountainous') ? 0.6 : 0.3;
-    drawCrosshatch(ctx, cell.x * AI_CELL, cell.y * AI_CELL, opacity);
-  }
-
-  console.log('[sketchToPng] renderSketchForAI: neon data-mask palette');
+  console.log('[sketchToPng] renderSketchForAI: symbol-based rendering');
   return canvas.toDataURL('image/png');
 }
 

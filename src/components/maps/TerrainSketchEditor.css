@@ -1,6 +1,7 @@
 /* ── TerrainSketchEditor ──────────────────────────────────────────────────── */
 
 .tse-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: #1c1c1c;
@@ -144,11 +145,26 @@
   overflow: auto;
   background: #141414;
 }
-.tse-canvas {
-  cursor: crosshair;
+/* Canvas area: stacks symbol canvas + SVG interaction layer */
+.tse-canvas-area {
+  position: relative;
   border: 1px solid #3a3020;
   border-radius: 2px;
+  display: inline-block;
+  line-height: 0;
+}
+.tse-canvas-bg {
+  display: block;
+}
+.tse-canvas {
+  cursor: crosshair;
   touch-action: none;
+}
+.tse-canvas--overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: transparent;
 }
 .tse-canvas-info {
   margin-top: 6px;
@@ -263,3 +279,74 @@
   font-weight: bold;
 }
 .tse-btn--primary:hover { background: #4a3818; }
+
+/* ── Fill dialog ──────────────────────────────────────────────────────────── */
+.tse-fill-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: 6px;
+}
+.tse-fill-dialog {
+  background: #1e1a12;
+  border: 1px solid #6b5a35;
+  border-radius: 8px;
+  padding: 1.4rem 1.6rem;
+  max-width: 400px;
+  width: 90%;
+  color: #e8d8b0;
+}
+.tse-fill-dialog h3 {
+  margin: 0 0 0.6rem;
+  color: #c8a84b;
+  font-size: 1rem;
+}
+.tse-fill-dialog p {
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #c0b090;
+}
+.tse-fill-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+}
+.tse-fill-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #c0b090;
+  transition: background 0.15s;
+}
+.tse-fill-opt:hover { background: #2a2415; }
+.tse-fill-opt--active {
+  border-color: #6b5a35;
+  background: #2a2415;
+}
+.tse-fill-opt input[type="radio"] { accent-color: #c8a84b; }
+.tse-fill-opt select {
+  background: #2a2415;
+  border: 1px solid #6b5a35;
+  color: #e8d8b0;
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.82rem;
+}
+.tse-fill-rec  { color: #7ab870; font-size: 0.78rem; }
+.tse-fill-warn { color: #c08040; font-size: 0.78rem; }
+.tse-fill-btns {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+}
