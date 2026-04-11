@@ -1,0 +1,15 @@
+@echo off
+echo === Building ===
+call npm run build
+if errorlevel 1 ( echo BUILD FAILED & pause & exit /b 1 )
+if not exist "server\public\index.html" ( echo NO INDEX.HTML & pause & exit /b 1 )
+echo === Uploading index.html ===
+scp -i C:\DnD_manager_app\ssh-key-2026-03-11.key server\public\index.html ubuntu@158.180.63.20:/var/www/adnd-manager/server/public/index.html
+if errorlevel 1 ( echo SCP FAILED & pause & exit /b 1 )
+echo === Uploading assets ===
+scp -i C:\DnD_manager_app\ssh-key-2026-03-11.key -r server\public\assets ubuntu@158.180.63.20:/var/www/adnd-manager/server/public/
+if errorlevel 1 ( echo SCP FAILED & pause & exit /b 1 )
+echo === Restarting ===
+ssh -i C:\DnD_manager_app\ssh-key-2026-03-11.key ubuntu@158.180.63.20 "pm2 restart adnd-backend --update-env"
+echo === Done ===
+pause
