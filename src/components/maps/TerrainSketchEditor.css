@@ -119,6 +119,16 @@
   border-radius: 2px;
   flex-shrink: 0;
 }
+.tse-chip-tile {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  image-rendering: pixelated;
+}
 .tse-chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
 
 .tse-erase-btn {

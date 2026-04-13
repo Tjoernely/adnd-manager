@@ -420,7 +420,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
         <div className="tse-palette">
           <ToolSection label="Biome" active={activeBiome !== null}>
             {Object.entries(BIOME_CONFIG).map(([key, cfg]) => (
-              <PaletteChip key={key} color={cfg.color} label={cfg.label}
+              <PaletteChip key={key} label={cfg.label}
+                tile={`/tiles/${getTileKey(key, undefined)}.png`}
                 active={activeBiome === key}
                 onClick={() => {
                   setActiveBiome(prev => prev === key ? null : key);
@@ -431,7 +432,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
           <ToolSection label="Relief" active={activeRelief !== null}>
             {RELIEF_OPTIONS.map(r => (
-              <PaletteChip key={r} color={RELIEF_CONFIG[r].color} label={RELIEF_CONFIG[r].label}
+              <PaletteChip key={r} label={RELIEF_CONFIG[r].label}
+                tile={`/tiles/${getTileKey('plains', r === 'flat' ? undefined : r)}.png`}
                 active={activeRelief === r}
                 onClick={() => {
                   setActiveRelief(prev => prev === r ? null : r);
@@ -664,11 +666,14 @@ function ToolSection({ label, active, children }) {
   );
 }
 
-function PaletteChip({ color, label, active, dimmed, onClick }) {
+function PaletteChip({ color, label, active, dimmed, onClick, tile }) {
   return (
     <button className={`tse-chip ${active ? 'tse-chip--active' : ''} ${dimmed ? 'tse-chip--dimmed' : ''}`}
       onClick={onClick} title={label}>
-      <span className="tse-chip-swatch" style={{ background: color }} />
+      {tile
+        ? <span className="tse-chip-tile" style={{ backgroundImage: `url(${tile})` }} />
+        : <span className="tse-chip-swatch" style={{ background: color }} />
+      }
       <span className="tse-chip-label">{label}</span>
     </button>
   );
