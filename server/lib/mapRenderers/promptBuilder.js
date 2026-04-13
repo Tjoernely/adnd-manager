@@ -5,25 +5,16 @@
 
 // ── Base prompt ────────────────────────────────────────────────────────────────
 
-const BASE_PROMPT = `You are given a sketch of a fantasy map region.
-The image uses natural-looking terrain symbols on coloured cells.
+const BASE_PROMPT = `You are given a terrain sketch map built from illustrated tiles.
+Each tile visually depicts its terrain type — forests show trees, mountains show
+peaks, ocean shows waves, plains show grass, desert shows sand dunes, etc.
+Dark / empty cells at the edge are unpainted background — ignore them.
 
-SYMBOL KEY — what each cell type looks like in the image:
-- Warm yellow-green cells with short vertical grass strokes = Plains / Grasslands
-- Dark green cells with small filled triangle tree shapes = Forest / Woodland
-- Deep navy cells with curved horizontal wave lines = Ocean / Deep water
-- Teal cells with lighter wave lines = Coastal / Shoreline
-- Medium blue cells with wave lines = Inland lake
-- Sandy tan cells with curved dune arc lines = Desert / Arid terrain
-- Dark grey-green cells with × cross marks = Swamp / Marsh
-- Pale blue-grey cells with small white dots = Tundra / Snow
-- Very dark red-brown cells with radial crack lines = Volcanic terrain
-- Triangle peak symbol overlaid on a cell = Mountain relief
-- Arced hill shape overlaid on a cell = Hills relief
-- Dark (nearly black) cells = Unpainted / empty — ignore these
+Your task: transform this tiled sketch into a cohesive, seamless,
+professionally illustrated fantasy map.
 
-Do NOT copy or reproduce these sketch symbols literally on the output map.
-Translate each symbol type into its corresponding natural illustrated terrain.
+Do NOT reproduce the tile grid, tile edges, or pixelated boundaries.
+Blend all terrain zones into natural organic transitions.
 
 Render the map as finished fantasy cartography with:
 - organic land and biome shapes with natural boundaries

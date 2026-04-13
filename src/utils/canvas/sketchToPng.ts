@@ -191,10 +191,49 @@ export function renderSketchToControlImage(spec: SketchSpec): string {
   return dataUrl;
 }
 
+// ── Tile key mapping ─────────────────────────────────────────────────────────
+// Maps biome + relief → tile filename key (without .png extension).
+
+export function getTileKey(biome: string | undefined, relief: string | undefined): string {
+  const b = biome  ?? '';
+  const r = relief ?? '';
+
+  if (b === 'plains') {
+    if (r === 'mountains' || r === 'mountainous') return 'plains_mountains';
+    if (r === 'hills') return 'plains_hills';
+    return 'plains_flat';
+  }
+  if (b === 'forest') {
+    if (r === 'mountains' || r === 'mountainous') return 'forest_mountains';
+    if (r === 'hills') return 'forest_hills';
+    return 'forest_flat';
+  }
+  if (b === 'swamp') {
+    if (r === 'hills') return 'jungle_hills';
+    return 'swamp_flat';
+  }
+  if (b === 'desert') {
+    if (r === 'mountains' || r === 'mountainous') return 'plains_mountains';
+    if (r === 'hills') return 'desert_hills';
+    return 'desert_flat';
+  }
+  if (b === 'tundra') {
+    if (r === 'mountains' || r === 'mountainous') return 'tundra_mountains';
+    return 'tundra_flat';
+  }
+  if (b === 'volcanic') {
+    if (r === 'mountains' || r === 'mountainous') return 'volcanic_mountain_large';
+    return 'volcanic_flat';
+  }
+  if (b === 'ocean')   return 'ocean_deep';
+  if (b === 'coastal') return 'coast_flat';
+  if (b === 'lake')    return 'inland_lake';
+
+  return 'plains_flat'; // fallback
+}
+
 // ── Symbol-based cell renderer ────────────────────────────────────────────────
-// Works at any cellSize. Used for both editor canvas (14px) and AI input (32px).
-// Same visual vocabulary: each biome gets natural hand-drawn symbols on a
-// natural-looking base colour so both the editor and Gemini see the same image.
+// Kept for reference/fallback. Not used in editor display (SVG tiles) or AI render (tile canvas).
 
 const SYMBOL_BASE: Record<string, string> = {
   plains:   '#c8d878',  // warm yellow-green
@@ -408,31 +447,71 @@ export function renderCell(
   ctx.restore();
 }
 
-// ── AI render — symbol-based (same as editor display) ─────────────────────────
-// Uses renderCell so the image Gemini receives looks identical to what the user
-// painted in the editor. No neon palette, no data-mask — just natural symbols.
+// ── AI render — tile-based 1024×1024 PNG for Gemini ─────────────────────────
+// Loads 64px tiles from /tiles/ai/, draws onto 2048×2048 canvas, scales to 1024.
+// Async because tile loading uses Image.onload promises.
 
-const AI_PX   = 1024;
-const AI_CELL = AI_PX / GRID; // 32px
+const AI_TILE = 64;
+const AI_FULL = GRID * AI_TILE; // 2048px
 
-export function renderSketchForAI(spec: SketchSpec): string {
+const TILE_FALLBACK: Record<string, string> = {
+  plains: '#c8d878', forest: '#2a6e2a', ocean: '#1a3e7e',
+  coastal: '#3a8898', lake: '#1a5ea2', desert: '#d4b060',
+  swamp: '#3a5a2a', tundra: '#b8cede', volcanic: '#3c1818',
+};
+
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise(resolve => {
+    const img = new window.Image();
+    img.onload  = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src     = src;
+  });
+}
+
+export async function renderSketchForAI(spec: SketchSpec): Promise<string> {
   const canvas = document.createElement('canvas');
-  canvas.width  = AI_PX;
-  canvas.height = AI_PX;
+  canvas.width  = AI_FULL;
+  canvas.height = AI_FULL;
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = true;
 
-  // Background for unpainted cells
-  ctx.fillStyle = SYMBOL_BASE.null;
-  ctx.fillRect(0, 0, AI_PX, AI_PX);
+  // Dark background for unpainted cells
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(0, 0, AI_FULL, AI_FULL);
 
-  // Draw each cell using the symbol renderer
-  for (const cell of spec.cells) {
-    renderCell(ctx, cell.x, cell.y, AI_CELL, cell.biome, cell.relief as string | undefined);
+  // Load unique tile images in parallel
+  const keys = [...new Set((spec.cells ?? []).map(c => getTileKey(c.biome, c.relief as string)))];
+  const loaded: Record<string, HTMLImageElement | null> = {};
+  await Promise.all(keys.map(async k => {
+    loaded[k] = await loadImage(`/tiles/ai/${k}.png`);
+  }));
+
+  // Draw each cell
+  for (const cell of (spec.cells ?? [])) {
+    const key = getTileKey(cell.biome, cell.relief as string);
+    const img = loaded[key];
+    const px  = cell.x * AI_TILE;
+    const py  = cell.y * AI_TILE;
+    if (img && img.naturalWidth > 0) {
+      ctx.drawImage(img, px, py, AI_TILE, AI_TILE);
+    } else {
+      ctx.fillStyle = TILE_FALLBACK[cell.biome] ?? '#555555';
+      ctx.fillRect(px, py, AI_TILE, AI_TILE);
+    }
   }
 
-  console.log('[sketchToPng] renderSketchForAI: symbol-based rendering');
-  return canvas.toDataURL('image/png');
+  // Scale down to 1024×1024
+  const out  = document.createElement('canvas');
+  out.width  = 1024;
+  out.height = 1024;
+  const octx = out.getContext('2d')!;
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(canvas, 0, 0, 1024, 1024);
+
+  console.log('[sketchToPng] renderSketchForAI: tile-based 1024×1024');
+  return out.toDataURL('image/png');
 }
 
 // ── Preview renderer (for humans) ────────────────────────────────────────────

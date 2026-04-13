@@ -8,7 +8,7 @@
  */
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
-import { renderSketchForAI }            from '../../utils/canvas/sketchToPng.ts';
+import { renderSketchForAI, getTileKey } from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
 import './TerrainSketchEditor.css';
 
@@ -314,10 +314,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     try {
-      // Render neon data-mask control image — impossible colours Gemini reads as
-      // a pure spatial data mask rather than natural terrain to copy.
       setGenStatus('Capturing sketch…');
-      const controlImage = renderSketchForAI(spec);
+      const controlImage = await renderSketchForAI(spec);
 
       // 2. POST to server → returns jobId immediately (non-blocking)
       const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'
@@ -481,19 +479,17 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             </defs>
             <rect width={totalPx} height={totalPx} fill="url(#tse-grid)" />
 
-            {/* Painted biome cells */}
-            {cellArr.map(c => (
-              <rect key={cellKey(c.x,c.y)}
-                x={c.x*CELL_PX} y={c.y*CELL_PX}
-                width={CELL_PX} height={CELL_PX}
-                fill={BIOME_CONFIG[c.biome]?.color ?? '#888'}
-                opacity={0.85} />
-            ))}
-
-            {/* Relief — per-type markers */}
-            {cellArr.filter(c => c.relief && c.relief !== 'flat').map(c => (
-              <ReliefMarker key={'r'+cellKey(c.x,c.y)} c={c} />
-            ))}
+            {/* Painted biome cells — tile images */}
+            {cellArr.map(c => {
+              const key = getTileKey(c.biome, c.relief);
+              return (
+                <image key={cellKey(c.x,c.y)}
+                  href={`/tiles/${key}.png`}
+                  x={c.x*CELL_PX} y={c.y*CELL_PX}
+                  width={CELL_PX} height={CELL_PX}
+                  style={{ imageRendering: 'pixelated' }} />
+              );
+            })}
 
             {/* Committed overlays — per-type style */}
             {overlays.map((ov, i) => {
