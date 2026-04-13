@@ -14,6 +14,7 @@ import './TerrainSketchEditor.css';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
+// Kept for spec/validation compatibility
 export const BIOME_CONFIG = {
   plains:   { label: 'Plains',   color: '#c8d88a' },
   forest:   { label: 'Forest',   color: '#3a7a3a' },
@@ -26,14 +27,57 @@ export const BIOME_CONFIG = {
   lake:     { label: 'Lake',     color: '#1976d2' },
 };
 
-const RELIEF_CONFIG = {
-  flat:      { label: 'Flat',         color: '#c8b89a' },
-  hills:     { label: '∩ Hills',      color: '#8B7355' },
-  mountains: { label: '△ Mountains', color: '#888888' },
-};
-const RELIEF_OPTIONS = Object.keys(RELIEF_CONFIG);
-const OVERLAY_CONNECTORS = ['river', 'road'];
-const OVERLAY_DIVIDERS   = ['canyon', 'chasm'];
+// Grouped tile palette — drives the brush UI
+const TILE_PALETTE = [
+  { category: 'Plains', tiles: [
+    { key: 'plains_flat',      label: 'Plains Flat',      biome: 'plains', relief: undefined },
+    { key: 'plains_hills',     label: 'Plains Hills',     biome: 'plains', relief: 'hills' },
+    { key: 'plains_mountains', label: 'Plains Mountains', biome: 'plains', relief: 'mountains' },
+  ]},
+  { category: 'Forest', tiles: [
+    { key: 'forest_flat',      label: 'Forest Flat',      biome: 'forest', relief: undefined },
+    { key: 'forest_hills',     label: 'Forest Hills',     biome: 'forest', relief: 'hills' },
+    { key: 'forest_mountains', label: 'Forest Mountains', biome: 'forest', relief: 'mountains' },
+    { key: 'forest_edge',      label: 'Forest Edge',      biome: 'forest', relief: undefined },
+    { key: 'jungle_flat',      label: 'Jungle Flat',      biome: 'swamp',  relief: undefined },
+    { key: 'jungle_hills',     label: 'Jungle Hills',     biome: 'swamp',  relief: 'hills' },
+  ]},
+  { category: 'Swamp', tiles: [
+    { key: 'swamp_flat',  label: 'Swamp Flat',  biome: 'swamp', relief: undefined },
+    { key: 'swamp_trees', label: 'Swamp Trees', biome: 'swamp', relief: undefined },
+  ]},
+  { category: 'Desert', tiles: [
+    { key: 'desert_flat',      label: 'Desert Flat',      biome: 'desert', relief: undefined },
+    { key: 'desert_hills',     label: 'Desert Hills',     biome: 'desert', relief: 'hills' },
+    { key: 'plains_mountains', label: 'Desert Mountains', biome: 'desert', relief: 'mountains' },
+  ]},
+  { category: 'Tundra', tiles: [
+    { key: 'tundra_flat',      label: 'Tundra Flat',      biome: 'tundra', relief: undefined },
+    { key: 'tundra_mountains', label: 'Tundra Mountains', biome: 'tundra', relief: 'mountains' },
+  ]},
+  { category: 'Volcanic', tiles: [
+    { key: 'volcanic_flat',           label: 'Volcanic Flat',     biome: 'volcanic', relief: undefined },
+    { key: 'volcanic_mountain_large', label: 'Volcanic Mountain', biome: 'volcanic', relief: 'mountains' },
+  ]},
+  { category: 'Water', tiles: [
+    { key: 'ocean_shallow', label: 'Ocean Shallow', biome: 'coastal', relief: undefined },
+    { key: 'ocean_deep',    label: 'Ocean Deep',    biome: 'ocean',   relief: undefined },
+    { key: 'reef',          label: 'Reef',          biome: 'coastal', relief: undefined },
+    { key: 'inland_lake',   label: 'Inland Lake',   biome: 'lake',    relief: undefined },
+  ]},
+  { category: 'Shoreline', tiles: [
+    { key: 'coast_flat', label: 'Coast Flat', biome: 'coastal', relief: undefined },
+  ]},
+  { category: 'Infra', tiles: [
+    { key: 'river_stream',     label: 'River Stream',     overlay: 'river' },
+    { key: 'river_main',       label: 'River Main',       overlay: 'river' },
+    { key: 'road_path',        label: 'Road Path',        overlay: 'road' },
+    { key: 'dirt_road',        label: 'Dirt Road',        overlay: 'road' },
+    { key: 'cobblestone_road', label: 'Cobblestone Road', overlay: 'road' },
+  ]},
+];
+
+const OVERLAY_DIVIDERS = ['canyon', 'chasm'];
 
 const OVERLAY_STYLE = {
   river:  { color: '#2196f3', width: 3 },
@@ -113,12 +157,14 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   );
   const [modifiers, setModifiers]   = useState(initialSpec?.modifiers ?? []);
 
-  // Brush state — biome and relief are independent toggles (null = inactive)
-  const [activeBiome, setActiveBiome] = useState('plains');   // null | biomeKey
-  const [activeRelief, setActiveRelief] = useState(null);     // null | reliefKey
+  // Brush state — single active tile (encodes biome + relief + display key)
+  const [activeTile, setActiveTile]   = useState(TILE_PALETTE[0].tiles[0]); // plains_flat
   const [tool, setTool]               = useState(null);       // null | 'overlay' | 'erase'
   const [overlay, setOverlay]         = useState('river');
   const [brushSize, setBrushSize]     = useState(1);
+
+  // Zoom state for canvas
+  const [zoom, setZoom]               = useState(1);
 
   // Settings
   const [scope, setScope]           = useState(initialSpec?.scope ?? 'region');
@@ -144,8 +190,9 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
   function svgCoords(e) {
     const rect = svgRef.current.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / CELL_PX);
-    const y = Math.floor((e.clientY - rect.top)  / CELL_PX);
+    // getBoundingClientRect returns scaled dimensions, so divide by effective cell size
+    const x = Math.floor((e.clientX - rect.left) / (CELL_PX * zoom));
+    const y = Math.floor((e.clientY - rect.top)  / (CELL_PX * zoom));
     return [Math.max(0, Math.min(31, x)), Math.max(0, Math.min(31, y))];
   }
 
@@ -172,33 +219,20 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       return;
     }
 
-    // Paint mode: biome and relief are independent
-    if (activeBiome !== null || activeRelief !== null) {
+    // Paint mode — stamp activeTile biome+relief+tileKey onto cells
+    if (tool === null && activeTile) {
       setCells(prev => {
         const next = { ...prev };
         getCellsInBrush(cx, cy, brushSize).forEach(([x, y]) => {
-          const key = cellKey(x, y);
-          if (activeBiome !== null) {
-            // Biome paint creates/updates cell; relief unchanged
-            next[key] = { ...(prev[key] ?? {}), x, y, biome: activeBiome };
-          }
-          if (activeRelief !== null) {
-            // Relief only modifies existing cells (or cells just created by biome above)
-            if (next[key]) {
-              if (activeRelief === 'flat') {
-                // Remove relief key entirely so it never serialises as null/"null"
-                const { relief: _r, ...rest } = next[key];
-                next[key] = rest;
-              } else {
-                next[key] = { ...next[key], relief: activeRelief };
-              }
-            }
-          }
+          const k = cellKey(x, y);
+          const cell = { x, y, biome: activeTile.biome, tileKey: activeTile.key };
+          if (activeTile.relief) cell.relief = activeTile.relief;
+          next[k] = cell;
         });
         return next;
       });
     }
-  }, [tool, activeBiome, activeRelief, overlay, brushSize]);
+  }, [tool, activeTile, overlay, brushSize, zoom]);
 
   function handlePointerDown(e) {
     e.preventDefault();
@@ -418,41 +452,29 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       <div className="tse-body">
         {/* ── Left palette ── */}
         <div className="tse-palette">
-          <ToolSection label="Biome" active={activeBiome !== null}>
-            {Object.entries(BIOME_CONFIG).map(([key, cfg]) => (
-              <PaletteChip key={key} label={cfg.label}
-                tile={`/tiles/${getTileKey(key, undefined)}.png`}
-                active={activeBiome === key}
-                onClick={() => {
-                  setActiveBiome(prev => prev === key ? null : key);
-                  setTool(null);
-                }} />
-            ))}
-          </ToolSection>
-
-          <ToolSection label="Relief" active={activeRelief !== null}>
-            {RELIEF_OPTIONS.map(r => (
-              <PaletteChip key={r} label={RELIEF_CONFIG[r].label}
-                tile={`/tiles/${getTileKey('plains', r === 'flat' ? undefined : r)}.png`}
-                active={activeRelief === r}
-                onClick={() => {
-                  setActiveRelief(prev => prev === r ? null : r);
-                  setTool(null);
-                }} />
-            ))}
-          </ToolSection>
-
-          <ToolSection label="Connectors" active={tool==='overlay' && OVERLAY_CONNECTORS.includes(overlay)}>
-            {OVERLAY_CONNECTORS.map(o => (
-              <PaletteChip key={o} color={OVERLAY_COLORS[o]} label={o}
-                active={tool==='overlay' && overlay===o}
-                onClick={() => { setTool('overlay'); setOverlay(o); }} />
-            ))}
-          </ToolSection>
+          {TILE_PALETTE.map(({ category, tiles }) => (
+            <ToolSection key={category} label={category}
+              active={tool === null && tiles.some(t => t.key === activeTile?.key)}>
+              {tiles.map((t, i) => (
+                <PaletteChip key={t.key + i} label={t.label}
+                  tile={`/tiles/${t.key}.png`}
+                  active={tool === null && activeTile?.key === t.key && activeTile?.label === t.label}
+                  onClick={() => {
+                    if (t.overlay) {
+                      setTool('overlay');
+                      setOverlay(t.overlay);
+                    } else {
+                      setActiveTile(t);
+                      setTool(null);
+                    }
+                  }} />
+              ))}
+            </ToolSection>
+          ))}
 
           <ToolSection label="Dividers" active={tool==='overlay' && OVERLAY_DIVIDERS.includes(overlay)}>
             {OVERLAY_DIVIDERS.map(o => (
-              <PaletteChip key={o} color={OVERLAY_COLORS[o]} label={o}
+              <PaletteChip key={o} color={OVERLAY_STYLE[o]?.color} label={o}
                 active={tool==='overlay' && overlay===o}
                 onClick={() => { setTool('overlay'); setOverlay(o); }} />
             ))}
@@ -464,9 +486,25 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
         </div>
 
         {/* ── Canvas ── */}
-        <div className="tse-canvas-wrap">
+        <div className="tse-canvas-wrap"
+          onWheel={e => {
+            e.preventDefault();
+            setZoom(z => {
+              const next = e.deltaY < 0 ? z * 1.25 : z / 1.25;
+              return Math.max(1, Math.min(6, Math.round(next * 100) / 100));
+            });
+          }}>
+          <div className="tse-zoom-bar">
+            <button className="tse-zoom-btn" onClick={() => setZoom(z => Math.min(6, Math.round(z * 1.25 * 100) / 100))}>+</button>
+            <span className="tse-zoom-label">{Math.round(zoom * 100)}%</span>
+            <button className="tse-zoom-btn" onClick={() => setZoom(z => Math.max(1, Math.round(z / 1.25 * 100) / 100))}>−</button>
+            <button className="tse-zoom-btn tse-zoom-reset" onClick={() => setZoom(1)}>1:1</button>
+          </div>
+          <div className="tse-canvas-scroll">
+          <div style={{ width: totalPx * zoom, height: totalPx * zoom, position: 'relative', flexShrink: 0 }}>
           <svg ref={svgRef} width={totalPx} height={totalPx}
             className="tse-canvas"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', position: 'absolute' }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -483,7 +521,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
             {/* Painted biome cells — tile images */}
             {cellArr.map(c => {
-              const key = getTileKey(c.biome, c.relief);
+              const key = c.tileKey ?? getTileKey(c.biome, c.relief);
               return (
                 <image key={cellKey(c.x,c.y)}
                   href={`/tiles/${key}.png`}
@@ -521,6 +559,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             )}
 
           </svg>
+          </div>{/* zoom sizer */}
+          </div>{/* tse-canvas-scroll */}
           <div className="tse-canvas-info">
             {cellArr.length} cells painted · {overlays.length} overlays
             {overlays.length > 0 && <button className="tse-clear-link" onClick={clearOverlays}>clear overlays</button>}
