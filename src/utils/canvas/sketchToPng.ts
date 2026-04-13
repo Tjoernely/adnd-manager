@@ -460,6 +460,42 @@ const TILE_FALLBACK: Record<string, string> = {
   swamp: '#3a5a2a', tundra: '#b8cede', volcanic: '#3c1818',
 };
 
+// Tiles that benefit from per-cell rotation to break repetition
+const ROTATE_TILE_KEYS = new Set([
+  'coast_flat', 'ocean_shallow', 'ocean_deep', 'reef',
+  'inland_lake', 'swamp_flat', 'plains_flat',
+]);
+
+/** Deterministic pseudo-random in [0,1) from an integer seed. */
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+
+/** Returns 0–3 quarter-turns for a cell position. */
+function cellRotation(cx: number, cy: number): number {
+  return Math.floor(seededRandom(cx * 31 + cy) * 4);
+}
+
+/** Draw a tile image, rotating in 90° increments around the cell centre. */
+function drawTileRotated(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  px: number, py: number,
+  size: number,
+  rotation: number,  // 0 | 1 | 2 | 3
+): void {
+  if (rotation === 0) {
+    ctx.drawImage(img, px, py, size, size);
+    return;
+  }
+  ctx.save();
+  ctx.translate(px + size / 2, py + size / 2);
+  ctx.rotate(rotation * Math.PI / 2);
+  ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise(resolve => {
     const img = new window.Image();
@@ -480,8 +516,10 @@ export async function renderSketchForAI(spec: SketchSpec): Promise<string> {
   ctx.fillStyle = '#2a2a2a';
   ctx.fillRect(0, 0, AI_FULL, AI_FULL);
 
-  // Load unique tile images in parallel
-  const keys = [...new Set((spec.cells ?? []).map(c => getTileKey(c.biome, c.relief as string)))];
+  // Load unique tile images in parallel (prefer stored tileKey over derived key)
+  const keys = [...new Set((spec.cells ?? []).map(c =>
+    (c as { tileKey?: string }).tileKey ?? getTileKey(c.biome, c.relief as string)
+  ))];
   const loaded: Record<string, HTMLImageElement | null> = {};
   await Promise.all(keys.map(async k => {
     loaded[k] = await loadImage(`/tiles/ai/${k}.png`);
@@ -489,12 +527,13 @@ export async function renderSketchForAI(spec: SketchSpec): Promise<string> {
 
   // Draw each cell
   for (const cell of (spec.cells ?? [])) {
-    const key = getTileKey(cell.biome, cell.relief as string);
+    const key = (cell as { tileKey?: string }).tileKey ?? getTileKey(cell.biome, cell.relief as string);
     const img = loaded[key];
     const px  = cell.x * AI_TILE;
     const py  = cell.y * AI_TILE;
     if (img && img.naturalWidth > 0) {
-      ctx.drawImage(img, px, py, AI_TILE, AI_TILE);
+      const rot = ROTATE_TILE_KEYS.has(key) ? cellRotation(cell.x, cell.y) : 0;
+      drawTileRotated(ctx, img, px, py, AI_TILE, rot);
     } else {
       ctx.fillStyle = TILE_FALLBACK[cell.biome] ?? '#555555';
       ctx.fillRect(px, py, AI_TILE, AI_TILE);

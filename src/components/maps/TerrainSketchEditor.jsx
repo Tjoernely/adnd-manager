@@ -29,55 +29,69 @@ export const BIOME_CONFIG = {
 
 // Grouped tile palette — drives the brush UI
 const TILE_PALETTE = [
-  { category: 'Plains', tiles: [
-    { key: 'plains_flat',      label: 'Plains Flat',      biome: 'plains', relief: undefined },
-    { key: 'plains_hills',     label: 'Plains Hills',     biome: 'plains', relief: 'hills' },
-    { key: 'plains_mountains', label: 'Plains Mountains', biome: 'plains', relief: 'mountains' },
+  { id: 'plains',   emoji: '🌿', category: 'Plains',   tiles: [
+    { key: 'plains_flat',      label: 'Flat',       biome: 'plains',   relief: undefined },
+    { key: 'plains_hills',     label: 'Hills',      biome: 'plains',   relief: 'hills' },
+    { key: 'plains_mountains', label: 'Mountains',  biome: 'plains',   relief: 'mountains' },
   ]},
-  { category: 'Forest', tiles: [
-    { key: 'forest_flat',      label: 'Forest Flat',      biome: 'forest', relief: undefined },
-    { key: 'forest_hills',     label: 'Forest Hills',     biome: 'forest', relief: 'hills' },
-    { key: 'forest_mountains', label: 'Forest Mountains', biome: 'forest', relief: 'mountains' },
-    { key: 'forest_edge',      label: 'Forest Edge',      biome: 'forest', relief: undefined },
-    { key: 'jungle_flat',      label: 'Jungle Flat',      biome: 'swamp',  relief: undefined },
-    { key: 'jungle_hills',     label: 'Jungle Hills',     biome: 'swamp',  relief: 'hills' },
+  { id: 'forest',   emoji: '🌲', category: 'Forest',   tiles: [
+    { key: 'forest_flat',      label: 'Flat',        biome: 'forest',  relief: undefined },
+    { key: 'forest_hills',     label: 'Hills',       biome: 'forest',  relief: 'hills' },
+    { key: 'forest_mountains', label: 'Mountains',   biome: 'forest',  relief: 'mountains' },
+    { key: 'forest_edge',      label: 'Edge',        biome: 'forest',  relief: undefined },
+    { key: 'jungle_flat',      label: 'Jungle Flat', biome: 'swamp',   relief: undefined },
+    { key: 'jungle_hills',     label: 'Jungle Hills',biome: 'swamp',   relief: 'hills' },
   ]},
-  { category: 'Swamp', tiles: [
-    { key: 'swamp_flat',  label: 'Swamp Flat',  biome: 'swamp', relief: undefined },
-    { key: 'swamp_trees', label: 'Swamp Trees', biome: 'swamp', relief: undefined },
+  { id: 'swamp',    emoji: '🌿', category: 'Swamp',    tiles: [
+    { key: 'swamp_flat',  label: 'Flat',  biome: 'swamp', relief: undefined },
+    { key: 'swamp_trees', label: 'Trees', biome: 'swamp', relief: undefined },
   ]},
-  { category: 'Desert', tiles: [
-    { key: 'desert_flat',      label: 'Desert Flat',      biome: 'desert', relief: undefined },
-    { key: 'desert_hills',     label: 'Desert Hills',     biome: 'desert', relief: 'hills' },
-    { key: 'plains_mountains', label: 'Desert Mountains', biome: 'desert', relief: 'mountains' },
+  { id: 'desert',   emoji: '🏜', category: 'Desert',   tiles: [
+    { key: 'desert_flat',  label: 'Flat',  biome: 'desert', relief: undefined },
+    { key: 'desert_hills', label: 'Hills', biome: 'desert', relief: 'hills' },
   ]},
-  { category: 'Tundra', tiles: [
-    { key: 'tundra_flat',      label: 'Tundra Flat',      biome: 'tundra', relief: undefined },
-    { key: 'tundra_mountains', label: 'Tundra Mountains', biome: 'tundra', relief: 'mountains' },
+  { id: 'tundra',   emoji: '❄',  category: 'Tundra',   tiles: [
+    { key: 'tundra_flat',      label: 'Flat',      biome: 'tundra', relief: undefined },
+    { key: 'tundra_mountains', label: 'Mountains', biome: 'tundra', relief: 'mountains' },
   ]},
-  { category: 'Volcanic', tiles: [
-    { key: 'volcanic_flat',           label: 'Volcanic Flat',     biome: 'volcanic', relief: undefined },
-    { key: 'volcanic_mountain_large', label: 'Volcanic Mountain', biome: 'volcanic', relief: 'mountains' },
+  { id: 'volcanic', emoji: '🌋', category: 'Volcanic', tiles: [
+    { key: 'volcanic_flat',           label: 'Flat',         biome: 'volcanic', relief: undefined },
+    { key: 'volcanic_mountain_large', label: 'Large Volcano',biome: 'volcanic', relief: 'mountains' },
+    { key: 'volcanic_mountain_small', label: 'Small Volcano',biome: 'volcanic', relief: 'mountains' },
   ]},
-  { category: 'Water', tiles: [
-    { key: 'ocean_shallow', label: 'Ocean Shallow', biome: 'coastal', relief: undefined },
-    { key: 'ocean_deep',    label: 'Ocean Deep',    biome: 'ocean',   relief: undefined },
-    { key: 'reef',          label: 'Reef',          biome: 'coastal', relief: undefined },
-    { key: 'inland_lake',   label: 'Inland Lake',   biome: 'lake',    relief: undefined },
+  { id: 'ocean',    emoji: '🌊', category: 'Ocean',    tiles: [
+    { key: 'ocean_deep',    label: 'Deep',    biome: 'ocean',   relief: undefined },
+    { key: 'ocean_shallow', label: 'Shallow', biome: 'coastal', relief: undefined },
+    { key: 'reef',          label: 'Reef',    biome: 'coastal', relief: undefined },
   ]},
-  { category: 'Shoreline', tiles: [
-    { key: 'coast_flat', label: 'Coast Flat', biome: 'coastal', relief: undefined },
+  { id: 'coastal',  emoji: '🏖', category: 'Coastal',  tiles: [
+    { key: 'coast_flat', label: 'Coast', biome: 'coastal', relief: undefined },
   ]},
-  { category: 'Infra', tiles: [
-    { key: 'river_stream',     label: 'River Stream',     overlay: 'river' },
-    { key: 'river_main',       label: 'River Main',       overlay: 'river' },
-    { key: 'road_path',        label: 'Road Path',        overlay: 'road' },
-    { key: 'dirt_road',        label: 'Dirt Road',        overlay: 'road' },
-    { key: 'cobblestone_road', label: 'Cobblestone Road', overlay: 'road' },
+  { id: 'lake',     emoji: '💧', category: 'Lake',     tiles: [
+    { key: 'inland_lake', label: 'Lake', biome: 'lake', relief: undefined },
   ]},
 ];
 
+// Overlay brushes (not tile images — drawn as lines/paths)
+const CONNECTOR_BRUSHES = [
+  { type: 'river', label: '🌊 River', color: '#2196f3' },
+  { type: 'road',  label: '🛤 Road',  color: '#8d6e63' },
+];
+
 const OVERLAY_DIVIDERS = ['canyon', 'chasm'];
+
+// Tiles that look bad when all identically oriented — rotate per cell
+const ROTATE_TILE_KEYS = new Set([
+  'coast_flat', 'ocean_shallow', 'ocean_deep', 'reef',
+  'inland_lake', 'swamp_flat', 'plains_flat',
+]);
+function seededRandom(seed) {
+  const x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+function cellRotDeg(cx, cy) {
+  return [0, 90, 180, 270][Math.floor(seededRandom(cx * 31 + cy) * 4)];
+}
 
 const OVERLAY_STYLE = {
   river:  { color: '#2196f3', width: 3 },
@@ -162,6 +176,18 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [tool, setTool]               = useState(null);       // null | 'overlay' | 'erase'
   const [overlay, setOverlay]         = useState('river');
   const [brushSize, setBrushSize]     = useState(1);
+
+  // Collapsible palette categories — all open by default
+  const [openCats, setOpenCats] = useState(
+    () => new Set([...TILE_PALETTE.map(c => c.id), 'connectors', 'dividers'])
+  );
+  function toggleCat(id) {
+    setOpenCats(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   // Zoom state for canvas
   const [zoom, setZoom]               = useState(1);
@@ -452,55 +478,76 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       <div className="tse-body">
         {/* ── Left palette ── */}
         <div className="tse-palette">
-          {TILE_PALETTE.map(({ category, tiles }) => (
-            <ToolSection key={category} label={category}
-              active={tool === null && tiles.some(t => t.key === activeTile?.key)}>
-              {tiles.map((t, i) => (
-                <PaletteChip key={t.key + i} label={t.label}
-                  tile={`/tiles/${t.key}.png`}
-                  active={tool === null && activeTile?.key === t.key && activeTile?.label === t.label}
-                  onClick={() => {
-                    if (t.overlay) {
-                      setTool('overlay');
-                      setOverlay(t.overlay);
-                    } else {
-                      setActiveTile(t);
-                      setTool(null);
-                    }
-                  }} />
+          {/* Biome tile categories */}
+          {TILE_PALETTE.map(({ id, emoji, category, tiles }) => {
+            const catActive = tool === null && tiles.some(t => t.key === activeTile?.key);
+            return (
+              <CategorySection key={id} id={id} emoji={emoji} label={category}
+                open={openCats.has(id)} active={catActive} onToggle={() => toggleCat(id)}>
+                <div className="tse-tile-grid">
+                  {tiles.map(t => (
+                    <TileChip key={t.key} tileKey={t.key} label={t.label}
+                      active={tool === null && activeTile?.key === t.key}
+                      onClick={() => { setActiveTile(t); setTool(null); }} />
+                  ))}
+                </div>
+              </CategorySection>
+            );
+          })}
+
+          {/* Connectors (river, road) */}
+          <CategorySection id="connectors" emoji="〰" label="Connectors"
+            open={openCats.has('connectors')}
+            active={tool === 'overlay' && CONNECTOR_BRUSHES.some(c => c.type === overlay)}
+            onToggle={() => toggleCat('connectors')}>
+            <div className="tse-chip-row">
+              {CONNECTOR_BRUSHES.map(c => (
+                <OverlayChip key={c.type} label={c.label} color={c.color}
+                  active={tool === 'overlay' && overlay === c.type}
+                  onClick={() => { setTool('overlay'); setOverlay(c.type); }} />
               ))}
-            </ToolSection>
-          ))}
+            </div>
+          </CategorySection>
 
-          <ToolSection label="Dividers" active={tool==='overlay' && OVERLAY_DIVIDERS.includes(overlay)}>
-            {OVERLAY_DIVIDERS.map(o => (
-              <PaletteChip key={o} color={OVERLAY_STYLE[o]?.color} label={o}
-                active={tool==='overlay' && overlay===o}
-                onClick={() => { setTool('overlay'); setOverlay(o); }} />
-            ))}
-          </ToolSection>
+          {/* Dividers (canyon, chasm) */}
+          <CategorySection id="dividers" emoji="⛰" label="Dividers"
+            open={openCats.has('dividers')}
+            active={tool === 'overlay' && OVERLAY_DIVIDERS.includes(overlay)}
+            onToggle={() => toggleCat('dividers')}>
+            <div className="tse-chip-row">
+              {OVERLAY_DIVIDERS.map(o => (
+                <OverlayChip key={o} label={o} color={OVERLAY_STYLE[o]?.color}
+                  active={tool === 'overlay' && overlay === o}
+                  onClick={() => { setTool('overlay'); setOverlay(o); }} />
+              ))}
+            </div>
+          </CategorySection>
 
-          <button className="tse-erase-btn" onClick={() => setTool('erase')}>
-            {tool==='erase' ? '✕ Erasing' : '✕ Erase'}
+          <button
+            className={`tse-erase-btn${tool === 'erase' ? ' tse-erase-btn--active' : ''}`}
+            onClick={() => setTool(t => t === 'erase' ? null : 'erase')}>
+            ✕ {tool === 'erase' ? 'Erasing…' : 'Erase'}
           </button>
         </div>
 
         {/* ── Canvas ── */}
-        <div className="tse-canvas-wrap"
-          onWheel={e => {
-            e.preventDefault();
-            setZoom(z => {
-              const next = e.deltaY < 0 ? z * 1.25 : z / 1.25;
-              return Math.max(1, Math.min(6, Math.round(next * 100) / 100));
-            });
-          }}>
+        <div className="tse-canvas-wrap">
           <div className="tse-zoom-bar">
-            <button className="tse-zoom-btn" onClick={() => setZoom(z => Math.min(6, Math.round(z * 1.25 * 100) / 100))}>+</button>
+            <button className="tse-zoom-btn" title="Zoom in" onClick={() => setZoom(z => Math.min(6, Math.round(z * 1.25 * 100) / 100))}>+</button>
             <span className="tse-zoom-label">{Math.round(zoom * 100)}%</span>
-            <button className="tse-zoom-btn" onClick={() => setZoom(z => Math.max(1, Math.round(z / 1.25 * 100) / 100))}>−</button>
-            <button className="tse-zoom-btn tse-zoom-reset" onClick={() => setZoom(1)}>1:1</button>
+            <button className="tse-zoom-btn" title="Zoom out" onClick={() => setZoom(z => Math.max(1, Math.round(z / 1.25 * 100) / 100))}>−</button>
+            <button className="tse-zoom-btn tse-zoom-reset" title="Reset zoom" onClick={() => setZoom(1)}>1:1</button>
+            <span className="tse-zoom-hint">Ctrl+scroll to zoom</span>
           </div>
-          <div className="tse-canvas-scroll">
+          <div className="tse-canvas-scroll"
+            onWheel={e => {
+              if (!e.ctrlKey && !e.metaKey) return; // plain wheel → native scroll (both axes)
+              e.preventDefault();
+              setZoom(z => {
+                const next = e.deltaY < 0 ? z * 1.2 : z / 1.2;
+                return Math.max(1, Math.min(6, Math.round(next * 100) / 100));
+              });
+            }}>
           <div style={{ width: totalPx * zoom, height: totalPx * zoom, position: 'relative', flexShrink: 0 }}>
           <svg ref={svgRef} width={totalPx} height={totalPx}
             className="tse-canvas"
@@ -522,11 +569,15 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             {/* Painted biome cells — tile images */}
             {cellArr.map(c => {
               const key = c.tileKey ?? getTileKey(c.biome, c.relief);
+              const rot = ROTATE_TILE_KEYS.has(key) ? cellRotDeg(c.x, c.y) : 0;
+              const cx  = c.x * CELL_PX + CELL_PX / 2;
+              const cy  = c.y * CELL_PX + CELL_PX / 2;
               return (
                 <image key={cellKey(c.x,c.y)}
                   href={`/tiles/${key}.png`}
                   x={c.x*CELL_PX} y={c.y*CELL_PX}
                   width={CELL_PX} height={CELL_PX}
+                  transform={rot ? `rotate(${rot} ${cx} ${cy})` : undefined}
                   style={{ imageRendering: 'pixelated' }} />
               );
             })}
@@ -569,85 +620,87 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
         {/* ── Settings sidebar ── */}
         <div className="tse-settings">
-          <label className="tse-label">Scope
-            <select value={scope} onChange={e => setScope(e.target.value)}>
-              <option value="world">World</option>
-              <option value="region">Region</option>
-              <option value="local">Local</option>
-            </select>
-          </label>
-
-          <label className="tse-label">Scale
-            <select value={scale} onChange={e => setScale(e.target.value)}>
-              <option value="10mi">10 mi</option>
-              <option value="50mi">50 mi</option>
-              <option value="200mi">200 mi</option>
-              <option value="500mi">500 mi</option>
-            </select>
-          </label>
-
-          <label className="tse-label">Climate
-            <select value={climate} onChange={e => setClimate(e.target.value)}>
-              <option value="">— any —</option>
-              <option value="temperate">Temperate</option>
-              <option value="tropical">Tropical</option>
-              <option value="arctic">Arctic</option>
-              <option value="arid">Arid</option>
-            </select>
-          </label>
-
-          <label className="tse-label">AI Freedom
-            <select value={aiFreedom} onChange={e => setAiFreedom(e.target.value)}>
-              <option value="strict">Strict</option>
-              <option value="balanced">Balanced</option>
-              <option value="creative">Creative</option>
-            </select>
-          </label>
-
-          <label className="tse-label tse-toggle">
-            <input type="checkbox" checked={loreMode} onChange={e => setLoreMode(e.target.checked)} />
-            Lore mode
-          </label>
-
-          <label className="tse-label tse-prompt-label">Extra prompt
-            <textarea className="tse-prompt" rows={3} maxLength={500}
-              placeholder="Describe unique features…"
-              value={userPrompt} onChange={e => setUserPrompt(e.target.value)} />
-          </label>
-
-          <label className="tse-label">Map Style
-            <select value={mapStyle} onChange={e => setMapStyle(e.target.value)} disabled={generating}>
-              <option value="schley">🏔 Modern Classical Fantasy</option>
-              <option value="handwritten">✏️ Crude Handwritten</option>
-              <option value="parchment">📜 Parchment Atlas</option>
-              <option value="ink">🖋 Hand-drawn Ink</option>
-              <option value="classic">🗺 Classic D&amp;D Module</option>
-            </select>
-          </label>
-
-          <label className="tse-label">Renderer
-            <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
-              <option value="auto">🤖 Auto</option>
-              <option value="gpt-image-1">🖼 GPT-Image-1 (OpenAI)</option>
-              <option value="gemini">🟦 Gemini Image (Google)</option>
-            </select>
-          </label>
-
-          {errors.length > 0 && (
-            <div className="tse-errors">
-              {errors.map((e,i) => <div key={i}>⚠ {e}</div>)}
-            </div>
-          )}
-
-          {generating && genStatus && (
-            <div className="tse-gen-status">⏳ {genStatus}</div>
-          )}
-
+          {/* Actions pinned at TOP — always visible */}
           <div className="tse-actions">
             <button className="tse-btn tse-btn--primary" onClick={handleGenerate} disabled={generating}>
-              {generating ? 'Generating…' : 'Generate Map from Sketch'}
+              {generating ? 'Generating…' : '🗺 Generate Map'}
             </button>
             <button className="tse-btn" onClick={handleCancel} disabled={generating}>Cancel</button>
+            {generating && genStatus && (
+              <div className="tse-gen-status">⏳ {genStatus}</div>
+            )}
+            {errors.length > 0 && (
+              <div className="tse-errors">
+                {errors.map((e,i) => <div key={i}>⚠ {e}</div>)}
+              </div>
+            )}
+          </div>
+
+          <div className="tse-settings-scroll">
+            <label className="tse-label">Scope
+              <select value={scope} onChange={e => setScope(e.target.value)}>
+                <option value="world">World</option>
+                <option value="region">Region</option>
+                <option value="local">Local</option>
+              </select>
+            </label>
+
+            <label className="tse-label">Scale
+              <select value={scale} onChange={e => setScale(e.target.value)}>
+                <option value="10mi">10 mi</option>
+                <option value="50mi">50 mi</option>
+                <option value="200mi">200 mi</option>
+                <option value="500mi">500 mi</option>
+              </select>
+            </label>
+
+            <label className="tse-label">Climate
+              <select value={climate} onChange={e => setClimate(e.target.value)}>
+                <option value="">— any —</option>
+                <option value="temperate">Temperate</option>
+                <option value="tropical">Tropical</option>
+                <option value="arctic">Arctic</option>
+                <option value="arid">Arid</option>
+              </select>
+            </label>
+
+            <label className="tse-label">AI Freedom
+              <select value={aiFreedom} onChange={e => setAiFreedom(e.target.value)}>
+                <option value="strict">Strict</option>
+                <option value="balanced">Balanced</option>
+                <option value="creative">Creative</option>
+              </select>
+            </label>
+
+            <label className="tse-label tse-toggle">
+              <input type="checkbox" checked={loreMode} onChange={e => setLoreMode(e.target.checked)} />
+              Lore mode
+            </label>
+
+            <label className="tse-label tse-prompt-label">Extra prompt
+              <textarea className="tse-prompt" rows={3} maxLength={500}
+                placeholder="Describe unique features…"
+                value={userPrompt} onChange={e => setUserPrompt(e.target.value)} />
+            </label>
+
+            <label className="tse-label">Map Style
+              <select value={mapStyle} onChange={e => setMapStyle(e.target.value)} disabled={generating}>
+                <option value="schley">🏔 Modern Classical Fantasy</option>
+                <option value="handwritten">✏️ Crude Handwritten</option>
+                <option value="parchment">📜 Parchment Atlas</option>
+                <option value="ink">🖋 Hand-drawn Ink</option>
+                <option value="classic">🗺 Classic D&amp;D Module</option>
+              </select>
+            </label>
+
+            <label className="tse-label">Renderer
+              <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
+                <option value="auto">🤖 Auto</option>
+                <option value="gpt-image-1">🖼 GPT-Image-1 (OpenAI)</option>
+                <option value="gemini">🟦 Gemini Image (Google)</option>
+              </select>
+            </label>
+
           </div>
         </div>
       </div>
@@ -697,24 +750,35 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function ToolSection({ label, active, children }) {
+function CategorySection({ id, emoji, label, open, active, onToggle, children }) {
   return (
-    <div className={`tse-section ${active ? 'tse-section--active' : ''}`}>
-      <div className="tse-section-label">{label}</div>
-      <div className="tse-chips">{children}</div>
+    <div className={`tse-cat${active ? ' tse-cat--active' : ''}`}>
+      <button className="tse-cat-header" onClick={onToggle} title={`${open ? 'Collapse' : 'Expand'} ${label}`}>
+        <span className="tse-cat-emoji">{emoji}</span>
+        <span className="tse-cat-name">{label}</span>
+        <span className="tse-cat-chevron">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="tse-cat-body">{children}</div>}
     </div>
   );
 }
 
-function PaletteChip({ color, label, active, dimmed, onClick, tile }) {
+function TileChip({ tileKey, label, active, onClick }) {
   return (
-    <button className={`tse-chip ${active ? 'tse-chip--active' : ''} ${dimmed ? 'tse-chip--dimmed' : ''}`}
+    <button className={`tse-tile-chip${active ? ' tse-tile-chip--active' : ''}`}
       onClick={onClick} title={label}>
-      {tile
-        ? <span className="tse-chip-tile" style={{ backgroundImage: `url(${tile})` }} />
-        : <span className="tse-chip-swatch" style={{ background: color }} />
-      }
-      <span className="tse-chip-label">{label}</span>
+      <img src={`/tiles/${tileKey}.png`} alt={label} className="tse-tile-img" />
+      <span className="tse-tile-label">{label}</span>
+    </button>
+  );
+}
+
+function OverlayChip({ label, color, active, onClick }) {
+  return (
+    <button className={`tse-overlay-chip${active ? ' tse-overlay-chip--active' : ''}`}
+      onClick={onClick} title={label}>
+      <span className="tse-overlay-swatch" style={{ background: color }} />
+      <span className="tse-overlay-label">{label}</span>
     </button>
   );
 }
