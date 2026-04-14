@@ -80,17 +80,46 @@ const CONNECTOR_BRUSHES = [
 
 const OVERLAY_DIVIDERS = ['canyon', 'chasm'];
 
-// Tiles that look bad when all identically oriented — rotate per cell
+// Random rotation — only for linear/directional tiles where any angle looks natural
 const ROTATE_TILE_KEYS = new Set([
-  'coast_flat', 'ocean_shallow', 'ocean_deep', 'reef',
-  'inland_lake', 'swamp_flat', 'plains_flat',
+  'river_stream', 'river_main',
+  'road_path', 'dirt_road', 'cobblestone_road',
 ]);
+
+// Tile keys that count as "ocean/water" for coast orientation purposes
+const OCEAN_TILE_KEYS = new Set(['ocean_shallow', 'ocean_deep', 'reef', 'inland_lake']);
+
 function seededRandom(seed) {
   const x = Math.sin(seed + 1) * 10000;
   return x - Math.floor(x);
 }
 function cellRotDeg(cx, cy) {
   return [0, 90, 180, 270][Math.floor(seededRandom(cx * 31 + cy) * 4)];
+}
+
+/**
+ * Orient coast_flat so its water edge faces the nearest ocean neighbor.
+ * Assumes coast_flat.png has water at the BOTTOM in default (0°) orientation.
+ *   0°   → water faces south (+y)
+ *   90°  → water faces west  (-x)   (bottom rotated CW → left)
+ *   180° → water faces north (-y)
+ *   270° → water faces east  (+x)
+ * Falls back to seeded random when no ocean neighbor is found.
+ */
+function coastRotDeg(cx, cy, cellsMap) {
+  const dirs = [
+    [0,  1,   0],   // south
+    [-1, 0,  90],   // west
+    [0, -1, 180],   // north
+    [1,  0, 270],   // east
+  ];
+  for (const [dx, dy, rot] of dirs) {
+    const nb = cellsMap[`${cx + dx},${cy + dy}`];
+    if (!nb) continue;
+    const nKey = nb.tileKey ?? '';
+    if (OCEAN_TILE_KEYS.has(nKey) || nb.biome === 'ocean' || nb.biome === 'lake') return rot;
+  }
+  return cellRotDeg(cx, cy); // fallback
 }
 
 const OVERLAY_STYLE = {
@@ -569,15 +598,17 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             {/* Painted biome cells — tile images */}
             {cellArr.map(c => {
               const key = c.tileKey ?? getTileKey(c.biome, c.relief);
-              const rot = ROTATE_TILE_KEYS.has(key) ? cellRotDeg(c.x, c.y) : 0;
-              const cx  = c.x * CELL_PX + CELL_PX / 2;
-              const cy  = c.y * CELL_PX + CELL_PX / 2;
+              const rot = key === 'coast_flat'      ? coastRotDeg(c.x, c.y, cells)
+                        : ROTATE_TILE_KEYS.has(key) ? cellRotDeg(c.x, c.y)
+                        : 0;
+              const scx = c.x * CELL_PX + CELL_PX / 2;
+              const scy = c.y * CELL_PX + CELL_PX / 2;
               return (
                 <image key={cellKey(c.x,c.y)}
                   href={`/tiles/${key}.png`}
                   x={c.x*CELL_PX} y={c.y*CELL_PX}
                   width={CELL_PX} height={CELL_PX}
-                  transform={rot ? `rotate(${rot} ${cx} ${cy})` : undefined}
+                  transform={rot ? `rotate(${rot} ${scx} ${scy})` : undefined}
                   style={{ imageRendering: 'pixelated' }} />
               );
             })}

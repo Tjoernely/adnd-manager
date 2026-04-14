@@ -460,11 +460,14 @@ const TILE_FALLBACK: Record<string, string> = {
   swamp: '#3a5a2a', tundra: '#b8cede', volcanic: '#3c1818',
 };
 
-// Tiles that benefit from per-cell rotation to break repetition
+// Random rotation — only for linear/directional tiles where any angle looks natural
 const ROTATE_TILE_KEYS = new Set([
-  'coast_flat', 'ocean_shallow', 'ocean_deep', 'reef',
-  'inland_lake', 'swamp_flat', 'plains_flat',
+  'river_stream', 'river_main',
+  'road_path', 'dirt_road', 'cobblestone_road',
 ]);
+
+// Tile keys that count as ocean/water for coast orientation
+const OCEAN_TILE_KEYS = new Set(['ocean_shallow', 'ocean_deep', 'reef', 'inland_lake']);
 
 /** Deterministic pseudo-random in [0,1) from an integer seed. */
 function seededRandom(seed: number): number {
@@ -475,6 +478,32 @@ function seededRandom(seed: number): number {
 /** Returns 0–3 quarter-turns for a cell position. */
 function cellRotation(cx: number, cy: number): number {
   return Math.floor(seededRandom(cx * 31 + cy) * 4);
+}
+
+type CellLike = { x: number; y: number; biome: string; tileKey?: string; relief?: string };
+
+/**
+ * Orient coast_flat so its water edge faces the nearest ocean neighbor.
+ * Assumes coast_flat.png has water at the BOTTOM in 0° orientation.
+ *   0   → water faces south (+y)
+ *   1   → water faces west  (-x)
+ *   2   → water faces north (-y)
+ *   3   → water faces east  (+x)
+ */
+function coastRotation(cx: number, cy: number, cellMap: Map<string, CellLike>): number {
+  const dirs: [number, number, number][] = [
+    [0,  1, 0],
+    [-1, 0, 1],
+    [0, -1, 2],
+    [1,  0, 3],
+  ];
+  for (const [dx, dy, rot] of dirs) {
+    const nb = cellMap.get(`${cx + dx},${cy + dy}`);
+    if (!nb) continue;
+    const nKey = nb.tileKey ?? '';
+    if (OCEAN_TILE_KEYS.has(nKey) || nb.biome === 'ocean' || nb.biome === 'lake') return rot;
+  }
+  return cellRotation(cx, cy); // fallback
 }
 
 /** Draw a tile image, rotating in 90° increments around the cell centre. */
@@ -525,14 +554,20 @@ export async function renderSketchForAI(spec: SketchSpec): Promise<string> {
     loaded[k] = await loadImage(`/tiles/ai/${k}.png`);
   }));
 
+  // Build cell lookup for coast orientation
+  const cellMap = new Map<string, CellLike>();
+  for (const c of spec.cells ?? []) cellMap.set(`${c.x},${c.y}`, c as CellLike);
+
   // Draw each cell
   for (const cell of (spec.cells ?? [])) {
-    const key = (cell as { tileKey?: string }).tileKey ?? getTileKey(cell.biome, cell.relief as string);
+    const key = (cell as CellLike).tileKey ?? getTileKey(cell.biome, cell.relief as string);
     const img = loaded[key];
     const px  = cell.x * AI_TILE;
     const py  = cell.y * AI_TILE;
     if (img && img.naturalWidth > 0) {
-      const rot = ROTATE_TILE_KEYS.has(key) ? cellRotation(cell.x, cell.y) : 0;
+      const rot = key === 'coast_flat'      ? coastRotation(cell.x, cell.y, cellMap)
+                : ROTATE_TILE_KEYS.has(key) ? cellRotation(cell.x, cell.y)
+                : 0;
       drawTileRotated(ctx, img, px, py, AI_TILE, rot);
     } else {
       ctx.fillStyle = TILE_FALLBACK[cell.biome] ?? '#555555';
