@@ -492,10 +492,10 @@ type CellLike = { x: number; y: number; biome: string; tileKey?: string; relief?
  */
 function coastRotation(cx: number, cy: number, cellMap: Map<string, CellLike>): number {
   const dirs: [number, number, number][] = [
-    [0,  1, 0],
-    [-1, 0, 1],
-    [0, -1, 2],
-    [1,  0, 3],
+    [0,  1, 2],
+    [-1, 0, 3],
+    [0, -1, 0],
+    [1,  0, 1],
   ];
   for (const [dx, dy, rot] of dirs) {
     const nb = cellMap.get(`${cx + dx},${cy + dy}`);

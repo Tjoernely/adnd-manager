@@ -108,10 +108,10 @@ function cellRotDeg(cx, cy) {
  */
 function coastRotDeg(cx, cy, cellsMap) {
   const dirs = [
-    [0,  1,   0],   // south
-    [-1, 0,  90],   // west
-    [0, -1, 180],   // north
-    [1,  0, 270],   // east
+    [0,  1, 180],   // south
+    [-1, 0, 270],   // west
+    [0, -1,   0],   // north
+    [1,  0,  90],   // east
   ];
   for (const [dx, dy, rot] of dirs) {
     const nb = cellsMap[`${cx + dx},${cy + dy}`];
