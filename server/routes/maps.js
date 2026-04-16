@@ -685,6 +685,10 @@ router.post('/generate-from-sketch', auth, (req, res) => {
     aiFredom      = 'balanced',
   } = req.body ?? {};
 
+  console.log('[server] req.body keys:', Object.keys(req.body ?? {}));
+  console.log('[server] sketchSpec received:', req.body?.sketchSpec?.cells?.length);
+  console.log('[server] controlImage length:', req.body?.controlImage?.length);
+
   if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
   if (!controlImage || typeof controlImage !== 'string')
     return res.status(400).json({ error: 'controlImage (base64 PNG) required' });

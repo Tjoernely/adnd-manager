@@ -413,11 +413,16 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       setGenStatus(`Queuing ${rendererLabel} job…`);
 
       const token = localStorage.getItem('dnd_token') ?? '';
-      console.log('[generate] sending cells:', spec.cells?.length, '| overlays:', spec.overlays?.length);
+      console.log('[sketch] cells before send:', spec?.cells?.length);
+      const postBody = { sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced' };
+      console.log('[sketch] POST body keys:', Object.keys(postBody));
+      console.log('[sketch] sketchSpec in body:', postBody.sketchSpec?.cells?.length);
+      const bodyStr = JSON.stringify(postBody);
+      console.log('[sketch] POST body total size (chars):', bodyStr.length, '≈', (bodyStr.length / 1024 / 1024).toFixed(2), 'MB');
       const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced' }),
+        body: bodyStr,
       });
       if (!startResp.ok) {
         const err = await startResp.json().catch(() => ({ error: startResp.statusText }));

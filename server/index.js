@@ -42,7 +42,8 @@ app.use(cors({
   credentials: true,
 }));
 // verify captures raw body for webhook HMAC verification
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString(); }, limit: '10mb' }));
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString(); }, limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ── API routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',            authRouter);
