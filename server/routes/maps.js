@@ -574,6 +574,39 @@ router.put('/:id', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
+// ── Patch sketch data directly via jsonb_set (DM only) ───────────────────────
+// PUT /api/maps/:id/sketch  { sketchSpec: {...} }
+// Uses jsonb_set so only data->sketch is touched — all other data fields preserved.
+router.put('/:id/sketch', auth, async (req, res) => {
+  try {
+    const map = await db.one('SELECT campaign_id FROM maps WHERE id=$1', [req.params.id]);
+    if (!map) return res.status(404).json({ error: 'Not found' });
+    if (!(await isDM(map.campaign_id, req.user.id)))
+      return res.status(403).json({ error: 'DM only' });
+
+    const { sketchSpec } = req.body ?? {};
+    if (!sketchSpec) return res.status(400).json({ error: 'sketchSpec required' });
+
+    const cells = sketchSpec.cells ?? [];
+    console.log(`[maps PUT sketch] id=${req.params.id} cells=${cells.length} overlays=${(sketchSpec.overlays ?? []).length}`);
+
+    const updated = await db.one(
+      `UPDATE maps
+       SET data = jsonb_set(data::jsonb, '{sketch}', $1::jsonb, true),
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, data->'sketch'->'cells' AS sketch_cells_check`,
+      [JSON.stringify(sketchSpec), req.params.id],
+    );
+    const savedCount = Array.isArray(updated.sketch_cells_check) ? updated.sketch_cells_check.length : '?';
+    console.log(`[maps PUT sketch] id=${req.params.id} saved — cells in DB: ${savedCount}`);
+    res.json({ ok: true, cells_saved: savedCount });
+  } catch (e) {
+    console.error(`[maps PUT sketch] id=${req.params.id} FAILED:`, e.message);
+    next500(e, res);
+  }
+});
+
 // ── Delete map (DM only) ──────────────────────────────────────────────────────
 router.delete('/:id', auth, async (req, res) => {
   try {
@@ -657,6 +690,7 @@ router.post('/generate-from-sketch', auth, (req, res) => {
     return res.status(400).json({ error: 'controlImage (base64 PNG) required' });
 
   const cells = sketchSpec.cells ?? [];
+  console.log(`[generate-from-sketch] received sketchSpec — cells=${cells.length} overlays=${(sketchSpec.overlays ?? []).length} body_keys=${Object.keys(req.body ?? {}).join(',')}`);
   if (!Array.isArray(cells) || cells.length === 0)
     return res.status(400).json({ error: 'Sketch has no painted cells — paint some terrain first' });
 

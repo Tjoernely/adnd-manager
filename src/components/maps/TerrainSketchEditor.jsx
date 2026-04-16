@@ -413,6 +413,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       setGenStatus(`Queuing ${rendererLabel} job…`);
 
       const token = localStorage.getItem('dnd_token') ?? '';
+      console.log('[generate] sending cells:', spec.cells?.length, '| overlays:', spec.overlays?.length);
       const startResp = await fetch('/api/maps/generate-from-sketch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -501,6 +502,15 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             <button key={s} className={`tse-sz ${brushSize===s?'tse-sz--active':''}`}
               onClick={() => setBrushSize(s)}>{s}×{s}</button>
           ))}
+        </div>
+        <div className="tse-toolbar-actions">
+          <button className="tse-btn tse-btn--primary tse-btn--generate"
+            onClick={handleGenerate} disabled={generating}>
+            {generating ? `⏳ ${genStatus || 'Generating…'}` : '🗺 Generate Map'}
+          </button>
+          <button className="tse-btn tse-btn--cancel" onClick={handleCancel} disabled={generating}>
+            ✕
+          </button>
         </div>
       </div>
 
@@ -651,22 +661,6 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
         {/* ── Settings sidebar ── */}
         <div className="tse-settings">
-          {/* Actions pinned at TOP — always visible */}
-          <div className="tse-actions">
-            <button className="tse-btn tse-btn--primary" onClick={handleGenerate} disabled={generating}>
-              {generating ? 'Generating…' : '🗺 Generate Map'}
-            </button>
-            <button className="tse-btn" onClick={handleCancel} disabled={generating}>Cancel</button>
-            {generating && genStatus && (
-              <div className="tse-gen-status">⏳ {genStatus}</div>
-            )}
-            {errors.length > 0 && (
-              <div className="tse-errors">
-                {errors.map((e,i) => <div key={i}>⚠ {e}</div>)}
-              </div>
-            )}
-          </div>
-
           <div className="tse-settings-scroll">
             <label className="tse-label">Scope
               <select value={scope} onChange={e => setScope(e.target.value)}>
@@ -731,6 +725,12 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
                 <option value="gemini">🟦 Gemini Image (Google)</option>
               </select>
             </label>
+
+            {errors.length > 0 && (
+              <div className="tse-errors">
+                {errors.map((e,i) => <div key={i}>⚠ {e}</div>)}
+              </div>
+            )}
 
           </div>
         </div>
