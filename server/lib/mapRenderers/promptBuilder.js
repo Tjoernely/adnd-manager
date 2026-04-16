@@ -205,137 +205,152 @@ function buildConnectorPaths(spec) {
 
 function buildMustKeepFacts(spec) {
   if (!spec?.cells) return null;
-  const cells   = (spec.cells ?? []).filter(c => BIOME_CHAR[c.biome]);
-  const overlays = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
-  const facts   = [];
-  if (!cells.length) return null;
-
-  // Include mountain/hill relief cells (not in BIOME_CHAR filter above)
   const allCells = spec.cells ?? [];
+  const overlays  = (spec.overlays ?? []).filter(o => o.points?.length >= 2);
+  if (!allCells.length) return null;
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  // Normalise a cell to a single terrain label; mountains relief always → 'mountains'
+  function terrainLabel(c) {
+    if (c.relief === 'mountains' || c.relief === 'mountainous' || c.biome === 'mountains') return 'mountains';
+    return c.biome;
+  }
+
+  // Cardinal compass description from an (x,y) centroid on the 32×32 grid
+  function compassPos(ax, ay) {
+    const ns = ay <= 10 ? 'northern' : ay >= 22 ? 'southern' : '';
+    const ew = ax <= 10 ? 'western'  : ax >= 22 ? 'eastern'  : '';
+    return [ns, ew].filter(Boolean).join(' ') || 'central';
+  }
+
   const cellMap = new Map();
   for (const c of allCells) cellMap.set(`${c.x},${c.y}`, c);
-  // Also index biome cells
-  for (const c of cells) if (!cellMap.has(`${c.x},${c.y}`)) cellMap.set(`${c.x},${c.y}`, c);
 
-  function edgeLabels(c) {
-    const l = [];
-    if (c.y < 8)   l.push('north');
-    if (c.y >= 24) l.push('south');
-    if (c.x >= 24) l.push('east');
-    if (c.x < 8)   l.push('west');
-    return l;
-  }
+  const facts = [];
 
-  // A. Edge-exclusive biomes
-  const biomeEdges = {}, biomeInCenter = new Set();
-  for (const c of cells) {
-    const edges = edgeLabels(c);
-    if (!edges.length) { biomeInCenter.add(c.biome); continue; }
-    if (!biomeEdges[c.biome]) biomeEdges[c.biome] = new Set();
-    edges.forEach(e => biomeEdges[c.biome].add(e));
-  }
-  for (const [biome, edgeSet] of Object.entries(biomeEdges)) {
-    if (biomeInCenter.has(biome)) continue;
-    const a = [...edgeSet];
-    const hasN = a.includes('north'), hasS = a.includes('south');
-    const hasE = a.includes('east'),  hasW = a.includes('west');
-    let where;
-    if      (hasN && hasE && !hasS && !hasW) where = 'the northeast';
-    else if (hasN && hasW && !hasS && !hasE) where = 'the northwest';
-    else if (hasS && hasE && !hasN && !hasW) where = 'the southeast';
-    else if (hasS && hasW && !hasN && !hasE) where = 'the southwest';
-    else                                     where = a.join(' and ');
-    facts.push(`${biome[0].toUpperCase() + biome.slice(1)} terrain exists only in ${where}`);
-    if (facts.length >= 3) break;
-  }
+  // ── 1. Dominant edges ────────────────────────────────────────────────────────
+  // For each edge band, find whether one terrain type covers ≥ 60 % of painted cells.
+  const edgeDefs = [
+    { dir: 'eastern',  test: c => c.x >= 28 },
+    { dir: 'western',  test: c => c.x <= 3  },
+    { dir: 'northern', test: c => c.y <= 3  },
+    { dir: 'southern', test: c => c.y >= 28 },
+  ];
 
-  // B. Forest-coast adjacency
-  const WATER = new Set(['ocean', 'coastal']);
-  for (const fc of cells.filter(c => c.biome === 'forest')) {
-    for (const [dx, dy, dir] of [[0,-1,'northern'],[0,1,'southern'],[-1,0,'western'],[1,0,'eastern']]) {
-      const n = cellMap.get(`${fc.x+dx},${fc.y+dy}`);
-      if (n && WATER.has(n.biome)) { facts.push(`Forest reaches the ${dir} coastline`); break; }
+  let edgeFacts = 0;
+  for (const { dir, test } of edgeDefs) {
+    if (edgeFacts >= 2) break;
+    const eCells = allCells.filter(test);
+    if (eCells.length < 4) continue;
+    const counts = {};
+    for (const c of eCells) {
+      const lbl = terrainLabel(c);
+      counts[lbl] = (counts[lbl] ?? 0) + 1;
     }
-    if (facts.length >= 5) break;
+    const [topLabel, topCount] = Object.entries(counts).sort((a,b) => b[1]-a[1])[0] ?? [];
+    if (!topLabel || topCount / eCells.length < 0.6) continue;
+    facts.push(`A ${topLabel} zone dominates the ${dir} edge — render it along the FULL ${dir} border (do NOT omit)`);
+    edgeFacts++;
   }
 
-  // C. Inland lakes
-  const isolatedLakes = cells.filter(c => c.biome === 'lake' &&
-    ![[0,-1],[0,1],[-1,0],[1,0]].some(([dx,dy]) => {
-      const n = cellMap.get(`${c.x+dx},${c.y+dy}`);
-      return n && (n.biome === 'ocean' || n.biome === 'coastal');
-    }));
-  if (isolatedLakes.length) {
-    const ax = isolatedLakes.reduce((s,c) => s+c.x, 0) / isolatedLakes.length;
-    const ay = isolatedLakes.reduce((s,c) => s+c.y, 0) / isolatedLakes.length;
-    const pos = ay < 12 ? 'northern' : ay > 20 ? 'southern' : ax < 12 ? 'western' : ax > 20 ? 'eastern' : 'central';
-    facts.push(`A distinct inland lake exists in the ${pos} region`);
+  // ── 2. Large connected components (BFS flood-fill by terrain label) ──────────
+  // Each component > 50 cells is a "major terrain feature" the AI must not shrink.
+  const visited = new Set();
+  const components = [];
+
+  for (const c of allCells) {
+    const key = `${c.x},${c.y}`;
+    if (visited.has(key)) continue;
+    const lbl   = terrainLabel(c);
+    const queue = [c];
+    const comp  = [];
+    visited.add(key);
+    while (queue.length) {
+      const cur = queue.shift();
+      comp.push(cur);
+      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+        const nk = `${cur.x+dx},${cur.y+dy}`;
+        if (visited.has(nk)) continue;
+        const nb = cellMap.get(nk);
+        if (!nb || terrainLabel(nb) !== lbl) continue;
+        visited.add(nk);
+        queue.push(nb);
+      }
+    }
+    components.push({ label: lbl, cells: comp });
+  }
+  components.sort((a,b) => b.cells.length - a.cells.length);
+
+  let largeFacts = 0;
+  for (const { label, cells: comp } of components) {
+    if (facts.length >= 6 || largeFacts >= 2) break;
+    if (comp.length <= 50) continue;
+    // Plains and ocean are self-evident from the image — skip them here
+    if (label === 'plains' || label === 'ocean') continue;
+    const ax = comp.reduce((s,c) => s+c.x, 0) / comp.length;
+    const ay = comp.reduce((s,c) => s+c.y, 0) / comp.length;
+    facts.push(`A large ${label} zone covers ${comp.length} cells in the ${compassPos(ax, ay)} area — this is a major terrain feature (do NOT omit or shrink)`);
+    largeFacts++;
   }
 
-  // D. Biome proportions
-  const total = cells.length || 1;
-  const counts = {};
-  for (const c of cells) counts[c.biome] = (counts[c.biome] ?? 0) + 1;
-  for (const [biome, n] of Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,5)) {
-    if (n / total < 0.05) continue;
-    facts.push(`${biome[0].toUpperCase() + biome.slice(1)} covers ~${Math.round(n/total*100)}% of the map — preserve this proportion`);
-    if (facts.length >= 6) break;
+  // ── 3. Isolated small features (3-14 cells, isolated component) ──────────────
+  // Small zones are at risk of being dropped by the AI — flag them explicitly.
+  let isolatedFacts = 0;
+  for (const { label, cells: comp } of components) {
+    if (facts.length >= 7 || isolatedFacts >= 2) break;
+    if (comp.length < 3 || comp.length > 14) continue;
+    if (label === 'plains') continue; // minor plains patches are not important
+    const ax = comp.reduce((s,c) => s+c.x, 0) / comp.length;
+    const ay = comp.reduce((s,c) => s+c.y, 0) / comp.length;
+    facts.push(`Small but important ${label} zone (${comp.length} cells) in the ${compassPos(ax, ay)} area — render as a distinct feature (do NOT omit)`);
+    isolatedFacts++;
   }
 
-  // E. Single-volcano constraint
-  const volCount = counts['volcanic'] ?? 0;
-  if (volCount > 0 && volCount < 25) facts.push(`Volcanic zone is small (${volCount} cells) — render as a SINGLE volcano, not multiple`);
+  // ── 4. Interesting terrain adjacencies ───────────────────────────────────────
+  // Certain biome boundaries have strong visual impact and must be preserved.
+  // Keys are alphabetically sorted label pairs joined by '|'.
+  const INTERESTING_PAIRS = new Set([
+    'coastal|forest', 'forest|ocean',
+    'mountains|swamp', 'forest|swamp',
+    'desert|mountains', 'mountains|tundra',
+    'ocean|volcanic', 'plains|volcanic',
+    'lake|mountains', 'coastal|mountains',
+  ]);
 
-  // F. Swamp visibility
-  if ((counts['swamp'] ?? 0) > 50) facts.push('Swamp must be rendered as a VISIBLE marsh/wetland zone with distinctive visual texture — not just labeled as text (do NOT omit)');
-
-  // J. Northeast mountain range
-  const isMountainCell = c => c.relief === 'mountains' || c.relief === 'mountainous' ||
-                               c.biome === 'mountains';
-  const neMountains = allCells.filter(c => isMountainCell(c) && c.y < 8 && c.x > 20);
-  if (neMountains.length >= 2) {
-    facts.push('Mountain range in the NORTHEAST corner (top-right area) MUST be rendered. This is NOT optional — show illustrated mountain peaks (do NOT omit)');
+  const adjFound = new Set();
+  const adjFacts = [];
+  for (const c of allCells) {
+    const lbl1 = terrainLabel(c);
+    for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+      const nb = cellMap.get(`${c.x+dx},${c.y+dy}`);
+      if (!nb) continue;
+      const lbl2 = terrainLabel(nb);
+      if (lbl1 === lbl2) continue;
+      const pairKey = [lbl1, lbl2].sort().join('|');
+      if (adjFound.has(pairKey) || !INTERESTING_PAIRS.has(pairKey)) continue;
+      adjFound.add(pairKey);
+      const ax = (c.x + nb.x) / 2;
+      const ay = (c.y + nb.y) / 2;
+      adjFacts.push(`The ${lbl1} zone directly borders the ${lbl2} zone in the ${compassPos(ax, ay)} area — maintain this boundary`);
+    }
+  }
+  for (const f of adjFacts.slice(0, 2)) {
+    if (facts.length < 8) facts.push(f);
   }
 
-  // J2. Continuous mountain range along eastern edge
-  const eastMountainRows = [];
-  for (let y = 0; y < 32; y++) {
-    const hasEastMountain = allCells.some(c => c.x >= 28 && c.y === y && isMountainCell(c));
-    if (hasEastMountain) eastMountainRows.push(y);
-  }
-  if (eastMountainRows.length > 5) {
-    const first = eastMountainRows[0];
-    const last  = eastMountainRows[eastMountainRows.length - 1];
-    facts.push(
-      `CRITICAL: A continuous mountain range runs along the ENTIRE eastern edge ` +
-      `from top (row ${first}) to bottom (row ${last}). ` +
-      `Mountains MUST appear along the full right side of the map — not just the top corner. ` +
-      `(do NOT omit)`
-    );
-  }
+  // ── Preserved hard constraints ────────────────────────────────────────────────
+  // Single-volcano: small volcanic zones must not be multiplied by the AI
+  const volCells = allCells.filter(c => c.biome === 'volcanic');
+  if (facts.length < 8 && volCells.length > 0 && volCells.length < 25)
+    facts.push(`Volcanic zone is small (${volCells.length} cells) — render as a SINGLE volcano, not multiple`);
 
-  // K. Swamp adjacent to mountain cells
-  const mountainCells = new Set(allCells.filter(isMountainCell).map(c => `${c.x},${c.y}`));
-  const swampNextToMountain = cells.filter(c => c.biome === 'swamp' &&
-    [[0,-1],[0,1],[-1,0],[1,0]].some(([dx,dy]) => mountainCells.has(`${c.x+dx},${c.y+dy}`))
-  );
-  if (swampNextToMountain.length > 0) {
-    facts.push('A swamp/marsh zone exists directly adjacent to a mountain range. Render as dark wetland terrain breaking through mountain foothills (do NOT omit)');
-  }
-
-  // G. Ocean negative constraints
-  if (counts['ocean'] || counts['coastal']) {
-    const oceanEdges = new Set(cells.filter(c => c.biome === 'ocean' || c.biome === 'coastal').flatMap(edgeLabels));
-    const absent = ['north','south','east','west'].filter(e => !oceanEdges.has(e));
-    if (absent.length > 0 && absent.length <= 3) facts.push(`No ocean in the ${absent.join(' or ')}`);
-  }
-
-  // H. Road/path water constraint
-  if (overlays.some(o => o.type === 'road' || o.type === 'canyon' || o.type === 'chasm'))
+  // Road/canyon/chasm water constraint
+  if (facts.length < 8 && overlays.some(o => o.type === 'road' || o.type === 'canyon' || o.type === 'chasm'))
     facts.push('Roads, canyons, and chasms are land features — they NEVER enter water or the sea');
 
   if (!facts.length) return null;
-  return 'Must preserve (non-negotiable):\n' + facts.slice(0, 10).map(f => `- ${f}`).join('\n');
+  return 'Must preserve (non-negotiable):\n' + facts.slice(0, 8).map(f => `- ${f}`).join('\n');
 }
 
 // ── Full prompt ────────────────────────────────────────────────────────────────
