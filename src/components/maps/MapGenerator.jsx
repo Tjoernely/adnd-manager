@@ -273,6 +273,7 @@ export function MapGenerator({
   presetParams   = null,   // Partial<GeneratedParams> from connectionEngine or sketchToGeneratedParams
   presetImageUrl = null,   // pre-generated image URL from generate-from-sketch route
   fromSketch     = false,  // true when opened from TerrainSketchEditor
+  sketchSpec     = null,   // full SketchSpec (cells + overlays) — persisted to data.sketch on create
 }) {
   // presetType takes priority for mapType; presetParams fills terrain/atmosphere/etc.
   const [params, setParams] = useState({
@@ -435,6 +436,8 @@ export function MapGenerator({
           ...(worldData.validation_errors ? { validation_errors: worldData.validation_errors } : {}),
           // MapSpec (Trin D) — includes image_prompt_contract
           spec,
+          // Terrain sketch — persisted at creation so cells are never lost
+          ...(sketchSpec ? { sketch: sketchSpec } : {}),
         },
       });
       console.log('[MapGenerator] Map record created — id:', map?.id);

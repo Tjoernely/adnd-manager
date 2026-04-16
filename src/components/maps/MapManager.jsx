@@ -940,6 +940,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           presetParams={genContext?.presetParams ?? null}
           presetImageUrl={genContext?.presetImageUrl ?? null}
           fromSketch={!!genContext?.sketchSpec}
+          sketchSpec={genContext?.sketchSpec ?? null}
         />
       )}
 

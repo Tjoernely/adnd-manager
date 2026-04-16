@@ -331,7 +331,14 @@ function buildFullPrompt(spec, aiFredom, userPrompt) {
   const mustKeep   = buildMustKeepFacts(spec);
   const connectors = buildConnectorPaths(spec);
 
-  const sections = [BASE_PROMPT, PRIORITY_ORDER];
+  const TERRAIN_ID_GUIDE = `Terrain identification guide for this map:
+- Tiles with DEAD/BARE trees and muddy water texture = Swamp — render as wetland/marsh, NOT forest
+- Tiles with GREY rocky peaks and snow = Mountains — render with illustrated stone peaks
+- Tiles with GREEN leafy trees = Forest — render as living woodland
+- Tiles with dark volcanic rock = Volcanic — render as dramatic lava/ash terrain
+Do NOT render swamp as forest — swamp must look like a marsh or wetland with standing water and dead vegetation.`;
+
+  const sections = [BASE_PROMPT, TERRAIN_ID_GUIDE, PRIORITY_ORDER];
   if (mustKeep)   sections.push(mustKeep);
   if (connectors) sections.push(connectors);
   sections.push(freedomBlock);
