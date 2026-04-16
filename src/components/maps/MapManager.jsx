@@ -667,6 +667,18 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     // If editing an existing map, save sketch (+ new image if re-rendered) and done
     if (sketchEditMap) {
       try {
+        // Step 1: guarantee sketch cells via jsonb_set (bypasses enrichMapData spreads)
+        console.log('[MapManager] saving sketch cells via /sketch — cells:', sketchSpec?.cells?.length);
+        const token = localStorage.getItem('dnd_token');
+        const sketchResp = await fetch(`/api/maps/${sketchEditMap.id}/sketch`, {
+          method:  'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ sketchSpec }),
+        });
+        const sketchResult = await sketchResp.json().catch(() => ({}));
+        console.log('[MapManager] /sketch result:', sketchResult);
+
+        // Step 2: update image_url + full data (normal PUT path)
         const updated = await api.updateMap(sketchEditMap.id, {
           name:      sketchEditMap.name,
           type:      sketchEditMap.type,
@@ -674,7 +686,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           data:      { ...sketchEditMap.data, sketch: sketchSpec },
         });
         patchMap(updated);
-        // Navigate to the map (handles both new pre-created and re-edited maps)
+        // Navigate to the map
         setActiveMapId(updated.id);
         setSelectedPoiId(null);
       } catch (e) { console.error('[MapManager] sketch save', e.message); }

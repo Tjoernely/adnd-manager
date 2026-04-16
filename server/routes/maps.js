@@ -532,6 +532,7 @@ router.put('/:id', auth, async (req, res) => {
 
     // DEBUG: trace image_url for every PUT so we can spot any overwrite
     console.log(`[maps PUT] id=${req.params.id} body.image_url=${JSON.stringify(req.body?.image_url)} db.image_url=${JSON.stringify(map.image_url)} resolved=${JSON.stringify(image_url)}`);
+    console.log(`[maps PUT] id=${req.params.id} body.data.sketch.cells=${req.body?.data?.sketch?.cells?.length ?? 'MISSING'}`);
 
     if (!VALID_TYPES.includes(type))
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
@@ -560,7 +561,9 @@ router.put('/:id', auth, async (req, res) => {
       }),
     };
 
-    const updated = await db.one(
+    console.log(`[maps PUT] id=${req.params.id} mergedData.sketch.cells=${mergedData?.sketch?.cells?.length ?? 'MISSING'}`);
+
+    let updated = await db.one(
       `UPDATE maps
        SET name=$1, type=$2, image_url=$3, data=$4,
            parent_map_id=$5, parent_poi_id=$6, updated_at=NOW()
@@ -570,6 +573,24 @@ router.put('/:id', auth, async (req, res) => {
       [name.trim(), type, image_url, JSON.stringify(mergedData),
        parent_map_id || null, parent_poi_id || null, req.params.id],
     );
+
+    // Belt-and-suspenders: if body contained sketch cells, ensure they are
+    // written via jsonb_set so they are never dropped by enrichMapData spreads.
+    const sketchFromBody = req.body?.data?.sketch;
+    if (sketchFromBody?.cells?.length > 0) {
+      console.log(`[maps PUT] id=${req.params.id} jsonb_set fallback — patching ${sketchFromBody.cells.length} cells`);
+      updated = await db.one(
+        `UPDATE maps
+         SET data = jsonb_set(data::jsonb, '{sketch}', $1::jsonb, true),
+             updated_at = NOW()
+         WHERE id = $2
+         RETURNING id, campaign_id, name, type, image_url, data,
+                   parent_map_id, parent_poi_id, created_at, updated_at`,
+        [JSON.stringify(sketchFromBody), req.params.id],
+      );
+      console.log(`[maps PUT] id=${req.params.id} jsonb_set done — cells now in DB: ${updated.data?.sketch?.cells?.length ?? '?'}`);
+    }
+
     res.json(updated);
   } catch (e) { next500(e, res); }
 });
