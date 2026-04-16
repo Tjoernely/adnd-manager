@@ -297,6 +297,23 @@ function buildMustKeepFacts(spec) {
     facts.push('Mountain range in the NORTHEAST corner (top-right area) MUST be rendered. This is NOT optional — show illustrated mountain peaks (do NOT omit)');
   }
 
+  // J2. Continuous mountain range along eastern edge
+  const eastMountainRows = [];
+  for (let y = 0; y < 32; y++) {
+    const hasEastMountain = allCells.some(c => c.x >= 28 && c.y === y && isMountainCell(c));
+    if (hasEastMountain) eastMountainRows.push(y);
+  }
+  if (eastMountainRows.length > 5) {
+    const first = eastMountainRows[0];
+    const last  = eastMountainRows[eastMountainRows.length - 1];
+    facts.push(
+      `CRITICAL: A continuous mountain range runs along the ENTIRE eastern edge ` +
+      `from top (row ${first}) to bottom (row ${last}). ` +
+      `Mountains MUST appear along the full right side of the map — not just the top corner. ` +
+      `(do NOT omit)`
+    );
+  }
+
   // K. Swamp adjacent to mountain cells
   const mountainCells = new Set(allCells.filter(isMountainCell).map(c => `${c.x},${c.y}`));
   const swampNextToMountain = cells.filter(c => c.biome === 'swamp' &&
