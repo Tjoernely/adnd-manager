@@ -660,11 +660,13 @@ export function CharacterPrintView({ characterData, characterId }) {
               const thac0w = calcWeaponThac0(w, cd);
               const apr    = calcAttacksPerRound(w, cd, equippedItems);
               const noteNotes = w.notes ? w.notes.substring(0, 50) : null;
+              const isBastardSword = (w.name ?? '').toLowerCase().includes('bastard');
               const note   = [
                 w.identify_state === 'unidentified' ? '?' : null,
                 w.is_cursed ? 'Cursed' : null,
                 w.magic_bonus && w.identify_state === 'identified' && w.magic_bonus !== 0
                   ? sgn(w.magic_bonus) : null,
+                isBastardSword ? '1H: 1d8/1d12 | 2H: 2d4/2d8' : null,
                 noteNotes,
               ].filter(Boolean).join(' · ');
               return (

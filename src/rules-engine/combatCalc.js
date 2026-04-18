@@ -116,6 +116,30 @@ const WEAP_ID_TO_NAME = (() => {
   return map;
 })();
 
+// ── Flexible weapon name matching ────────────────────────────────────────────
+// Handles "Sword, Bastard" (DB comma-notation) vs "Bastard Sword" (catalog).
+// Also strips parenthetical suffixes like "(1H)", "(2H)".
+function weaponNamesMatch(equippedName, catalogName) {
+  const a = (equippedName ?? '').toLowerCase().trim();
+  const b = (catalogName ?? '').toLowerCase().trim();
+  if (!a || !b) return false;
+
+  // Strip parenthetical suffixes, then collapse whitespace
+  const clean = s => s.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+  const na = clean(a);
+  const nb = clean(b);
+
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+
+  // Reverse comma-notation: "Sword, Bastard" → "Bastard Sword"
+  const reversed = na.includes(',')
+    ? na.split(',').map(p => p.trim()).reverse().join(' ')
+    : na;
+
+  return reversed === nb || reversed.includes(nb) || nb.includes(reversed);
+}
+
 /**
  * Returns the masteryPicked entry for the given equipped weapon, or null.
  * Matches by checking if any masteryPicked key's weapon name is a substring
@@ -129,9 +153,7 @@ function findMasteryEntry(weapon, cd) {
     if (!entry?.tier) continue;
     const catalogName = WEAP_ID_TO_NAME[weapId];
     if (!catalogName) continue;
-    // Consider proficient if names share a meaningful substring
-    const base = catalogName.split(',')[0];           // e.g. "long sword"
-    if (itemName.includes(base) || base.includes(itemName.split(',')[0])) {
+    if (weaponNamesMatch(itemName, catalogName)) {
       return entry; // { tier, type }
     }
   }
@@ -149,37 +171,28 @@ function isWeaponProficient(weapon, cd) {
     if (weapPicked[bg.id]) {
       for (const tg of bg.tightGroups) {
         for (const w of tg.weapons) {
-          if (itemName.includes(w.name.toLowerCase()) ||
-              w.name.toLowerCase().includes(itemName.split(',')[0])) return true;
+          if (weaponNamesMatch(itemName, w.name)) return true;
         }
       }
       for (const w of bg.unrelated ?? []) {
-        if (itemName.includes(w.name.toLowerCase()) ||
-            w.name.toLowerCase().includes(itemName.split(',')[0])) return true;
+        if (weaponNamesMatch(itemName, w.name)) return true;
       }
     }
     // Tight group
     for (const tg of bg.tightGroups) {
       if (weapPicked[tg.id]) {
         for (const w of tg.weapons) {
-          if (itemName.includes(w.name.toLowerCase()) ||
-              w.name.toLowerCase().includes(itemName.split(',')[0])) return true;
+          if (weaponNamesMatch(itemName, w.name)) return true;
         }
       }
       // Single weapon
       for (const w of tg.weapons) {
-        if (weapPicked[w.id] && (
-          itemName.includes(w.name.toLowerCase()) ||
-          w.name.toLowerCase().includes(itemName.split(',')[0])
-        )) return true;
+        if (weapPicked[w.id] && weaponNamesMatch(itemName, w.name)) return true;
       }
     }
     // Unrelated singles
     for (const w of bg.unrelated ?? []) {
-      if (weapPicked[w.id] && (
-        itemName.includes(w.name.toLowerCase()) ||
-        w.name.toLowerCase().includes(itemName.split(',')[0])
-      )) return true;
+      if (weapPicked[w.id] && weaponNamesMatch(itemName, w.name)) return true;
     }
   }
   return false;
@@ -197,18 +210,21 @@ function getNonProfPenalty(cd) {
 // ── Racial weapon bonus ───────────────────────────────────────────────────────
 
 function getRacialWeaponBonus(weapon, cd) {
-  const race       = (cd.selectedRace ?? '').toLowerCase();
-  const weaponName = (weapon.name ?? '').toLowerCase();
+  const race = (cd.selectedRace ?? '').toLowerCase();
+  // Normalize weapon name: strip parens, reverse comma-notation
+  const raw   = (weapon.name ?? '').toLowerCase();
+  const clean = raw.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+  const norm  = clean.includes(',')
+    ? clean.split(',').map(p => p.trim()).reverse().join(' ')
+    : clean;
 
   // Elves: –1 THAC0 with bows and long/short swords
   if (race.includes('elf')) {
-    if (weaponName.includes('bow') ||
-        weaponName.includes('long sword') ||
-        weaponName.includes('short sword')) return -1;
+    if (norm.includes('bow') || norm.includes('long sword') || norm.includes('short sword')) return -1;
   }
   // Halflings: –1 THAC0 with slings and thrown (ranged) weapons
-  if (race.includes('halfling') || race.includes('half')) {
-    if (weaponName.includes('sling') || weapon.item_type === 'ranged') return -1;
+  if (race.includes('halfling')) {
+    if (norm.includes('sling') || weapon.item_type === 'ranged') return -1;
   }
   return 0;
 }
@@ -216,14 +232,23 @@ function getRacialWeaponBonus(weapon, cd) {
 // ── Weapon of choice bonus ────────────────────────────────────────────────────
 
 function getWocBonus(weapon, cd) {
-  const woc        = (cd.wocPicked ?? '').toLowerCase();
+  const woc = (cd.wocPicked ?? '').toLowerCase();
   if (!woc) return 0;
-  const weaponName = (weapon.name ?? '').toLowerCase();
-  // wocPicked is a weaponId like "ws_long_sword"
   const catalogName = WEAP_ID_TO_NAME[woc] ?? woc.replace(/^w[a-z]_/, '').replace(/_/g, ' ');
-  const base = catalogName.split(',')[0];
-  if (weaponName.includes(base) || base.includes(weaponName.split(',')[0])) return -1;
+  if (weaponNamesMatch(weapon.name, catalogName)) return -1;
   return 0;
+}
+
+// ── Human racial attack bonus (hu01) ─────────────────────────────────────────
+
+function getHumanAttackBonus(weapon, cd) {
+  const hu01 = (cd.racialPicked ?? {}).hu01;
+  if (!hu01 || typeof hu01 !== 'object') return 0;
+  const selectedWeaponId = hu01.weapon;
+  if (!selectedWeaponId) return 0;
+  const catalogName = WEAP_ID_TO_NAME[selectedWeaponId];
+  if (!catalogName) return 0;
+  return weaponNamesMatch(weapon.name, catalogName) ? -1 : 0; // -1 THAC0 = +1 to hit
 }
 
 // ── Mastery hit/damage bonuses ────────────────────────────────────────────────
@@ -353,8 +378,11 @@ export function calcWeaponThac0(weapon, characterData) {
   // 8. Racial bonus (negative = better)
   const racialBonus = getRacialWeaponBonus(weapon, cd);
 
+  // 9. Human racial attack bonus — hu01 (+1 to hit with chosen weapon)
+  const humanBonus = getHumanAttackBonus(weapon, cd);
+
   const finalThac0 = baseThac0 + abilityMod + profBonus
-                   + masteryHitMod + wocBonus + magicBonus + racialBonus;
+                   + masteryHitMod + wocBonus + magicBonus + racialBonus + humanBonus;
 
   return {
     finalThac0,
@@ -366,6 +394,7 @@ export function calcWeaponThac0(weapon, characterData) {
       wocBonus,
       magicBonus,
       racialBonus,
+      humanBonus,
     },
   };
 }
