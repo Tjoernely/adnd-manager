@@ -320,8 +320,11 @@ export function KitsTab(props) {
                     <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
                       {(activeKit.nwpRequired||[]).map(p => {
                         const ok = profNamePicked(p);
+                        const baseName = p.replace(/\s*\*$/, '').trim();
+                        const profEntry = (ALL_PROFS||[]).find(x => x.name.toLowerCase() === baseName.toLowerCase());
+                        const tip = profEntry?.desc || 'Description not available';
                         return (
-                          <span key={p} style={{ fontSize:11,
+                          <span key={p} title={tip} style={{ fontSize:11, cursor:'help',
                             color: ok ? "#60c060" : C.red,
                             background: ok ? "rgba(60,160,60,.1)" : "rgba(200,50,50,.08)",
                             border:`1px solid ${ok ? "rgba(60,160,60,.25)" : "rgba(200,50,50,.25)"}`,
@@ -340,8 +343,11 @@ export function KitsTab(props) {
                     <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
                       {(activeKit.nwpRecommended||[]).map(p => {
                         const ok = profNamePicked(p);
+                        const baseName = p.replace(/\s*\*$/, '').trim();
+                        const profEntry = (ALL_PROFS||[]).find(x => x.name.toLowerCase() === baseName.toLowerCase());
+                        const tip = profEntry?.desc || 'Description not available';
                         return (
-                          <span key={p} style={{ fontSize:11,
+                          <span key={p} title={tip} style={{ fontSize:11, cursor:'help',
                             color: ok ? C.gold : C.textDim,
                             background: ok ? "rgba(212,160,53,.1)" : "transparent",
                             border:`1px solid ${ok ? "rgba(212,160,53,.3)" : C.border}`,

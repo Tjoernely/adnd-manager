@@ -159,7 +159,7 @@ export function ProfsTab(props) {
                         )}
                         <CpBadge>{effCp}</CpBadge>
                       </div>
-                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:prof.desc});}} />
+                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:prof.desc||'See rulebook for details.'});}} />
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.textDim }}>
                       <span style={{ color:"#8a7050" }}>{subLabel} {statScore}</span>
