@@ -57,6 +57,7 @@ function getWeaponNameById(weapId) {
 import {
   THIEF_SKILLS, SKILL_CLASS_ABILS,
   getThiefRacialAdj, getSkillSubAdj, calcThiefSkill, THIEF_ARMOR_ADJ,
+  getRangerRacialAdj,
 } from '../../data/thieving.js';
 
 import { getSocialRank, getRankTable } from '../../data/socialStatus.js';
@@ -409,12 +410,29 @@ export function CharacterPrintView({ characterData, characterId }) {
   // ── Thieving skills ───────────────────────────────────────────────────────
   const thiefEntries = useMemo(() => {
     if (!selectedClass || !classAbilPicked) return [];
-    // Ranger: fixed level-based values (S&P Table 22) — no disc/racial/armor adjustments
+    // Ranger: fixed level-based + Balance + racial modifiers (S&P Table 22)
     if (selectedClass === 'ranger') {
-      const pct = getRangerThievingPct(charLevel ?? 1);
+      const base   = getRangerThievingPct(charLevel ?? 1);
+      const balMod = getBalanceStats(effSub('balance')).moveSilent ?? 0;
+      const racial = getRangerRacialAdj(selectedRace ?? 'human');
+      const sgn = n => n === 0 ? '' : (n > 0 ? `+${n}%` : `${n}%`);
+      const breakdown = (raceMod) => {
+        const parts = [`base ${base}%`];
+        if (balMod !== 0) parts.push(`Dex ${sgn(balMod)}`);
+        if (raceMod !== 0) parts.push(`Race ${sgn(raceMod)}`);
+        return parts.join(' ');
+      };
       return [
-        { id: 'ms', label: 'Move Silently', final: pct, rangerFixed: true },
-        { id: 'hs', label: 'Hide in Shadows', final: pct, rangerFixed: true },
+        {
+          id: 'ms', label: 'Move Silently', rangerFixed: true,
+          final: Math.min(95, Math.max(5, base + balMod + racial.ms)),
+          breakdown: breakdown(racial.ms),
+        },
+        {
+          id: 'hs', label: 'Hide in Shadows', rangerFixed: true,
+          final: Math.min(95, Math.max(5, base + balMod + racial.hs)),
+          breakdown: breakdown(racial.hs),
+        },
       ];
     }
     const racialAdj = getThiefRacialAdj(selectedRace ?? 'human');
@@ -712,7 +730,7 @@ export function CharacterPrintView({ characterData, characterId }) {
             <SectionHead>{selectedClass === 'ranger' ? 'Ranger Abilities' : 'Thieving Skills'}</SectionHead>
             {selectedClass === 'ranger' && (
               <div style={{ fontSize:10, color:'#888', marginBottom:6, fontStyle:'italic' }}>
-                Fixed percentages per level (S&P Table 22) — no discretionary points
+                Base from level (S&P Table 22) + Balance (DEX) + racial bonus — no discretionary points
               </div>
             )}
             <div className="ps-thief-grid">
@@ -720,7 +738,12 @@ export function CharacterPrintView({ characterData, characterId }) {
                 <div key={sk.id} className="ps-thief-item">
                   <span className="ps-thief-label">{sk.label}</span>
                   <span className="ps-thief-val">
-                    {sk.final}%{sk.rangerFixed ? ' (fixed)' : ''}
+                    {sk.final}%
+                    {sk.breakdown && (
+                      <span style={{ fontSize:'0.8em', color:'#888', display:'block' }}>
+                        ({sk.breakdown})
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}

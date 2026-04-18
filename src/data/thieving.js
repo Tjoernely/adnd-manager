@@ -97,6 +97,18 @@ export function getThiefRacialAdj(raceId) {
   return THIEF_RACIAL_ADJ[raceId] ?? THIEF_RACIAL_ADJ.human;
 }
 
+// ── Ranger stealth racial bonuses (separate from standard thief Table 28) ─────
+// Rangers apply these to Move Silently and Hide in Shadows per S&P rules.
+export const RANGER_STEALTH_ADJ = {
+  elf:      { ms: +5, hs: +10 },
+  halfelf:  { ms: +5, hs:   0 },
+  halfling: { ms:+15, hs: +10 },
+};
+
+export function getRangerRacialAdj(raceId) {
+  return RANGER_STEALTH_ADJ[raceId] ?? { ms: 0, hs: 0 };
+}
+
 // Helper: get sub-stat adj for a score (clamp 9-20)
 export function getThiefDexAdj(score) {
   const clamped = Math.max(9, Math.min(20, Math.floor(score)));

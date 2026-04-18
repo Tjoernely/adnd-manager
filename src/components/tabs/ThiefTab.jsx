@@ -4,7 +4,9 @@ import {
   THIEF_SKILLS, THIEF_DISC_POINTS, SKILL_CLASS_ABILS,
   THIEF_ARMOR_ADJ, THIEF_ARMOR_OPTIONS,
   getThiefRacialAdj, getThiefDexAdj, calcThiefSkill,
+  getRangerRacialAdj,
 } from "../../data/thieving.js";
+import { getBalanceStats } from "../../data/abilities.js";
 import { ChHead } from "../ui/index.js";
 
 // Color-code final skill %
@@ -230,11 +232,18 @@ export function ThiefTab(props) {
   const racialAdj = isRanger ? {} : getThiefRacialAdj(selectedRace);
   const armorData = isRanger ? {} : (THIEF_ARMOR_ADJ[thiefArmorType] ?? THIEF_ARMOR_ADJ.padded_studded);
 
-  // ── Ranger: fixed level-based read-only display (S&P Table 22) ───────────────
+  // ── Ranger: fixed level-based + balance/racial modifiers (S&P Table 22) ───────
   if (isRanger) {
-    const lvl   = Math.max(1, charLevel ?? 1);
-    const pct   = getRangerThievingPct(lvl);
-    const band  = getRangerLevelBand(lvl);
+    const lvl      = Math.max(1, charLevel ?? 1);
+    const base     = getRangerThievingPct(lvl);
+    const band     = getRangerLevelBand(lvl);
+    const balMod   = getBalanceStats(balScore).moveSilent ?? 0;
+    const racial   = getRangerRacialAdj(selectedRace);
+    const msRace   = racial.ms;
+    const hsRace   = racial.hs;
+    const msFinal  = Math.min(95, Math.max(5, base + balMod + msRace));
+    const hsFinal  = Math.min(95, Math.max(5, base + balMod + hsRace));
+
     const RANGER_LEVELS = [
       { band:"1–2",  pct:10 },
       { band:"3–4",  pct:15 },
@@ -243,36 +252,44 @@ export function ThiefTab(props) {
       { band:"9–10", pct:40 },
       { band:"11+",  pct:50 },
     ];
+
+    const sgn = n => n === 0 ? null : (n > 0 ? `+${n}` : `${n}`);
+
+    const BreakdownLine = ({ baseVal, dexMod, raceMod }) => (
+      <div style={{ fontSize:10, color:C.textDim, marginTop:4 }}>
+        base {baseVal}%
+        {dexMod !== 0 && <span style={{ color: dexMod > 0 ? C.green : C.red }}> {sgn(dexMod)}% Balance</span>}
+        {raceMod !== 0 && <span style={{ color: C.blue }}> {sgn(raceMod)}% Race</span>}
+      </div>
+    );
+
     return (
       <div>
         <ChHead icon="🌲" num="Class Specific Skills" title="Ranger Abilities"
-          sub="Rangers use Move Silently and Hide in Shadows at fixed percentages per level (S&P Table 22). No discretionary points." />
+          sub="Move Silently and Hide in Shadows: base value from level (S&P Table 22) + Balance sub-ability + racial bonus. No discretionary points." />
 
         <div style={{ display:"flex", gap:20, flexWrap:"wrap", marginBottom:24 }}>
-          {[
-            { label:"Move Silently", pct },
-            { label:"Hide in Shadows", pct },
-          ].map(({ label, pct: p }) => (
-            <div key={label} style={{ flex:"1 1 200px", padding:"16px 20px",
-              background:"rgba(0,0,0,.3)", border:`1px solid ${C.border}`,
-              borderRadius:10 }}>
-              <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-                textTransform:"uppercase", marginBottom:6 }}>{label}</div>
-              <div style={{ fontSize:36, fontWeight:"bold", color:skillColor(p) }}>
-                {p}%
-              </div>
-              <div style={{ fontSize:11, color:C.textDim, marginTop:4 }}>
-                Level {band} — fixed (S&P Table 22)
-              </div>
-            </div>
-          ))}
+          <div style={{ flex:"1 1 200px", padding:"16px 20px",
+            background:"rgba(0,0,0,.3)", border:`1px solid ${C.border}`, borderRadius:10 }}>
+            <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+              textTransform:"uppercase", marginBottom:6 }}>Move Silently</div>
+            <div style={{ fontSize:36, fontWeight:"bold", color:skillColor(msFinal) }}>{msFinal}%</div>
+            <BreakdownLine baseVal={base} dexMod={balMod} raceMod={msRace} />
+          </div>
+          <div style={{ flex:"1 1 200px", padding:"16px 20px",
+            background:"rgba(0,0,0,.3)", border:`1px solid ${C.border}`, borderRadius:10 }}>
+            <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+              textTransform:"uppercase", marginBottom:6 }}>Hide in Shadows</div>
+            <div style={{ fontSize:36, fontWeight:"bold", color:skillColor(hsFinal) }}>{hsFinal}%</div>
+            <BreakdownLine baseVal={base} dexMod={balMod} raceMod={hsRace} />
+          </div>
         </div>
 
         <div style={{ padding:"10px 16px",
           background:"rgba(0,0,0,.2)", border:`1px solid ${C.border}`,
           borderRadius:8, marginBottom:20 }}>
           <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
-            textTransform:"uppercase", marginBottom:10 }}>All Levels (S&P Table 22)</div>
+            textTransform:"uppercase", marginBottom:10 }}>Base by Level (S&P Table 22)</div>
           <div style={{ display:"flex", gap:0, flexWrap:"wrap" }}>
             {RANGER_LEVELS.map(row => {
               const active = row.band === band;
@@ -298,7 +315,7 @@ export function ThiefTab(props) {
         </div>
 
         <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic" }}>
-          Rangers receive Move Silently and Hide in Shadows at these fixed values. No racial, armor, or discretionary adjustments apply (S&P p.70).
+          No armor or discretionary point adjustments. Balance (DEX) and racial bonuses apply per S&P rules.
         </div>
       </div>
     );
