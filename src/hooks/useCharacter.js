@@ -38,6 +38,18 @@ import {
   THIEF_SKILLS, THIEF_DISC_POINTS, SKILL_CLASS_ABILS,
 } from "../data/thieving.js";
 
+// ── Module-level constants (static, defined outside the hook) ─────────────────
+
+// Racial abilities that require a weapon choice stored as { weapon: weaponId }
+const WEAPON_CHOICE_ABILS = new Set(["hu01"]);
+
+// Druid free sphere IDs (major access, no CP cost, auto-selected)
+const DRUID_FREE_SPHERE_IDS = new Set([
+  'cl_all_maj','cl_ani_maj','cl_ela_maj','cl_hea_maj','cl_plt_maj','cl_wea_maj',
+]);
+// ELA cascade: Elemental All (major) automatically grants these 4 sub-spheres
+const DRUID_ELA_SUB_IDS = ["cl_air_maj","cl_ear_maj","cl_fir_maj","cl_wat_maj"];
+
 export function useCharacter() {
 
   // ── Identity
@@ -173,17 +185,28 @@ export function useCharacter() {
 
 
   // Class abilities for current class
+  // Druid: replace sphere abilities with the full cleric sphere list,
+  // marking the 6 free druid spheres with druidFree: true.
   const currentAbils = useMemo(() => {
     if (!selectedClass) return [];
+    if (selectedClass === 'druid') {
+      const clericSpheres = (CLASS_ABILITIES.cleric ?? [])
+        .filter(a => a.sphere)
+        .map(a => DRUID_FREE_SPHERE_IDS.has(a.id) ? { ...a, druidFree: true } : a);
+      const druidOther = (CLASS_ABILITIES.druid ?? []).filter(a => !a.sphere);
+      return [...clericSpheres, ...druidOther];
+    }
     return CLASS_ABILITIES[selectedClass] ?? [];
   }, [selectedClass]);
 
   // CP spent on class abilities (restrictions give CP back)
   const classAbilCPSpent = useMemo(() => {
-    // Sub-spheres that are free because Elemental All (major/minor) is active
+    // Sub-spheres that are free because Elemental All (major/minor) is active.
+    // Druid free spheres are also exempt — they are auto-selected at no cost.
     const elaFree = new Set([
       ...(classAbilPicked["cl_ela_maj"] ? ["cl_air_maj","cl_ear_maj","cl_fir_maj","cl_wat_maj"] : []),
       ...(classAbilPicked["cl_ela_min"] ? ["cl_air_min","cl_ear_min","cl_fir_min","cl_wat_min"] : []),
+      ...(selectedClass === 'druid' ? Array.from(DRUID_FREE_SPHERE_IDS) : []),
     ]);
     const abilCost = currentAbils.reduce((sum, a) => {
       if (!classAbilPicked[a.id]) return sum;
@@ -196,7 +219,7 @@ export function useCharacter() {
     const schoolCost = hasMg00 ? 0
       : Object.values(mageSchoolsPicked).filter(Boolean).length * 5;
     return abilCost + schoolCost;
-  }, [currentAbils, classAbilPicked, mageSchoolsPicked]);
+  }, [currentAbils, classAbilPicked, mageSchoolsPicked, selectedClass]);
 
   // Whether any picked ability grants exStr (warrior-priests etc)
   const abilGrantsExStr = useMemo(() =>
@@ -720,6 +743,9 @@ export function useCharacter() {
             setRacialPicked(p => ({ ...p, [ab.id]: true }));
           },
         });
+      } else if (WEAPON_CHOICE_ABILS.has(ab.id)) {
+        // Store as object so the weapon choice can be recorded later
+        setRacialPicked(p => ({ ...p, [ab.id]: { weapon: null } }));
       } else {
         setRacialPicked(p => ({ ...p, [ab.id]: true }));
       }
@@ -731,6 +757,15 @@ export function useCharacter() {
       });
     } else doSelect();
   };
+
+  // ── Update weapon choice for a racial ability (e.g. hu01 attack bonus)
+  const setRacialAbilWeapon = useCallback((abilId, weaponId) => {
+    setRacialPicked(p => {
+      const current = p[abilId];
+      if (!current || typeof current !== 'object') return p;
+      return { ...p, [abilId]: { ...current, weapon: weaponId || null } };
+    });
+  }, []);
 
   // ── Toggle class
   // ── Monstrous race selection
@@ -769,7 +804,18 @@ export function useCharacter() {
     }
   };
 
-  const handleClassSelect = id => { setSelectedClass(id === selectedClass ? null : id); setClassAbilPicked({}); setSelectedKit(null); };
+  const handleClassSelect = id => {
+    const picking = id !== selectedClass;
+    // Druid: pre-populate free spheres (and ELA cascade sub-spheres)
+    let initial = {};
+    if (id === 'druid' && picking) {
+      DRUID_FREE_SPHERE_IDS.forEach(sid => { initial[sid] = true; });
+      DRUID_ELA_SUB_IDS.forEach(sid => { initial[sid] = true; });
+    }
+    setSelectedClass(id === selectedClass ? null : id);
+    setClassAbilPicked(initial);
+    setSelectedKit(null);
+  };
 
   // ── Toggle trait (with conflict detection)
   const toggleTrait = tr => {
@@ -1091,7 +1137,6 @@ export function useCharacter() {
     setBaseScores(s.baseScores ?? Object.fromEntries(PARENT_STATS.map(st => [st, 0])));
     setExPcts(s.exPcts ?? { muscle: 50, stamina: 50 });
     setSplitMods(s.splitMods ?? Object.fromEntries(ALL_SUBS.map(st => [st.id, 0])));
-    setClassAbilPicked(s.classAbilPicked ?? {});
     setSelectedKit(s.selectedKit ?? null);
     setKitAutoNWPs(s.kitAutoNWPs ?? {});
     setKitFreeWeaponPick(s.kitFreeWeaponPick ?? null);
@@ -1104,6 +1149,15 @@ export function useCharacter() {
     setMonstrousCustomize(s.monstrousCustomize ?? false);
     setMongrelChoice(s.mongrelChoice ?? null);
     setSelectedClass(s.selectedClass ?? null);
+    {
+      // Ensure druid free spheres are always present (backward compat + new chars)
+      let picked = { ...(s.classAbilPicked ?? {}) };
+      if (s.selectedClass === 'druid') {
+        DRUID_FREE_SPHERE_IDS.forEach(sid => { picked[sid] = true; });
+        DRUID_ELA_SUB_IDS.forEach(sid => { picked[sid] = true; });
+      }
+      setClassAbilPicked(picked);
+    }
     setSpecialistSchool(s.specialistSchool ?? null);
     setMageSchoolsPicked(s.mageSchoolsPicked ?? {});
     setExtraOpposition(s.extraOpposition ?? []);
@@ -1211,7 +1265,7 @@ export function useCharacter() {
     monstrousRaceData, monstrousAdjMods, monstrousBudget,
     // Handlers
     toggleClassAbil, rollStat, rollAll, setBase, adjustSplit,
-    handleRaceSelect, handleSubRaceSelect, toggleRacialAbil,
+    handleRaceSelect, handleSubRaceSelect, toggleRacialAbil, setRacialAbilWeapon,
     handleMonstrousRaceSelect, toggleMonstrousFeat,
     handleClassSelect, toggleTrait, toggleDisadv, toggleProf, toggleWeap, profSuccess,
     // Save / Load

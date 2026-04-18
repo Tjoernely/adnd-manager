@@ -324,6 +324,32 @@ export function ClassesTab(props) {
                     const majPicked = grp.maj ? !!classAbilPicked[grp.maj.id] : false;
                     const minPicked = grp.min ? !!classAbilPicked[grp.min.id] : false;
 
+                    // Druid free spheres: locked as Major at no CP cost
+                    if (grp.maj?.druidFree) {
+                      return (
+                        <div key={grp.key} style={{
+                          background:"linear-gradient(145deg,#060e08,#040c06)",
+                          border:"1px solid #3a6a30",
+                          borderRadius:7, padding:"8px 12px",
+                          transition:"all .15s",
+                        }}>
+                          <div style={{ display:"flex", justifyContent:"space-between",
+                            alignItems:"center", gap:8, marginBottom:4 }}>
+                            <div style={{ fontSize:11, fontWeight:"bold", color:"#80c070" }}>
+                              🌿 {grp.label}
+                            </div>
+                            <span style={{ fontSize:9, color:"#507050",
+                              border:"1px solid #3a6a30", borderRadius:4, padding:"2px 6px" }}>
+                              ● Major — FREE
+                            </span>
+                          </div>
+                          <div style={{ fontSize:10, color:"#5a7a50" }}>
+                            {grp.maj?.desc}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     // mode: "none" | "minor" | "major"
                     const mode = majPicked ? "major" : minPicked ? "minor" : "none";
 
@@ -779,13 +805,15 @@ export function ClassesTab(props) {
                   {currentAbils.filter(a => classAbilPicked[a.id]).map(a => (
                     <span key={a.id} style={{ fontSize: 10, padding: "2px 8px",
                       borderRadius: 4,
-                      background: a.restriction
-                        ? "rgba(180,80,30,.15)"
-                        : a.sphere ? "rgba(80,130,220,.15)" : "rgba(212,160,53,.12)",
-                      border: `1px solid ${a.restriction ? "#c06030" : a.sphere ? "#6090d8" : C.gold}44`,
-                      color: a.restriction ? "#e08050" : a.sphere ? "#90b8f0" : C.gold,
+                      background: a.druidFree
+                        ? "rgba(30,120,50,.15)"
+                        : a.restriction
+                          ? "rgba(180,80,30,.15)"
+                          : a.sphere ? "rgba(80,130,220,.15)" : "rgba(212,160,53,.12)",
+                      border: `1px solid ${a.druidFree ? "#3a6a30" : a.restriction ? "#c06030" : a.sphere ? "#6090d8" : C.gold}44`,
+                      color: a.druidFree ? "#80c070" : a.restriction ? "#e08050" : a.sphere ? "#90b8f0" : C.gold,
                     }}>
-                      {a.name} ({a.restriction ? "+" : ""}{a.cp}cp)
+                      {a.name} {a.druidFree ? "(FREE)" : `(${a.restriction ? "+" : ""}${a.cp}cp)`}
                     </span>
                   ))}
                 </div>

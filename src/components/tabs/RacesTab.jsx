@@ -1,8 +1,15 @@
 import { C, fmt, statColor, numInputStyle } from "../../data/constants.js";
 import { RACES, SUB_RACES, MONSTROUS_RACES, MONSTROUS_FEAT_MAP, MONSTROUS_FEATURES } from "../../data/races.js";
 import { PARENT_STATS, PARENT_STAT_LABELS } from "../../data/abilities.js";
+import { WEAPON_CANONICAL_IDS } from "../../data/weapons.js";
 
 import { ChHead, IBtn, TagBadge, Checkbox, CpBadge } from "../ui/index.js";
+
+// Flat sorted weapon list for hu01 dropdown (de-duped canonical weapons)
+const FLAT_WEAPONS = Object.values(WEAPON_CANONICAL_IDS)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+const WEAPON_CHOICE_ABILS = new Set(["hu01"]);
 
 export function RacesTab(props) {
   const {
@@ -16,7 +23,7 @@ export function RacesTab(props) {
     baseScores,
     ruleBreaker,
     setInfoModal, setConfirmBox,
-    handleRaceSelect, handleSubRaceSelect, toggleRacialAbil,
+    handleRaceSelect, handleSubRaceSelect, toggleRacialAbil, setRacialAbilWeapon,
     handleMonstrousRaceSelect, toggleMonstrousFeat,
     muscleStats,
     ALL_SUBS,
@@ -221,6 +228,30 @@ export function RacesTab(props) {
                                 <span style={{ color:C.amber, marginLeft:8 }}>
                                   Att {fmt(muscleStats.attAdj)} Dmg {fmt(muscleStats.dmgAdj)}
                                 </span>
+                              )}
+                            </div>
+                          )}
+                          {WEAPON_CHOICE_ABILS.has(ab.id) && picked && (
+                            <div style={{ marginTop:8 }} onClick={e => e.stopPropagation()}>
+                              <select
+                                value={typeof racialPicked[ab.id] === "object" ? (racialPicked[ab.id]?.weapon ?? "") : ""}
+                                onChange={e => setRacialAbilWeapon(ab.id, e.target.value)}
+                                style={{
+                                  width:"100%", padding:"5px 8px", borderRadius:5,
+                                  background:"#0c1008", border:`1px solid ${
+                                    racialPicked[ab.id]?.weapon ? C.gold : C.red}`,
+                                  color: racialPicked[ab.id]?.weapon ? C.textBri : C.red,
+                                  fontSize:11, fontFamily:"inherit", cursor:"pointer",
+                                }}>
+                                <option value="">— Choose weapon —</option>
+                                {FLAT_WEAPONS.map(w => (
+                                  <option key={w.id} value={w.id}>{w.name}</option>
+                                ))}
+                              </select>
+                              {!racialPicked[ab.id]?.weapon && (
+                                <div style={{ fontSize:10, color:C.red, marginTop:3 }}>
+                                  ⚠ Must select a weapon to complete this ability
+                                </div>
                               )}
                             </div>
                           )}

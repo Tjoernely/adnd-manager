@@ -21,6 +21,24 @@ function sgn(n) {
   return "—";
 }
 
+// Ranger thieving % from S&P Table 22
+function getRangerThievingPct(level) {
+  if (level >= 11) return 50;
+  if (level >= 9)  return 40;
+  if (level >= 7)  return 30;
+  if (level >= 5)  return 20;
+  if (level >= 3)  return 15;
+  return 10;
+}
+function getRangerLevelBand(level) {
+  if (level >= 11) return "11+";
+  if (level >= 9)  return "9–10";
+  if (level >= 7)  return "7–8";
+  if (level >= 5)  return "5–6";
+  if (level >= 3)  return "3–4";
+  return "1–2";
+}
+
 // Classes that show this tab
 const THIEF_CLASSES   = new Set(["thief", "bard", "ranger"]);
 const TURNING_CLASSES = new Set(["cleric", "paladin", "shaman"]);
@@ -211,6 +229,80 @@ export function ThiefTab(props) {
   const isRanger  = selectedClass === "ranger";
   const racialAdj = isRanger ? {} : getThiefRacialAdj(selectedRace);
   const armorData = isRanger ? {} : (THIEF_ARMOR_ADJ[thiefArmorType] ?? THIEF_ARMOR_ADJ.padded_studded);
+
+  // ── Ranger: fixed level-based read-only display (S&P Table 22) ───────────────
+  if (isRanger) {
+    const lvl   = Math.max(1, charLevel ?? 1);
+    const pct   = getRangerThievingPct(lvl);
+    const band  = getRangerLevelBand(lvl);
+    const RANGER_LEVELS = [
+      { band:"1–2",  pct:10 },
+      { band:"3–4",  pct:15 },
+      { band:"5–6",  pct:20 },
+      { band:"7–8",  pct:30 },
+      { band:"9–10", pct:40 },
+      { band:"11+",  pct:50 },
+    ];
+    return (
+      <div>
+        <ChHead icon="🌲" num="Class Specific Skills" title="Ranger Abilities"
+          sub="Rangers use Move Silently and Hide in Shadows at fixed percentages per level (S&P Table 22). No discretionary points." />
+
+        <div style={{ display:"flex", gap:20, flexWrap:"wrap", marginBottom:24 }}>
+          {[
+            { label:"Move Silently", pct },
+            { label:"Hide in Shadows", pct },
+          ].map(({ label, pct: p }) => (
+            <div key={label} style={{ flex:"1 1 200px", padding:"16px 20px",
+              background:"rgba(0,0,0,.3)", border:`1px solid ${C.border}`,
+              borderRadius:10 }}>
+              <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+                textTransform:"uppercase", marginBottom:6 }}>{label}</div>
+              <div style={{ fontSize:36, fontWeight:"bold", color:skillColor(p) }}>
+                {p}%
+              </div>
+              <div style={{ fontSize:11, color:C.textDim, marginTop:4 }}>
+                Level {band} — fixed (S&P Table 22)
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding:"10px 16px",
+          background:"rgba(0,0,0,.2)", border:`1px solid ${C.border}`,
+          borderRadius:8, marginBottom:20 }}>
+          <div style={{ fontSize:10, color:C.textDim, letterSpacing:2,
+            textTransform:"uppercase", marginBottom:10 }}>All Levels (S&P Table 22)</div>
+          <div style={{ display:"flex", gap:0, flexWrap:"wrap" }}>
+            {RANGER_LEVELS.map(row => {
+              const active = row.band === band;
+              return (
+                <div key={row.band} style={{
+                  flex:"1 1 80px", padding:"8px 12px", textAlign:"center",
+                  background: active ? "rgba(212,160,53,.15)" : "transparent",
+                  border: active ? `1px solid ${C.gold}66` : "1px solid transparent",
+                  borderRadius: active ? 6 : 0,
+                }}>
+                  <div style={{ fontSize:9, color: active ? C.gold : C.textDim,
+                    letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>
+                    Lvl {row.band}
+                  </div>
+                  <div style={{ fontSize:18, fontWeight:"bold",
+                    color: active ? skillColor(row.pct) : C.textDim }}>
+                    {row.pct}%
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ fontSize:11, color:C.textDim, fontStyle:"italic" }}>
+          Rangers receive Move Silently and Hide in Shadows at these fixed values. No racial, armor, or discretionary adjustments apply (S&P p.70).
+        </div>
+      </div>
+    );
+  }
 
   // ── Filter skills to only those with a class entry for this class ─────────────
   const classAbils = CLASS_ABILITIES?.[selectedClass] ?? [];

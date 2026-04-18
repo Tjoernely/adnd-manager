@@ -32,6 +32,28 @@ import {
   WEAPON_GROUPS_49, canonicalWeapId, MASTERY_TIERS, STYLE_SPECS,
 } from '../../data/weapons.js';
 
+function getRangerThievingPct(level) {
+  if (level >= 11) return 50;
+  if (level >= 9)  return 40;
+  if (level >= 7)  return 30;
+  if (level >= 5)  return 20;
+  if (level >= 3)  return 15;
+  return 10;
+}
+
+function getWeaponNameById(weapId) {
+  if (!weapId) return null;
+  for (const bg of WEAPON_GROUPS_49) {
+    for (const tg of bg.tightGroups) {
+      const w = tg.weapons.find(w => w.id === weapId);
+      if (w) return w.name;
+    }
+    const w = (bg.unrelated ?? []).find(w => w.id === weapId);
+    if (w) return w.name;
+  }
+  return weapId;
+}
+
 import {
   THIEF_SKILLS, SKILL_CLASS_ABILS,
   getThiefRacialAdj, getSkillSubAdj, calcThiefSkill, THIEF_ARMOR_ADJ,
@@ -387,6 +409,14 @@ export function CharacterPrintView({ characterData, characterId }) {
   // ── Thieving skills ───────────────────────────────────────────────────────
   const thiefEntries = useMemo(() => {
     if (!selectedClass || !classAbilPicked) return [];
+    // Ranger: fixed level-based values (S&P Table 22) — no disc/racial/armor adjustments
+    if (selectedClass === 'ranger') {
+      const pct = getRangerThievingPct(charLevel ?? 1);
+      return [
+        { id: 'ms', label: 'Move Silently', final: pct, rangerFixed: true },
+        { id: 'hs', label: 'Hide in Shadows', final: pct, rangerFixed: true },
+      ];
+    }
     const racialAdj = getThiefRacialAdj(selectedRace ?? 'human');
     const armorAdj  = THIEF_ARMOR_ADJ[thiefArmorType ?? 'padded_studded'] ?? {};
     const aimScore  = effSub('aim');
@@ -405,7 +435,7 @@ export function CharacterPrintView({ characterData, characterId }) {
       });
       return { id: sk.id, label: sk.label, final };
     }).filter(Boolean);
-  }, [selectedClass, classAbilPicked, selectedRace, thiefArmorType, effSub, thiefDiscPoints]);
+  }, [selectedClass, classAbilPicked, selectedRace, thiefArmorType, effSub, thiefDiscPoints, charLevel]);
 
   // ── Social status ─────────────────────────────────────────────────────────
   const rankVal = socialStatus?.override ?? socialStatus?.rolled ?? null;
@@ -676,17 +706,41 @@ export function CharacterPrintView({ characterData, characterId }) {
           )
         }
 
-        {/* ── Thieving Skills ───────────────────────────────────────── */}
+        {/* ── Thieving / Ranger Skills ───────────────────────────────── */}
         {thiefEntries.length > 0 && (
           <>
-            <SectionHead>Thieving Skills</SectionHead>
+            <SectionHead>{selectedClass === 'ranger' ? 'Ranger Abilities' : 'Thieving Skills'}</SectionHead>
+            {selectedClass === 'ranger' && (
+              <div style={{ fontSize:10, color:'#888', marginBottom:6, fontStyle:'italic' }}>
+                Fixed percentages per level (S&P Table 22) — no discretionary points
+              </div>
+            )}
             <div className="ps-thief-grid">
               {thiefEntries.map(sk => (
                 <div key={sk.id} className="ps-thief-item">
                   <span className="ps-thief-label">{sk.label}</span>
-                  <span className="ps-thief-val">{sk.final}%</span>
+                  <span className="ps-thief-val">
+                    {sk.final}%{sk.rangerFixed ? ' (fixed)' : ''}
+                  </span>
                 </div>
               ))}
+            </div>
+          </>
+        )}
+
+        {/* ── Racial Abilities (weapon choice) ──────────────────────── */}
+        {racialPicked['hu01'] && typeof racialPicked['hu01'] === 'object' && (
+          <>
+            <SectionHead>Racial Abilities</SectionHead>
+            <div className="ps-thief-grid">
+              <div className="ps-thief-item">
+                <span className="ps-thief-label">Attack Bonus</span>
+                <span className="ps-thief-val">
+                  {racialPicked['hu01'].weapon
+                    ? `+1 to hit with ${getWeaponNameById(racialPicked['hu01'].weapon)}`
+                    : '+1 to hit (no weapon chosen)'}
+                </span>
+              </div>
             </div>
           </>
         )}
