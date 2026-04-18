@@ -89,6 +89,8 @@ export function ProfsTab(props) {
         const nwpGroups  = props.effectiveNWPGroups ?? NWP_GROUPS;
         const allNwpFlat = props.ALL_NWP            ?? STATIC_ALL_NWP;
         const pickedNames = new Set(allNwpFlat.filter(p => profsPicked[p.id]).map(p => p.name));
+        // DB-loaded profs don't carry desc — look it up from the static JS bundle by id.
+        const staticDescById = Object.fromEntries(STATIC_ALL_NWP.map(p => [p.id, p.desc]));
 
         return nwpGroups.map(grp => {
         const isSameGroup = grp.groupTag === classGroup || grp.groupTag === "general";
@@ -159,7 +161,7 @@ export function ProfsTab(props) {
                         )}
                         <CpBadge>{effCp}</CpBadge>
                       </div>
-                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:prof.desc||'See rulebook for details.'});}} />
+                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:staticDescById[prof.id]||prof.desc||'See rulebook for details.'});}} />
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.textDim }}>
                       <span style={{ color:"#8a7050" }}>{subLabel} {statScore}</span>
