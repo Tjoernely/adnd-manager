@@ -43,11 +43,14 @@ import {
 // Racial abilities that require a weapon choice stored as { weapon: weaponId }
 const WEAPON_CHOICE_ABILS = new Set(["hu01"]);
 
-// Druid free sphere IDs (major access, no CP cost, auto-selected)
-const DRUID_FREE_SPHERE_IDS = new Set([
+// Druid standard package — 7 spheres totalling 60 CP (S&P p.160)
+// Major: All(5), Animal(10), Elemental All(15), Healing(10), Plant(10), Weather(5)
+// Minor: Divination(5)
+const DRUID_STANDARD_PKG_CORE = [
   'cl_all_maj','cl_ani_maj','cl_ela_maj','cl_hea_maj','cl_plt_maj','cl_wea_maj',
-]);
-// ELA cascade: Elemental All (major) automatically grants these 4 sub-spheres
+  'cl_div_min',
+];
+// ELA cascade: Elemental All (major) automatically grants these 4 sub-spheres at no CP
 const DRUID_ELA_SUB_IDS = ["cl_air_maj","cl_ear_maj","cl_fir_maj","cl_wat_maj"];
 
 export function useCharacter() {
@@ -190,10 +193,10 @@ export function useCharacter() {
   const currentAbils = useMemo(() => {
     if (!selectedClass) return [];
     if (selectedClass === 'druid') {
-      const clericSpheres = (CLASS_ABILITIES.cleric ?? [])
-        .filter(a => a.sphere)
-        .map(a => DRUID_FREE_SPHERE_IDS.has(a.id) ? { ...a, druidFree: true } : a);
-      const druidOther = (CLASS_ABILITIES.druid ?? []).filter(a => !a.sphere);
+      // Druid uses the full cleric sphere list — no spheres are free (all cost normal CP).
+      // Use the "📦 Standard Druid Package" button to buy the S&P default 60 CP set.
+      const clericSpheres = (CLASS_ABILITIES.cleric ?? []).filter(a => a.sphere);
+      const druidOther    = (CLASS_ABILITIES.druid ?? []).filter(a => !a.sphere);
       return [...clericSpheres, ...druidOther];
     }
     return CLASS_ABILITIES[selectedClass] ?? [];
@@ -202,11 +205,9 @@ export function useCharacter() {
   // CP spent on class abilities (restrictions give CP back)
   const classAbilCPSpent = useMemo(() => {
     // Sub-spheres that are free because Elemental All (major/minor) is active.
-    // Druid free spheres are also exempt — they are auto-selected at no cost.
     const elaFree = new Set([
       ...(classAbilPicked["cl_ela_maj"] ? ["cl_air_maj","cl_ear_maj","cl_fir_maj","cl_wat_maj"] : []),
       ...(classAbilPicked["cl_ela_min"] ? ["cl_air_min","cl_ear_min","cl_fir_min","cl_wat_min"] : []),
-      ...(selectedClass === 'druid' ? Array.from(DRUID_FREE_SPHERE_IDS) : []),
     ]);
     const abilCost = currentAbils.reduce((sum, a) => {
       if (!classAbilPicked[a.id]) return sum;
@@ -805,17 +806,26 @@ export function useCharacter() {
   };
 
   const handleClassSelect = id => {
-    const picking = id !== selectedClass;
-    // Druid: pre-populate free spheres (and ELA cascade sub-spheres)
-    let initial = {};
-    if (id === 'druid' && picking) {
-      DRUID_FREE_SPHERE_IDS.forEach(sid => { initial[sid] = true; });
-      DRUID_ELA_SUB_IDS.forEach(sid => { initial[sid] = true; });
-    }
     setSelectedClass(id === selectedClass ? null : id);
-    setClassAbilPicked(initial);
+    setClassAbilPicked({});
     setSelectedKit(null);
   };
+
+  // ── Druid: buy/remove the standard S&P sphere package in one click
+  // Selects core 7 spheres (60 CP) + ELA cascade sub-spheres (0 CP).
+  // Clicking again when all core spheres are already picked deselects everything.
+  const handleDruidStandardPackage = useCallback(() => {
+    setClassAbilPicked(prev => {
+      const allPicked = DRUID_STANDARD_PKG_CORE.every(id => prev[id]);
+      const next = { ...prev };
+      if (allPicked) {
+        [...DRUID_STANDARD_PKG_CORE, ...DRUID_ELA_SUB_IDS].forEach(id => { next[id] = false; });
+      } else {
+        [...DRUID_STANDARD_PKG_CORE, ...DRUID_ELA_SUB_IDS].forEach(id => { next[id] = true; });
+      }
+      return next;
+    });
+  }, []);
 
   // ── Toggle trait (with conflict detection)
   const toggleTrait = tr => {
@@ -1149,15 +1159,7 @@ export function useCharacter() {
     setMonstrousCustomize(s.monstrousCustomize ?? false);
     setMongrelChoice(s.mongrelChoice ?? null);
     setSelectedClass(s.selectedClass ?? null);
-    {
-      // Ensure druid free spheres are always present (backward compat + new chars)
-      let picked = { ...(s.classAbilPicked ?? {}) };
-      if (s.selectedClass === 'druid') {
-        DRUID_FREE_SPHERE_IDS.forEach(sid => { picked[sid] = true; });
-        DRUID_ELA_SUB_IDS.forEach(sid => { picked[sid] = true; });
-      }
-      setClassAbilPicked(picked);
-    }
+    setClassAbilPicked(s.classAbilPicked ?? {});
     setSpecialistSchool(s.specialistSchool ?? null);
     setMageSchoolsPicked(s.mageSchoolsPicked ?? {});
     setExtraOpposition(s.extraOpposition ?? []);
@@ -1267,7 +1269,7 @@ export function useCharacter() {
     toggleClassAbil, rollStat, rollAll, setBase, adjustSplit,
     handleRaceSelect, handleSubRaceSelect, toggleRacialAbil, setRacialAbilWeapon,
     handleMonstrousRaceSelect, toggleMonstrousFeat,
-    handleClassSelect, toggleTrait, toggleDisadv, toggleProf, toggleWeap, profSuccess,
+    handleClassSelect, handleDruidStandardPackage, toggleTrait, toggleDisadv, toggleProf, toggleWeap, profSuccess,
     // Save / Load
     serializeCharacter, loadCharacterState,
     // Data refs needed by JSX (exported for tab components)
