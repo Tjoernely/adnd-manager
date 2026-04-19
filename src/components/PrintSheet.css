@@ -536,6 +536,37 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   KIT DETAILS
+───────────────────────────────────────────────────────────────────────────── */
+.ps-kit-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.ps-kit-block {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.ps-kit-label {
+  font-size: 9px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #8a7040;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.ps-kit-text {
+  font-size: 10px;
+  color: var(--ps-text);
+  line-height: 1.4;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    EQUIPMENT
 ───────────────────────────────────────────────────────────────────────────── */
 .ps-equipment-block {
