@@ -770,6 +770,40 @@ export function CharacterPrintView({ characterData, characterId }) {
           </>
         )}
 
+        {/* ── Kit Details ───────────────────────────────────────────── */}
+        {activeKitObj && (activeKitObj.benefits || activeKitObj.hindrances ||
+          (activeKitObj.nwpRequired?.length > 0) || (activeKitObj.wpRequired?.length > 0)) && (
+          <>
+            <SectionHead>Kit: {activeKitObj.name}</SectionHead>
+            <div className="ps-kit-details">
+              {activeKitObj.benefits && (
+                <div className="ps-kit-block">
+                  <div className="ps-kit-label">Benefits</div>
+                  <div className="ps-kit-text">{activeKitObj.benefits}</div>
+                </div>
+              )}
+              {activeKitObj.hindrances && (
+                <div className="ps-kit-block">
+                  <div className="ps-kit-label">Hindrances</div>
+                  <div className="ps-kit-text">{activeKitObj.hindrances}</div>
+                </div>
+              )}
+              {activeKitObj.nwpRequired?.length > 0 && (
+                <div className="ps-kit-block">
+                  <div className="ps-kit-label">Required NWPs</div>
+                  <div className="ps-kit-text">{activeKitObj.nwpRequired.join(', ')}</div>
+                </div>
+              )}
+              {activeKitObj.wpRequired?.length > 0 && (
+                <div className="ps-kit-block">
+                  <div className="ps-kit-label">Required Weapons</div>
+                  <div className="ps-kit-text">{activeKitObj.wpRequired.join(', ')}</div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {/* ── Traits & Disadvantages ────────────────────────────────── */}
         <div className="ps-two-col">
           <div>
