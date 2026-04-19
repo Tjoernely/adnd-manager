@@ -89,8 +89,10 @@ export function ProfsTab(props) {
         const nwpGroups  = props.effectiveNWPGroups ?? NWP_GROUPS;
         const allNwpFlat = props.ALL_NWP            ?? STATIC_ALL_NWP;
         const pickedNames = new Set(allNwpFlat.filter(p => profsPicked[p.id]).map(p => p.name));
-        // DB-loaded profs don't carry desc — look it up from the static JS bundle by id.
-        const staticDescById = Object.fromEntries(STATIC_ALL_NWP.map(p => [p.id, p.desc]));
+        // DB-loaded profs use slug canonical_id (e.g. "modern-languages"), not "ng01" IDs.
+        // Build both an id-keyed AND a name-keyed map so either source works.
+        const staticDescById   = Object.fromEntries(STATIC_ALL_NWP.map(p => [p.id,             p.desc]));
+        const staticDescByName = Object.fromEntries(STATIC_ALL_NWP.map(p => [p.name.toLowerCase(), p.desc]));
 
         return nwpGroups.map(grp => {
         const isSameGroup = grp.groupTag === classGroup || grp.groupTag === "general";
@@ -161,7 +163,7 @@ export function ProfsTab(props) {
                         )}
                         <CpBadge>{effCp}</CpBadge>
                       </div>
-                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:staticDescById[prof.id]||prof.desc||'See rulebook for details.'});}} />
+                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:staticDescById[prof.id]||staticDescByName[prof.name?.toLowerCase()]||prof.desc||'See rulebook for details.'});}} />
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.textDim }}>
                       <span style={{ color:"#8a7050" }}>{subLabel} {statScore}</span>

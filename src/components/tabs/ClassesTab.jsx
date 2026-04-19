@@ -50,11 +50,15 @@ export function ClassesTab(props) {
     selectedClass, selectedRace, charLevel,
     classData, classAbilPicked,  classAbilCPSpent,
     currentAbils, effSub, modParent, PARENT_STAT_LABELS,
-    toggleClassAbil,
+    toggleClassAbil, handleDruidStandardPackage,
     specialistSchool, mageSchoolsPicked, extraOpposition,
     handleSpecialistSchool, toggleMageSchool, toggleExtraOpposition,
     ruleBreaker, setConfirmBox,
   } = props;
+
+  // Druid standard package IDs (same list as DRUID_STANDARD_PKG_CORE in useCharacter.js)
+  const DRUID_PKG_IDS = ['cl_all_maj','cl_ani_maj','cl_ela_maj','cl_hea_maj','cl_plt_maj','cl_wea_maj','cl_div_min'];
+  const druidPkgActive = DRUID_PKG_IDS.every(id => !!classAbilPicked[id]);
 
   const _getSpellPointBonus = props.getSpellPointBonus ?? (score => {
     if (score >= 18) return 7;
@@ -316,39 +320,33 @@ export function ClassesTab(props) {
             {/* ── Spell Spheres — Major/Minor three-way toggle */}
             {sphereGroups.length > 0 && (
               <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 10, color: "#6080c0", letterSpacing: 3,
-                  textTransform: "uppercase", marginBottom: 10 }}>Spell Spheres</div>
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10, flexWrap:"wrap" }}>
+                  <div style={{ fontSize: 10, color: "#6080c0", letterSpacing: 3,
+                    textTransform: "uppercase" }}>Spell Spheres</div>
+                  {/* Standard Druid Package button */}
+                  {selectedClass === "druid" && handleDruidStandardPackage && (
+                    <button
+                      onClick={handleDruidStandardPackage}
+                      style={{
+                        padding: "4px 12px", borderRadius: 5, fontSize: 11,
+                        cursor: "pointer", fontFamily: "inherit",
+                        background: druidPkgActive
+                          ? "linear-gradient(135deg,#0d2010,#091a0a)"
+                          : "linear-gradient(135deg,#1a2808,#111e06)",
+                        color: druidPkgActive ? "#80c070" : "#a0d060",
+                        border: `1px solid ${druidPkgActive ? "#3a7a30" : "#506020"}`,
+                        boxShadow: druidPkgActive ? "0 0 8px rgba(60,160,50,.15)" : "none",
+                        transition: "all .15s",
+                      }}>
+                      {druidPkgActive ? "✓ Standard Package selected" : "📦 Standard Druid Package (60 CP)"}
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: "grid",
                   gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 6 }}>
                   {sphereGroups.map(grp => {
                     const majPicked = grp.maj ? !!classAbilPicked[grp.maj.id] : false;
                     const minPicked = grp.min ? !!classAbilPicked[grp.min.id] : false;
-
-                    // Druid free spheres: locked as Major at no CP cost
-                    if (grp.maj?.druidFree) {
-                      return (
-                        <div key={grp.key} style={{
-                          background:"linear-gradient(145deg,#060e08,#040c06)",
-                          border:"1px solid #3a6a30",
-                          borderRadius:7, padding:"8px 12px",
-                          transition:"all .15s",
-                        }}>
-                          <div style={{ display:"flex", justifyContent:"space-between",
-                            alignItems:"center", gap:8, marginBottom:4 }}>
-                            <div style={{ fontSize:11, fontWeight:"bold", color:"#80c070" }}>
-                              🌿 {grp.label}
-                            </div>
-                            <span style={{ fontSize:9, color:"#507050",
-                              border:"1px solid #3a6a30", borderRadius:4, padding:"2px 6px" }}>
-                              ● Major — FREE
-                            </span>
-                          </div>
-                          <div style={{ fontSize:10, color:"#5a7a50" }}>
-                            {grp.maj?.desc}
-                          </div>
-                        </div>
-                      );
-                    }
 
                     // mode: "none" | "minor" | "major"
                     const mode = majPicked ? "major" : minPicked ? "minor" : "none";
@@ -805,15 +803,13 @@ export function ClassesTab(props) {
                   {currentAbils.filter(a => classAbilPicked[a.id]).map(a => (
                     <span key={a.id} style={{ fontSize: 10, padding: "2px 8px",
                       borderRadius: 4,
-                      background: a.druidFree
-                        ? "rgba(30,120,50,.15)"
-                        : a.restriction
-                          ? "rgba(180,80,30,.15)"
-                          : a.sphere ? "rgba(80,130,220,.15)" : "rgba(212,160,53,.12)",
-                      border: `1px solid ${a.druidFree ? "#3a6a30" : a.restriction ? "#c06030" : a.sphere ? "#6090d8" : C.gold}44`,
-                      color: a.druidFree ? "#80c070" : a.restriction ? "#e08050" : a.sphere ? "#90b8f0" : C.gold,
+                      background: a.restriction
+                        ? "rgba(180,80,30,.15)"
+                        : a.sphere ? "rgba(80,130,220,.15)" : "rgba(212,160,53,.12)",
+                      border: `1px solid ${a.restriction ? "#c06030" : a.sphere ? "#6090d8" : C.gold}44`,
+                      color: a.restriction ? "#e08050" : a.sphere ? "#90b8f0" : C.gold,
                     }}>
-                      {a.name} {a.druidFree ? "(FREE)" : `(${a.restriction ? "+" : ""}${a.cp}cp)`}
+                      {a.name} ({a.restriction ? "+" : ""}{a.cp}cp)
                     </span>
                   ))}
                 </div>
