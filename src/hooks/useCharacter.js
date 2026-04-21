@@ -354,7 +354,12 @@ export function useCharacter() {
   // Grouped for ProfsTab display
   const effectiveNWPGroups = useMemo(() => {
     if (!_dbProfs) return NWP_GROUPS;
-    return buildProfGroups(_dbProfs);
+    const groups = buildProfGroups(_dbProfs);
+    // DEBUG: log one raw prof so we can inspect its shape
+    const sampleProf = _dbProfs[0];
+    console.log('[NWP DB DEBUG] raw DB prof sample:', sampleProf, '| total:', _dbProfs.length);
+    console.log('[NWP DB DEBUG] first group profs[0]:', groups[0]?.profs?.[0]);
+    return groups;
   }, [_dbProfs]);
 
   // ── DB kits (137 kits) — fetched once, falls back to static bundle ──────────

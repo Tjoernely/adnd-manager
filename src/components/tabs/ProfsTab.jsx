@@ -163,7 +163,22 @@ export function ProfsTab(props) {
                         )}
                         <CpBadge>{effCp}</CpBadge>
                       </div>
-                      <IBtn onClick={e=>{e.stopPropagation();setInfoModal({title:prof.name,body:staticDescById[prof.id]||staticDescByName[prof.name?.toLowerCase()]||prof.desc||'See rulebook for details.'});}} />
+                      <IBtn onClick={e=>{
+                        e.stopPropagation();
+                        const hitById   = staticDescById[prof.id];
+                        const hitByName = staticDescByName[prof.name?.toLowerCase()];
+                        console.log('[NWP DEBUG]', {
+                          prof,
+                          profIdType: typeof prof?.id,
+                          profName: prof?.name,
+                          profDesc: prof?.desc,
+                          hitById,
+                          hitByName,
+                          staticSample: STATIC_ALL_NWP.slice(0,5).map(p=>({id:p.id,name:p.name,hasDesc:!!p.desc})),
+                          nameMapKeys: Object.keys(staticDescByName).slice(0,15),
+                        });
+                        setInfoModal({title:prof.name,body:hitById||hitByName||prof.desc||'See rulebook for details.'});
+                      }} />
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.textDim }}>
                       <span style={{ color:"#8a7050" }}>{subLabel} {statScore}</span>
