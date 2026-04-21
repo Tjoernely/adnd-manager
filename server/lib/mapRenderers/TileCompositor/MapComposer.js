@@ -21,7 +21,11 @@ const { createCanvas } = require('@napi-rs/canvas');
 const {
   terrainKeyForCell,
   rankForTerrainKey,
+  ALL_TERRAIN_KEYS,
 } = require('./TerrainPriority');
+
+// Build once — O(1) validation for cell.tileKey overrides
+const ALL_TERRAIN_KEYS_SET = new Set(ALL_TERRAIN_KEYS);
 
 const DEFAULT_TILE_SIZE = 128;
 const GRID_SIZE_DEFAULT = 32;
@@ -93,7 +97,14 @@ class MapComposer {
     for (const cell of cells) {
       if (cell.x < 0 || cell.x >= this._gridW) continue;
       if (cell.y < 0 || cell.y >= this._gridH) continue;
-      const key = terrainKeyForCell(cell);
+
+      // Prefer the explicit tileKey stored by TerrainSketchEditor (handles
+      // ocean_shallow, reef, volcanic_mountain_large, etc.) over the
+      // (biome, relief) → key derivation which can't distinguish those variants.
+      const key = (cell.tileKey && ALL_TERRAIN_KEYS_SET.has(cell.tileKey))
+        ? cell.tileKey
+        : terrainKeyForCell(cell);
+
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(cell);
     }

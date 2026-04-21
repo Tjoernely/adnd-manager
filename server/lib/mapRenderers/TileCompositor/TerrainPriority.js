@@ -24,6 +24,7 @@ const RELIEF_FALLBACK = {
   flat:        'flat',
   rolling:     'flat',
   hills:       'hills',
+  mountains:   'mountains',   // canonical value stored by TerrainSketchEditor
   mountainous: 'mountains',
   cliffs:      'mountains',
   valley:      'flat',

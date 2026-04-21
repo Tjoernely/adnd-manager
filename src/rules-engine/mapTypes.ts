@@ -225,12 +225,8 @@ export type BiomeType =
 
 export type ReliefType =
   | 'flat'
-  | 'rolling'
   | 'hills'
-  | 'mountainous'
-  | 'cliffs'
-  | 'valley'
-  | 'plateau';
+  | 'mountainous';
 
 export type OverlayType =
   | 'river'
@@ -256,10 +252,14 @@ export type AIFreedom = 'strict' | 'balanced' | 'creative';
 export type SketchScope = 'world' | 'region' | 'local';
 
 export interface SketchCell {
-  x:       number;   // 0–31
-  y:       number;   // 0–31
-  biome:   BiomeType;
-  relief?: ReliefType;
+  x:        number;   // 0–31
+  y:        number;   // 0–31
+  biome:    BiomeType;
+  relief?:  ReliefType;
+  /** Exact tile asset key stored by TerrainSketchEditor (e.g. 'ocean_shallow',
+   *  'reef', 'volcanic_mountain_large'). When present and valid, MapComposer
+   *  uses it directly instead of deriving a key from (biome, relief). */
+  tileKey?: string;
 }
 
 export interface SketchOverlay {
