@@ -43,7 +43,10 @@ async function seedFromSource() {
             (canonical_id,name,prof_group,sp_cp_cost,sp_rank,sp_stat_1,sp_stat_2,
              is_sp_native,description,source_book)
            VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,$9)
-           ON CONFLICT (canonical_id) DO NOTHING RETURNING id`,
+           ON CONFLICT (canonical_id) DO UPDATE SET
+             description = COALESCE(NULLIF(EXCLUDED.description,''), nonweapon_proficiencies.description),
+             updated_at  = NOW()
+           RETURNING id`,
           [cid,p.name,profGroup,p.cp??null,p.rank??null,
            validStat(p.stats?.[0]??null),validStat(p.stats?.[1]??null),
            p.desc??null,"Player's Option: Skills & Powers"]);
