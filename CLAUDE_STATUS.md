@@ -1,236 +1,121 @@
-# AD&D Manager — Project Status
+# AD&D 2E Campaign Manager — Status
 
-_Last updated: 2026-04-18_
+## Projekt
+- **Lokalt:** C:\DnD_manager_app\Version_1\
+- **GitHub:** https://github.com/Tjoernely/adnd-manager
+- **Server:** ubuntu@158.180.63.20
+- **App:** http://158.180.63.20
+- **SSH key:** C:\DnD_manager_app\ssh-key-2026-03-11.key
 
----
+## Server Stack
+- Nginx → /api/ → localhost:3001, / → /var/server/public/
+- Node.js backend (Express) port 3001 via PM2 (adnd-backend, id:0)
+- PostgreSQL 14: adnddb, user: adnduser, password: **se server/.env**
+- JWT_SECRET: **se server/.env**
+- ecosystem.config.cjs at /var/www/adnd-manager/ (NOT in git)
 
-## 1. Server Setup
-
-| Property | Value |
-|---|---|
-| Provider | Oracle Cloud free-tier |
-| IP | `158.180.63.20` |
-| User | `ubuntu` |
-| SSH key | `C:/DnD_manager_app/ssh-key-2026-03-11.key` |
-| App root | `/var/www/adnd-manager` |
-| Process manager | PM2, process name: `adnd-backend` |
-| Web server | nginx — port 80, `/api/` → Express :3001, everything else → `server/public/` |
-| Database | PostgreSQL (managed Oracle DB) |
-
-### Deploy flows
-
-**Frontend (requires build):**
-```bat
-# Local: build React → commit server/public/ → push
-npm run build
-git add server/public/ src/ && git commit -m "..." && git push
-ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
-  "cd /var/www/adnd-manager && git pull && pm2 restart adnd-backend"
-```
-
-**Backend only (no build needed):**
+## Deploy
 ```bash
-git add server/... && git commit -m "..." && git push
-ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
-  "cd /var/www/adnd-manager && git pull && pm2 restart adnd-backend"
+# Windows
+deploy.bat
+
+# SSH
+cd /var/www/adnd-manager && git pull && bash deploy.sh
+
+# Scripts med DB credentials
+DB_HOST=localhost DB_PORT=5432 DB_NAME=adnddb DB_USER=adnduser DB_PASSWORD=<se server/.env> node scripts/SCRIPT.mjs
 ```
 
-**Webhook (automatic on `git push` to main):**
-- GitHub webhook → `POST /api/webhook/deploy` → `deploy.sh` runs `git pull + pm2 restart`
-- HMAC signature verified via `WEBHOOK_SECRET` in `server/.env`
-- Lock file prevents concurrent deploys
-- Frontend assets are NOT rebuilt by webhook (frontend requires manual build + commit of `server/public/`)
+## Database — Vigtige tabeller
+- users, campaigns, campaign_members, characters (character_data JSONB)
+- spells (4400), magical_items (~6441)
+- monsters (3781 med fuld stats, variants JSONB for drager)
+- saved_encounters, encounter_creatures
+- party_equipment, character_equipment, character_spells
+- weapons_catalog (68 våben), armor_catalog (14 armor + 3 shields)
+- magical_items_em_import (staging tabel for EM import)
+- maps, map_pois
 
----
+## Monsters System
+- 3781 monstre med fuld stats
+- HP formel: baseHp = HD×10 × sizeModifier × typeModifier × roleModifier × randomModifier
+- Size parser: "G (54' base)" → gargantuan → ×3.6
+- Type detection: Dragon* → ×2.2, Golem* → ×2.0 etc.
+- Dragon age variants: 23 drager med variants JSONB (age 1-12)
+- Reimport script: server/scripts/reimport-monster-stats.mjs
 
-## 2. Feature Status
+## Armor Profiles (House Rules)
+9 damage types: slashing, piercing, bludgeoning, fire, cold, lightning, magic, acid, poison
+11 profiler: feather, none, padded_cloth, leather, chain, plate, dense_flesh, thick_hide, carapace, stone_body, dragon_scales
 
-### ✅ Fully working
+## Character System
+- Builder: Ability Scores → Race → Class → Kits → Traits → NWPs → Weapon Profs → Specialization
+- Sub-abilities: Muscle/Stamina, Aim/Balance, Health/Fitness, Reason/Knowledge, Intuition/Willpower, Leadership/Appearance
+- Data gemt i characters.character_data JSONB
+- Equipment slots: head, neck, shoulders, body, cloak, belt, wrists, ring_l, ring_r, gloves, boots, hand_r, hand_l, ranged, ammo
 
-**Character Builder**
-- All 10 tabs: Scores, Races, Classes, Kits, Traits, Proficiencies, Weapons, Thief, Mastery, Portrait
-- Race/class restrictions (`RACE_CLASS_CAPS` in `classes.js`)
-- Specialist wizard schools + extra opposition picker
-- Sphere major/minor three-way toggle
-- Fanaticism sub-options
-- Social Status (2d6) with rank table
-- Kit selection + display
-- Nonweapon proficiencies (311 NWPs in DB with sp_cp_cost)
-- Character save/load via session storage + DB
+## Party Knowledge
+- Characters tab: Character Sheet (Print view), Equipment & Treasure, Spellbook
+- Character Sheet: Combat Stats, Saving Throws, Ability Scores, Weapons tabel (THAC0/damage beregnet fra combatCalc.js)
+- Equipment: Paperdoll silhouet med slots, item catalog, party pool
+- Spellbook: Spells per level, Special abilities, Add from Spell Library
+- Party Loot tab: items ikke givet til characters endnu
+- Encounters tab: Combat manager, Smart Loot, Complete encounter → Party Loot
 
-**Campaign & Party**
-- Campaign creation, DM/player roles, campaign switching
-- NPC management
-- Party hub, party inventory, party equipment
-- Party knowledge (shared notes)
-- Quest tracker
-- Encounter manager + saved encounters
-- Random encounter tables
+## Combat Beregning (combatCalc.js)
+- AC = 10 + armorAC + shieldAC + Balance modifier + magic AC (hvis identified)
+- THAC0 = class base - Muscle att.adj - weapon prof - specialization - mastery - WoC - magic bonus - racial bonus - human attack bonus (hu01)
+- DR = fra equipped armor (slashing/piercing/bludgeoning)
 
-**Map System (core)**
-- Map list, map viewer, POI system (DM-only + player-visible)
-- POI drill-down (child map creation)
-- Map image upload + DALL-E 3 generation (via OpenAI key)
-- Map hierarchy (parent/child maps)
-- Map visibility toggle (DM-only / shared with players)
+## Encyclopedia Magica Import
+- Script: server/scripts/import-em-items.mjs
+- API: MediaWiki API (ikke HTML scraping)
+- Staging tabel: magical_items_em_import
+- TABLE_MAP: "Table A: Magical Liquids (EM)" etc.
+- Table A (544 items) + Table S testet OK
+- normalizeItem() tilføjer item_type, equip_slot, weapon_family etc.
+- Status: Staging import ikke kørt endnu for alle tabeller
 
-**AI Integration**
-- Claude (Anthropic) for map metadata, POIs, lore generation
-- DALL-E 3 for map images (optional, requires OpenAI key)
-- Gemini Image for sketch-to-map rendering (requires `GOOGLE_AI_API_KEY`)
-- GPT-Image-1 as alternative sketch renderer (requires `OPENAI_API_KEY`)
+## Spell Library
+- 4400 spells, wizard + priest
+- Character filter: filtrerer spell_group baseret på class
+- Specialist wizard: opposition schools med ⊗ badge
+- Generator: niveau-dropdowns per level
+- Add to Spellbook / Make Scroll knapper
 
-**Terrain Sketch Editor**
-- 32×32 grid tile painter
-- 9 biome categories with all tile variants (28 unique tiles in `tiles_64/`)
-- Collapsible category palette with 48×48px tile chips
-- River + road overlay drawing
-- Brush sizes: 1×1, 3×3, 5×5
-- Canvas zoom (Ctrl+scroll) + pan
-- Smart coast orientation (water edge faces nearest ocean neighbor)
-- Seeded per-cell rotation for natural variation
-- Fill empty cells: nearest-neighbor or flood-fill
-- Sketch → Gemini/GPT-Image generation (async job with polling)
-- Generated image attached to existing map record
+## Aktuelle Bugs (april 2026)
+1. **NWP descriptions** viser "See rulebook for details" for ALLE NWPs
+   - Root cause: props.effectiveNWPGroups fra API mangler desc felt
+   - Fix: staticDescById lookup fra STATIC_ALL_NWP — committed MEN ikke deployet
+   - Bekræftet: bundle mangler staticDescById
 
-**Prompt Builder (server-side)**
-- 32×32 ASCII terrain grid sent to AI renderer
-- `buildMustKeepFacts()` — 4 general algorithms (max 8 facts):
-  1. Dominant edges (≥60% of edge band → "render along FULL border")
-  2. Large connected components via BFS flood-fill (>50 cells)
-  3. Isolated small features (3-14 cell components)
-  4. Interesting terrain adjacencies (forest/coast, mountains/swamp, etc.)
-- Terrain ID guide (distinguishes swamp vs forest vs mountains for Gemini)
-- Freedom modes: strict / balanced / creative
+2. **Druid spheres** — sphere selection UI forkert
+   - Skal bruge SAMME UI som Cleric/Priest
+   - Standard pakke (60 CP): Major All/Animal/Elemental/Healing/Plant/Weather + Minor Divination
+   - 60 CP betales KUN via sphere-køb, ikke separat skill
 
-**Database Reference Data**
-- 4,400 spells
-- 5,725 magical items
-- 3,781 monsters
-- 311 nonweapon proficiencies (with sp_cp_cost)
-- 137 kits
-- Weapons catalog + armor catalog
+## Character Builder — Seneste Ændringer
+- ✅ Human Attack Bonus (hu01): våben-vælger dropdown, gemt som { enabled: true, weapon: "ws_..." }
+- ✅ Human Attack Bonus: talt med i THAC0 beregning i combatCalc.js
+- ✅ Ranger thieving: fixed % per level + Balance modifier + racial bonuses (Elf/Half-elf/Halfling)
+- ✅ Bastard sword: 1H og 2H damage vises begge i CharacterPrintView
+- ✅ Kit benefits/hindrances vist i CharacterPrintView
+- ⚠️ NWP descriptions: Fix committed men IKKE deployet til server
 
----
+## Vigtige Kildefiler
+- src/data/proficiencies.js — NWP data med desc felter
+- src/data/kits.js — Kit data
+- src/data/classes.js — Klasse data inkl. Druid sphere regler
+- src/rules-engine/combatCalc.js — AC/THAC0/damage beregning
+- src/components/characters/CharacterPrintView.jsx — Print/Character Sheet
+- src/components/builder/ProfsTab.jsx — NWP tab (har staticDescById bug)
+- src/components/party/PartyHub.jsx — Party Knowledge hub
+- src/components/spells/SpellLibrary.jsx — Spell Library
+- server/scripts/import-em-items.mjs — EM importer
+- server/routes/magicalItems.js — Magical items API
 
-### 🔶 Partially implemented / needs verification
-
-**sketchSpec.cells persistence**
-- Three-layer fix has been deployed but not yet confirmed working:
-  1. `PUT /api/maps/:id/sketch` endpoint (jsonb_set, bypasses enrichMapData)
-  2. Belt-and-suspenders in `PUT /api/maps/:id` — re-patches via jsonb_set if body has sketch cells
-  3. Explicit `PUT /sketch` call in `MapManager.handleSketchGenerate` before `api.updateMap`
-- DB has `has_sketch=false` for maps created before fix — historical data not backfilled
-- **Next step**: generate one map from sketch and check DB with `SELECT data->'sketch'->'cells' FROM maps WHERE id=X`
-
-**Map Generator (MapGenerator.jsx) from sketch**
-- Sketch → image → MapGenerator form → Claude AI → new map record flow works
-- sketchSpec persistence to new maps: same three-layer fix above
-- **Status: put on hold by user** — will revisit later
-
----
-
-### ⏸ On hold / not started
-
-**Map Generator general improvements**
-- User has paused work on this area
-
-**Weapon proficiencies in DB**
-- Weapon prof data exists in `src/data/` but not yet imported to PostgreSQL
-- Currently read from static JS files client-side
-
-**Seamless tile variants**
-- Current tiles show visible seams at biome boundaries
-- Plan: create edge/transition tile variants
-- Status: not started
-
-**stat limits UI validation**
-- `statLimits` per race exists in `races.js`
-- Not yet used for validation in ScoresTab
-- Status: not started
-
----
-
-## 3. Known Bugs & Problems
-
-| # | Severity | Description | Status |
-|---|---|---|---|
-| 1 | High | `sketchSpec.cells` not confirmed saved to DB — three-layer fix deployed, needs one test | Needs verification |
-| 2 | Low | `auto-migrate` errors for monsters/items table (ownership) — cosmetic, does not affect app | Ignored (DB permissions) |
-| 3 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
-| 4 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
-
----
-
-## 4. Architecture Decisions
-
-### Tile-based Sketch Editor
-- SVG `<image>` elements for rendering (not `<canvas>`) — canvas had blank display issues
-- Each cell: `{ x, y, biome, tileKey, relief? }` — tileKey stored explicitly so renderer uses exact tile
-- 32×32 grid = 1024 max cells, ~50–100KB JSON
-- `seededRandom(x*31+y)` — deterministic rotation per cell (same sketch always renders same)
-- coast_flat: smart rotation via 4-directional neighbor scan (water edge faces ocean)
-- Tiles stored in `tiles_64/` locally, served from `server/public/tiles/` in production
-
-### SketchSpec Data Model
-```javascript
-{
-  grid_size: 32, scope: 'region',
-  cells: [{ x, y, biome, tileKey, relief? }],
-  overlays: [{ type: 'river'|'road', points: [{x,y},...] }],
-  modifiers: [],
-  climate?: string, scale?: string,
-  ai_freedom: 'balanced'|'strict'|'creative',
-  lore_mode: boolean, user_prompt?: string
-}
-```
-- Stored in `maps.data->sketch` (JSONB)
-- `PUT /api/maps/:id/sketch` patches only this key via `jsonb_set` — safe, no enrichMapData side effects
-
-### Gemini Image Renderer
-- Model: `gemini-2.5-flash-image` (Gemini Image Generation via `@google/genai`)
-- Input: base64 PNG of sketch (rendered client-side by `sketchToPng.ts`)
-- Prompt: base prompt + terrain grid + must-keep facts + connectors + freedom mode
-- Output: PNG saved to `server/public/uploads/maps/`
-- Async job pattern: POST returns `{jobId}` immediately, client polls `/sketch-job/:jobId`
-- Jobs expire after 30 minutes (in-memory store, cleared on restart)
-
-### GPT-Image-1 Renderer (alternative)
-- Uses OpenAI Responses API with `gpt-4o` + image generation tool
-- Same async job pattern as Gemini
-- Requires `OPENAI_API_KEY` in `server/.env`
-
-### enrichMapData (server-side)
-- Runs on every `POST /` and `PUT /:id` for maps
-- Derives `scope`, `context`, `tags`, `settlement` from `generated_params`
-- If no `generated_params` → returns data unchanged (stub maps are safe)
-- `PUT /:id/sketch` bypasses this entirely (direct jsonb_set)
-
-### Body Parser Limit
-- `express.json({ limit: '50mb' })` — needed for 1024-cell sketch + base64 PNG in same request
-
----
-
-## 5. Next Priorities
-
-These are suggested based on current state — confirm with user before starting:
-
-1. **Verify sketch cells persistence** — generate one sketch map, query DB, confirm `cells.length > 0`
-2. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
-3. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
-4. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
-5. **Resume Map Generator improvements** — when user is ready
-
----
-
-## 6. Environment Variables (server/.env)
-
-| Key | Purpose | Required for |
-|---|---|---|
-| `DB_*` | PostgreSQL connection | Everything |
-| `JWT_SECRET` | Auth tokens | Everything |
-| `ANTHROPIC_API_KEY` | Claude AI (map lore, POIs) | Map generator |
-| `OPENAI_API_KEY` | DALL-E 3 + GPT-Image-1 | Map images |
-| `GOOGLE_AI_API_KEY` | Gemini image generation | Sketch-to-map |
-| `WEBHOOK_SECRET` | GitHub webhook HMAC | Auto-deploy |
-| `PORT` | Express port (default 3000 local, 3001 prod) | Backend |
+## Næste Opgaver
+1. Deploy NWP desc fix + Druid spheres fix til server (SSH deploy!)
+2. Kits komplet implementering (alle kits fra Kits.xlsx i project files)
+3. Encyclopedia Magica staging import (alle tabeller A-T)
+4. Merge EM staging data til magical_items production tabel
