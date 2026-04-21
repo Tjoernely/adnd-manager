@@ -53,3 +53,7 @@ Thumbs.db
 *.sln
 *.sw?
 deploy-frontend.bat
+
+# Local tile asset working directories (belong in server/public/tiles/ after build)
+tiles_64/
+tiles_128/
