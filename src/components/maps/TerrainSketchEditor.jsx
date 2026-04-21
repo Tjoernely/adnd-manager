@@ -228,7 +228,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [aiFreedom, setAiFreedom]   = useState(initialSpec?.ai_freedom ?? 'balanced');
   const [loreMode, setLoreMode]     = useState(initialSpec?.lore_mode ?? false);
   const [userPrompt, setUserPrompt] = useState(initialSpec?.user_prompt ?? '');
-  const [renderer, setRenderer]     = useState('gemini');
+  const [renderer, setRenderer]     = useState("tile-compositor");
   const [mapStyle, setMapStyle]     = useState('schley');
   const [errors, setErrors]         = useState([]);
   const [generating, setGenerating] = useState(false);
@@ -407,8 +407,9 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       const controlImage = await renderSketchForAI(spec);
 
       // 2. POST to server → returns jobId immediately (non-blocking)
-      const rendererLabel = renderer === 'gpt-image-1' ? 'GPT-Image-1'
-                          : renderer === 'gemini'     ? 'Gemini Image'
+      const rendererLabel = renderer === 'tile-compositor' ? 'Tile Compositor'
+                          : renderer === 'gpt-image-1'    ? 'GPT-Image-1'
+                          : renderer === 'gemini'         ? 'Gemini Image'
                           : 'AI renderer';
       setGenStatus(`Queuing ${rendererLabel} job…`);
 
@@ -725,6 +726,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
             <label className="tse-label">Renderer
               <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
+                <option value="tile-compositor">🧩 Tile Compositor (deterministic, recommended)</option>
                 <option value="auto">🤖 Auto</option>
                 <option value="gpt-image-1">🖼 GPT-Image-1 (OpenAI)</option>
                 <option value="gemini">🟦 Gemini Image (Google)</option>

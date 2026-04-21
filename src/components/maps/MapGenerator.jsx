@@ -457,6 +457,11 @@ export function MapGenerator({
           });
           const patchData = await patchResp.json().catch(() => ({}));
           console.log('[MapGenerator] Sketch patch result:', patchData);
+          // Mirror the sketch onto the in-memory map so the subsequent
+          // updateMap() call carries cells in its body (belt-and-suspenders
+          // for the cells=0 persistence bug).
+          if (!map.data) map.data = {};
+          map.data.sketch = sketchSpec;
         } catch (patchErr) {
           console.warn('[MapGenerator] Sketch patch failed (non-fatal):', patchErr.message);
         }

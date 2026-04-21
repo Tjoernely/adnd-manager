@@ -406,6 +406,11 @@ router.post('/', auth, async (req, res) => {
       console.log('[maps POST] WARNING: no spec in data');
     }
     const safeData   = enrichMapData(baseData, type);
+    // Defensive sketch preservation — guarantees tile-compositor can re-render.
+    if (baseData.sketch && !safeData.sketch) {
+      safeData.sketch = baseData.sketch;
+      console.log(`[maps POST] restored sketch lost by enrichMapData (cells=${baseData.sketch.cells?.length ?? '?'})`);
+    }
     // DEBUG — verify spec survives enrichMapData
     if (safeData.spec) {
       console.log('[maps POST] spec after enrichMapData — state:', safeData.spec.state,
@@ -533,6 +538,15 @@ router.put('/:id', auth, async (req, res) => {
     // DEBUG: trace image_url for every PUT so we can spot any overwrite
     console.log(`[maps PUT] id=${req.params.id} body.image_url=${JSON.stringify(req.body?.image_url)} db.image_url=${JSON.stringify(map.image_url)} resolved=${JSON.stringify(image_url)}`);
     console.log(`[maps PUT] id=${req.params.id} body.data.sketch.cells=${req.body?.data?.sketch?.cells?.length ?? 'MISSING'}`);
+
+    // Defensive: if the DB row already has a sketch but the request body
+    // omits it (e.g. a partial metadata update), preserve the existing sketch
+    // so the tile compositor can still re-render the map later. This prevents
+    // the classic cells=0 bug where a generic metadata save wipes sketch.cells.
+    if (map.data?.sketch?.cells?.length > 0 && !data?.sketch?.cells?.length) {
+      data.sketch = map.data.sketch;
+      console.log(`[maps PUT] id=${req.params.id} preserved DB sketch (cells=${map.data.sketch.cells.length}) — body had no sketch`);
+    }
 
     if (!VALID_TYPES.includes(type))
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
