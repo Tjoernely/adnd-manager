@@ -36,9 +36,14 @@ function extractBasePlusBonus(desc) {
   // Strip leading stop-words: "this footman's mace" → "footman's mace",
   // "a long sword" → "long sword".
   let baseType = m[1].toLowerCase().trim();
-  const toks = baseType.split(/\s+/);
+  const toks = baseType.split(/\s+/)
+    // Scrub wiki-italic markup: "''footman's" → "footman's", but preserve
+    // the internal possessive apostrophe. Also drop tokens that become empty.
+    .map(t => t.replace(/^'+|'+$/g, '').replace(/'{2,}/g, "'"))
+    .filter(Boolean);
   while (toks.length > 1 && STOPWORDS.has(toks[0])) toks.shift();
   baseType = toks.join(' ');
+  if (!baseType) return null;
   return {
     baseType,
     magicBonus: parseInt(m[2], 10),

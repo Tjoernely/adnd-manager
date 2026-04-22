@@ -217,6 +217,28 @@ test('4. Boots of Elvenkind — non-weapon, slot=boots, silent movement', () => 
   );
 });
 
+test('6. Wiki-italic markup in description — apostrophes scrubbed from baseType', () => {
+  // Regression: real Nightbringer row has "''footman's mace +3" (wiki markup).
+  // The leading '' must be stripped so baseType normalizes to "Mace, Footman's".
+  const mi = {
+    id: 3258,
+    name: 'Nightbringer',
+    item_type: 'weapon',
+    category: 'Mace',
+    equip_slot: 'hand_r',
+    cursed: false,
+    description:
+      "Nightbringer is a ''footman's mace +3. It is a powerful tool of evil.",
+  };
+  const out = parseMagicItem(mi, weaponsCatalog);
+  assert.equal(out.magic_bonus, 3);
+  assert.equal(out.base_type, "footman's mace",
+               'Leading wiki-italic apostrophes must be scrubbed');
+  assert.equal(out.catalog_matched, true);
+  assert.equal(out.weapon_type, 'B');
+  assert.equal(out.damage_s_m, '1d6+1');
+});
+
 test('5. Cloak of Displacement — non-weapon, cloak slot, displacement', () => {
   const mi = {
     id: 105,
