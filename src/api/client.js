@@ -61,7 +61,13 @@ export const api = {
   getCampaign:       (id)           => apiFetch(`/campaigns/${id}`),
   createCampaign:    (data)         => apiFetch('/campaigns',      { method: 'POST',   body: JSON.stringify(data) }),
   updateCampaign:    (id, data)     => apiFetch(`/campaigns/${id}`, { method: 'PUT',   body: JSON.stringify(data) }),
-  deleteCampaign:    (id)           => apiFetch(`/campaigns/${id}`, { method: 'DELETE' }),
+  // Preview child-row counts before confirming delete
+  getCampaignDeletePreview: (id)    => apiFetch(`/campaigns/${id}/delete-preview`),
+  // opts.deleteCharacters=true hard-deletes characters in same txn; default keeps them as orphans (SET NULL)
+  deleteCampaign:    (id, opts = {}) => {
+    const qs = opts.deleteCharacters ? '?delete_characters=true' : '';
+    return apiFetch(`/campaigns/${id}${qs}`, { method: 'DELETE' });
+  },
   getCampaignMembers:(id)           => apiFetch(`/campaigns/${id}/members`),
   kickMember:        (id, userId)   => apiFetch(`/campaigns/${id}/members/${userId}`, { method: 'DELETE' }),
   getCampaignInvites:(id)           => apiFetch(`/campaigns/${id}/invites`),

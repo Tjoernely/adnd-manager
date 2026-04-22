@@ -29,19 +29,31 @@ function partyFilter(data) {
 }
 
 // ── List characters ──────────────────────────────────────────────────────────
+// campaign_id="null" (string)  → list UNASSIGNED (orphan) characters for this user
+// campaign_id=<numeric id>     → list characters in that campaign
+// (omitted)                    → list all characters for this user
 router.get('/', auth, async (req, res) => {
   try {
     const { campaign_id } = req.query;
-    const rows = campaign_id
-      ? await db.all(
-          `SELECT * FROM characters WHERE player_user_id=$1 AND campaign_id=$2
-           ORDER BY updated_at DESC`,
-          [req.user.id, campaign_id],
-        )
-      : await db.all(
-          `SELECT * FROM characters WHERE player_user_id=$1 ORDER BY updated_at DESC`,
-          [req.user.id],
-        );
+    let rows;
+    if (campaign_id === 'null') {
+      rows = await db.all(
+        `SELECT * FROM characters WHERE player_user_id=$1 AND campaign_id IS NULL
+         ORDER BY updated_at DESC`,
+        [req.user.id],
+      );
+    } else if (campaign_id) {
+      rows = await db.all(
+        `SELECT * FROM characters WHERE player_user_id=$1 AND campaign_id=$2
+         ORDER BY updated_at DESC`,
+        [req.user.id, campaign_id],
+      );
+    } else {
+      rows = await db.all(
+        `SELECT * FROM characters WHERE player_user_id=$1 ORDER BY updated_at DESC`,
+        [req.user.id],
+      );
+    }
     res.json(rows.map(fmt));
   } catch (e) { next500(e, res); }
 });

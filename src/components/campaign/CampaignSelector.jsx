@@ -17,9 +17,16 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
   const [newName,     setNewName]     = useState('');
   const [newDesc,     setNewDesc]     = useState('');
   const [saving,      setSaving]      = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // campaign id
 
-  const load = useCallback(async () => {
+  // Delete-confirmation modal state
+  const [deletePreview, setDeletePreview] = useState(null);  // { campaign, cascade, set_null, other, characters }
+  const [deleteChars,   setDeleteChars]   = useState(false); // checkbox: also hard-delete chars?
+  const [deleteBusy,    setDeleteBusy]    = useState(false);
+
+  // Unassigned (orphan) characters — campaign_id IS NULL
+  const [unassigned, setUnassigned] = useState([]);
+
+  const loadCampaigns = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       setCampaigns(await api.getCampaigns());
@@ -30,7 +37,18 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Orphan characters use the same endpoint with campaign_id=null
+  const loadUnassigned = useCallback(async () => {
+    try {
+      const rows = await api.getCharacters('null');
+      setUnassigned(Array.isArray(rows) ? rows : []);
+    } catch {
+      // Non-fatal — if endpoint doesn't support null, just show nothing.
+      setUnassigned([]);
+    }
+  }, []);
+
+  useEffect(() => { loadCampaigns(); loadUnassigned(); }, [loadCampaigns, loadUnassigned]);
 
   async function createCampaign(e) {
     e.preventDefault();
@@ -47,11 +65,51 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
     }
   }
 
-  async function deleteCampaign(id) {
+  async function openDeletePreview(id) {
+    setError(null);
+    setDeleteChars(false);
     try {
-      await api.deleteCampaign(id);
-      setCampaigns(prev => prev.filter(c => c.id !== id));
-      setDeleteConfirm(null);
+      const preview = await api.getCampaignDeletePreview(id);
+      setDeletePreview(preview);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deletePreview) return;
+    setDeleteBusy(true);
+    try {
+      await api.deleteCampaign(deletePreview.campaign.id, { deleteCharacters: deleteChars });
+      setCampaigns(prev => prev.filter(c => c.id !== deletePreview.campaign.id));
+      setDeletePreview(null);
+      setDeleteChars(false);
+      // If we kept characters, they now show up in the Unassigned section.
+      loadUnassigned();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  // ── Unassigned character actions ──────────────────────────────────────
+  async function reassignCharacter(charId, campaignId) {
+    if (!campaignId) return;
+    try {
+      await api.saveCharacter(charId, { campaign_id: Number(campaignId) });
+      setUnassigned(prev => prev.filter(c => c.id !== charId));
+      loadCampaigns(); // refresh character counts
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function deleteUnassigned(charId, charName) {
+    if (!window.confirm(`Permanently delete "${charName}"? This cannot be undone.`)) return;
+    try {
+      await api.deleteCharacter(charId);
+      setUnassigned(prev => prev.filter(c => c.id !== charId));
     } catch (e) {
       setError(e.message);
     }
@@ -219,41 +277,237 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
               }}>
                 Enter →
               </button>
-              {deleteConfirm === camp.id ? (
-                <>
-                  <button onClick={() => deleteCampaign(camp.id)} style={{
-                    padding: '8px 12px', border: '1px solid rgba(200,50,50,.5)',
-                    borderRadius: 6, background: 'rgba(200,50,50,.15)',
-                    color: C.red, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                  }}>
-                    Confirm delete
-                  </button>
-                  <button onClick={() => setDeleteConfirm(null)} style={{
-                    padding: '8px 10px', border: `1px solid ${C.border}`,
-                    borderRadius: 6, background: 'transparent',
-                    color: C.textDim, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                  }}>
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => setDeleteConfirm(camp.id)} style={{
-                  padding: '8px 10px', border: `1px solid ${C.border}`,
-                  borderRadius: 6, background: 'transparent',
-                  color: '#6a4a30', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
-                  transition: 'color .12s',
-                }}
-                  onMouseEnter={e => e.target.style.color = C.red}
-                  onMouseLeave={e => e.target.style.color = '#6a4a30'}
-                  title="Delete campaign"
-                >
-                  ✕
-                </button>
-              )}
+              <button onClick={() => openDeletePreview(camp.id)} style={{
+                padding: '8px 10px', border: `1px solid ${C.border}`,
+                borderRadius: 6, background: 'transparent',
+                color: '#6a4a30', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+                transition: 'color .12s',
+              }}
+                onMouseEnter={e => e.target.style.color = C.red}
+                onMouseLeave={e => e.target.style.color = '#6a4a30'}
+                title="Delete campaign"
+              >
+                ✕
+              </button>
             </div>
           </div>
         ))}
+
+        {/* ── Unassigned Characters ─────────────────────────────────────── */}
+        {unassigned.length > 0 && (
+          <section style={{
+            marginTop: 32,
+            background: 'linear-gradient(145deg,#1a1308,#100c04)',
+            border: `1px solid ${C.border}`, borderRadius: 10,
+            padding: '18px 20px',
+          }}>
+            <div style={{ fontSize: 12, color: C.goldDim, letterSpacing: 2,
+              textTransform: 'uppercase', marginBottom: 4 }}>
+              ⚠ Unassigned Characters
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 14 }}>
+              These characters aren't linked to any campaign. Reassign them or delete.
+            </div>
+            {unassigned.map(ch => (
+              <div key={ch.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', marginBottom: 6,
+                background: 'rgba(0,0,0,.25)', border: `1px solid ${C.border}`,
+                borderRadius: 6,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: C.text }}>{ch.name}</div>
+                  <div style={{ fontSize: 10, color: C.textDim }}>
+                    {ch.race ?? '—'} {ch.class ?? ''}{ch.level ? ` · L${ch.level}` : ''}
+                  </div>
+                </div>
+                <select
+                  defaultValue=""
+                  onChange={e => reassignCharacter(ch.id, e.target.value)}
+                  style={{
+                    ...inputStyle, width: 180, padding: '6px 8px', fontSize: 11,
+                  }}
+                >
+                  <option value="" disabled>Assign to campaign…</option>
+                  {campaigns.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => deleteUnassigned(ch.id, ch.name)}
+                  style={{
+                    padding: '6px 10px', border: '1px solid rgba(200,50,50,.4)',
+                    borderRadius: 6, background: 'rgba(200,50,50,.08)',
+                    color: C.red, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  }}
+                  title="Delete character permanently"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
       </main>
+
+      {/* ── Delete-preview modal ─────────────────────────────────────────── */}
+      {deletePreview && (
+        <DeletePreviewModal
+          preview={deletePreview}
+          deleteChars={deleteChars}
+          setDeleteChars={setDeleteChars}
+          busy={deleteBusy}
+          onConfirm={confirmDelete}
+          onCancel={() => { setDeletePreview(null); setDeleteChars(false); }}
+        />
+      )}
     </div>
   );
+}
+
+// ── Delete-preview modal ────────────────────────────────────────────────────
+function DeletePreviewModal({ preview, deleteChars, setDeleteChars, busy, onConfirm, onCancel }) {
+  const { campaign, cascade, set_null, characters } = preview;
+  const cascadeRows = Object.entries(cascade ?? {});
+  const setnullRows = Object.entries(set_null ?? {});
+  const hasChars    = (characters ?? []).length > 0;
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 20,
+        background: 'rgba(0,0,0,.72)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: 560, width: '100%',
+          background: 'linear-gradient(145deg,#1c1408,#100a04)',
+          border: `2px solid ${C.borderHi}`, borderRadius: 12,
+          padding: '22px 26px',
+          fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif",
+          color: C.text, boxShadow: '0 8px 40px rgba(0,0,0,.6)',
+        }}
+      >
+        <div style={{ fontSize: 12, color: C.red, letterSpacing: 3,
+          textTransform: 'uppercase', marginBottom: 6 }}>
+          ⚠ Delete Campaign
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 'bold', color: C.gold, marginBottom: 16 }}>
+          {campaign.name}
+        </div>
+
+        {cascadeRows.length === 0 && setnullRows.length === 0 ? (
+          <div style={{ fontSize: 13, color: C.textDim, marginBottom: 18 }}>
+            This campaign has no associated data. Deletion will only remove the campaign record.
+          </div>
+        ) : (
+          <>
+            {cascadeRows.length > 0 && (
+              <>
+                <div style={{ fontSize: 11, color: C.red, letterSpacing: 1.5,
+                  textTransform: 'uppercase', marginBottom: 8 }}>
+                  Will be permanently deleted:
+                </div>
+                <ul style={{ margin: '0 0 14px 16px', padding: 0, fontSize: 13, color: C.text }}>
+                  {cascadeRows.map(([tbl, n]) => (
+                    <li key={tbl} style={{ marginBottom: 3 }}>
+                      <strong style={{ color: C.red }}>{n}</strong>{' '}
+                      <span style={{ color: C.textDim }}>{prettyTableName(tbl)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {setnullRows.length > 0 && (
+              <>
+                <div style={{ fontSize: 11, color: C.goldDim, letterSpacing: 1.5,
+                  textTransform: 'uppercase', marginBottom: 8 }}>
+                  Will survive (unlinked from this campaign):
+                </div>
+                <ul style={{ margin: '0 0 6px 16px', padding: 0, fontSize: 13, color: C.text }}>
+                  {setnullRows.map(([tbl, n]) => (
+                    <li key={tbl} style={{ marginBottom: 3 }}>
+                      <strong style={{ color: C.gold }}>{n}</strong>{' '}
+                      <span style={{ color: C.textDim }}>{prettyTableName(tbl)}</span>
+                    </li>
+                  ))}
+                </ul>
+                {hasChars && (
+                  <div style={{
+                    fontSize: 11, color: C.textDim, marginBottom: 14, marginLeft: 16,
+                    fontStyle: 'italic',
+                  }}>
+                    {characters.map(c => c.name).join(', ')}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {hasChars && (
+          <label style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '10px 12px', marginBottom: 14,
+            background: 'rgba(200,50,50,.06)',
+            border: '1px solid rgba(200,50,50,.25)',
+            borderRadius: 6, cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={deleteChars}
+              onChange={e => setDeleteChars(e.target.checked)}
+              style={{ marginTop: 2 }}
+            />
+            <span style={{ fontSize: 12, color: C.text }}>
+              <strong style={{ color: C.red }}>Also delete these {characters.length} character{characters.length !== 1 ? 's' : ''}</strong>
+              <br />
+              <span style={{ color: C.textDim, fontSize: 11 }}>
+                Leave unchecked to keep them as Unassigned Characters — you can reassign them later.
+              </span>
+            </span>
+          </label>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            style={{
+              padding: '8px 18px', border: `1px solid ${C.border}`, borderRadius: 6,
+              background: 'transparent', color: C.textDim,
+              cursor: busy ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', fontSize: 12,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            style={{
+              padding: '8px 20px', border: '1px solid rgba(200,50,50,.5)', borderRadius: 6,
+              background: 'rgba(200,50,50,.2)', color: C.red, fontWeight: 'bold',
+              cursor: busy ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', fontSize: 12,
+              opacity: busy ? 0.7 : 1,
+            }}
+          >
+            {busy ? 'Deleting…' : 'Delete campaign'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Humanize table names: "party_equipment" → "party equipment"
+function prettyTableName(tbl) {
+  return tbl.replace(/_/g, ' ');
 }

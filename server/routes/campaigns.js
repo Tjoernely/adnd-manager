@@ -80,14 +80,97 @@ router.put('/:id', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
-// ── Delete campaign (DM only) ────────────────────────────────────────────────
-router.delete('/:id', auth, async (req, res) => {
+// ── Delete preview: what will cascade vs. survive? (DM only) ─────────────────
+// Returns child-row counts grouped by FK rule so the UI can render a
+// confirmation modal that tells the DM *exactly* what will vanish if they
+// click delete. Called before DELETE /:id.
+router.get('/:id/delete-preview', auth, async (req, res) => {
   try {
     const existing = await dmOnly(req.params.id, req.user.id);
     if (!existing) return res.status(403).json({ error: 'Not DM of this campaign' });
-    await db.query('DELETE FROM campaigns WHERE id=$1', [req.params.id]);
-    res.status(204).end();
+
+    // Find every table with a campaign_id column and classify by FK delete rule.
+    // Then run COUNT(*) on each. Cheap on current dataset.
+    const { rows: tables } = await db.query(
+      `SELECT c.table_name,
+              COALESCE(rc.delete_rule, 'NO FK') AS delete_rule
+       FROM information_schema.columns c
+       LEFT JOIN information_schema.key_column_usage kcu
+              ON kcu.table_name = c.table_name
+             AND kcu.column_name = c.column_name
+             AND kcu.table_schema = c.table_schema
+       LEFT JOIN information_schema.referential_constraints rc
+              ON rc.constraint_name = kcu.constraint_name
+             AND rc.constraint_schema = kcu.constraint_schema
+       WHERE c.column_name = 'campaign_id'
+         AND c.table_schema = 'public'
+       ORDER BY c.table_name`
+    );
+
+    const cascade  = {};
+    const setnull  = {};
+    const other    = {};
+    for (const t of tables) {
+      const { rows } = await db.query(
+        `SELECT COUNT(*)::int AS n FROM ${t.table_name} WHERE campaign_id=$1`,
+        [req.params.id],
+      );
+      const count = rows[0].n;
+      if (count === 0) continue;
+      if (t.delete_rule === 'CASCADE')       cascade[t.table_name]  = count;
+      else if (t.delete_rule === 'SET NULL') setnull[t.table_name]  = count;
+      else                                    other[t.table_name]    = count;
+    }
+
+    // Also list the character rows themselves (name + id) so the modal can
+    // show "these characters will become unassigned" explicitly.
+    const { rows: characters } = await db.query(
+      `SELECT id, name, class, race, level
+         FROM characters
+        WHERE campaign_id=$1
+        ORDER BY name`,
+      [req.params.id],
+    );
+
+    res.json({
+      campaign: { id: existing.id, name: existing.name },
+      cascade,               // { monsters: 42, maps: 3, ... }  (will be deleted)
+      set_null: setnull,     // { characters: 2, ... }          (will survive as orphan)
+      other,                 // NO FK tables (shouldn't happen post-migration)
+      characters,            // full rows for set_null.characters
+    });
   } catch (e) { next500(e, res); }
+});
+
+// ── Delete campaign (DM only) ────────────────────────────────────────────────
+// Query flag ?delete_characters=true tells us to hard-delete this campaign's
+// characters first (in the same transaction) — otherwise the SET NULL FK
+// leaves them alive as unassigned characters that can be reassigned later.
+router.delete('/:id', auth, async (req, res) => {
+  const deleteChars = req.query.delete_characters === 'true';
+  const client = await db.pool.connect();
+  try {
+    const existing = await dmOnly(req.params.id, req.user.id);
+    if (!existing) {
+      client.release();
+      return res.status(403).json({ error: 'Not DM of this campaign' });
+    }
+    await client.query('BEGIN');
+    if (deleteChars) {
+      await client.query(
+        'DELETE FROM characters WHERE campaign_id=$1',
+        [req.params.id],
+      );
+    }
+    await client.query('DELETE FROM campaigns WHERE id=$1', [req.params.id]);
+    await client.query('COMMIT');
+    res.status(204).end();
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    next500(e, res);
+  } finally {
+    client.release();
+  }
 });
 
 // ── List members ─────────────────────────────────────────────────────────────
