@@ -4,6 +4,7 @@ import DiceRoller from './DiceRoller.jsx';
 import './Items.css';
 import { S3_DATA, S3_CATEGORIES as S3_CATS } from './s3_data.js';
 import { buildS3WikiTitle, getS3WikiUrl } from './s3_wiki_links.js';
+import { buildLootPayload } from './lootHelpers.js';
 
 // ── Table 1 master overview ────────────────────────────────────────────────
 const TABLE_1 = [
@@ -216,13 +217,24 @@ function determineCursed(atkEntry, dmgEntry) {
 // ── Module-level fetch helpers ─────────────────────────────────────────────
 // tableLetter (optional) — restricts search to one table, preventing
 // cross-category false matches (e.g. "of Distortion" in D hitting Table A).
+// The list endpoint only returns description_preview (LEFT(description, 300)).
+// When we find a hit, enrich it with the single-item endpoint to get the
+// full description + all fields the list doesn't return.
+async function enrichFullItem(listItem) {
+  if (!listItem?.id) return listItem ?? null;
+  try {
+    const full = await api.getMagicalItem(listItem.id);
+    return full ?? listItem;
+  } catch { return listItem; }
+}
+
 async function fetchItemByName(name, tableLetter) {
   if (!name) return null;
   try {
     const opts = { search: name, limit: 1 };
     if (tableLetter) opts.table_letter = tableLetter;
     const res = await api.searchMagicalItems(opts);
-    return res?.items?.[0] ?? null;
+    return enrichFullItem(res?.items?.[0] ?? null);
   } catch { return null; }
 }
 
@@ -232,7 +244,7 @@ async function fetchItemByNameExact(name, tableLetter) {
     const opts = { search: name, exact: true, limit: 1 };
     if (tableLetter) opts.table_letter = tableLetter;
     const res = await api.searchMagicalItems(opts);
-    return res?.items?.[0] ?? null;
+    return enrichFullItem(res?.items?.[0] ?? null);
   } catch { return null; }
 }
 
@@ -440,7 +452,8 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
 
   const isCursed    = !!forceCursed || compositeAtk?.cursed || compositeDmg?.cursed || !!item?.cursed;
   const displayName = compositeName ?? item?.name ?? '—';
-  const description = item?.description_preview || item?.description || item?.fallback_description || null;
+  // Prefer full description (from GET /:id) over truncated preview (from list endpoint).
+  const description = item?.description || item?.description_preview || item?.fallback_description || null;
 
   return (
     <div className="mi-detail-body">
@@ -531,9 +544,31 @@ function DetailPanel({ item, loading, error, compositeName, compositeAtk, compos
 }
 
 // ── Main component — dynamic pane stack ───────────────────────────────────
-export default function DrillDown() {
+export default function DrillDown({ campaignId } = {}) {
   const [panes, setPanes] = useState([{ type: 'overview' }]);
   const containerRef = useRef(null);
+
+  // ── Add-to-Party-Loot state (shared across all description panes) ─────────
+  const [addingToLoot, setAddingToLoot] = useState(null); // item.id while in-flight
+  const [lootSuccess,  setLootSuccess]  = useState({});   // item.id → true
+  const [lootError,    setLootError]    = useState(null);
+
+  async function handleAddToLoot(item) {
+    if (!item) return;
+    if (!campaignId) { setLootError('No active campaign — open a campaign first.'); return; }
+    const key = item.id ?? item.name;
+    if (addingToLoot === key) return;
+    setLootError(null);
+    setAddingToLoot(key);
+    try {
+      await api.createPartyEquipment(buildLootPayload(item, campaignId));
+      setLootSuccess(prev => ({ ...prev, [key]: true }));
+      setTimeout(() => setLootSuccess(prev => { const n = { ...prev }; delete n[key]; return n; }), 3000);
+    } catch (e) {
+      console.error('Add to party loot failed:', e);
+      setLootError(e.message ?? 'Failed to add to party loot');
+    } finally { setAddingToLoot(null); }
+  }
 
   // Scroll right when a new pane is added
   useEffect(() => {
@@ -803,6 +838,9 @@ export default function DrillDown() {
     }
 
     if (mode === 'composite') {
+      const compositeItem = item
+        ? { ...item, name: pane.name, cursed: pane.cursed || item.cursed }
+        : { name: pane.name, cursed: pane.cursed };
       return (
         <>
           <PaneHeader title="Result" />
@@ -820,7 +858,9 @@ export default function DrillDown() {
                 : `A magically enhanced ${pane.baseEntry?.item_name ?? 'weapon'}. Apply the listed bonuses to attack and damage rolls.`
             }
             note={!pane.isArmor ? 'For a specific named weapon variant, roll on Table S3 — Special Weapons.' : null}
-          />
+          >
+            {renderLootButton(compositeItem)}
+          </DetailPanel>
         </>
       );
     }
@@ -830,8 +870,50 @@ export default function DrillDown() {
       <>
         <PaneHeader title={item?.name ?? pane.name ?? 'Item Detail'} subtitle="Description" />
         <DetailPanel item={item} loading={false} error={pane.error}
-          fallback="No description available — see Fandom Wiki for details." />
+          fallback="No description available — see Fandom Wiki for details.">
+          {renderLootButton(item)}
+        </DetailPanel>
       </>
+    );
+  }
+
+  // ── Render the "Add to Party Loot" button ─────────────────────────────────
+  function renderLootButton(item) {
+    if (!item) return null;
+    const key       = item.id ?? item.name;
+    const isAdding  = addingToLoot === key;
+    const isSuccess = !!lootSuccess[key];
+    return (
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(212,168,64,0.18)' }}>
+        {lootError && (
+          <div style={{
+            color: '#d85050', fontSize: 11, marginBottom: 8,
+            background: 'rgba(200,50,50,0.08)', border: '1px solid rgba(200,50,50,0.25)',
+            padding: '6px 10px', borderRadius: 3,
+          }}>⚠ {lootError}</div>
+        )}
+        <button
+          onClick={() => handleAddToLoot(item)}
+          disabled={isAdding || !campaignId}
+          title={!campaignId ? 'Open a campaign first to add items to party loot' : undefined}
+          style={{
+            width: '100%', padding: '8px 12px', borderRadius: 5,
+            cursor: (isAdding || !campaignId) ? 'not-allowed' : 'pointer',
+            background: isSuccess ? 'rgba(109,190,136,.18)' : 'rgba(212,160,53,.1)',
+            border: `1px solid ${isSuccess ? 'rgba(109,190,136,.5)' : 'rgba(212,160,53,.35)'}`,
+            color: isSuccess ? '#6dbe88' : '#c8a040',
+            fontSize: 12, fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif",
+            fontVariant: 'small-caps', letterSpacing: '0.08em',
+            opacity: (isAdding || !campaignId) ? 0.6 : 1,
+          }}
+        >
+          {!campaignId
+            ? '📦 Add to Party Loot (no active campaign)'
+            : isAdding     ? '⏳ Adding…'
+            : isSuccess    ? '✓ Added to Party Loot'
+            : '📦 Add to Party Loot'}
+        </button>
+      </div>
     );
   }
 

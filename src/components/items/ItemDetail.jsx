@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../../api/client.js';
+import React from 'react';
 import './Items.css';
 
 /**
@@ -10,36 +9,6 @@ import './Items.css';
  *   onClose — () => void
  */
 export default function ItemDetail({ item, loading, onClose }) {
-  const [tableData,    setTableData]    = useState(null);
-  const [tableLoading, setTableLoading] = useState(false);
-  const [rollResult,   setRollResult]   = useState(null);
-  const [rolling,      setRolling]      = useState(false);
-
-  // Fetch table entries whenever the item's table_letter changes
-  useEffect(() => {
-    setRollResult(null);
-    if (!item?.table_letter) { setTableData(null); return; }
-    setTableLoading(true);
-    api.getTableEntries(item.table_letter, 50)
-      .then(setTableData)
-      .catch(() => setTableData(null))
-      .finally(() => setTableLoading(false));
-  }, [item?.table_letter]);
-
-  const handleRoll = useCallback(async () => {
-    if (!item?.table_letter) return;
-    setRolling(true);
-    setRollResult(null);
-    try {
-      const res = await api.rollMagicalTable(item.table_letter);
-      setRollResult(res);
-    } catch (err) {
-      setRollResult({ error: err.message });
-    } finally {
-      setRolling(false);
-    }
-  }, [item?.table_letter]);
-
   if (loading) {
     return (
       <div className="id-panel id-panel--loading">
@@ -147,76 +116,6 @@ export default function ItemDetail({ item, loading, onClose }) {
           </div>
         )}
 
-        {/* ── Subtable section ── */}
-        {item.table_letter && (
-          <div className="id-section">
-            <div className="id-divider">
-              <span className="id-divider-title">
-                Roll on Table {item.table_letter}
-                {tableData ? ` — ${tableData.table_name} (${tableData.dice})` : ''}
-              </span>
-            </div>
-
-            {/* Roll button */}
-            <button
-              className="id-roll-table-btn"
-              onClick={handleRoll}
-              disabled={rolling}
-            >
-              {rolling ? 'Rolling…' : '🎲 Roll for specific type'}
-            </button>
-
-            {/* Roll result */}
-            {rollResult && (
-              <div className={`id-roll-result${rollResult.error ? ' id-roll-result--error' : ''}`}>
-                {rollResult.error ? (
-                  <span>{rollResult.error}</span>
-                ) : (
-                  <>
-                    <span className="id-roll-result-die">({rollResult.roll})</span>
-                    <span className="id-roll-result-name">
-                      {rollResult.item?.name ?? rollResult.item_name}
-                    </span>
-                    {rollResult.item?.description && (
-                      <p className="id-roll-result-desc">
-                        {rollResult.item.description.slice(0, 160).trim()}
-                        {rollResult.item.description.length > 160 ? '…' : ''}
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Table entries list */}
-            {tableLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', opacity: 0.6 }}>
-                <div className="mi-spinner" style={{ width: 14, height: 14 }} />
-                <span style={{ fontSize: 11 }}>Loading table…</span>
-              </div>
-            )}
-            {tableData && tableData.entries.length > 0 && (
-              <div className="id-table-entries">
-                {tableData.entries.map((e, i) => (
-                  <div key={i} className="id-table-entry">
-                    <span className="id-table-entry-roll">
-                      {e.roll_min === e.roll_max
-                        ? e.roll_min
-                        : `${e.roll_min}–${e.roll_max}`}
-                    </span>
-                    <span className="id-table-entry-name">{e.item_name}</span>
-                  </div>
-                ))}
-                {tableData.total >= 50 && (
-                  <p className="id-table-entries-more">
-                    Showing first 50 entries — use 🎲 Roll above for random results.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Import warnings */}
         {Array.isArray(item.import_warnings) && item.import_warnings.length > 0 && (
           <div className="id-section">
@@ -239,16 +138,6 @@ export default function ItemDetail({ item, loading, onClose }) {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="id-footer">
-        <button
-          className="id-add-btn"
-          disabled
-          title="Coming soon: add this item to a campaign hoard"
-        >
-          + Add to Hoard
-        </button>
-      </div>
     </div>
   );
 }

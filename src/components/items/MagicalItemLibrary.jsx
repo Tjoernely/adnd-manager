@@ -3,6 +3,7 @@ import { api } from '../../api/client.js';
 import ItemCard       from './ItemCard.jsx';
 import ItemDetail     from './ItemDetail.jsx';
 import DrillDown from './DrillDown.jsx';
+import { buildLootPayload } from './lootHelpers.js';
 import './Items.css';
 
 const PAGE_SIZE = 50;
@@ -21,44 +22,6 @@ const RARITIES = [
 ];
 
 const TABLE_LETTERS = 'ABCDEFGHIJKLMNOPQRST'.split('');
-
-// ── Loot helpers ──────────────────────────────────────────────────────────────
-
-function mapCategory(category, name) {
-  const c = (category || '').toLowerCase();
-  const n = (name || '').toLowerCase();
-  if (c === 'weapon' || n.includes('sword') || n.includes('axe') ||
-      n.includes('bow') || n.includes('dagger') || n.includes('spear') ||
-      n.includes('mace') || n.includes('hammer') || n.includes('staff') ||
-      n.includes('wand')) return 'weapon';
-  if (c === 'armor' || n.includes('armor') || n.includes('mail') ||
-      n.includes('shield') || n.includes('plate') || n.includes('leather'))
-    return (c.includes('shield') || n.includes('shield')) ? 'shield' : 'armor';
-  if (c === 'potion') return 'potion';
-  if (c === 'scroll') return 'scroll';
-  if (c === 'ring')   return 'ring';
-  if (c === 'wand')   return 'wand';
-  if (c === 'rod' || c === 'staff') return 'staff';
-  return 'misc';
-}
-
-function buildItemNotes(item) {
-  const desc = (item.description_preview || '').toLowerCase();
-  const weaponTypes = [
-    'short sword', 'long sword', 'broad sword', 'two-handed sword',
-    'bastard sword', 'dagger', 'battle axe', 'hand axe', 'war hammer',
-    'mace', 'flail', 'spear', 'quarterstaff', 'bow', 'crossbow', 'sling',
-    'scimitar', 'rapier', 'katana',
-  ];
-  const foundType  = weaponTypes.find(t => desc.includes(t));
-  const bonusMatch = desc.match(/\+(\d+)\s*(to hit|hit|sword|weapon|attack|damage)?/i);
-  const bonus      = bonusMatch ? `+${bonusMatch[1]}` : null;
-  return [
-    foundType ? `Type: ${foundType}` : null,
-    bonus     ? `Bonus: ${bonus}`    : null,
-    item.xp_value ? `XP: ${item.xp_value}` : null,
-  ].filter(Boolean).join(' | ');
-}
 
 /**
  * MagicalItemLibrary — full-screen magical item browser.
@@ -103,18 +66,7 @@ export default function MagicalItemLibrary({ onBack, campaignId }) {
     setLootError(null);
     setAddingToLoot(item.id);
     try {
-      await api.createPartyEquipment({
-        campaign_id:     campaignId,
-        name:            item.name,
-        description:     (item.description_preview || '').substring(0, 300),
-        is_magical:      true,
-        identify_state:  'unknown',
-        item_type:       mapCategory(item.category, item.name),
-        magical_item_id: item.id,
-        value_gp:        item.value_gp ?? null,
-        source:          'found',
-        notes:           buildItemNotes(item),
-      });
+      await api.createPartyEquipment(buildLootPayload(item, campaignId));
       setLootSuccess(prev => ({ ...prev, [item.id]: true }));
       setTimeout(() => setLootSuccess(prev => { const n = { ...prev }; delete n[item.id]; return n; }), 3000);
     } catch (e) {
@@ -470,7 +422,7 @@ export default function MagicalItemLibrary({ onBack, campaignId }) {
         )}
 
         {/* ── Drill-Down Tables Tab ────────────────────────────────────────────── */}
-        {tab === 'roller' && <DrillDown />}
+        {tab === 'roller' && <DrillDown campaignId={campaignId} />}
 
       </div>
     </div>
