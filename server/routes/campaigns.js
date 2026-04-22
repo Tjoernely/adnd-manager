@@ -90,21 +90,27 @@ router.get('/:id/delete-preview', auth, async (req, res) => {
     if (!existing) return res.status(403).json({ error: 'Not DM of this campaign' });
 
     // Find every table with a campaign_id column and classify by FK delete rule.
-    // Then run COUNT(*) on each. Cheap on current dataset.
+    // A single campaign_id column can belong to multiple constraints (PK + FK),
+    // so DISTINCT ON picks the FK row when present (NULLs sort LAST with DESC).
     const { rows: tables } = await db.query(
-      `SELECT c.table_name,
+      `SELECT DISTINCT ON (c.table_name)
+              c.table_name,
               COALESCE(rc.delete_rule, 'NO FK') AS delete_rule
        FROM information_schema.columns c
+       LEFT JOIN information_schema.table_constraints tc
+              ON tc.table_name = c.table_name
+             AND tc.table_schema = c.table_schema
+             AND tc.constraint_type = 'FOREIGN KEY'
        LEFT JOIN information_schema.key_column_usage kcu
-              ON kcu.table_name = c.table_name
+              ON kcu.constraint_name = tc.constraint_name
+             AND kcu.constraint_schema = tc.constraint_schema
              AND kcu.column_name = c.column_name
-             AND kcu.table_schema = c.table_schema
        LEFT JOIN information_schema.referential_constraints rc
               ON rc.constraint_name = kcu.constraint_name
              AND rc.constraint_schema = kcu.constraint_schema
        WHERE c.column_name = 'campaign_id'
          AND c.table_schema = 'public'
-       ORDER BY c.table_name`
+       ORDER BY c.table_name, rc.delete_rule NULLS LAST`
     );
 
     const cascade  = {};
