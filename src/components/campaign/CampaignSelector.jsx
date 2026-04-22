@@ -318,7 +318,9 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: C.text }}>{ch.name}</div>
                   <div style={{ fontSize: 10, color: C.textDim }}>
-                    {ch.race ?? '—'} {ch.class ?? ''}{ch.level ? ` · L${ch.level}` : ''}
+                    {ch.character_data?.selectedRace ?? '—'}
+                    {ch.character_data?.selectedClass ? ` ${ch.character_data.selectedClass}` : ''}
+                    {ch.character_data?.charLevel ? ` · L${ch.character_data.charLevel}` : ''}
                   </div>
                 </div>
                 <select

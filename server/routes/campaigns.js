@@ -21,7 +21,9 @@ router.get('/', auth, async (req, res) => {
     const rows = await db.all(
       `SELECT DISTINCT c.*,
               (c.dm_user_id = $1)       AS is_dm,
-              COALESCE(cm.role, 'dm')   AS my_role
+              COALESCE(cm.role, 'dm')   AS my_role,
+              (SELECT COUNT(*)::int FROM characters WHERE campaign_id = c.id)
+                                        AS character_count
        FROM campaigns c
        LEFT JOIN campaign_members cm ON cm.campaign_id = c.id AND cm.user_id = $1
        WHERE c.dm_user_id = $1 OR cm.user_id = $1
@@ -130,8 +132,12 @@ router.get('/:id/delete-preview', auth, async (req, res) => {
 
     // Also list the character rows themselves (name + id) so the modal can
     // show "these characters will become unassigned" explicitly.
+    // class/race/level live inside character_data JSONB, not top-level cols.
     const { rows: characters } = await db.query(
-      `SELECT id, name, class, race, level
+      `SELECT id, name,
+              character_data->>'selectedClass' AS class,
+              character_data->>'selectedRace'  AS race,
+              character_data->>'charLevel'     AS level
          FROM characters
         WHERE campaign_id=$1
         ORDER BY name`,
