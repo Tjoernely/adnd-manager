@@ -79,7 +79,7 @@ export default function MagicalItemLibrary({ onBack, campaignId }) {
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [filterOpen, setFilterOpen] = useState(false);
-  const [tab,        setTab]        = useState('library');
+  const [tab,        setTab]        = useState('roller');  // default to Drill-Down Tables
 
   // ── Results ───────────────────────────────────────────────────────────────
   const [items,   setItems]   = useState([]);

@@ -57,9 +57,6 @@ const SCOPE_TO_MAP_TYPE: Record<string, string> = {
 const RELIEF_SUFFIX: Partial<Record<ReliefType, string>> = {
   mountainous: 'Mountains',
   hills:       'Hills',
-  cliffs:      'Cliffs',
-  valley:      'Valley',
-  plateau:     'Plateau',
 };
 
 // ── Dominant biome helper ─────────────────────────────────────────────────────

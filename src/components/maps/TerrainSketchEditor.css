@@ -16,15 +16,17 @@
 .tse-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
+  gap: 10px;
+  padding: 7px 12px;
   background: #141414;
   border-bottom: 1px solid #3a3020;
+  flex-shrink: 0;
 }
 .tse-title {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: #c8a84b;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .tse-brush-sizes {
   display: flex;
@@ -44,117 +46,208 @@
   border-color: #c8a84b;
   color: #c8a84b;
 }
+.tse-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.tse-btn--generate {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.tse-btn--cancel {
+  padding: 5px 9px;
+  font-size: 0.85rem;
+  border-color: #503030;
+  color: #a06050;
+}
+.tse-btn--cancel:hover { background: #2a1818; border-color: #904040; color: #d07060; }
 
 /* Body */
 .tse-body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
-/* Palette */
+/* ── Palette (left) ──────────────────────────────────────────────────────── */
 .tse-palette {
-  width: 200px;
-  min-width: 200px;
+  width: 196px;
+  min-width: 196px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: #181818;
   border-right: 1px solid #3a3020;
-  padding: 8px 6px;
+  padding: 6px 5px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: #5a4020 #181818;
 }
-.tse-section {
-  border: 1px solid #2a2a2a;
-  border-radius: 4px;
+.tse-palette::-webkit-scrollbar        { width: 6px; }
+.tse-palette::-webkit-scrollbar-track  { background: #181818; }
+.tse-palette::-webkit-scrollbar-thumb  { background: #5a4020; border-radius: 3px; }
+
+/* Category block */
+.tse-cat {
+  border: 1px solid #2a2518;
+  border-radius: 5px;
   overflow: hidden;
+  flex-shrink: 0;
 }
-.tse-section--active {
-  border-color: #c8a84b;
+.tse-cat--active {
+  border-color: #c8a84b60;
 }
-.tse-section-label {
-  padding: 4px 8px;
-  background: #232323;
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #907040;
+
+/* Category header (clickable) */
+.tse-cat-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #222018;
+  border: none;
   cursor: pointer;
-  user-select: none;
+  color: #a08848;
+  font-size: 0.78rem;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s;
 }
-.tse-section--active .tse-section-label {
-  color: #c8a84b;
-  background: #2a1e0a;
+.tse-cat-header:hover { background: #2a2410; }
+.tse-cat--active .tse-cat-header {
+  background: #2c1e06;
+  color: #d4a84b;
 }
-.tse-chips {
+.tse-cat-emoji { font-size: 0.88rem; line-height: 1; }
+.tse-cat-name  { flex: 1; font-weight: 600; letter-spacing: 0.03em; }
+.tse-cat-chevron { font-size: 0.65rem; color: #605040; opacity: 0.8; }
+
+/* Category body */
+.tse-cat-body {
+  padding: 6px;
+  background: #1a1916;
+  border-top: 1px solid #2a2518;
+}
+
+/* Tile grid (3 per row at 48px) */
+.tse-tile-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 5px;
 }
-.tse-chip {
+
+/* Individual tile chip */
+.tse-tile-chip {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 4px 3px 3px;
-  border: 2px solid #383828;
-  border-radius: 4px;
-  background: #1c1c1c;
-  color: #b0a070;
+  padding: 3px 3px 4px;
+  background: #201e14;
+  border: 2px solid #302a18;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 0.60rem;
-  white-space: nowrap;
-  width: 62px;
+  color: #907848;
+  font-size: 0.58rem;
+  font-family: inherit;
+  width: 56px;
+  transition: border-color 0.1s, background 0.1s;
 }
-.tse-chip:hover { border-color: #807050; background: #242420; }
-.tse-chip--active {
+.tse-tile-chip:hover {
+  border-color: #706030;
+  background: #2a2818;
+  color: #c0a060;
+}
+.tse-tile-chip--active {
   border-color: #ffd700;
-  background: #3a2a06;
+  background: #2e2206;
   color: #ffd700;
 }
-.tse-chip--dimmed { opacity: 0.7; }
-.tse-chip-swatch {
-  display: inline-block;
-  width: 52px;
-  height: 52px;
+
+.tse-tile-img {
+  width: 48px;
+  height: 48px;
+  display: block;
   border-radius: 3px;
-  flex-shrink: 0;
+  border: 1px solid #282418;
+  object-fit: cover;
+  image-rendering: auto;
 }
-.tse-chip-tile {
-  display: inline-block;
-  width: 52px;
-  height: 52px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  background-size: cover;
-  background-position: center;
-  image-rendering: pixelated;
+.tse-tile-chip--active .tse-tile-img {
+  border-color: #c8a84b;
 }
-.tse-chip-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 58px;
+.tse-tile-chip:hover .tse-tile-img {
+  opacity: 0.9;
+}
+
+.tse-tile-label {
   text-align: center;
   line-height: 1.2;
   white-space: normal;
   word-break: break-word;
+  max-width: 52px;
 }
 
+/* Overlay chips (river, road, canyon, chasm) */
+.tse-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.tse-overlay-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  background: #1e1c12;
+  border: 1px solid #302a18;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #a08848;
+  font-size: 0.74rem;
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s;
+}
+.tse-overlay-chip:hover  { background: #2a2818; border-color: #605030; color: #c0a060; }
+.tse-overlay-chip--active {
+  border-color: #ffd700;
+  background: #2e2206;
+  color: #ffd700;
+}
+.tse-overlay-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+.tse-overlay-label { white-space: nowrap; }
+
+/* Erase button */
 .tse-erase-btn {
   margin-top: 4px;
-  padding: 5px 8px;
-  background: #2a1010;
-  border: 1px solid #603030;
-  border-radius: 4px;
-  color: #c07060;
+  padding: 6px 10px;
+  background: #1e1010;
+  border: 1px solid #502020;
+  border-radius: 5px;
+  color: #b06050;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+  font-family: inherit;
   text-align: center;
+  transition: background 0.1s, border-color 0.1s;
+  flex-shrink: 0;
 }
-.tse-erase-btn:hover { background: #3a1818; border-color: #c05050; }
+.tse-erase-btn:hover      { background: #2a1414; border-color: #904040; color: #d07060; }
+.tse-erase-btn--active    { background: #3a1010; border-color: #d04040; color: #ff6060; }
 
-/* Canvas */
+/* ── Canvas (center) ─────────────────────────────────────────────────────── */
 .tse-canvas-wrap {
   flex: 1;
   display: flex;
@@ -190,10 +283,17 @@
   min-width: 36px;
   text-align: center;
 }
+.tse-zoom-hint {
+  font-size: 0.62rem;
+  color: #504038;
+  margin-left: 4px;
+}
 .tse-canvas-scroll {
   flex: 1;
-  overflow: auto;
+  overflow: auto;          /* both axes */
   padding: 12px;
+  /* prevent browser from hijacking ctrl+wheel for page zoom */
+  overscroll-behavior: contain;
 }
 .tse-canvas {
   cursor: crosshair;
@@ -220,17 +320,25 @@
   text-decoration: underline;
 }
 
-/* Settings sidebar */
+/* ── Settings sidebar (right) ────────────────────────────────────────────── */
 .tse-settings {
   width: 190px;
   min-width: 190px;
-  padding: 10px;
   background: #181818;
   border-left: 1px solid #3a3020;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tse-settings-scroll {
+  flex: 1;
   overflow-y: auto;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #4a3820 #181818;
 }
 .tse-label {
   display: flex;
@@ -290,14 +398,6 @@
   50%       { opacity: 0.6; }
 }
 
-.tse-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid #2a2010;
-}
 .tse-btn {
   padding: 8px 10px;
   border: 1px solid #504030;
@@ -306,15 +406,18 @@
   color: #c8a84b;
   cursor: pointer;
   font-size: 0.82rem;
+  font-family: inherit;
   text-align: center;
+  transition: background 0.1s;
 }
 .tse-btn:hover { background: #3a3020; }
+.tse-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tse-btn--primary {
   background: #3a2808;
   border-color: #c8a84b;
   font-weight: bold;
 }
-.tse-btn--primary:hover { background: #4a3818; }
+.tse-btn--primary:hover:not(:disabled) { background: #4a3818; }
 
 /* ── Fill dialog ──────────────────────────────────────────────────────────── */
 .tse-fill-overlay {
