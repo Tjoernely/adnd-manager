@@ -177,7 +177,7 @@ function getCellsInBrush(cx, cy, size) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ initialSpec, onGenerate, onCancel }, ref) {
+export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ initialSpec, onGenerate, onCancel, mapId = null }, ref) {
   const [cells, setCells]           = useState(() => {
     const map = {};
     (initialSpec?.cells ?? []).forEach(c => {
@@ -414,7 +414,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
       const token = localStorage.getItem('dnd_token') ?? '';
       console.log('[sketch] cells before send:', spec?.cells?.length);
-      const postBody = { sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced' };
+      // mapId (optional) tells the server to persist the sketchSpec to
+      // maps.data->sketch via jsonb_set the moment the job succeeds. This
+      // is the authoritative server-side write that prevents cells=0
+      // when a client-side update fails or races.
+      const postBody = { sketchSpec: spec, renderer, controlImage, stylePreset: mapStyle, userPrompt, aiFredom: spec.ai_freedom || 'balanced', mapId };
       console.log('[sketch] POST body keys:', Object.keys(postBody));
       console.log('[sketch] sketchSpec in body:', postBody.sketchSpec?.cells?.length);
       const bodyStr = JSON.stringify(postBody);
