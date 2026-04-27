@@ -704,6 +704,7 @@ router.post('/generate-from-sketch', auth, (req, res) => {
     stylePreset   = 'schley',
     userPrompt    = '',
     aiFredom      = 'balanced',
+    mapId,                                // optional — when set, server persists sketchSpec on job success
   } = req.body ?? {};
 
   console.log('[server] req.body keys:', Object.keys(req.body ?? {}));
@@ -730,7 +731,7 @@ router.post('/generate-from-sketch', auth, (req, res) => {
   const jobId = crypto.randomUUID();
   sketchJobs.set(jobId, { status: 'pending', createdAt: Date.now() });
 
-  console.log(`[generate-from-sketch] job=${jobId} renderer=${renderer.name} style=${stylePreset} cells=${cells.length}`);
+  console.log(`[generate-from-sketch] job=${jobId} renderer=${renderer.name} style=${stylePreset} cells=${cells.length} mapId=${mapId ?? '(none — client-side persistence only)'}`);
   res.json({ jobId, status: 'pending' });
 
   // Run generation in background — do not await
@@ -744,11 +745,35 @@ router.post('/generate-from-sketch', auth, (req, res) => {
       const outputPath     = await renderer.render(controlPath, stylePreset, userPrompt, sketchSpec, aiFredom);
       const localImageUrl  = `/uploads/maps/${path.basename(outputPath)}`;
 
+      // Server-side sketch persistence: when mapId is provided, write the
+      // sketchSpec to maps.data->sketch via jsonb_set. This eliminates the
+      // race where a client-side three-layer fallback could miss and leave
+      // cells=0 in the DB. Authoritative server-side write happens here.
+      if (mapId) {
+        try {
+          const cellCount = sketchSpec?.cells?.length ?? 0;
+          const updated = await db.one(
+            `UPDATE maps
+               SET data       = jsonb_set(data::jsonb, '{sketch}', $1::jsonb, true),
+                   image_url  = COALESCE($3, image_url),
+                   updated_at = NOW()
+             WHERE id = $2
+             RETURNING id, jsonb_array_length(data->'sketch'->'cells') AS cells_in_db`,
+            [JSON.stringify(sketchSpec), mapId, localImageUrl],
+          );
+          console.log(`[job-worker] ${jobId} persisted sketch to map=${mapId} — cells in DB: ${updated?.cells_in_db ?? '?'}/${cellCount}`);
+        } catch (persistErr) {
+          // Non-fatal — log it. The client may still call PUT /sketch as a fallback.
+          console.error(`[job-worker] ${jobId} sketch persistence FAILED for map=${mapId}:`, persistErr.message);
+        }
+      }
+
       sketchJobs.set(jobId, {
         status:        'succeeded',
         imageUrl:      localImageUrl,
         renderer_used: renderer.name,
         spec:          sketchSpec,
+        mapId:         mapId ?? null,
         createdAt:     sketchJobs.get(jobId)?.createdAt ?? Date.now(),
       });
       console.log(`[job-worker] ${jobId} succeeded — ${localImageUrl}`);

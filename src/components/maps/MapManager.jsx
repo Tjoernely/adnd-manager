@@ -963,6 +963,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
             <TerrainSketchEditor
               ref={sketchEditorRef}
               initialSpec={sketchEditMap?.data?.sketch ?? null}
+              mapId={sketchEditMap?.id ?? null}
               onGenerate={handleSketchGenerate}
               onCancel={() => { setShowSketch(false); setSketchEditMap(null); }}
             />
