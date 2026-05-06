@@ -11,6 +11,33 @@ const express = require('express');
 const db      = require('../db');
 const { auth } = require('../middleware/auth');
 
+// ── Save-target computation (mirror of src/rules-engine/combat/savingThrows.ts) ─
+// Inlined here so the server doesn't have to import TS at runtime. Same logic.
+const SAVES_DATA = require('../../src/rulesets/savingThrows.json');
+const SAVES_TABLES = SAVES_DATA.tables;
+
+function hdToFighterLevel(hd) {
+  if (typeof hd === 'number') return Math.max(1, Math.floor(hd));
+  if (!hd) return 1;
+  const trimmed = String(hd).trim();
+  // "5+3" → 6 (treat +N as bumping one level)
+  const plus  = trimmed.match(/^(\d+)\+(\d+)/);
+  if (plus)  return parseInt(plus[1], 10) + (parseInt(plus[2], 10) > 0 ? 1 : 0);
+  // "1-1" → 1
+  const minus = trimmed.match(/^(\d+)-(\d+)/);
+  if (minus) return Math.max(1, parseInt(minus[1], 10));
+  if (trimmed === '½' || trimmed === '1/2') return 1;
+  const n = parseInt(trimmed, 10);
+  return isNaN(n) ? 1 : Math.max(1, n);
+}
+
+function computeSaveTargets(tableId, level) {
+  const tbl = (tableId === 'monster') ? SAVES_TABLES.warrior : SAVES_TABLES[tableId];
+  if (!tbl) return { death: 16, wand: 18, petrify: 17, breath: 20, spell: 19 };
+  const row = tbl.rows.find(r => level >= r.from && level <= r.to) ?? tbl.rows[0];
+  return { death: row.death, wand: row.wand, petrify: row.petrify, breath: row.breath, spell: row.spell };
+}
+
 const router = express.Router();
 
 // ── List saved encounters (creatures nested) ───────────────────────────────
@@ -76,16 +103,36 @@ router.post('/', auth, async (req, res) => {
     if (creaturesInput.length) {
       // New format: each element is already one creature instance
       for (const cr of creaturesInput) {
+        // Compute combat-extension data blob: saveTargets, saveTable, saveLevel.
+        // Look up monster.hit_dice from DB if not supplied on the input row.
+        let hitDice = cr.hit_dice;
+        if (!hitDice && cr.monster_id) {
+          try {
+            const m = await db.one('SELECT hit_dice FROM monsters WHERE id=$1', [cr.monster_id]);
+            hitDice = m?.hit_dice;
+          } catch { /* monster lookup miss — use defaults */ }
+        }
+        const saveLevel   = hdToFighterLevel(hitDice ?? 1);
+        const saveTargets = computeSaveTargets('monster', saveLevel);
+        const dataBlob    = {
+          saveTable:    'monster',
+          saveLevel,
+          saveTargets,
+          conditions:   [],
+          initModifier: 0,
+        };
+
         const c = await db.one(
           `INSERT INTO encounter_creatures
              (encounter_id, monster_id, monster_name, max_hp, current_hp,
-              initiative, ac, thac0, attacks, damage, xp_value)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+              initiative, ac, thac0, attacks, damage, xp_value, data)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
           [enc.id, cr.monster_id ?? null, cr.monster_name ?? 'Unknown',
            cr.max_hp ?? 8, cr.current_hp ?? cr.max_hp ?? 8,
            cr.initiative ?? 0,
            cr.ac ?? null, cr.thac0 ?? null,
-           cr.attacks ?? null, cr.damage ?? null, cr.xp_value ?? 0],
+           cr.attacks ?? null, cr.damage ?? null, cr.xp_value ?? 0,
+           JSON.stringify(dataBlob)],
         );
         savedCreatures.push(c);
       }
@@ -185,7 +232,7 @@ router.put('/:id/creatures/:cid', auth, async (req, res) => {
     const access = await campaignAccess(creature.campaign_id, req.user.id);
     if (!access) return res.status(403).json({ error: 'Access denied' });
 
-    const { current_hp, initiative, status, notes } = req.body ?? {};
+    const { current_hp, initiative, status, notes, data } = req.body ?? {};
 
     const newHp         = current_hp  !== undefined ? Math.max(0, Number(current_hp))  : creature.current_hp;
     const newInitiative = initiative  !== undefined ? Number(initiative)                : (creature.initiative ?? 0);
@@ -195,11 +242,17 @@ router.put('/:id/creatures/:cid', auth, async (req, res) => {
       : newHp <= Math.ceil(creature.max_hp * 0.50)  ? 'bloodied'
       : 'alive';
 
+    // Combat-extension data blob — shallow-merge incoming `data` into existing
+    // (preserves saveTargets etc. when caller only patches conditions/currentInit)
+    const mergedData = (data && typeof data === 'object')
+      ? { ...(creature.data ?? {}), ...data }
+      : (creature.data ?? {});
+
     const updated = await db.one(
       `UPDATE encounter_creatures
-       SET current_hp=$1, initiative=$2, status=$3, notes=COALESCE($4, notes)
-       WHERE id=$5 RETURNING *`,
-      [newHp, newInitiative, newStatus, notes ?? null, req.params.cid],
+       SET current_hp=$1, initiative=$2, status=$3, notes=COALESCE($4, notes), data=$5
+       WHERE id=$6 RETURNING *`,
+      [newHp, newInitiative, newStatus, notes ?? null, JSON.stringify(mergedData), req.params.cid],
     );
     res.json(updated);
   } catch (e) { next500(e, res); }

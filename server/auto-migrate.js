@@ -201,6 +201,9 @@ async function autoMigrate() {
       await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS attacks VARCHAR(20);`);
       await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS damage VARCHAR(50);`);
       await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS xp_value INTEGER DEFAULT 0;`);
+      // Combat-extension blob: holds conditions[], currentInit, saveTargets, saveTable, saveLevel, initModifier
+      // (added 2026-04-28 for Combat Manager extensions — saves/conditions/inline statblock/per-round init)
+      await db.query(`ALTER TABLE encounter_creatures ADD COLUMN IF NOT EXISTS data JSONB DEFAULT '{}'::jsonb;`);
     } catch (e) { console.warn('[auto-migrate] combat columns skipped:', e.message); }
 
     // Loot data + source tracking columns

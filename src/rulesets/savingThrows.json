@@ -1,0 +1,65 @@
+{
+  "$schema": "AD&D 2E saving throw tables. Source: PHB Chapter 9. Categories ordered: Paralyzation/Poison/Death, Rod/Staff/Wand, Petrification/Polymorph, Breath Weapon, Spell.",
+  "categories": [
+    { "id": "death",       "label": "Death/Poison/Paralyzation", "short": "DPP" },
+    { "id": "wand",        "label": "Rod/Staff/Wand",            "short": "RSW" },
+    { "id": "petrify",     "label": "Petrification/Polymorph",   "short": "PP"  },
+    { "id": "breath",      "label": "Breath Weapon",             "short": "BW"  },
+    { "id": "spell",       "label": "Spell",                     "short": "Sp"  }
+  ],
+  "tables": {
+    "warrior": {
+      "label": "Warrior (Fighter, Paladin, Ranger)",
+      "rows": [
+        { "from": 0,  "to": 0,  "death": 16, "wand": 18, "petrify": 17, "breath": 20, "spell": 19 },
+        { "from": 1,  "to": 2,  "death": 14, "wand": 16, "petrify": 15, "breath": 17, "spell": 17 },
+        { "from": 3,  "to": 4,  "death": 13, "wand": 15, "petrify": 14, "breath": 16, "spell": 16 },
+        { "from": 5,  "to": 6,  "death": 11, "wand": 13, "petrify": 12, "breath": 13, "spell": 14 },
+        { "from": 7,  "to": 8,  "death": 10, "wand": 12, "petrify": 11, "breath": 12, "spell": 13 },
+        { "from": 9,  "to": 10, "death": 8,  "wand": 10, "petrify": 9,  "breath": 9,  "spell": 11 },
+        { "from": 11, "to": 12, "death": 7,  "wand": 9,  "petrify": 8,  "breath": 8,  "spell": 10 },
+        { "from": 13, "to": 14, "death": 5,  "wand": 7,  "petrify": 6,  "breath": 5,  "spell": 8  },
+        { "from": 15, "to": 16, "death": 4,  "wand": 6,  "petrify": 5,  "breath": 4,  "spell": 7  },
+        { "from": 17, "to": 99, "death": 3,  "wand": 5,  "petrify": 4,  "breath": 4,  "spell": 6  }
+      ]
+    },
+    "wizard": {
+      "label": "Wizard (Mage, Specialist)",
+      "rows": [
+        { "from": 1,  "to": 5,  "death": 14, "wand": 11, "petrify": 13, "breath": 15, "spell": 12 },
+        { "from": 6,  "to": 10, "death": 13, "wand": 9,  "petrify": 11, "breath": 13, "spell": 10 },
+        { "from": 11, "to": 15, "death": 11, "wand": 7,  "petrify": 9,  "breath": 11, "spell": 8  },
+        { "from": 16, "to": 20, "death": 10, "wand": 5,  "petrify": 7,  "breath": 9,  "spell": 6  },
+        { "from": 21, "to": 99, "death": 8,  "wand": 3,  "petrify": 5,  "breath": 7,  "spell": 4  }
+      ]
+    },
+    "priest": {
+      "label": "Priest (Cleric, Druid)",
+      "rows": [
+        { "from": 1,  "to": 3,  "death": 10, "wand": 14, "petrify": 13, "breath": 16, "spell": 15 },
+        { "from": 4,  "to": 6,  "death": 9,  "wand": 13, "petrify": 12, "breath": 15, "spell": 14 },
+        { "from": 7,  "to": 9,  "death": 7,  "wand": 11, "petrify": 10, "breath": 13, "spell": 12 },
+        { "from": 10, "to": 12, "death": 6,  "wand": 10, "petrify": 9,  "breath": 12, "spell": 11 },
+        { "from": 13, "to": 15, "death": 5,  "wand": 9,  "petrify": 8,  "breath": 11, "spell": 10 },
+        { "from": 16, "to": 18, "death": 4,  "wand": 8,  "petrify": 6,  "breath": 9,  "spell": 8  },
+        { "from": 19, "to": 99, "death": 2,  "wand": 6,  "petrify": 5,  "breath": 8,  "spell": 6  }
+      ]
+    },
+    "rogue": {
+      "label": "Rogue (Thief, Bard)",
+      "rows": [
+        { "from": 1,  "to": 4,  "death": 13, "wand": 14, "petrify": 12, "breath": 16, "spell": 15 },
+        { "from": 5,  "to": 8,  "death": 12, "wand": 12, "petrify": 11, "breath": 15, "spell": 13 },
+        { "from": 9,  "to": 12, "death": 11, "wand": 10, "petrify": 10, "breath": 14, "spell": 11 },
+        { "from": 13, "to": 16, "death": 10, "wand": 8,  "petrify": 9,  "breath": 13, "spell": 9  },
+        { "from": 17, "to": 20, "death": 9,  "wand": 6,  "petrify": 8,  "breath": 12, "spell": 7  },
+        { "from": 21, "to": 99, "death": 8,  "wand": 4,  "petrify": 7,  "breath": 11, "spell": 5  }
+      ]
+    },
+    "monster": {
+      "label": "Monster (saves as Warrior of HD level)",
+      "$note": "Use the warrior table at level = monster HD (round up; +1 per +1 HD bonus, e.g. 5+3 → level 6).",
+      "rows": []
+    }
+  }
+}

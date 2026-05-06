@@ -13,6 +13,9 @@ import { CharacterPrintView } from '../characters/CharacterPrintView.jsx';
 import { SLOT_LABELS } from '../../constants/equipmentSlots.js';
 import { RACES } from '../../data/races.js';
 import { ALL_CLASSES } from '../../data/classes.js';
+// Combat Manager extensions (added 2026-04-28): saves, conditions, per-round init, inline statblock
+import { RoundControls }            from '../Encounters/RoundControls.tsx';
+import { CombatantCardExtensions }  from '../Encounters/CombatantCard.tsx';
 
 // ── Race / class ID → display name lookup maps (used in panel header & list) ──
 const _raceNameMap  = {};
@@ -535,11 +538,18 @@ function hpLabel(pct) {
 }
 
 // ── Sort creatures: alive sorted by chosen key, dead always last ─────────────
+// Effective initiative: per-round re-roll (data.currentInit) wins, falls back to base initiative.
+// 2E RAW rolls 1d10 each round; lower = faster. We sort descending below for "highest goes first"
+// matching the existing in-class convention. The new RoundControls writes data.currentInit each round.
+function effectiveInitiative(c) {
+  return c?.data?.currentInit ?? c?.initiative ?? 0;
+}
+
 function sortCreatures(list, by) {
   const alive = list.filter(c => c.current_hp > 0);
   const dead  = list.filter(c => c.current_hp <= 0);
   alive.sort((a, b) => {
-    if (by === 'initiative') return (b.initiative ?? 0) - (a.initiative ?? 0);
+    if (by === 'initiative') return effectiveInitiative(b) - effectiveInitiative(a);
     if (by === 'hp_pct') {
       const pa = a.max_hp > 0 ? a.current_hp / a.max_hp : 0;
       const pb = b.max_hp > 0 ? b.current_hp / b.max_hp : 0;
@@ -611,23 +621,49 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
     saveCreature(updated);
   }
 
-  async function nextRound() {
-    const newRound = round + 1;
-    const next = creatures.map(c => ({
-      ...c,
-      initiative: c.current_hp > 0 ? Math.floor(Math.random() * 10) + 1 : 0,
-    }));
+  // Patch a single combatant's `data` blob (used by CombatantCardExtensions onUpdate).
+  // Shallow-merges patch into c.data, persists via /creatures/:cid (server merges too).
+  async function updateCombatant(creatureId, patch) {
+    const next = creatures.map(c =>
+      c.id === creatureId
+        ? { ...c, data: { ...(c.data ?? {}), ...patch } }
+        : c
+    );
+    setCreatures(next);
+    onCreaturesUpdate(enc.id, next);
+    try { await api.updateCreature(enc.id, creatureId, { data: patch }); } catch { /* non-fatal */ }
+  }
+
+  // RoundControls callback — receives ticked conditions + per-creature initiative rolls.
+  // initLocked (lock checkbox) yields zero-rolls; we ignore those and keep base initiative.
+  async function handleRoundNext(newRound, { initiatives, tickedConditions }) {
+    const next = creatures.map(c => {
+      const init = initiatives.find(i => i.id === c.id);
+      const newInit = (init && init.total > 0 && c.current_hp > 0) ? init.total : null;
+      return {
+        ...c,
+        // Keep base `initiative` untouched; per-round value goes into data.currentInit.
+        data: {
+          ...(c.data ?? {}),
+          // tickedConditions is keyed by combatant id — replace conditions array
+          conditions: tickedConditions[c.id] ?? (c.data?.conditions ?? []),
+          // currentInit is undefined when locked → fall back to existing or base
+          ...(newInit != null ? { currentInit: newInit } : {}),
+        },
+      };
+    });
     setCreatures(next);
     onCreaturesUpdate(enc.id, next);
     setRound(newRound);
     setSortBy('initiative');
-    setRoundMsg(`Round ${newRound} begins — Initiative rolled!`);
+    setRoundMsg(`Round ${newRound} begins${initiatives.some(i => i.total > 0) ? ' — Initiative rolled!' : ''}`);
     setTimeout(() => setRoundMsg(null), 3500);
     try { await api.updateSavedEncounter(enc.id, { current_round: newRound }); } catch { /* */ }
     onEncounterUpdate(enc.id, { current_round: newRound });
+    // Persist each creature's new data blob (only the ones with content changes — alive only)
     for (const c of next) {
       if (c.current_hp > 0) {
-        try { await api.updateCreature(enc.id, c.id, { current_hp: c.current_hp, initiative: c.initiative, status: c.status }); } catch { /* */ }
+        try { await api.updateCreature(enc.id, c.id, { data: c.data }); } catch { /* */ }
       }
     }
   }
@@ -756,26 +792,20 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
           )}
         </div>
 
-        {/* Round controls */}
+        {/* Round controls — uses shared RoundControls (per-round init re-roll + condition tick) */}
         {isActive && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <button onClick={prevRound} disabled={round <= 1} style={{
-              background: 'rgba(0,0,0,.3)', border: `1px solid ${C.border}`, borderRadius: 5,
-              padding: '4px 10px', cursor: round <= 1 ? 'not-allowed' : 'pointer',
-              color: round <= 1 ? C.textDim : C.text, fontFamily: ff, fontSize: 11,
-              opacity: round <= 1 ? 0.4 : 1,
-            }}>◀ Prev</button>
-
-            <span style={{ fontSize: 14, color: C.gold, fontWeight: 'bold', fontFamily: ff, minWidth: 80, textAlign: 'center' }}>
-              Round {round}
-            </span>
-
-            <button onClick={nextRound} style={{
-              background: 'rgba(212,160,53,.15)', border: `1px solid ${C.borderHi}`,
-              borderRadius: 5, padding: '4px 10px', cursor: 'pointer',
-              color: C.gold, fontFamily: ff, fontSize: 11, fontWeight: 'bold',
-            }}>Next Round ▶</button>
-
+            <RoundControls
+              round={round}
+              combatants={creatures.map(c => ({
+                id:           c.id,
+                name:         c.monster_name,
+                initModifier: c.data?.initModifier ?? 0,
+                conditions:   c.data?.conditions ?? [],
+              }))}
+              onPrev={prevRound}
+              onNext={handleRoundNext}
+            />
             {(enc.total_xp ?? 0) > 0 && (
               <span style={{ fontSize: 10, color: C.gold, marginLeft: 'auto' }}>
                 {deadXpEarned > 0
@@ -929,6 +959,32 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
                   </div>
                 )}
               </div>
+
+              {/* ── Combat extensions: saves / conditions / inline statblock ── */}
+              {/* Hidden for dead creatures to keep the row visually quiet. */}
+              {isActive && !isDead && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${C.border}` }}>
+                  <CombatantCardExtensions
+                    monster={{
+                      // Minimal MonsterLikeStats projection from the creature row.
+                      // Full monster fetch on expand is a follow-up; the inline statblock
+                      // gracefully omits empty fields.
+                      thac0:        c.thac0 ?? undefined,
+                      armor_class:  c.ac    ?? undefined,
+                      attacks:      c.attacks ?? undefined,
+                      damage:       c.damage  ?? undefined,
+                      hit_dice:     c.data?.saveLevel ?? undefined,
+                    }}
+                    combatant={{
+                      conditions:   c.data?.conditions  ?? [],
+                      saveTargets:  c.data?.saveTargets,
+                      saveModifier: 0,
+                    }}
+                    currentRound={round}
+                    onUpdate={(patch) => updateCombatant(c.id, patch)}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
