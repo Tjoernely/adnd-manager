@@ -8,6 +8,20 @@ const APP       = process.env.APP_ROOT || '/var/www/adnd-manager';
 const LOG_FILE  = APP + '/deploy.log';
 const LOCK_FILE = APP + '/deploy.lock';
 
+// A deploy that takes longer than this is almost certainly hung or crashed.
+// Locks older than this are auto-cleared so the next push can proceed.
+// Real deploys take ~30–60s; even a slow npm install rarely exceeds 3 min.
+const STALE_LOCK_MS = 10 * 60 * 1000;  // 10 minutes
+
+function isLockStale() {
+  try {
+    const stat = fs.statSync(LOCK_FILE);
+    return (Date.now() - stat.mtimeMs) > STALE_LOCK_MS;
+  } catch {
+    return false;  // no lock = not stale
+  }
+}
+
 function verifySignature(req) {
   const secret = process.env.WEBHOOK_SECRET;
   if (!secret) return false;
@@ -30,10 +44,25 @@ router.post('/deploy', (req, res) => {
     return res.status(200).json({ message: 'Ignored: ' + ref });
   }
 
-  // Prevent concurrent deploys — if lock file exists, a deploy is already running
+  // Prevent concurrent deploys — if lock file exists, a deploy is already running.
+  // BUT: a deploy that crashed (e.g. server restart mid-deploy, npm install hang
+  // killed by OOM) leaves the lock behind forever. Auto-clear locks older than
+  // STALE_LOCK_MS so a hung deploy can't permanently block future pushes.
   if (fs.existsSync(LOCK_FILE)) {
-    console.log('[webhook] Deploy already in progress — skipping');
-    return res.status(202).json({ message: 'Deploy already in progress — skipped' });
+    if (isLockStale()) {
+      try {
+        const ageMin = Math.round((Date.now() - fs.statSync(LOCK_FILE).mtimeMs) / 60000);
+        fs.unlinkSync(LOCK_FILE);
+        console.warn(`[webhook] Stale lock auto-cleared (${ageMin} min old) — proceeding with deploy`);
+        fs.appendFileSync(LOG_FILE, `\n[${new Date().toISOString()}] Stale lock auto-cleared (${ageMin} min old)\n`);
+      } catch (e) {
+        console.warn('[webhook] Failed to clear stale lock:', e.message);
+        return res.status(202).json({ message: 'Stale lock present but could not clear — manual intervention needed' });
+      }
+    } else {
+      console.log('[webhook] Deploy already in progress — skipping');
+      return res.status(202).json({ message: 'Deploy already in progress — skipped' });
+    }
   }
 
   console.log('[webhook] Push to main — starting detached deploy');
