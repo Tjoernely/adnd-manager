@@ -4,6 +4,15 @@ import { C } from '../../data/constants.js';
 import { getArmorProfile, getAllArmorProfiles } from '../../rules-engine/monsterEngine.js';
 import { computeGeneratedHp, rerollHp, formatVanillaHp } from '../../rules-engine/monsterHp.js';
 import LootGenerator from './LootGenerator.jsx';
+import { AddToEncounterButton } from '../Encounters/AddToEncounterButton.tsx';
+
+// Active campaign id from sessionStorage — null when no campaign is selected.
+function activeCampaignId() {
+  try {
+    const raw = sessionStorage.getItem('adnd_campaign');
+    return raw ? JSON.parse(raw)?.id ?? null : null;
+  } catch { return null; }
+}
 
 // ── Stat parsing ──────────────────────────────────────────────────────────────
 // Handles concatenated imports like 610 → 6, "6 10" → 6, -1 → -1
@@ -215,6 +224,18 @@ export function MonsterDetail({ monsterId, onClose }) {
             ↗ Wiki
           </a>
         )}
+        {/* Add-to-encounter button — hidden when no active campaign */}
+        {(() => {
+          const campaignId = activeCampaignId();
+          if (!campaignId) return null;
+          return (
+            <AddToEncounterButton
+              monster={monster}
+              campaignId={campaignId}
+              variant="detail"
+            />
+          );
+        })()}
       </div>
 
       {/* ── Variant / Age-Category Selector ── */}

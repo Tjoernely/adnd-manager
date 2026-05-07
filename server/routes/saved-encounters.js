@@ -258,6 +258,100 @@ router.put('/:id/creatures/:cid', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
+// ── Append a single creature to an existing encounter (DM only) ────────────
+// POST /:id/creatures  { monster_id, monster_name, max_hp, current_hp, ... }
+// Used by the "Add to Encounter" button on monster cards / detail modal.
+// Mirrors the spawn pattern from POST /  — including server-side saveTargets
+// computation from monsters.hit_dice — so adopted creatures behave exactly
+// like creatures created with the encounter.
+router.post('/:id/creatures', auth, async (req, res) => {
+  try {
+    const enc = await db.one('SELECT id, campaign_id FROM saved_encounters WHERE id=$1', [req.params.id]);
+    if (!enc) return res.status(404).json({ error: 'Encounter not found' });
+    if (!(await isDM(enc.campaign_id, req.user.id)))
+      return res.status(403).json({ error: 'DM only' });
+
+    const {
+      monster_id,
+      monster_name,
+      max_hp,
+      current_hp,
+      initiative = 0,
+      status     = 'alive',
+      ac,
+      thac0,
+      attacks,
+      damage,
+      xp_value   = 0,
+      notes      = null,
+    } = req.body ?? {};
+
+    // Required-field validation matches the docstring contract on the v4 button.
+    if (typeof monster_name !== 'string' || !monster_name.trim())
+      return res.status(400).json({ error: 'monster_name required' });
+    const mxHp = Number(max_hp);
+    const cuHp = Number(current_hp);
+    if (!Number.isFinite(mxHp) || mxHp <= 0)
+      return res.status(400).json({ error: 'max_hp must be a positive number' });
+    if (!Number.isFinite(cuHp) || cuHp < 0)
+      return res.status(400).json({ error: 'current_hp must be a non-negative number' });
+
+    // Same saveTargets compute pattern as the encounter-create route.
+    // Look up monsters.hit_dice when not supplied; fall back to HD 1 if neither.
+    let hitDice = req.body.hit_dice;
+    if (!hitDice && monster_id) {
+      try {
+        const m = await db.one('SELECT hit_dice FROM monsters WHERE id=$1', [Number(monster_id)]);
+        hitDice = m?.hit_dice;
+      } catch { /* unknown monster — fall through to defaults */ }
+    }
+    const saveLevel   = hdToFighterLevel(hitDice ?? 1);
+    const saveTargets = computeSaveTargets('monster', saveLevel);
+    const dataBlob    = {
+      saveTable:    'monster',
+      saveLevel,
+      saveTargets,
+      conditions:   [],
+      initModifier: 0,
+    };
+
+    const created = await db.one(
+      `INSERT INTO encounter_creatures
+         (encounter_id, monster_id, monster_name, max_hp, current_hp,
+          initiative, status, ac, thac0, attacks, damage, xp_value, notes, data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       RETURNING *`,
+      [
+        enc.id,
+        monster_id ?? null,
+        monster_name.trim(),
+        mxHp,
+        cuHp,
+        Number(initiative) || 0,
+        status,
+        ac     ?? null,
+        thac0  ?? null,
+        attacks ?? null,
+        damage  ?? null,
+        Number(xp_value) || 0,
+        notes,
+        JSON.stringify(dataBlob),
+      ],
+    );
+
+    // Bump encounter total_xp so the right-pane chip stays accurate.
+    await db.query(
+      `UPDATE saved_encounters
+          SET total_xp   = COALESCE(total_xp, 0) + $1,
+              updated_at = NOW()
+        WHERE id = $2`,
+      [Number(xp_value) || 0, enc.id],
+    );
+
+    res.status(201).json(created);
+  } catch (e) { next500(e, res); }
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function isDM(campaignId, userId) {
   return db.one('SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2', [campaignId, userId]);

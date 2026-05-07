@@ -1,6 +1,16 @@
 import { C } from '../../data/constants.js';
 import { getArmorProfile } from '../../rules-engine/monsterEngine.js';
 import { formatVanillaHp } from '../../rules-engine/monsterHp.js';
+import { AddToEncounterButton } from '../Encounters/AddToEncounterButton.tsx';
+
+// Read the active campaign id from sessionStorage (set by App.jsx).
+// Returns null when no campaign is selected — the button is hidden in that case.
+function activeCampaignId() {
+  try {
+    const raw = sessionStorage.getItem('adnd_campaign');
+    return raw ? JSON.parse(raw)?.id ?? null : null;
+  } catch { return null; }
+}
 
 const TYPE_COLORS = {
   humanoid:   '#a07040',
@@ -109,6 +119,20 @@ export function MonsterCard({ monster: m, selected, onClick }) {
               {m.frequency}
             </span>
           )}
+          {/* Add-to-encounter pill — hidden when no active campaign */}
+          {(() => {
+            const campaignId = activeCampaignId();
+            if (!campaignId) return null;
+            return (
+              <div onClick={e => e.stopPropagation()}>
+                <AddToEncounterButton
+                  monster={m}
+                  campaignId={campaignId}
+                  variant="card"
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {/* Stat row */}
