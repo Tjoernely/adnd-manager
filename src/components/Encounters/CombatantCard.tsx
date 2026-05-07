@@ -1,8 +1,14 @@
 /**
- * UPDATED CombatantCardExtensions — adds customAbilities pass-through.
+ * V3 CombatantCardExtensions — lazy-loads the FULL monster from /api/monsters/:id
+ * the first time the statblock is rendered.
  *
- * The combatant slice now has an optional `customAbilities` field that gets
- * persisted with the encounter so DM-added Eye Stalk powers etc. survive saves.
+ * Why: combatants in saved encounters only carry a small subset of stats
+ * (ac, thac0, attacks, damage). The rich fields — special_attacks, magic_resistance,
+ * description, wiki_url — must be fetched by monster_id.
+ *
+ * Use the new prop `monsterId` instead of (or alongside) `monster`. If both are
+ * passed, the fetched monster is preferred for the statblock display while the
+ * row stats keep using whatever you already pass.
  */
 import { useState } from "react";
 import {
@@ -22,6 +28,7 @@ import {
   type CustomAbility,
 } from "./InlineStatblock";
 import { SaveButtons } from "./SaveButtons";
+import { useFullMonster } from "./useFullMonster";
 
 interface CombatantSlice {
   conditions?: AppliedCondition[];
@@ -31,7 +38,10 @@ interface CombatantSlice {
 }
 
 interface Props {
-  monster: MonsterLikeStats;
+  /** PREFERRED: numeric monster_id from the combatant. Triggers lazy fetch. */
+  monsterId?: number | null;
+  /** Optional fallback / pre-loaded monster — used while fetch is in flight. */
+  monster?: MonsterLikeStats;
   combatant: CombatantSlice;
   currentRound: number;
   onUpdate: (patch: Partial<CombatantSlice>) => void;
@@ -39,24 +49,18 @@ interface Props {
 }
 
 export function CombatantCardExtensions({
-  monster,
+  monsterId,
+  monster: monsterProp,
   combatant,
   currentRound,
   onUpdate,
   onLogSave,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const { monster: fetched, loading } = useFullMonster(monsterId ?? null);
 
-  const handleApply = (conditionId: string, durationOverride: number | null) => {
-    const next = applyCondition(combatant.conditions, conditionId, currentRound, {
-      duration: durationOverride,
-    });
-    onUpdate({ conditions: next });
-  };
-
-  const handleRemove = (conditionId: string) => {
-    onUpdate({ conditions: removeCondition(combatant.conditions, conditionId) });
-  };
+  // Prefer fetched (rich) over passed-in (sparse), fall back to whatever exists
+  const effectiveMonster: MonsterLikeStats = (fetched ?? monsterProp ?? {}) as MonsterLikeStats;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
@@ -86,7 +90,9 @@ export function CombatantCardExtensions({
         </button>
         <ConditionBadges
           conditions={combatant.conditions ?? []}
-          onRemove={handleRemove}
+          onRemove={(cid) =>
+            onUpdate({ conditions: removeCondition(combatant.conditions, cid) })
+          }
         />
       </div>
 
@@ -99,18 +105,36 @@ export function CombatantCardExtensions({
         />
       )}
 
-      {/* Statblock toggle (now richer + with custom-abilities editor) */}
-      <InlineStatblock
-        monster={monster}
-        saveTargets={combatant.saveTargets}
-        customAbilities={combatant.customAbilities}
-        onCustomAbilitiesChange={(next) => onUpdate({ customAbilities: next })}
-      />
+      {/* Statblock — uses lazy-loaded full monster */}
+      {loading && !fetched ? (
+        <div
+          style={{
+            fontSize: "0.7rem",
+            color: "var(--color-muted, #888)",
+            padding: "0.2rem 0",
+          }}
+        >
+          Loading statblock…
+        </div>
+      ) : (
+        <InlineStatblock
+          monster={effectiveMonster}
+          saveTargets={combatant.saveTargets}
+          customAbilities={combatant.customAbilities}
+          onCustomAbilitiesChange={(next) => onUpdate({ customAbilities: next })}
+        />
+      )}
 
       <ConditionPicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onApply={handleApply}
+        onApply={(cid, dur) =>
+          onUpdate({
+            conditions: applyCondition(combatant.conditions, cid, currentRound, {
+              duration: dur,
+            }),
+          })
+        }
       />
     </div>
   );

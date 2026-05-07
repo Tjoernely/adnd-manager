@@ -965,15 +965,18 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
               {isActive && !isDead && (
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${C.border}` }}>
                   <CombatantCardExtensions
+                    // v3: pass monster_id so the component can lazy-fetch the full
+                    // statblock (special_attacks, magic_resistance, description, wiki_url)
+                    // from /api/monsters/:id. Cached globally so N copies of the same
+                    // monster trigger only 1 fetch.
+                    monsterId={c.monster_id ?? null}
+                    // Sparse fallback shown while the fetch is in flight. The fetched
+                    // rich object overrides this once it arrives.
                     monster={{
-                      // Minimal MonsterLikeStats projection from the creature row.
-                      // Full monster fetch on expand is a follow-up; the inline statblock
-                      // gracefully omits empty fields.
                       thac0:        c.thac0 ?? undefined,
                       armor_class:  c.ac    ?? undefined,
                       attacks:      c.attacks ?? undefined,
                       damage:       c.damage  ?? undefined,
-                      hit_dice:     c.data?.saveLevel ?? undefined,
                     }}
                     combatant={{
                       conditions:      c.data?.conditions  ?? [],
