@@ -5,6 +5,8 @@
  * rather than replacing — keep your existing currentHp, maxHp, etc. intact.
  */
 
+import type { CustomAbility } from "../../components/Encounters/InlineStatblock";
+
 export type SaveCategoryId = "death" | "wand" | "petrify" | "breath" | "spell";
 
 export type SaveTableId = "warrior" | "wizard" | "priest" | "rogue" | "monster";
@@ -55,7 +57,13 @@ export interface CombatExtensionFields {
   saveTable?: SaveTableId;
   /** Effective level for the save table (HD for monsters, class level for PCs). */
   saveLevel?: number;
+  /** DM-added per-combatant abilities (Beholder eye-stalks etc.). v2. */
+  customAbilities?: CustomAbility[];
 }
+
+// Re-export for convenience — callers that import from this module shouldn't need
+// to know that CustomAbility lives in the components tree.
+export type { CustomAbility };
 
 /**
  * Result of a single saving-throw roll.

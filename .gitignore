@@ -59,5 +59,6 @@ tiles_64/
 tiles_128/
 
 # Update-pack zips and their extracted folders (temporary integration artifacts)
-encounter-update.zip
-encounter-update/
+encounter-update*.zip
+encounter-update*/
+INTEGRATION-v*.md

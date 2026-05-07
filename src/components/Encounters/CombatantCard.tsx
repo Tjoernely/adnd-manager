@@ -1,16 +1,8 @@
 /**
- * CombatantCard — example showing how to wire the 4 new features into your existing
- * combatant row. Your current card already renders name, HP bar, AC, THAC0, Atk, Dmg,
- * and the +/-/skull buttons. Below is a drop-in addition you can paste into the bottom
- * of that card (or merge directly).
+ * UPDATED CombatantCardExtensions — adds customAbilities pass-through.
  *
- * NOTE: The exact prop names depend on your existing types. The relevant additions:
- *   - props.monster:        the full monster from /api/monsters/:id (for InlineStatblock)
- *   - props.combatant:      your combatant — must include conditions[] and saveTargets
- *   - props.currentRound:   from the encounter state
- *   - props.onUpdate:       a function that updates this combatant in encounter state
- *
- * If you keep encounter state in a parent (likely), pass an updater down the tree.
+ * The combatant slice now has an optional `customAbilities` field that gets
+ * persisted with the encounter so DM-added Eye Stalk powers etc. survive saves.
  */
 import { useState } from "react";
 import {
@@ -24,13 +16,18 @@ import type {
 } from "../../rules-engine/combat/types";
 import { ConditionBadges } from "./ConditionBadges";
 import { ConditionPicker } from "./ConditionPicker";
-import { InlineStatblock, type MonsterLikeStats } from "./InlineStatblock";
+import {
+  InlineStatblock,
+  type MonsterLikeStats,
+  type CustomAbility,
+} from "./InlineStatblock";
 import { SaveButtons } from "./SaveButtons";
 
 interface CombatantSlice {
   conditions?: AppliedCondition[];
   saveTargets?: SaveTargets;
   saveModifier?: number;
+  customAbilities?: CustomAbility[];
 }
 
 interface Props {
@@ -64,7 +61,14 @@ export function CombatantCardExtensions({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
       {/* Conditions row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.4rem",
+          flexWrap: "wrap",
+        }}
+      >
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
@@ -95,8 +99,13 @@ export function CombatantCardExtensions({
         />
       )}
 
-      {/* Statblock toggle */}
-      <InlineStatblock monster={monster} saveTargets={combatant.saveTargets} />
+      {/* Statblock toggle (now richer + with custom-abilities editor) */}
+      <InlineStatblock
+        monster={monster}
+        saveTargets={combatant.saveTargets}
+        customAbilities={combatant.customAbilities}
+        onCustomAbilitiesChange={(next) => onUpdate({ customAbilities: next })}
+      />
 
       <ConditionPicker
         open={pickerOpen}

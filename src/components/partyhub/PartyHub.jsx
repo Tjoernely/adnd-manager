@@ -976,9 +976,10 @@ function CombatManager({ enc, onEncounterUpdate, onCreaturesUpdate, isDM, charac
                       hit_dice:     c.data?.saveLevel ?? undefined,
                     }}
                     combatant={{
-                      conditions:   c.data?.conditions  ?? [],
-                      saveTargets:  c.data?.saveTargets,
-                      saveModifier: 0,
+                      conditions:      c.data?.conditions  ?? [],
+                      saveTargets:     c.data?.saveTargets,
+                      saveModifier:    0,
+                      customAbilities: c.data?.customAbilities,
                     }}
                     currentRound={round}
                     onUpdate={(patch) => updateCombatant(c.id, patch)}
