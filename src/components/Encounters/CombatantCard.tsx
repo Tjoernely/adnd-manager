@@ -15,6 +15,10 @@ import {
   applyCondition,
   removeCondition,
 } from "../../rules-engine/combat/conditions";
+import {
+  computeSaveTargets,
+  hdToFighterLevel,
+} from "../../rules-engine/combat/savingThrows";
 import type {
   AppliedCondition,
   SaveRollResult,
@@ -29,6 +33,28 @@ import {
 } from "./InlineStatblock";
 import { SaveButtons } from "./SaveButtons";
 import { useFullMonster } from "./useFullMonster";
+
+/**
+ * Derive saving-throw targets from a monster's hit_dice when no stored saves
+ * exist on the combatant. This is the standard 2E rule (PHB Ch.9):
+ * monsters without class levels save as a fighter of level = HD.
+ *
+ * Returns null when there's no usable HD signal at all — in which case
+ * SaveButtons stays hidden as before. Tagged so the UI can show a "generic"
+ * hint distinguishing derived-from-HD targets from authoritative stored ones.
+ */
+function deriveGenericSaves(monster: MonsterLikeStats | null | undefined):
+  | { targets: SaveTargets; hdLabel: string }
+  | null
+{
+  const hd = monster?.hit_dice;
+  if (hd === undefined || hd === null || hd === "") return null;
+  const level = hdToFighterLevel(hd);
+  return {
+    targets: computeSaveTargets("monster", level),
+    hdLabel: String(hd),
+  };
+}
 
 interface CombatantSlice {
   conditions?: AppliedCondition[];
@@ -61,6 +87,16 @@ export function CombatantCardExtensions({
 
   // Prefer fetched (rich) over passed-in (sparse), fall back to whatever exists
   const effectiveMonster: MonsterLikeStats = (fetched ?? monsterProp ?? {}) as MonsterLikeStats;
+
+  // Save-target resolution: stored on the combatant takes precedence
+  // (server-computed at encounter creation). When missing — common for
+  // creatures spawned before v1, or where the DB lacked enough info —
+  // derive from the fetched monster's HD using the standard 2E rule.
+  // We expose `derivedSaves` so the UI can flag the result as "generic".
+  const derivedSaves =
+    !combatant.saveTargets && fetched ? deriveGenericSaves(fetched) : null;
+  const saveTargetsToShow: SaveTargets | undefined =
+    combatant.saveTargets ?? derivedSaves?.targets;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
@@ -96,13 +132,29 @@ export function CombatantCardExtensions({
         />
       </div>
 
-      {/* Saves row */}
-      {combatant.saveTargets && (
-        <SaveButtons
-          targets={combatant.saveTargets}
-          modifier={combatant.saveModifier ?? 0}
-          onRoll={onLogSave}
-        />
+      {/* Saves row — uses stored saveTargets when present, falls back to
+          HD-derived "generic" saves on the fetched monster. */}
+      {saveTargetsToShow && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          {derivedSaves && (
+            <span
+              title="No save data stored for this combatant. Targets are derived from the monster's HD using the standard 2E rule (save as fighter of level = HD)."
+              style={{
+                fontSize: "0.65rem",
+                fontStyle: "italic",
+                color: "var(--color-muted, #b8a070)",
+                opacity: 0.85,
+              }}
+            >
+              ⓘ Generic — derived from HD {derivedSaves.hdLabel}
+            </span>
+          )}
+          <SaveButtons
+            targets={saveTargetsToShow}
+            modifier={combatant.saveModifier ?? 0}
+            onRoll={onLogSave}
+          />
+        </div>
       )}
 
       {/* Statblock — uses lazy-loaded full monster */}
