@@ -107,6 +107,7 @@
     { "slug": "lawful",           "label": "Lawful" },
     { "slug": "chaotic",          "label": "Chaotic" },
     { "slug": "intelligent",      "label": "Intelligent",      "description": "Average INT or higher (8+)." },
-    { "slug": "mindless",         "label": "Mindless",         "description": "Animal INT or none (0-1)." }
+    { "slug": "mindless",         "label": "Mindless",         "description": "Animal INT or none (0-1)." },
+    { "slug": "unique",           "label": "Unique",           "description": "A named, one-of-a-kind creature or NPC, not a category. Applied to entries with epithets (Mardukhavar the Reaver) or proper-noun names from obscure sources where no further classification is possible." }
   ]
 }
