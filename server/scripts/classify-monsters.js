@@ -34,7 +34,10 @@ const path = require('path');
 // --- Configuration ---
 const VOCAB_PATH = path.join(__dirname, '..', 'data', 'tag-vocabulary.json');
 const LOG_PATH = path.join(__dirname, '..', 'classify-monsters.log');
-const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+// Sonnet 4.5 picked over Haiku 4.5 — ~3× cost ($5 vs $1.50 for full 3781 set)
+// in exchange for substantially better semantic AD&D classification, fewer
+// low-confidence verdicts, and better name-vs-description reasoning.
+const ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_CONCURRENCY = 3;
 const RATE_LIMIT_DELAY_MS = 200; // small pause between batches
@@ -153,7 +156,10 @@ function buildPrompt(monsters) {
     intelligence: m.intelligence,
     alignment: m.alignment,
     hit_dice: m.hit_dice,
-    description: m.description ? m.description.slice(0, 1500) : null,
+    // 3000-char slice (bumped from 1500) — Sonnet 4.5's larger budget lets
+    // us include richer monsters' full ability lists (Beholder eye-stalks,
+    // Lich spell tables, etc.) without crowding the prompt.
+    description: m.description ? m.description.slice(0, 3000) : null,
   }));
 
   return `You are classifying AD&D 2nd Edition monsters into a flat tag system.
