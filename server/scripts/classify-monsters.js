@@ -221,11 +221,25 @@ async function classifyBatch(monsters) {
   const text = result.content?.[0]?.text || '';
   const cleaned = text.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
 
+  // Sonnet 4.5 occasionally prefixes the JSON with a reasoning preamble
+  // ("Looking at each monster carefully:\n\n1. ..."). Extract the first
+  // JSON array from anywhere in the response instead of requiring it at
+  // the very start. Falls back to plain parse on simple responses.
   let parsed;
   try {
     parsed = JSON.parse(cleaned);
-  } catch (e) {
-    throw new Error(`Failed to parse Claude response: ${e.message}\nRaw: ${text.slice(0, 500)}`);
+  } catch (eFirst) {
+    const arrayStart = cleaned.indexOf('[');
+    const arrayEnd   = cleaned.lastIndexOf(']');
+    if (arrayStart !== -1 && arrayEnd > arrayStart) {
+      try {
+        parsed = JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1));
+      } catch (eSecond) {
+        throw new Error(`Failed to parse Claude response (preamble-strip also failed): ${eSecond.message}\nRaw: ${text.slice(0, 500)}`);
+      }
+    } else {
+      throw new Error(`No JSON array found in Claude response.\nRaw: ${text.slice(0, 500)}`);
+    }
   }
 
   if (!Array.isArray(parsed)) {
