@@ -17,7 +17,10 @@
     "fix:treasure": "node fix-monster-treasure.mjs",
     "reimport:stats": "node scripts/reimport-monster-stats.mjs",
     "import:dragon-variants": "node scripts/import-variants.mjs",
-    "set:vanilla-hp": "node scripts/set-vanilla-hp.mjs"
+    "set:vanilla-hp": "node scripts/set-vanilla-hp.mjs",
+    "classify-monsters":       "node scripts/classify-monsters.js",
+    "classify-monsters:dry":   "node scripts/classify-monsters.js --dry-run --limit 10",
+    "classify-monsters:force": "node scripts/classify-monsters.js --force"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

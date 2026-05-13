@@ -206,18 +206,20 @@ router.post('/', auth, async (req, res) => {
       if (!ok) return res.status(403).json({ error: 'DM only' });
     }
 
+    // tags is now a jsonb column (after v5 migration). pg won't auto-coerce
+    // a JS array to jsonb, so stringify and let an explicit cast handle it.
     const row = await db.one(
       `INSERT INTO monsters
          (name, source, hit_dice, hit_points, armor_class, thac0, movement,
           size, type, alignment, attacks, damage, special_attacks, special_defenses,
           magic_resistance, save_as, morale, xp_value, description, habitat, frequency,
           armor_profile_id, generated_hp, tags, campaign_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb,$25)
        RETURNING *`,
       [name, source, hit_dice, hit_points, armor_class, thac0, movement,
        size, type, alignment, attacks, damage, special_attacks, special_defenses,
        magic_resistance, save_as, morale, xp_value, description, habitat, frequency,
-       armor_profile_id, generated_hp, tags, campaign_id ?? null],
+       armor_profile_id, generated_hp, JSON.stringify(tags ?? []), campaign_id ?? null],
     );
     res.status(201).json(row);
   } catch (e) { next500(e, res); }
