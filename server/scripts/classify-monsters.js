@@ -422,7 +422,7 @@ async function main() {
         ]);
         written++;
         if (opts.verbose) {
-          log(`  #${r.id} ${r.name}: [${r.tags.join(', ')}]`);
+          log(`  #${r.id} ${r.name}: [${r.tags.join(', ')}] (${r.confidence})${r.dropped.length ? ` dropped:[${r.dropped.join(',')}]` : ''}`);
         }
       } catch (e) {
         // If jsonb cast fails, try plain JSON text
