@@ -56,6 +56,7 @@ const opts = {
   limit: parseIntArg('--limit', null),
   batchSize: parseIntArg('--batch-size', DEFAULT_BATCH_SIZE),
   concurrency: parseIntArg('--concurrency', DEFAULT_CONCURRENCY),
+  model: parseStringArg('--model', ANTHROPIC_MODEL),
 };
 
 function parseIntArg(name, defaultValue) {
@@ -63,6 +64,12 @@ function parseIntArg(name, defaultValue) {
   if (idx === -1 || idx === args.length - 1) return defaultValue;
   const v = parseInt(args[idx + 1], 10);
   return isNaN(v) ? defaultValue : v;
+}
+
+function parseStringArg(name, defaultValue) {
+  const idx = args.indexOf(name);
+  if (idx === -1 || idx === args.length - 1) return defaultValue;
+  return args[idx + 1];
 }
 
 // --- Logger ---
@@ -206,7 +213,7 @@ async function classifyBatch(monsters) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
+      model: opts.model,
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     }),
