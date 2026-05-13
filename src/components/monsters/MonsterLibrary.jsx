@@ -1,84 +1,55 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
-import { MonsterCard }    from './MonsterCard.jsx';
-import { MonsterDetail }  from './MonsterDetail.jsx';
-import { MonsterFilters } from './MonsterFilters.jsx';
-import EncounterBuilder   from './EncounterBuilder.jsx';
+import { MonsterCard }     from './MonsterCard.jsx';
+import { MonsterDetail }   from './MonsterDetail.jsx';
+import EncounterBuilder    from './EncounterBuilder.jsx';
+import { TagFilterPanel }  from '../Encounters/TagFilterPanel.tsx';
 
 const PAGE_SIZE = 50;
 
-const EMPTY_FILTERS = {
-  search: '', type: '', size: '', frequency: '',
-  hd_min: '', hd_max: '', alignment: '', min_ac: '', max_ac: '',
-  sort: 'name_asc',
-};
-
 export default function MonsterLibrary({ campaignId, onBack }) {
-  const [tab,        setTab]        = useState('library');  // 'library' | 'encounter'
-  const [filters,    setFilters]    = useState(EMPTY_FILTERS);
-  const [monsters,   setMonsters]   = useState([]);
-  const [total,      setTotal]      = useState(0);
-  const [page,       setPage]       = useState(1);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
-  const [selected,   setSelected]   = useState(null);  // monster for detail panel
-  const [meta,       setMeta]       = useState(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [tab,         setTab]        = useState('library');  // 'library' | 'encounter'
+  const [allMonsters, setAllMonsters] = useState([]);          // full 3781-monster set
+  const [filtered,    setFiltered]   = useState([]);          // post TagFilterPanel
+  const [page,        setPage]       = useState(1);            // client-side now
+  const [loading,     setLoading]    = useState(true);
+  const [error,       setError]      = useState(null);
+  const [selected,    setSelected]   = useState(null);
+  const [meta,        setMeta]       = useState(null);
 
-  const searchTimer = useRef(null);
-
-  // Load meta on mount
+  // Bulk-load every monster once on mount. v6 TagFilterPanel does live tag
+  // filtering in memory — paged server queries would defeat the design.
+  // ~3-5 MB JSON. Server cap raised 200 → 5000 to support this.
   useEffect(() => {
-    api.getMonstersMeta().then(setMeta).catch(() => {});
-  }, []);
-
-  // Load monsters whenever filters or page changes (debounce search)
-  const loadMonsters = useCallback(async (f, p) => {
+    let cancelled = false;
     setLoading(true);
-    setError(null);
-    try {
-      const params = {
-        ...(f.search    ? { search:    f.search }    : {}),
-        ...(f.type      ? { type:      f.type }      : {}),
-        ...(f.size      ? { size:      f.size }      : {}),
-        ...(f.frequency ? { frequency: f.frequency } : {}),
-        ...(f.alignment ? { alignment: f.alignment } : {}),
-        ...(f.hd_min    ? { hd_min:    f.hd_min }    : {}),
-        ...(f.hd_max    ? { hd_max:    f.hd_max }    : {}),
-        ...(f.min_ac    ? { min_ac:    f.min_ac }    : {}),
-        ...(f.max_ac    ? { max_ac:    f.max_ac }    : {}),
-        ...(f.sort      ? { sort:      f.sort }      : {}),
-        ...(campaignId  ? { campaign_id: campaignId } : {}),
-        limit: PAGE_SIZE,
-        page:  p,
-      };
-      const result = await api.searchMonsters(params);
-      setMonsters(result.monsters ?? []);
-      setTotal(result.total ?? 0);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    api.getMonstersMeta().then(setMeta).catch(() => {});
+    api.searchMonsters({
+      limit: 5000,
+      ...(campaignId ? { campaign_id: campaignId } : {}),
+    })
+      .then(result => {
+        if (cancelled) return;
+        const list = result.monsters ?? [];
+        setAllMonsters(list);
+        setFiltered(list);                  // initial: no filters → everything
+      })
+      .catch(e => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [campaignId]);
 
-  // Debounce filter changes
-  useEffect(() => {
-    clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      setPage(1);
-      loadMonsters(filters, 1);
-    }, 300);
-    return () => clearTimeout(searchTimer.current);
-  }, [filters, loadMonsters]);
+  // Reset to page 1 when the filtered set shrinks/grows
+  useEffect(() => { setPage(1); }, [filtered.length]);
 
-  // Page change
-  useEffect(() => {
-    loadMonsters(filters, page);
-  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  const total      = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Client-side page slice from the post-filter list
+  const monsters   = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page],
+  );
 
   const headerStyle = {
     display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
@@ -154,19 +125,15 @@ export default function MonsterLibrary({ campaignId, onBack }) {
       {tab === 'library' && (
         <div style={{ display: 'flex', maxWidth: 1400, margin: '0 auto', padding: '20px 20px', gap: 20 }}>
 
-          {/* Left: filters (desktop sidebar / mobile collapsible) */}
-          <div style={{ width: 220, flexShrink: 0 }}>
-            <button
-              onClick={() => setShowFilters(v => !v)}
-              style={{
-                display: 'none', // hidden on desktop, shown on mobile via media — we'll just always show it
-                marginBottom: 8, background: 'transparent',
-                border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 12px',
-                color: C.textDim, fontFamily: 'inherit', fontSize: 11, cursor: 'pointer',
-              }}>
-              {showFilters ? '▲ Hide Filters' : '▼ Show Filters'}
-            </button>
-            <MonsterFilters filters={filters} onChange={f => { setFilters(f); setPage(1); }} meta={meta} />
+          {/* Left: v6 TagFilterPanel — operates over the full monster set in memory.
+              Replaces the previous MonsterFilters sidebar (HD/AC ranges + sort
+              are not yet ported; tag-based filtering covers the common cases). */}
+          <div style={{ width: 280, flexShrink: 0 }}>
+            <TagFilterPanel
+              storageKey="library"
+              monsters={allMonsters}
+              onFilteredChange={setFiltered}
+            />
           </div>
 
           {/* Center: monster list */}
@@ -198,7 +165,7 @@ export default function MonsterLibrary({ campaignId, onBack }) {
                 textAlign: 'center', padding: '60px 20px',
                 color: C.textDim, fontSize: 13, fontStyle: 'italic',
               }}>
-                {total === 0 && !filters.search && !filters.type && !filters.size && !filters.frequency
+                {allMonsters.length === 0
                   ? 'No monsters in the library yet. Run npm run import:monsters in the server folder to populate.'
                   : 'No monsters match the current filters.'}
               </div>

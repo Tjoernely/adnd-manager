@@ -1,0 +1,29 @@
+{
+  "$schema": "Filter UI configuration. Edit this file to add/remove quick filters or change default section state. Tag slugs MUST match the controlled vocabulary in tag-vocabulary.json.",
+  "version": 1,
+  "quickFilters": [
+    { "label": "Undead",      "category": "primary",  "tag": "undead" },
+    { "label": "Dragons",     "category": "primary",  "tag": "dragon" },
+    { "label": "Goblinoids",  "category": "primary",  "tag": "goblinoid" },
+    { "label": "Giants",      "category": "primary",  "tag": "giant" },
+    { "label": "Demons",      "category": "primary",  "tag": "demon" },
+    { "label": "Devils",      "category": "primary",  "tag": "devil" },
+    { "label": "Aberrations", "category": "primary",  "tag": "aberration" },
+    { "label": "Beasts",      "category": "primary",  "tag": "beast" },
+    { "label": "Fey",         "category": "primary",  "tag": "fey" },
+    { "label": "Constructs",  "category": "primary",  "tag": "construct" },
+    { "label": "Casters",     "category": "modifier", "tag": "spellcaster" },
+    { "label": "Flying",      "category": "modifier", "tag": "flying" }
+  ],
+  "defaultLogic": {
+    "primary":  "or",
+    "modifier": "and",
+    "subtype":  "or"
+  },
+  "defaultOpenSections": ["Primary Type", "Modifiers", "Size"],
+  "structuredFilters": {
+    "sizes": ["tiny", "small", "medium", "large", "huge", "gargantuan"],
+    "frequencies": ["Common", "Uncommon", "Rare", "Very Rare", "Unique"],
+    "$note_habitats": "Habitat values are derived from data at runtime — see filterEngine.extractHabitats()"
+  }
+}

@@ -1,0 +1,303 @@
+/* TagFilterPanel — matches the existing dark/gold theme via CSS variables. */
+
+.panel {
+  background: var(--color-bg-2, #221a0c);
+  border: 1px solid var(--color-border-2, #3a2a0a);
+  border-radius: 6px;
+  padding: 0.9rem;
+  height: fit-content;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  color: var(--color-text, #d8c89a);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.panelTitle {
+  font-size: 0.72rem;
+  color: var(--color-accent, #d4a850);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+  margin-top: 0.6rem;
+}
+.panelTitle:first-child { margin-top: 0; }
+
+.label {
+  font-size: 0.68rem;
+  color: var(--color-muted, #b8a070);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* === Selected bar === */
+.selectedBar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  min-height: 1.8rem;
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px dashed var(--color-border-2, #3a2a0a);
+}
+.emptyHint {
+  color: var(--color-muted-2, #888);
+  font-style: italic;
+  font-size: 0.78rem;
+}
+.clearAll {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--color-muted, #b8a070);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-family: inherit;
+  text-decoration: underline;
+}
+
+/* === Search === */
+.searchRow {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.7rem;
+  position: relative;
+}
+.searchInput {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-border, #4a3a1a);
+  color: inherit;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-accent, #d4a850);
+}
+.clearSearch {
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--color-muted, #b8a070);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0 0.3rem;
+}
+
+/* === Quick filters === */
+.quickRow {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px dashed var(--color-border-2, #3a2a0a);
+}
+.quickFilter {
+  padding: 0.15rem 0.45rem;
+  background: rgba(212, 168, 80, 0.08);
+  border: 1px solid rgba(212, 168, 80, 0.4);
+  color: var(--color-accent, #d4a850);
+  border-radius: 11px;
+  font-size: 0.68rem;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.3;
+}
+.quickFilter.active {
+  background: var(--color-accent, #d4a850);
+  color: var(--color-bg, #1a1408);
+  font-weight: bold;
+}
+
+/* === Sections === */
+.section {
+  margin-bottom: 0.6rem;
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+  user-select: none;
+}
+.caret {
+  cursor: pointer;
+  color: var(--color-accent, #d4a850);
+  font-size: 0.7em;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.section.open .caret { transform: rotate(90deg); }
+.sectionName {
+  cursor: pointer;
+  color: var(--color-accent, #d4a850);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex: 1;
+}
+.sectionBody {
+  padding: 0.25rem 0 0.3rem;
+}
+
+/* === AND/OR mini toggle === */
+.miniLogic {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-border, #4a3a1a);
+  border-radius: 3px;
+  overflow: hidden;
+  font-size: 0.62rem;
+}
+.miniLogic button {
+  background: transparent;
+  border: none;
+  color: var(--color-muted, #b8a070);
+  padding: 0.08rem 0.32rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: 0.05em;
+}
+.miniLogic button.active {
+  background: var(--color-accent, #d4a850);
+  color: var(--color-bg, #1a1408);
+  font-weight: bold;
+}
+
+/* === Tag chips === */
+.tagGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.tagChip {
+  padding: 0.1rem 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border, #4a3a1a);
+  color: var(--color-text, #d8c89a);
+  border-radius: 11px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  transition: all 0.1s;
+  line-height: 1.3;
+}
+.tagChip:hover:not(:disabled) {
+  border-color: var(--color-accent, #d4a850);
+  color: var(--color-accent, #d4a850);
+}
+.tagChip.selected {
+  background: rgba(212, 168, 80, 0.18);
+  border-color: var(--color-accent, #d4a850);
+  color: var(--color-accent, #d4a850);
+}
+.tagChip .count {
+  opacity: 0.55;
+  font-family: monospace;
+  font-size: 0.85em;
+}
+.tagChip.zero,
+.tagChip:disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* === Custom button === */
+.customBtn {
+  margin: 0.4rem 0 0;
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--color-border, #4a3a1a);
+  color: var(--color-muted, #b8a070);
+  padding: 0.35rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+.customBtn:hover {
+  border-color: var(--color-accent, #d4a850);
+  color: var(--color-accent, #d4a850);
+}
+
+/* === Modal === */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal {
+  width: 500px;
+  max-width: 100%;
+  max-height: 70vh;
+  background: var(--color-bg, #1a1408);
+  border: 1px solid var(--color-accent, #d4a850);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.modalHead {
+  padding: 0.8rem 1rem 0.5rem;
+  border-bottom: 1px solid var(--color-border-2, #3a2a0a);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalHead h3 {
+  margin: 0;
+  color: var(--color-accent, #d4a850);
+  font-size: 1rem;
+  font-weight: normal;
+}
+.modalHead button {
+  background: none;
+  border: none;
+  color: var(--color-muted, #b8a070);
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.modalBody {
+  padding: 0.8rem 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+.modalBody input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-border, #4a3a1a);
+  color: inherit;
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  margin-bottom: 0.7rem;
+}
+.modalCloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.empty {
+  color: var(--color-muted-2, #888);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+}

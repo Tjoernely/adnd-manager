@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { api } from '../../api/client.js';
 import { C } from '../../data/constants.js';
 import { MonsterDetail } from './MonsterDetail.jsx';
 import LootGenerator from './LootGenerator.jsx';
+import { TagFilterPanel } from '../Encounters/TagFilterPanel.tsx';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -145,6 +146,38 @@ export default function EncounterBuilder({ campaignId }) {
   const [groups,     setGroups]     = useState(null);
   const [genError,   setGenError]   = useState(null);
 
+  // v6: bulk-load all monsters once for the TagFilterPanel sidebar.
+  // The panel does live tag filtering in memory; generate() intersects
+  // server-side HD/habitat results with this set so the existing
+  // Party Size / Difficulty / Terrain controls still apply.
+  const [allMonsters,  setAllMonsters]  = useState([]);
+  const [filteredPool, setFilteredPool] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.searchMonsters({
+      limit: 5000,
+      ...(campaignId ? { campaign_id: campaignId } : {}),
+    })
+      .then(result => {
+        if (cancelled) return;
+        const list = result.monsters ?? [];
+        setAllMonsters(list);
+        setFilteredPool(list);
+      })
+      .catch(() => { /* non-fatal — generator still works via server fetchPool */ });
+    return () => { cancelled = true; };
+  }, [campaignId]);
+
+  // Fast id-lookup set for intersecting server pool with tag-filtered pool.
+  // When no tag filters are active, filteredPool == allMonsters and the
+  // intersection is a no-op (size matches).
+  const filteredIds = useMemo(
+    () => new Set(filteredPool.map(m => m.id)),
+    [filteredPool],
+  );
+  const filterActive = allMonsters.length > 0 && filteredPool.length !== allMonsters.length;
+
   const [generatedLoot, setGeneratedLoot] = useState([]);
 
   const [encName, setEncName] = useState('');
@@ -209,7 +242,13 @@ export default function EncounterBuilder({ campaignId }) {
     if (!result.monsters.length && habitatTerm) {
       result = await api.searchMonsters({ ...params, habitat: undefined });
     }
-    return result.monsters ?? [];
+    let pool = result.monsters ?? [];
+    // v6: when the TagFilterPanel has narrowed the pool, intersect server
+    // results with the user's selection. No-op when no tag filter is active.
+    if (filterActive) {
+      pool = pool.filter(m => filteredIds.has(m.id));
+    }
+    return pool;
   }
 
   // ── Generate ──────────────────────────────────────────────────────────────
@@ -373,7 +412,22 @@ export default function EncounterBuilder({ campaignId }) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif" }}>
+    <div style={{
+      fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif",
+      display: 'flex', gap: 20, alignItems: 'flex-start',
+    }}>
+
+      {/* ── v6 Tag Filter sidebar — narrows the random-pick pool ────── */}
+      <div style={{ width: 280, flexShrink: 0 }}>
+        <TagFilterPanel
+          storageKey="generator"
+          monsters={allMonsters}
+          onFilteredChange={setFilteredPool}
+        />
+      </div>
+
+      {/* ── Main column: existing settings + generated encounter ────── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
 
       {/* ── Settings ────────────────────────────────────────────── */}
       <div style={{
@@ -670,6 +724,7 @@ export default function EncounterBuilder({ campaignId }) {
           </div>
         </div>
       )}
+      </div>{/* end main column */}
     </div>
   );
 }

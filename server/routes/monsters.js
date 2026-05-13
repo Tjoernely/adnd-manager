@@ -135,7 +135,10 @@ router.get('/', async (req, res) => {
 
     const where   = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const orderBy = SORT_MAP[sort] ?? 'name ASC';
-    const lim     = Math.min(Math.max(1, Number(limit)), 200);
+    // Cap raised from 200 → 5000 to support v6's client-side TagFilterPanel
+    // which loads the full 3781-monster set once into memory for live tag filtering.
+    // 5000 covers headroom for new monster imports.
+    const lim     = Math.min(Math.max(1, Number(limit)), 5000);
     const offset  = (Math.max(1, Number(page)) - 1) * lim;
 
     const [rows, countRow] = await Promise.all([
