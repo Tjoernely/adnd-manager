@@ -39,8 +39,13 @@ const LOG_PATH = path.join(__dirname, '..', 'classify-monsters.log');
 // low-confidence verdicts, and better name-vs-description reasoning.
 const ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
 const DEFAULT_BATCH_SIZE = 20;
-const DEFAULT_CONCURRENCY = 3;
-const RATE_LIMIT_DELAY_MS = 200; // small pause between batches
+// Sonnet 4.5 on the default org tier caps at 30 000 input tokens/min and
+// 50 req/min. Each batch of 20 monsters with the 3000-char description slice
+// runs ~7 700 input tokens. To stay under the token cap we use concurrency=1
+// and ~16s between batches → ~3.7 batches/min × 7 700 ≈ 28 500 tokens/min.
+// The earlier value (concurrency=3, 200ms) tripped 429s on 93% of batches.
+const DEFAULT_CONCURRENCY = 1;
+const RATE_LIMIT_DELAY_MS = 16000;
 
 // --- Parse CLI args ---
 const args = process.argv.slice(2);
