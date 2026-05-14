@@ -4,6 +4,11 @@ import { C } from '../../data/constants.js';
 import { MonsterDetail } from './MonsterDetail.jsx';
 import LootGenerator from './LootGenerator.jsx';
 import { TagFilterPanel } from '../Encounters/TagFilterPanel.tsx';
+import { XpRangePanel } from '../Encounters/XpRangePanel.tsx';
+import { getXpBudget } from '../Encounters/xpThresholds.ts';
+
+// Title-case (existing) → lowercase ids the XpRangePanel expects
+const DIFF_KEY = { Easy: 'easy', Medium: 'medium', Hard: 'hard', Deadly: 'deadly' };
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -125,6 +130,107 @@ function makeGroup(monster, count) {
   };
 }
 
+// v7: Find a (monster, count) pair from the pool whose total XP fits the budget.
+// Walks the pool, computes the count range that satisfies `[budgetMin, budgetMax]`
+// for each monster's xp_value, then picks one of the qualifying monsters at random
+// and picks a random count inside its valid window. Returns null when no monster
+// in the pool can hit the budget at any allowed count.
+function pickMonsterAndCount(pool, budgetMin, budgetMax, minCount = 1, maxCount = 12) {
+  const candidates = [];
+  for (const m of pool) {
+    const xp = Number(m.xp_value) || 0;
+    if (xp <= 0) continue;
+    const lo = Math.max(minCount, Math.ceil(budgetMin / xp));
+    const hi = Math.min(maxCount, Math.floor(budgetMax / xp));
+    if (lo <= hi) candidates.push({ monster: m, lo, hi });
+  }
+  if (!candidates.length) return null;
+  const pick  = candidates[Math.floor(Math.random() * candidates.length)];
+  const count = pick.lo + Math.floor(Math.random() * (pick.hi - pick.lo + 1));
+  return { monster: pick.monster, count };
+}
+
+// v7: Type-specific XP-targeted picker. Preserves lore-compatibility (Mixed/Random)
+// and the boss-then-minions shape of Boss+Minions. Returns an array of
+// { monster, count } pairs or null if no encounter could be assembled.
+// 10% overshoot is permitted (matches the integration guide's pseudocode).
+function pickEncounterForXp(pool, encType, target) {
+  const tMin = target.min;
+  const tMax = target.max * 1.10;
+
+  if (encType === 'Single Monster') {
+    const pick = pickMonsterAndCount(pool, tMin, tMax, 1, 1);
+    return pick ? [pick] : null;
+  }
+
+  if (encType === 'Group') {
+    const pick = pickMonsterAndCount(pool, tMin, tMax, 2, 12);
+    // Fallback to a single monster if no group fits (e.g. very small target)
+    return pick ? [pick] : pickMonsterAndCount(pool, tMin, tMax, 1, 12) && [pickMonsterAndCount(pool, tMin, tMax, 1, 12)];
+  }
+
+  if (encType === 'Boss + Minions') {
+    // Boss = top 30% of the pool by xp_value (preserves "boss is significantly
+    // harder than party level" intent without HD math)
+    const sorted = pool.filter(m => (Number(m.xp_value) || 0) > 0)
+                       .sort((a, b) => (Number(b.xp_value) || 0) - (Number(a.xp_value) || 0));
+    if (!sorted.length) return null;
+    const topCutoff = Math.max(1, Math.floor(sorted.length * 0.3));
+    const boss = sorted[Math.floor(Math.random() * topCutoff)];
+    const bossXp = Number(boss.xp_value) || 0;
+    const bossGroup = getMonsterGroup(boss);
+    const minionPool = pool.filter(m =>
+      m.id !== boss.id && isCompatible(bossGroup, getMonsterGroup(m))
+      && (Number(m.xp_value) || 0) > 0
+      && (Number(m.xp_value) || 0) < bossXp / 2
+    );
+    const remMin = Math.max(0, tMin - bossXp);
+    const remMax = tMax - bossXp;
+    if (remMax <= 0) return [{ monster: boss, count: 1 }]; // boss alone already at/over target
+    const minions = pickMonsterAndCount(minionPool, remMin, remMax, 2, 6);
+    return minions
+      ? [{ monster: boss, count: 1 }, minions]
+      : [{ monster: boss, count: 1 }];
+  }
+
+  // Mixed (2-3 lore-compatible types, 1-3 each) or Random (1-3 types, 1-4 each)
+  const isMixed   = encType === 'Mixed';
+  const targetGroups = isMixed
+    ? 2 + Math.floor(Math.random() * 2) // 2-3
+    : 1 + Math.floor(Math.random() * 3); // 1-3
+  const perGroupCountMax = isMixed ? 3 : 4;
+
+  const picks = [];
+  let totalSoFar = 0;
+  let workingPool = pool;
+  let primaryGroup = null;
+
+  for (let i = 0; i < targetGroups; i++) {
+    const remainingGroups = targetGroups - i;
+    const myMin = Math.max(0, (tMin - totalSoFar) / remainingGroups);
+    const myMax = (tMax - totalSoFar) / remainingGroups * 1.30; // a bit of slack per slot
+    if (myMax < 1) break;
+
+    const pick = pickMonsterAndCount(workingPool, myMin, myMax, 1, perGroupCountMax);
+    if (!pick) break;
+
+    picks.push(pick);
+    totalSoFar += (Number(pick.monster.xp_value) || 0) * pick.count;
+
+    if (i === 0) {
+      // Lock to lore-compatible monsters after the first pick
+      primaryGroup = getMonsterGroup(pick.monster);
+      workingPool = pool.filter(m =>
+        m.id !== pick.monster.id && isCompatible(primaryGroup, getMonsterGroup(m))
+      );
+    } else {
+      workingPool = workingPool.filter(m => m.id !== pick.monster.id);
+    }
+    if (!workingPool.length) break;
+  }
+  return picks.length ? picks : null;
+}
+
 function rateDifficulty(totalXp, level, partySize) {
   const base = level * partySize;
   if (totalXp < base * XP_THRESHOLD.Easy)   return 'Easy';
@@ -145,6 +251,15 @@ export default function EncounterBuilder({ campaignId }) {
   const [generating, setGenerating] = useState(false);
   const [groups,     setGroups]     = useState(null);
   const [genError,   setGenError]   = useState(null);
+  const [genWarning, setGenWarning] = useState(null);
+
+  // v7: effective XP target range (panel-driven). Defaults to the
+  // difficulty-derived budget so generation works before the panel
+  // has rendered & emitted its first onRangeChange.
+  const [effectiveRange, setEffectiveRange] = useState(() => ({
+    ...getXpBudget(DIFF_KEY[difficulty] ?? 'medium', partySize, level),
+    source: 'difficulty',
+  }));
 
   // v6: bulk-load all monsters once for the TagFilterPanel sidebar.
   // The panel does live tag filtering in memory; generate() intersects
@@ -256,86 +371,69 @@ export default function EncounterBuilder({ campaignId }) {
   async function generate() {
     setGenerating(true);
     setGenError(null);
+    setGenWarning(null);
     setGroups(null);
     try {
       const habitatTerm = TERRAIN_HABITAT_MAP[terrain] ?? '';
-      const { min, max } = HD_RANGES[difficulty];
-      const hdMin = level * min;
-      const hdMax = level * max;
-      let newGroups = [];
 
-      if (encType === 'Boss + Minions') {
-        // Boss is significantly harder than party level
-        const bossMin = Math.max(0.5, level * 1.5);
-        const bossMax = level * 2.5;
-        const minionMin = Math.max(0.25, level * 0.25);
-        const minionMax = Math.max(0.5, level * 0.75);
+      // v7 rewrite: pool is HD-widened (was difficulty-specific) so we don't
+      // pre-exclude monsters whose xp_value can hit the target. The XP-target
+      // algorithm filters by xp inside pickMonsterAndCount.
+      const pool = await fetchPool(level * 0.25, level * 3.0, habitatTerm);
+      if (!pool.length) {
+        setGenError('No monsters found for these settings. Try a different terrain or relax tag filters.');
+        return;
+      }
 
-        const [bosses, minionPool] = await Promise.all([
-          fetchPool(bossMin, bossMax, habitatTerm),
-          fetchPool(minionMin, minionMax, habitatTerm),
-        ]);
+      // Target range — comes from the panel via setEffectiveRange. Falls back
+      // to the difficulty-derived budget if the panel hasn't emitted yet.
+      const target = effectiveRange ?? {
+        ...getXpBudget(DIFF_KEY[difficulty] ?? 'medium', partySize, level),
+        source: 'difficulty',
+      };
+      const tMin = target.min;
+      const tMax = target.max;
+      const midpoint = (tMin + tMax) / 2;
+      const overshootMax = tMax * 1.10;
 
-        const boss = pickRandom(bosses);
-        if (!boss) { setGenError('No suitable boss monsters found for these settings.'); return; }
+      // Try up to 30 times, keep the attempt closest to the midpoint when
+      // none falls inside the band. Random + Mixed are stochastic so retries
+      // genuinely explore the space; Single Monster / Group converge fast.
+      const MAX_ATTEMPTS = 30;
+      let best = null;
+      let bestDelta = Infinity;
 
-        // Minions must be lore-compatible with the boss
-        const bossGroup    = getMonsterGroup(boss);
-        const compatMinions = minionPool.filter(m =>
-          m.id !== boss.id && isCompatible(bossGroup, getMonsterGroup(m))
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const picks = pickEncounterForXp(pool, encType, target);
+        if (!picks || !picks.length) continue;
+        const total = picks.reduce(
+          (s, p) => s + (Number(p.monster.xp_value) || 0) * p.count, 0,
         );
-        const minionSource = compatMinions.length ? compatMinions : minionPool.filter(m => m.id !== boss.id);
-        const minion       = pickRandom(minionSource);
-        const minionCount  = Math.floor(Math.random() * 5) + 2; // 2–6
-
-        newGroups = [makeGroup(boss, 1)];
-        if (minion) newGroups.push(makeGroup(minion, minionCount));
-
-      } else {
-        const pool = await fetchPool(hdMin, hdMax, habitatTerm);
-        if (!pool.length) {
-          setGenError('No monsters found for these settings. Try a different difficulty or terrain.');
-          return;
+        if (total >= tMin && total <= overshootMax) {
+          best = { picks, total };
+          break;  // hit the band — accept first match
         }
-
-        if (encType === 'Single Monster') {
-          newGroups = [makeGroup(pickRandom(pool), 1)];
-
-        } else if (encType === 'Group') {
-          const count = Math.floor(Math.random() * 8) + 2; // 2–9
-          newGroups = [makeGroup(pickRandom(pool), count)];
-
-        } else if (encType === 'Mixed') {
-          // Pick first monster, then filter pool to lore-compatible only
-          const first = pickRandom(pool);
-          if (!first) { setGenError('No monsters found.'); return; }
-
-          const firstGroup  = getMonsterGroup(first);
-          const compatPool  = pool.filter(m =>
-            m.id !== first.id && isCompatible(firstGroup, getMonsterGroup(m))
-          );
-
-          const n    = Math.floor(Math.random() * 2) + 2; // 2–3 types
-          const rest = pickRandomN(compatPool, n - 1);
-          newGroups  = [first, ...rest].map(m => makeGroup(m, Math.floor(Math.random() * 3) + 1));
-
-        } else {
-          // Random: 1–3 groups, lore-compatible
-          const first = pickRandom(pool);
-          if (!first) { setGenError('No monsters found.'); return; }
-
-          const firstGroup  = getMonsterGroup(first);
-          const compatPool  = pool.filter(m =>
-            m.id !== first.id && isCompatible(firstGroup, getMonsterGroup(m))
-          );
-
-          const n    = Math.floor(Math.random() * 3) + 1;
-          const rest = pickRandomN(compatPool, n - 1);
-          newGroups  = [first, ...rest].map(m => makeGroup(m, Math.floor(Math.random() * 4) + 1));
+        const delta = Math.abs(total - midpoint);
+        if (delta < bestDelta) {
+          best = { picks, total };
+          bestDelta = delta;
         }
       }
 
+      if (!best) {
+        setGenError('Could not assemble an encounter with the current pool. Relax filters or widen the XP range.');
+        return;
+      }
+
+      const newGroups = best.picks.map(p => makeGroup(p.monster, p.count));
       setGroups(newGroups);
+
+      if (best.total < tMin || best.total > overshootMax) {
+        setGenWarning(
+          `Couldn't reach target — closest was ${best.total.toLocaleString()} XP ` +
+          `(target ${tMin.toLocaleString()}–${tMax.toLocaleString()})`,
+        );
+      }
     } catch (e) {
       setGenError(e.message);
     } finally {
@@ -459,6 +557,13 @@ export default function EncounterBuilder({ campaignId }) {
           <div style={{ gridColumn: 'span 2' }}>
             <label style={labelStyle}>Difficulty</label>
             {btnGroup(DIFFICULTIES, difficulty, setDifficulty, d => DIFF_COLOR[d])}
+            {/* v7 Custom XP range — overrides Difficulty's derived budget when active */}
+            <XpRangePanel
+              difficulty={DIFF_KEY[difficulty] ?? 'medium'}
+              partySize={partySize}
+              partyLevel={level}
+              onRangeChange={setEffectiveRange}
+            />
           </div>
         </div>
 
@@ -520,6 +625,17 @@ export default function EncounterBuilder({ campaignId }) {
           fontSize: 12, marginBottom: 16,
         }}>
           ⚠ {genError}
+        </div>
+      )}
+
+      {/* ── XP target warning (v7) ── */}
+      {genWarning && (
+        <div style={{
+          background: 'rgba(212,160,53,.12)', border: `1px solid rgba(212,160,53,.4)`,
+          borderRadius: 7, padding: '10px 16px', color: C.gold,
+          fontSize: 12, marginBottom: 16,
+        }}>
+          ⓘ {genWarning}
         </div>
       )}
 
