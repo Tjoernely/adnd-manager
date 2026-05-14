@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   extractHabitats,
   filterMonsters,
@@ -55,7 +55,7 @@ interface Props {
   onFilteredChange: (filtered: FilterableMonster[]) => void;
 }
 
-export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props) {
+function TagFilterPanelInner({ storageKey, monsters, onFilteredChange }: Props) {
   const filter = useFilterState(
     `adnd_filter_${storageKey}`,
     CONFIG.defaultLogic
@@ -73,8 +73,10 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
   // top of the file; CJS require isn't available in Vite's browser bundle.)
   const filtered = useMemo(() => filterMonsters(state, monsters), [state, monsters]);
 
-  // Propagate up
-  useMemo(() => {
+  // Propagate up — was a useMemo (side-effect during render, triggers React warning
+  // and tight render loops when 3781 monsters are in play). useEffect schedules it
+  // after the commit, breaks the freeze observed in EncounterBuilder.
+  useEffect(() => {
     onFilteredChange(filtered);
   }, [filtered, onFilteredChange]);
 
@@ -97,6 +99,31 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
     filter.toggleTag(cat, tag);
   };
 
+  // === Precompute all chip counts once per (state, monsters) change ===
+  // Without this, each render does ~500 projectedCount calls (per-chip + sort
+  // comparator). At 3781 monsters that's ~2M ops per render and freezes the
+  // browser in EncounterBuilder where many independent state hooks force
+  // frequent re-renders. With this memo, expensive recomputation only fires
+  // when the filter state or the monster list actually changes.
+  const projectedCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const cat of ["primary", "modifier", "subtype"] as const) {
+      for (const tag of ALL_TAGS_BY_CAT[cat]) {
+        m.set(`tag-${cat}:${tag}`, projectedCount(state, monsters, `tag-${cat}` as const, tag));
+      }
+    }
+    for (const sz of ["tiny","small","medium","large","huge","gargantuan"]) {
+      m.set(`size:${sz}`, projectedCount(state, monsters, "size", sz));
+    }
+    for (const fq of ["very rare","rare","uncommon","common"]) {
+      m.set(`freq:${fq}`, projectedCount(state, monsters, "freq", fq));
+    }
+    for (const h of habitats) {
+      m.set(`habitat:${h}`, projectedCount(state, monsters, "habitat", h));
+    }
+    return m;
+  }, [state, monsters, habitats]);
+
   // === Selected filter chips for the "active filters" summary ===
   const selectedList: Array<{ kind: string; value: string }> = [];
   for (const cat of ["primary", "modifier", "subtype"] as const)
@@ -111,13 +138,14 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
     const isOpen = openSections.has(label);
     const logic = state.logic[cat];
 
-    // Sort by projected count desc, but keep selected at top
+    // Sort by precomputed projected count (O(1) Map lookups instead of running
+    // filterMonsters inside every comparator pair).
     const sorted = [...tags].sort((a, b) => {
       const aSel = state.selectedTags[cat].has(a);
       const bSel = state.selectedTags[cat].has(b);
       if (aSel !== bSel) return aSel ? -1 : 1;
-      const aCount = projectedCount(state, monsters, `tag-${cat}` as const, a);
-      const bCount = projectedCount(state, monsters, `tag-${cat}` as const, b);
+      const aCount = projectedCounts.get(`tag-${cat}:${a}`) ?? 0;
+      const bCount = projectedCounts.get(`tag-${cat}:${b}`) ?? 0;
       return bCount - aCount;
     });
 
@@ -154,7 +182,7 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
           <div className={styles.sectionBody}>
             <div className={styles.tagGrid}>
               {sorted.map((tag) => {
-                const count = projectedCount(state, monsters, `tag-${cat}` as const, tag);
+                const count = projectedCounts.get(`tag-${cat}:${tag}`) ?? 0;
                 const selected = state.selectedTags[cat].has(tag);
                 const zero = count === 0 && !selected;
                 return (
@@ -203,7 +231,9 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
           <div className={styles.sectionBody}>
             <div className={styles.tagGrid}>
               {values.map((v) => {
-                const count = projectedCount(state, monsters, projectionKind, v);
+                const count = projectedCounts.get(`${projectionKind}:${normalize ? normalize(v) : v}`)
+                  ?? projectedCounts.get(`${projectionKind}:${v}`)
+                  ?? 0;
                 const isSelected = selected.has(v);
                 const zero = count === 0 && !isSelected;
                 return (
@@ -333,7 +363,7 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
                   <div className={styles.empty}>No matching tags</div>
                 ) : (
                   modalTagList.map(({ cat, tag }) => {
-                    const count = projectedCount(state, monsters, `tag-${cat}` as const, tag);
+                    const count = projectedCounts.get(`tag-${cat}:${tag}`) ?? 0;
                     const zero = count === 0;
                     return (
                       <button
@@ -357,3 +387,11 @@ export function TagFilterPanel({ storageKey, monsters, onFilteredChange }: Props
     </aside>
   );
 }
+
+// Re-export wrapped in React.memo. EncounterBuilder has many independent state
+// hooks (party size, level, difficulty, terrain, encType, encName input typing,
+// generation state). Without memo, each unrelated re-render cascaded into the
+// panel and re-triggered the expensive projectedCounts computation. With memo,
+// the panel only re-renders when monsters / onFilteredChange / storageKey change
+// references — which is what we want.
+export const TagFilterPanel = memo(TagFilterPanelInner);
