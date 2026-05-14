@@ -515,7 +515,21 @@ export default function EncounterBuilder({ campaignId }) {
       display: 'flex', gap: 20, alignItems: 'flex-start',
     }}>
 
-      {/* ── v6 Tag Filter sidebar — narrows the random-pick pool ────── */}
+      {/* ── v6 Tag Filter sidebar — TEMPORARILY DISABLED for TRIN 2 diagnostic.
+            All state (allMonsters, filteredPool, filterActive, filteredIds) stays
+            wired so the rest of EncounterBuilder still executes normally; only
+            the panel JSX is omitted. If EncounterBuilder still freezes without
+            the panel, the loop is elsewhere in EncounterBuilder itself. */}
+      <div style={{ width: 280, flexShrink: 0,
+        background: 'rgba(200,160,53,.08)',
+        border: '1px dashed rgba(212,160,53,.4)',
+        borderRadius: 8, padding: '12px 14px',
+        fontSize: 11, color: 'rgba(212,160,53,.9)', fontStyle: 'italic',
+      }}>
+        ⓘ Tag Filter Panel midlertidigt deaktiveret (TRIN 2 diagnostic).
+        {' '}Hvis Encounter Builder fortsat freezer uden panelet, ligger render-loopet et andet sted.
+      </div>
+      {/*
       <div style={{ width: 280, flexShrink: 0 }}>
         <TagFilterPanel
           storageKey="generator"
@@ -523,6 +537,7 @@ export default function EncounterBuilder({ campaignId }) {
           onFilteredChange={setFilteredPool}
         />
       </div>
+      */}
 
       {/* ── Main column: existing settings + generated encounter ────── */}
       <div style={{ flex: 1, minWidth: 0 }}>
