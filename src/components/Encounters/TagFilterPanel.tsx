@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   extractHabitats,
   filterMonsters,
@@ -68,19 +68,58 @@ function TagFilterPanelInner({ storageKey, monsters, onFilteredChange }: Props) 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSearch, setModalSearch] = useState("");
 
+  // === Stabilize the `monsters` prop reference ===
+  // Defensive against parents that pass a freshly-built array on every render
+  // (e.g. `monsters={allMonsters.filter(...)}` inline). If the underlying data
+  // is the same (same length + same first/last id), keep the previous ref so
+  // downstream useMemos don't recompute on reference-only changes.
+  const monstersStableRef = useRef<FilterableMonster[]>(monsters);
+  const monstersStable = useMemo(() => {
+    const prev = monstersStableRef.current;
+    if (prev.length === monsters.length &&
+        prev[0]?.id === monsters[0]?.id &&
+        prev[prev.length - 1]?.id === monsters[monsters.length - 1]?.id) {
+      return prev;
+    }
+    monstersStableRef.current = monsters;
+    return monsters;
+  }, [monsters]);
+
+  // === Stabilize the onFilteredChange callback via ref ===
+  // The propagate-up useEffect must not depend on `onFilteredChange` directly —
+  // if the parent passes a new arrow on every render, that dep flickers and the
+  // effect re-fires in a loop. Stash the latest callback in a ref and only
+  // depend on `filtered` content below.
+  const onFilteredChangeRef = useRef(onFilteredChange);
+  useEffect(() => { onFilteredChangeRef.current = onFilteredChange; });
+
   // === Compute filtered list ===
   // (Was `require()` in the shipped component — replaced with ES import at the
   // top of the file; CJS require isn't available in Vite's browser bundle.)
-  const filtered = useMemo(() => filterMonsters(state, monsters), [state, monsters]);
+  const filtered = useMemo(
+    () => filterMonsters(state, monstersStable),
+    [state, monstersStable],
+  );
 
-  // Propagate up — was a useMemo (side-effect during render, triggers React warning
-  // and tight render loops when 3781 monsters are in play). useEffect schedules it
-  // after the commit, breaks the freeze observed in EncounterBuilder.
+  // === Propagate filtered list up — content-equality gated ===
+  // Only notify the parent when the filtered result actually changed (not just
+  // a reference change). Breaks the React #520 render-loop the user reported
+  // even when parent props are unstable.
+  const lastFilteredRef = useRef<FilterableMonster[] | null>(null);
   useEffect(() => {
-    onFilteredChange(filtered);
-  }, [filtered, onFilteredChange]);
+    const prev = lastFilteredRef.current;
+    const curr = filtered;
+    if (prev &&
+        prev.length === curr.length &&
+        prev[0]?.id === curr[0]?.id &&
+        prev[prev.length - 1]?.id === curr[curr.length - 1]?.id) {
+      return; // content effectively unchanged → skip the upstream notification
+    }
+    lastFilteredRef.current = curr;
+    onFilteredChangeRef.current(curr);
+  }, [filtered]);
 
-  const habitats = useMemo(() => extractHabitats(monsters), [monsters]);
+  const habitats = useMemo(() => extractHabitats(monstersStable), [monstersStable]);
 
   // === Helpers ===
   const toggleSection = (id: string) => {
@@ -109,20 +148,20 @@ function TagFilterPanelInner({ storageKey, monsters, onFilteredChange }: Props) 
     const m = new Map<string, number>();
     for (const cat of ["primary", "modifier", "subtype"] as const) {
       for (const tag of ALL_TAGS_BY_CAT[cat]) {
-        m.set(`tag-${cat}:${tag}`, projectedCount(state, monsters, `tag-${cat}` as const, tag));
+        m.set(`tag-${cat}:${tag}`, projectedCount(state, monstersStable, `tag-${cat}` as const, tag));
       }
     }
     for (const sz of ["tiny","small","medium","large","huge","gargantuan"]) {
-      m.set(`size:${sz}`, projectedCount(state, monsters, "size", sz));
+      m.set(`size:${sz}`, projectedCount(state, monstersStable, "size", sz));
     }
     for (const fq of ["very rare","rare","uncommon","common"]) {
-      m.set(`freq:${fq}`, projectedCount(state, monsters, "freq", fq));
+      m.set(`freq:${fq}`, projectedCount(state, monstersStable, "freq", fq));
     }
     for (const h of habitats) {
-      m.set(`habitat:${h}`, projectedCount(state, monsters, "habitat", h));
+      m.set(`habitat:${h}`, projectedCount(state, monstersStable, "habitat", h));
     }
     return m;
-  }, [state, monsters, habitats]);
+  }, [state, monstersStable, habitats]);
 
   // === Selected filter chips for the "active filters" summary ===
   const selectedList: Array<{ kind: string; value: string }> = [];
