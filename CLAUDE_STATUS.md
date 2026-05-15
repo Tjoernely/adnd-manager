@@ -137,7 +137,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - Files: `backend/data/tag-vocabulary.json`, `backend/scripts/classify-monsters.js`, `backend/routes/monster-tags.js`
 - npm scripts: `classify-monsters`, `classify-monsters:dry`, `classify-monsters:force`
 
-**Tag Filter Panel — Monster Library (v6, 2026-05-13)**
+**Tag Filter Panel (v6, 2026-05-13 — Library + Encounter Builder)**
 - Sidebar with Quick filters (12 chips), per-category AND/OR (Primary OR / Modifier AND / Subtype OR defaults), live counts on every chip
 - Free-text search across name + tags + alignment (multi-word AND)
 - Size/Frequency/Habitat structured filters (always OR within each)
@@ -146,6 +146,16 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - sessionStorage per panel: `adnd_filter_library`, `adnd_filter_generator`
 - 30+ Vitest unit tests including 4000-monster perf test under 50ms
 - Files: `src/rulesets/{filterConfig,tag-vocabulary}.json`, `src/components/Encounters/{filterTypes,useFilterState}.ts`, `src/components/Encounters/{TagFilterPanel.tsx, TagFilterPanel.module.css}`, `src/rules-engine/monsters/{filterEngine,filterEngine.test}.ts`
+- Encounter Builder integration was blocked for ~2 days by a render-loop in XpRangePanel (not in this panel) — see bug #5. Library worked from day one; Generator side became usable after `60bed3e`.
+
+**Custom XP Range (v7, 2026-05-14)**
+- "Custom XP range" toggle under Difficulty buttons in Encounter Builder
+- Min/Max XP inputs, sessionStorage-persisted (`adnd_custom_xp_range`)
+- "Target: 2,000–5,000 XP (medium)" indicator always visible
+- Generator uses range instead of Difficulty thresholds when active; "Couldn't reach target — closest was X XP" warning when unsatisfiable
+- Files: `src/components/Encounters/{xpThresholds,useXpRangeState}.ts`, `src/components/Encounters/XpRangePanel.tsx`
+- The shipped panel originally contained a render-loop bug (state-update-during-render). Fixed in `60bed3e` — see bug #5 history.
+- **UI confirmed live; full end-to-end generator-override behavior is still pending user verification** — see priority #1 below.
 
 **Database Reference Data**
 - 4,400 spells
@@ -171,18 +181,6 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - Sketch → image → MapGenerator form → Claude AI → new map record flow works
 - sketchSpec persistence to new maps: same three-layer fix above
 - **Status: put on hold by user** — will revisit later
-
-**Tag Filter Panel — Encounter Builder (v6 Generator side)**
-- Filter panel works in Library, FREEZES the browser in Encounter Builder (see bug #5 below)
-- Same component, same data — bug is in EncounterBuilder integration, not the panel itself
-
-**Custom XP Range (v7, 2026-05-14)**
-- "Custom XP range" toggle under Difficulty buttons in Encounter Builder
-- Min/Max XP inputs, sessionStorage-persisted (`adnd_custom_xp_range`)
-- "Target: 2,000–5,000 XP (medium)" indicator always visible
-- Generator should use range instead of Difficulty thresholds when active; "Couldn't reach target — closest was X XP" warning when unsatisfiable
-- **Status: deployed but NOT VERIFIED — freeze bug intervened before testing**
-- Files: `src/components/Encounters/{xpThresholds,useXpRangeState}.ts`, `src/components/Encounters/XpRangePanel.tsx`
 
 ---
 
@@ -228,35 +226,44 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 | 2 | Low | `auto-migrate` errors for monsters/items table (ownership) — cosmetic, does not affect app | Ignored (DB permissions) |
 | 3 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
 | 4 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
-| 5 | **🔥 Critical** | **Encounter Builder freezes browser with React error #520 (infinite render loop)** | **Under investigation — see below** |
+| 5 | ~~Critical~~ Resolved | Encounter Builder freeze (React error #520, infinite render loop) | **Fixed in commit `60bed3e` on 2026-05-15. Verified live, 0 console errors.** |
 
-### Bug #5 — Encounter Builder freeze (active)
+### Bug #5 — Encounter Builder freeze (RESOLVED 2026-05-15)
 
-**Symptom:** Opening Encounter Builder tab triggers 10,000+ React error #520 ("Maximum update depth exceeded") in <1s, browser becomes unresponsive. Library uses same `TagFilterPanel` component and does NOT freeze.
+**Symptom:** Opening Encounter Builder tab triggered 10,000+ React error #520 ("Maximum update depth exceeded") in <1s, browser became unresponsive. Library used same `TagFilterPanel` component and did NOT freeze.
 
-**Fix attempts deployed (didn't resolve):**
+**Root cause:** `XpRangePanel.tsx` (v7) called the parent's state setter synchronously during its own render, on every render:
 
-1. **Commit `ee2e8c5` — perf angle:**
-   - `useMemo` → `useEffect` for `onFilteredChange(filtered)` propagate-up
-   - Precomputed projectedCounts Map (per-chip render becomes O(1) lookup)
-   - `React.memo` wrapper around export
-   - Result: build clean, 32/32 tests pass, still freezes
+```tsx
+// Original shipped v7 code, lines 132-137 — BAD
+if (onRangeChange) {
+  onRangeChange(effective);   // calls EncounterBuilder's setEffectiveRange
+}
+```
 
-2. **Commit `34da522` — render-loop defensive layers:**
-   - `onFilteredChangeRef` — stash callback in ref so effect doesn't list it as dep
-   - Content-equality gate — compare filtered list by length + first/last id, skip when content unchanged
-   - `monstersStable` ref — keep previous monsters ref when length + first/last id match
-   - Result: build clean, 32/32 tests pass, still freezes
+This is a state-update-during-render on the parent — a React anti-pattern. Compounded by `effective` being a fresh object literal every render, so `setEffectiveRange` received a new reference every pass → guaranteed re-render of EncounterBuilder → re-render of XpRangePanel → calls `onRangeChange` again → infinite loop. React's concurrent renderer caught each thrown error and wrapped it as #520.
 
-**Current diagnosis:** Library works = loop is not in panel itself. Must be in EncounterBuilder.tsx integration or a bidirectional flow that survives the defensive fixes.
+The v7 author (chat-Claude) had even written a justifying comment claiming "useEffect delays the notification by one render which makes Generate race-prone" — this was wrong. useEffect runs after every commit, long before any click handler fires.
 
-**Next diagnostic steps (sent to Claude Code):**
-- **TRIN 1:** Decode actual #520 message (build with `vite build --mode development` or grep `node_modules/react-dom/cjs/react-dom.production.min.js | grep '"520[^"]*"'`)
-- **TRIN 2:** Binary search — comment out `<TagFilterPanel/>` in EncounterBuilder.tsx, build, deploy. If still freezes → loop is in EncounterBuilder itself. If not → panel integration on EncounterBuilder side.
-- **TRIN 3:** Critical read of EncounterBuilder.tsx — look for useEffect depending on `filteredPool` setting state that affects `monsters`/`onFilteredChange` (circular), render-side state updates, JSON.stringify in dep arrays
-- **TRIN 4:** Render counters in both components if 1-3 reveal nothing
+**Fix (commit `60bed3e`):**
+- Memoize `effective` on primitive deps (stable identity instead of fresh literal each render)
+- Stash `onRangeChange` in a ref
+- Call it from a `useEffect` keyed on `effective` (runs after commit, not during render)
 
-Stop and report after TRIN 1+2 before further changes.
+**Diagnostic timeline — including misdirections worth recording:**
+
+| Commit | What was tried | Outcome |
+|---|---|---|
+| `ee2e8c5` | Perf fixes in TagFilterPanel (projectedCounts useMemo, useMemo→useEffect for propagate-up, React.memo) | Did not fix freeze — wrong component. **Kept in code as defense-in-depth, makes panel genuinely faster.** |
+| `34da522` | Defensive layers in TagFilterPanel (onFilteredChangeRef, content-equality gate, monstersStable ref) | Did not fix freeze — wrong component. **Kept in code as defense-in-depth, makes panel loop-resistant.** |
+| `276e706` | TRIN 2 binary-search: commented out `<TagFilterPanel/>` in EncounterBuilder | **This isolated the bug — proved loop was NOT in TagFilterPanel.** Cleanly reverted by 60bed3e. |
+| `60bed3e` | Actual fix in XpRangePanel + restore TagFilterPanel | ✅ Resolved |
+
+**Process lesson (recorded for future debugging):** The first two attempts assumed the loop was in the most recently/heavily-touched component (TagFilterPanel, v6) without proving it. The binary-search diagnostic (disable a component, observe) should have been step 1, not step 4. Two deploys wasted. **Future rule: before applying defensive fixes to a component you suspect, prove it's the source by disabling it first.**
+
+**Status of defensive fixes from earlier attempts:** All still in code, all worth keeping. They are legitimate improvements to TagFilterPanel even though they weren't the cure:
+- `ee2e8c5`: projectedCounts single-pass useMemo, useMemo→useEffect for propagate-up, React.memo wrapper
+- `34da522`: monstersStableRef + onFilteredChangeRef + content-equality gate
 
 ---
 
@@ -335,6 +342,17 @@ Stop and report after TRIN 1+2 before further changes.
 - Scales linearly with `(partySize × partyLevel) / (4 × 5)` for other party shapes
 - Defined in `src/components/Encounters/xpThresholds.ts` — single source of truth, can be replaced/wrapped by existing generator function if one exists
 
+### React Rendering Conventions (recorded after bug #5)
+- **Never call a parent's state setter during render.** It's a React anti-pattern that causes infinite re-render loops. Use `useEffect` keyed on the value that should trigger the notification.
+- **Memoize values passed up to parents.** A child returning `{ a, b }` literal on every render breaks parent's `useState`-based memoization. Wrap in `useMemo` on primitive dependencies.
+- **Refs for callbacks.** When a child should call a parent callback from an effect, stash the callback in a ref so the effect's dep array stays stable. Pattern:
+  ```tsx
+  const callbackRef = useRef(callback);
+  useEffect(() => { callbackRef.current = callback; });
+  useEffect(() => { callbackRef.current(value); }, [value]);
+  ```
+- **Before defensive fixes, isolate.** When diagnosing a render loop, the FIRST step is to disable suspected components one at a time to prove which is the source. Don't apply fixes to components you only suspect.
+
 ### API Quirks (encounter system)
 - `GET /api/saved-encounters?campaign_id=X` (list) → JSON ✓
 - `GET /api/saved-encounters/:id` (singular) → returns SPA HTML, NOT JSON ✗ (use list + find by id)
@@ -364,14 +382,13 @@ Stop and report after TRIN 1+2 before further changes.
 
 These are suggested based on current state — confirm with user before starting:
 
-1. **🔥 Fix Encounter Builder freeze (bug #5)** — TRIN 1+2 first (decode #520, binary search), then narrow from there. Stop and report between trins.
-2. **Verify v7 Custom XP Range** — once freeze is fixed, test the deployed but unverified feature
-3. **Verify sketch cells persistence** — generate one sketch map, query DB, confirm `cells.length > 0`
-4. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
-5. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
-6. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
-7. **Resume Map Generator improvements** — when user is ready
-8. **Consider v8 encounter features** — theme presets, saved filter presets per campaign (only after freeze is fixed and v7 verified)
+1. **Verify v7 Custom XP Range functionality end-to-end** — UI is confirmed live (button + target indicator visible). Test that toggling Custom actually overrides Difficulty in the generator output, that sessionStorage persists across reload, and that "Couldn't reach target" warning fires correctly with extreme ranges.
+2. **Verify sketch cells persistence** — generate one sketch map, query DB, confirm `cells.length > 0`
+3. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
+4. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
+5. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
+6. **Resume Map Generator improvements** — when user is ready
+7. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
 
 ---
 
