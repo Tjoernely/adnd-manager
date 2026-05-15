@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef } from "react";
 import {
   formatXp,
   getXpBudget,
@@ -122,19 +123,32 @@ export function XpRangePanel({
   // Compute the Difficulty-based range
   const diffBudget = getXpBudget(difficulty, partySize, partyLevel);
 
-  // The effective range that the generator should use
-  const effective = range.enabled && isValid
-    ? { min: range.min, max: range.max, source: "custom" as const }
-    : { min: diffBudget.min, max: diffBudget.max, source: "difficulty" as const };
+  // The effective range that the generator should use.
+  // Memoised on PRIMITIVE deps so the object identity is stable when the
+  // underlying numbers don't change — the previous version returned a fresh
+  // literal every render and caused the parent's setEffectiveRange to fire
+  // unconditionally each pass.
+  const effective = useMemo(() => (
+    range.enabled && isValid
+      ? { min: range.min, max: range.max, source: "custom" as const }
+      : { min: diffBudget.min, max: diffBudget.max, source: "difficulty" as const }
+  ), [range.enabled, isValid, range.min, range.max, diffBudget.min, diffBudget.max]);
 
-  // Notify parent on any change
-  // Note: this is fine to call on every render — parent should memoize handling
-  if (onRangeChange) {
-    // Call inside an effect-like guard by using a stable comparison via JSON
-    // (parent is expected to be cheap; the alternative is useEffect, but that
-    // delays the notification by one render which makes "Generate" race-prone).
-    onRangeChange(effective);
-  }
+  // === Notify parent — ROOT CAUSE FIX ===
+  // The shipped v7 component called onRangeChange(effective) inline during
+  // render. That's a state-update-during-render on the parent and produced
+  // a flood of React #520 errors (wrapped concurrent-rendering errors) in
+  // EncounterBuilder — the actual freeze the user reported.
+  //
+  // (a) Stabilize onRangeChange via ref so the effect doesn't need it as
+  //     a dep (defends against parents that pass a fresh arrow each render).
+  // (b) Call from useEffect so the update is scheduled after commit, not
+  //     during another component's render.
+  const onRangeChangeRef = useRef(onRangeChange);
+  useEffect(() => { onRangeChangeRef.current = onRangeChange; });
+  useEffect(() => {
+    onRangeChangeRef.current?.(effective);
+  }, [effective]);
 
   return (
     <div style={styles.wrapper}>
