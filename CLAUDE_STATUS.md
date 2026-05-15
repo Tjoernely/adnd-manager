@@ -146,7 +146,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - sessionStorage per panel: `adnd_filter_library`, `adnd_filter_generator`
 - 30+ Vitest unit tests including 4000-monster perf test under 50ms
 - Files: `src/rulesets/{filterConfig,tag-vocabulary}.json`, `src/components/Encounters/{filterTypes,useFilterState}.ts`, `src/components/Encounters/{TagFilterPanel.tsx, TagFilterPanel.module.css}`, `src/rules-engine/monsters/{filterEngine,filterEngine.test}.ts`
-- Encounter Builder integration was blocked for ~2 days by a render-loop in XpRangePanel (not in this panel) — see bug #5. Library worked from day one; Generator side became usable after `60bed3e`.
+- Encounter Builder integration was blocked for ~2 days by a render-loop in XpRangePanel (not in this panel) — see bug #4. Library worked from day one; Generator side became usable after `60bed3e`.
 
 **Custom XP Range (v7, 2026-05-14)**
 - "Custom XP range" toggle under Difficulty buttons in Encounter Builder
@@ -154,8 +154,8 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - "Target: 2,000–5,000 XP (medium)" indicator always visible
 - Generator uses range instead of Difficulty thresholds when active; "Couldn't reach target — closest was X XP" warning when unsatisfiable
 - Files: `src/components/Encounters/{xpThresholds,useXpRangeState}.ts`, `src/components/Encounters/XpRangePanel.tsx`
-- The shipped panel originally contained a render-loop bug (state-update-during-render). Fixed in `60bed3e` — see bug #5 history.
-- **UI confirmed live; full end-to-end generator-override behavior is still pending user verification** — see priority #1 below.
+- The shipped panel originally contained a render-loop bug (state-update-during-render). Fixed in `60bed3e` — see bug #4 history.
+- Verified end-to-end 2026-05-15.
 
 **Database Reference Data**
 - 4,400 spells
@@ -167,24 +167,15 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 
 ---
 
-### 🔶 Partially implemented / needs verification
+### ⏸ On hold / not started
 
 **sketchSpec.cells persistence**
-- Three-layer fix has been deployed but not yet confirmed working:
-  1. `PUT /api/maps/:id/sketch` endpoint (jsonb_set, bypasses enrichMapData)
-  2. Belt-and-suspenders in `PUT /api/maps/:id` — re-patches via jsonb_set if body has sketch cells
-  3. Explicit `PUT /sketch` call in `MapManager.handleSketchGenerate` before `api.updateMap`
-- DB has `has_sketch=false` for maps created before fix — historical data not backfilled
-- **Next step**: generate one map from sketch and check DB with `SELECT data->'sketch'->'cells' FROM maps WHERE id=X`
+- Three-layer fix (PUT /api/maps/:id/sketch + jsonb_set in PUT /:id + explicit PUT /sketch in MapManager.handleSketchGenerate) is deployed. DB inspection 2026-05-15 confirmed 3 maps with 1024 persisted cells each — the fix does work at the DB layer.
+- Map sketcher never reached working state — requires larger rework. Deferred indefinitely.
 
 **Map Generator (MapGenerator.jsx) from sketch**
-- Sketch → image → MapGenerator form → Claude AI → new map record flow works
-- sketchSpec persistence to new maps: same three-layer fix above
-- **Status: put on hold by user** — will revisit later
-
----
-
-### ⏸ On hold / not started
+- Sketch → image → MapGenerator form → Claude AI → new map record flow.
+- Map sketcher never reached working state — requires larger rework. Deferred indefinitely.
 
 **Map Generator general improvements**
 - User has paused work on this area
@@ -222,13 +213,12 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 
 | # | Severity | Description | Status |
 |---|---|---|---|
-| 1 | High | `sketchSpec.cells` not confirmed saved to DB — three-layer fix deployed, needs one test | Needs verification |
-| 2 | Low | `auto-migrate` errors for monsters/items table (ownership) — cosmetic, does not affect app | Ignored (DB permissions) |
-| 3 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
-| 4 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
-| 5 | ~~Critical~~ Resolved | Encounter Builder freeze (React error #520, infinite render loop) | **Fixed in commit `60bed3e` on 2026-05-15. Verified live, 0 console errors.** |
+| 1 | Low | `auto-migrate` errors for monsters/items table (ownership) — cosmetic, does not affect app | Ignored (DB permissions) |
+| 2 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
+| 3 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
+| 4 | ~~Critical~~ Resolved | Encounter Builder freeze (React error #520, infinite render loop) | **Fixed in commit `60bed3e` on 2026-05-15. Verified live, 0 console errors.** |
 
-### Bug #5 — Encounter Builder freeze (RESOLVED 2026-05-15)
+### Bug #4 — Encounter Builder freeze (RESOLVED 2026-05-15)
 
 **Symptom:** Opening Encounter Builder tab triggered 10,000+ React error #520 ("Maximum update depth exceeded") in <1s, browser became unresponsive. Library used same `TagFilterPanel` component and did NOT freeze.
 
@@ -342,7 +332,7 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 - Scales linearly with `(partySize × partyLevel) / (4 × 5)` for other party shapes
 - Defined in `src/components/Encounters/xpThresholds.ts` — single source of truth, can be replaced/wrapped by existing generator function if one exists
 
-### React Rendering Conventions (recorded after bug #5)
+### React Rendering Conventions (recorded after bug #4)
 - **Never call a parent's state setter during render.** It's a React anti-pattern that causes infinite re-render loops. Use `useEffect` keyed on the value that should trigger the notification.
 - **Memoize values passed up to parents.** A child returning `{ a, b }` literal on every render breaks parent's `useState`-based memoization. Wrap in `useMemo` on primitive dependencies.
 - **Refs for callbacks.** When a child should call a parent callback from an effect, stash the callback in a ref so the effect's dep array stays stable. Pattern:
@@ -382,13 +372,11 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 
 These are suggested based on current state — confirm with user before starting:
 
-1. **Verify v7 Custom XP Range functionality end-to-end** — UI is confirmed live (button + target indicator visible). Test that toggling Custom actually overrides Difficulty in the generator output, that sessionStorage persists across reload, and that "Couldn't reach target" warning fires correctly with extreme ranges.
-2. **Verify sketch cells persistence** — generate one sketch map, query DB, confirm `cells.length > 0`
-3. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
-4. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
-5. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
-6. **Resume Map Generator improvements** — when user is ready
-7. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
+1. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
+2. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
+3. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
+4. **Resume Map Generator improvements** — when user is ready
+5. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
 
 ---
 
