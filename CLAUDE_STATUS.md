@@ -146,7 +146,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - sessionStorage per panel: `adnd_filter_library`, `adnd_filter_generator`
 - 30+ Vitest unit tests including 4000-monster perf test under 50ms
 - Files: `src/rulesets/{filterConfig,tag-vocabulary}.json`, `src/components/Encounters/{filterTypes,useFilterState}.ts`, `src/components/Encounters/{TagFilterPanel.tsx, TagFilterPanel.module.css}`, `src/rules-engine/monsters/{filterEngine,filterEngine.test}.ts`
-- Encounter Builder integration was blocked for ~2 days by a render-loop in XpRangePanel (not in this panel) — see bug #4. Library worked from day one; Generator side became usable after `60bed3e`.
+- Encounter Builder integration was blocked for ~2 days by a render-loop in XpRangePanel (not in this panel) — see bug #5. Library worked from day one; Generator side became usable after `60bed3e`.
 
 **Custom XP Range (v7, 2026-05-14)**
 - "Custom XP range" toggle under Difficulty buttons in Encounter Builder
@@ -154,8 +154,11 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - "Target: 2,000–5,000 XP (medium)" indicator always visible
 - Generator uses range instead of Difficulty thresholds when active; "Couldn't reach target — closest was X XP" warning when unsatisfiable
 - Files: `src/components/Encounters/{xpThresholds,useXpRangeState}.ts`, `src/components/Encounters/XpRangePanel.tsx`
-- The shipped panel originally contained a render-loop bug (state-update-during-render). Fixed in `60bed3e` — see bug #4 history.
-- Verified end-to-end 2026-05-15.
+- The shipped panel originally contained a render-loop bug (state-update-during-render). Fixed in `60bed3e` — see bug #5 history.
+- Verified end-to-end 2026-05-15. Three tests passed:
+  - Custom override of Difficulty works (3 runs hit target 3000-3500 with 1-4% overshoot tolerance — acceptable for quantized monster XP)
+  - sessionStorage persistence across page reload
+  - Extreme range triggers 'Could not assemble an encounter' warning
 
 **Database Reference Data**
 - 4,400 spells
@@ -213,12 +216,12 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 
 | # | Severity | Description | Status |
 |---|---|---|---|
-| 1 | Low | `auto-migrate` errors for monsters/items table (ownership) — cosmetic, does not affect app | Ignored (DB permissions) |
-| 2 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
-| 3 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
-| 4 | ~~Critical~~ Resolved | Encounter Builder freeze (React error #520, infinite render loop) | **Fixed in commit `60bed3e` on 2026-05-15. Verified live, 0 console errors.** |
+| 2 | Low | `auto-migrate` errors for monsters/items table (ownership) — cosmetic, does not affect app | Ignored (DB permissions) |
+| 3 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
+| 4 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
+| 5 | ~~Critical~~ Resolved | Encounter Builder freeze (React error #520, infinite render loop) | **Fixed in commit `60bed3e` on 2026-05-15. Verified live, 0 console errors.** |
 
-### Bug #4 — Encounter Builder freeze (RESOLVED 2026-05-15)
+### Bug #5 — Encounter Builder freeze (RESOLVED 2026-05-15)
 
 **Symptom:** Opening Encounter Builder tab triggered 10,000+ React error #520 ("Maximum update depth exceeded") in <1s, browser became unresponsive. Library used same `TagFilterPanel` component and did NOT freeze.
 
@@ -332,7 +335,7 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 - Scales linearly with `(partySize × partyLevel) / (4 × 5)` for other party shapes
 - Defined in `src/components/Encounters/xpThresholds.ts` — single source of truth, can be replaced/wrapped by existing generator function if one exists
 
-### React Rendering Conventions (recorded after bug #4)
+### React Rendering Conventions (recorded after bug #5)
 - **Never call a parent's state setter during render.** It's a React anti-pattern that causes infinite re-render loops. Use `useEffect` keyed on the value that should trigger the notification.
 - **Memoize values passed up to parents.** A child returning `{ a, b }` literal on every render breaks parent's `useState`-based memoization. Wrap in `useMemo` on primitive dependencies.
 - **Refs for callbacks.** When a child should call a parent callback from an effect, stash the callback in a ref so the effect's dep array stays stable. Pattern:
