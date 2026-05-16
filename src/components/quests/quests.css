@@ -1,0 +1,703 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Quest module styling.
+ *
+ * Uses CSS variables that may already exist in the global stylesheet.
+ * Fallback values are provided where likely missing.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --quest-bg: var(--bg, #1a1a1f);
+  --quest-surface: var(--surface, #25252d);
+  --quest-surface-2: var(--surface-2, #2f2f38);
+  --quest-border: var(--border, #3a3a45);
+  --quest-text: var(--text, #e5e5ea);
+  --quest-text-muted: var(--text-muted, #8a8a96);
+  --quest-accent: var(--accent, #a78bfa);
+  --quest-accent-dim: var(--accent-dim, #6d4ec7);
+  --quest-danger: var(--danger, #ef4444);
+  --quest-success: var(--success, #22c55e);
+  --quest-info: var(--info, #60a5fa);
+  --quest-warning: var(--warning, #facc15);
+}
+
+/* ── Module container ──────────────────────────────────────────────────── */
+
+.quest-module {
+  color: var(--quest-text);
+  padding: 1rem;
+  min-height: 100%;
+}
+
+.quest-module--fullpage-active {
+  padding: 0;
+}
+
+/* ── Banner ────────────────────────────────────────────────────────────── */
+
+.quest-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--quest-border);
+}
+.quest-banner--info     { background: rgba(96,165,250,0.15); border-color: var(--quest-info); }
+.quest-banner--success  { background: rgba(34,197,94,0.15); border-color: var(--quest-success); }
+.quest-banner--error    { background: rgba(239,68,68,0.15); border-color: var(--quest-danger); }
+.quest-banner__close {
+  background: none; border: none; color: inherit; font-size: 1.2rem;
+  cursor: pointer; padding: 0 0.4rem;
+}
+.quest-banner__close:hover { color: var(--quest-text); }
+
+/* ── List view ─────────────────────────────────────────────────────────── */
+
+.quest-list__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+.quest-list__title { margin: 0; font-size: 1.5rem; }
+.quest-list__actions { display: flex; gap: 0.5rem; }
+
+.quest-list__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+.quest-filter__input,
+.quest-filter__select {
+  background: var(--quest-surface);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+}
+.quest-filter__input { flex: 1 1 200px; min-width: 200px; }
+.quest-filter__checkbox {
+  display: flex; align-items: center; gap: 0.4rem;
+  color: var(--quest-text-muted);
+  font-size: 0.9rem;
+}
+
+.quest-list__loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--quest-text-muted);
+}
+
+/* ── Kanban ────────────────────────────────────────────────────────────── */
+
+.quest-kanban {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+.quest-kanban--archive {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.quest-column {
+  background: var(--quest-surface);
+  border: 1px solid var(--quest-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+}
+.quest-column__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--quest-border);
+}
+.quest-column__dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.quest-column__title { flex: 1; font-weight: 600; }
+.quest-column__count {
+  background: var(--quest-surface-2);
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+}
+.quest-column__cards {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+.quest-column__empty {
+  text-align: center;
+  color: var(--quest-text-muted);
+  font-size: 0.85rem;
+  padding: 1rem 0;
+  opacity: 0.6;
+}
+
+.quest-archive {
+  margin-top: 1.5rem;
+}
+.quest-archive__heading {
+  font-size: 1.1rem;
+  color: var(--quest-text-muted);
+  margin: 0 0 0.5rem 0;
+}
+
+/* ── Quest card ────────────────────────────────────────────────────────── */
+
+.quest-card {
+  background: var(--quest-surface-2);
+  border: 1px solid var(--quest-border);
+  border-radius: 6px;
+  padding: 0.6rem;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.quest-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  border-color: var(--quest-accent-dim);
+}
+.quest-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+.quest-card__title { font-weight: 600; flex: 1; }
+.quest-card__ai-badge {
+  font-size: 0.85rem;
+}
+.quest-card__pitch {
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+  margin-bottom: 0.4rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.quest-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+.quest-card__chip {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  background: var(--quest-bg);
+  border: 1px solid var(--quest-border);
+  border-radius: 3px;
+  color: var(--quest-text-muted);
+}
+.quest-card__chip--diff {
+  background: rgba(167,139,250,0.15);
+  border-color: var(--quest-accent-dim);
+  color: var(--quest-accent);
+}
+.quest-card__chip--tone {
+  background: rgba(250,204,21,0.1);
+  border-color: rgba(250,204,21,0.3);
+}
+.quest-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--quest-border);
+}
+.quest-card__status-select {
+  background: var(--quest-bg);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  flex: 1;
+}
+.quest-card__delete {
+  background: none; border: none;
+  color: var(--quest-text-muted);
+  cursor: pointer; padding: 0.1rem 0.3rem;
+}
+.quest-card__delete:hover { color: var(--quest-danger); }
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.quest-btn {
+  background: var(--quest-surface-2);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.1s;
+}
+.quest-btn:hover:not(:disabled) {
+  background: var(--quest-border);
+}
+.quest-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.quest-btn--primary {
+  background: var(--quest-accent-dim);
+  border-color: var(--quest-accent-dim);
+}
+.quest-btn--primary:hover:not(:disabled) {
+  background: var(--quest-accent);
+}
+.quest-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.quest-btn--ghost:hover:not(:disabled) {
+  background: var(--quest-surface-2);
+}
+
+/* ── Modal ─────────────────────────────────────────────────────────────── */
+
+.quest-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+.quest-modal {
+  background: var(--quest-bg);
+  border: 1px solid var(--quest-border);
+  border-radius: 8px;
+  width: min(900px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.quest-modal--generate { width: min(700px, 100%); }
+.quest-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--quest-border);
+}
+.quest-modal__header h2 { margin: 0; font-size: 1.2rem; }
+.quest-modal__close {
+  background: none; border: none;
+  color: var(--quest-text); font-size: 1.4rem;
+  cursor: pointer; padding: 0 0.4rem;
+}
+.quest-modal__body {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+.quest-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--quest-border);
+}
+
+/* ── Editor ────────────────────────────────────────────────────────────── */
+
+.quest-editor {
+  display: flex;
+  flex-direction: column;
+  background: var(--quest-bg);
+}
+.quest-editor--modal {
+  background: var(--quest-bg);
+  border: 1px solid var(--quest-border);
+  border-radius: 8px;
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  overflow: hidden;
+}
+.quest-editor--fullpage {
+  min-height: 100vh;
+  width: 100%;
+}
+
+.quest-editor__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--quest-border);
+  background: var(--quest-surface);
+}
+.quest-editor__header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.quest-editor__title { margin: 0; font-size: 1.2rem; }
+.quest-editor__dirty-dot {
+  color: var(--quest-warning);
+  font-size: 0.9rem;
+}
+.quest-editor__header-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.quest-editor__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--quest-surface);
+  border-bottom: 1px solid var(--quest-border);
+  padding: 0 0.5rem;
+}
+.quest-editor__tab {
+  background: transparent;
+  border: none;
+  color: var(--quest-text-muted);
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.quest-editor__tab:hover {
+  color: var(--quest-text);
+}
+.quest-editor__tab.is-active {
+  color: var(--quest-text);
+  border-bottom-color: var(--quest-accent);
+}
+.quest-editor__tab-count {
+  background: var(--quest-surface-2);
+  font-size: 0.75rem;
+  padding: 0 0.4rem;
+  border-radius: 8px;
+}
+
+.quest-editor__body {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Tab content ──────────────────────────────────────────────────────── */
+
+.quest-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.quest-tab__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--quest-border);
+}
+.quest-tab__hint {
+  color: var(--quest-text-muted);
+  font-size: 0.85rem;
+  flex-basis: 100%;
+}
+.quest-tab__divider {
+  color: var(--quest-text-muted);
+  font-size: 0.85rem;
+  margin: 0 0.3rem;
+}
+
+.quest-empty {
+  text-align: center;
+  color: var(--quest-text-muted);
+  font-style: italic;
+  padding: 2rem 0;
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────── */
+
+.quest-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.quest-field label {
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+}
+.quest-field input[type="text"],
+.quest-field input[type="number"],
+.quest-field select,
+.quest-field textarea {
+  background: var(--quest-surface);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.quest-field input:focus,
+.quest-field select:focus,
+.quest-field textarea:focus {
+  outline: 2px solid var(--quest-accent-dim);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+.quest-field__inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--quest-text-muted);
+}
+.quest-field__inline input,
+.quest-field__inline select {
+  background: var(--quest-surface);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.3rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+}
+.quest-field__hint {
+  color: var(--quest-text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.quest-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.quest-row > * { flex: 1; min-width: 140px; }
+
+/* ── Item card (hooks, objectives, etc.) ──────────────────────────────── */
+
+.quest-item {
+  background: var(--quest-surface);
+  border: 1px solid var(--quest-border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.quest-item__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.quest-item__header-right {
+  display: flex;
+  gap: 0.2rem;
+}
+.quest-item__select {
+  min-width: 120px;
+}
+.quest-item__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+}
+.quest-item__tag {
+  background: var(--quest-accent-dim);
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+.quest-item input,
+.quest-item textarea,
+.quest-item select {
+  background: var(--quest-bg);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.4rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+/* ── Read-only display blocks ─────────────────────────────────────────── */
+
+.quest-readonly-block {
+  background: var(--quest-surface);
+  border: 1px solid var(--quest-border);
+  border-radius: 4px;
+  padding: 0.6rem;
+  font-size: 0.9rem;
+}
+.quest-readonly-block ul {
+  margin: 0.4rem 0 0 0;
+  padding-left: 1.2rem;
+}
+.quest-readonly-block li {
+  margin-bottom: 0.3rem;
+}
+.quest-readonly-block__sub {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+  padding-left: 0.5rem;
+}
+.quest-readonly-list {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+.quest-readonly-list ul { margin: 0.2rem 0 0 0; padding-left: 1.2rem; }
+.quest-tag--true {
+  background: rgba(34,197,94,0.2);
+  color: var(--quest-success);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+.quest-tag--false {
+  background: rgba(239,68,68,0.2);
+  color: var(--quest-danger);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+
+/* ── Generate dialog ─────────────────────────────────────────────────── */
+
+.quest-gen__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.quest-gen__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.quest-gen__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.quest-gen__help {
+  color: var(--quest-text-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+.quest-gen__row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.quest-gen__row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+}
+.quest-gen__row input,
+.quest-gen__row select {
+  background: var(--quest-surface);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  width: 100px;
+}
+.quest-gen__checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem !important;
+  color: var(--quest-text) !important;
+  font-size: 0.9rem !important;
+}
+.quest-gen__section textarea {
+  background: var(--quest-surface);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.quest-gen__section select {
+  background: var(--quest-surface);
+  color: var(--quest-text);
+  border: 1px solid var(--quest-border);
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+}
+
+.quest-gen__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* ── Tag button (taxonomy multi-select) ───────────────────────────────── */
+
+.quest-tag {
+  background: var(--quest-surface-2);
+  color: var(--quest-text-muted);
+  border: 1px solid var(--quest-border);
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.1s;
+}
+.quest-tag:hover {
+  background: var(--quest-border);
+  color: var(--quest-text);
+}
+.quest-tag--selected {
+  background: var(--quest-accent-dim);
+  border-color: var(--quest-accent);
+  color: white;
+}
+.quest-tag--selected:hover {
+  background: var(--quest-accent);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .quest-kanban {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .quest-kanban {
+    grid-template-columns: 1fr;
+  }
+  .quest-list__filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

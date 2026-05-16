@@ -1,0 +1,128 @@
+{
+  "$schema": "Moral dilemma presets. Used when 'Include moral dilemma' is toggled at quest generation, and as seed library for the dilemma picker in QuestEditor.",
+  "$version": 1,
+  "$note": "Each dilemma has 2-3 options, none of which is 'correct'. Use fits_quest_types and themes to filter when matching to a quest's existing taxonomy.",
+
+  "dilemmas": [
+    {
+      "slug": "protective_witch",
+      "label": "Den beskyttende heks",
+      "setup": "Landsbyen kræver en 'heks' dræbt — men hun beskytter dem mod en større, ukendt fare.",
+      "options": [
+        { "label": "Dræb heksen som krævet",   "consequence": "Landsbyen falder for den større fare inden for måneder" },
+        { "label": "Beskyt heksen mod landsbyen","consequence": "Landsbyboerne bliver fjendtlige mod partyen og heksen" },
+        { "label": "Afslør sandheden om faren", "consequence": "Kræver at partyen kan bevise det — landsbyen tror måske ikke på dem" }
+      ],
+      "themes": ["folkloric", "tragic", "gothic"],
+      "fits_quest_types": ["monster_problem", "moral_dilemma", "curse_haunting"]
+    },
+    {
+      "slug": "thief_with_purpose",
+      "label": "Tyven med formål",
+      "setup": "En tyv har stjålet medicin fra et tempel — men kun for at redde syge børn fattigkvarteret ikke har råd til.",
+      "options": [
+        { "label": "Tilbagelevér medicinen til templet","consequence": "Børnene dør, men templet beholder sin orden og kan hjælpe flere på lang sigt" },
+        { "label": "Hjælp tyven med at slippe væk",     "consequence": "Børnene lever, men templet vil ikke give partyen hjælp i fremtiden" },
+        { "label": "Forhandl en aftale",                "consequence": "Kræver social skill og at templet er villig — udfaldet er usikkert" }
+      ],
+      "themes": ["low_fantasy", "tragic", "political"],
+      "fits_quest_types": ["investigation", "moral_dilemma", "diplomacy"]
+    },
+    {
+      "slug": "corrupt_lord_keystone",
+      "label": "Den korrupte adelsmand",
+      "setup": "En adelsmand er korrupt og misbruger sin position — men hans fald vil destabilisere regionen og udløse borgerkrig.",
+      "options": [
+        { "label": "Afslør og bring ham til fald",      "consequence": "Retfærdighed sker, men regionen synker i krig — mange uskyldige dør" },
+        { "label": "Lad ham fortsætte",                 "consequence": "Korruptionen vokser, men freden holder. Partyen lever med kompromiset" },
+        { "label": "Tving ham til at træde tilbage stille","consequence": "Kræver leverage og tid — han kan modarbejde partyen i baggrunden" }
+      ],
+      "themes": ["political", "grim", "low_fantasy"],
+      "fits_quest_types": ["political_intrigue", "investigation", "moral_dilemma"]
+    },
+    {
+      "slug": "last_of_its_kind",
+      "label": "Sidste af sin art",
+      "setup": "Monsteret partyen jagter er den sidste levende af sin art. Det er farligt — men dets død er endegyldig.",
+      "options": [
+        { "label": "Dræb det som aftalt",             "consequence": "Området er sikkert, men en art uddør ved partyens hånd" },
+        { "label": "Fang og flyt det",                "consequence": "Kræver ressourcer og et sted — risiko for at det undslipper igen" },
+        { "label": "Beskyt det og lyv for quest-giver","consequence": "Bryder aftalen, mister belønning og omdømme — men arten lever" }
+      ],
+      "themes": ["folkloric", "tragic", "weird"],
+      "fits_quest_types": ["monster_problem", "moral_dilemma", "exploration"]
+    },
+    {
+      "slug": "cult_against_invasion",
+      "label": "Kulten der holder noget tilbage",
+      "setup": "En kult dyrker en ond magt — men ritualerne holder en demonisk invasion i skak. At stoppe kulten åbner porten.",
+      "options": [
+        { "label": "Knus kulten",                       "consequence": "Den demoniske invasion bryder løs — meget større trussel mod hele regionen" },
+        { "label": "Lad kulten fortsætte",              "consequence": "Lokale ofre fortsætter, men invasionen forhindres. Partyen kender sandheden" },
+        { "label": "Søg en alternativ måde at lukke porten","consequence": "Kræver researche, tid og måske et offer fra partyen selv" }
+      ],
+      "themes": ["weird", "gothic", "grim"],
+      "fits_quest_types": ["curse_haunting", "ancient_ruin", "moral_dilemma"]
+    },
+    {
+      "slug": "heretics_with_the_relic",
+      "label": "Kættere med relikviet",
+      "setup": "Et helligt relikvie er i en 'kættersk' fraktions varetægt — de behandler det med dyb respekt. Den 'rette' kirke vil ødelægge det som forurenet.",
+      "options": [
+        { "label": "Tag relikviet og giv det til kirken","consequence": "Relikviet ødelægges som forurenet. Kættere ser partyen som forrædere" },
+        { "label": "Lad kættere beholde det",          "consequence": "Kirken erklærer partyen som kættere selv — eskommunikation eller forfølgelse" },
+        { "label": "Stjæl det og skjul det",           "consequence": "Begge sider jagter partyen. Relikviet er sikkert men i eksil" }
+      ],
+      "themes": ["political", "gothic", "low_fantasy"],
+      "fits_quest_types": ["heist", "diplomacy", "moral_dilemma"]
+    },
+    {
+      "slug": "cursed_child",
+      "label": "Det forbandede barn",
+      "setup": "Et forældreløst barn bærer en forbandelse der vil dræbe mange når den modnes. Barnet selv er uskyldigt og elsket af sine plejere.",
+      "options": [
+        { "label": "Dræb barnet før forbandelsen modnes","consequence": "Forhindrer katastrofen — men partyen har dræbt et uskyldigt barn" },
+        { "label": "Forsøg at bryde forbandelsen",     "consequence": "Kræver lang og farlig søgen — barnet kan dø undervejs alligevel" },
+        { "label": "Isolér barnet i magisk fangenskab","consequence": "Barnet overlever men i evig ensomhed. Plejerne mister deres barn" }
+      ],
+      "themes": ["dark_fairy_tale", "tragic", "gothic"],
+      "fits_quest_types": ["curse_haunting", "rescue", "moral_dilemma"]
+    },
+    {
+      "slug": "water_temple_blackmail",
+      "label": "Vandtemplets afpresning",
+      "setup": "En tør landsby skylder vand fra et nærliggende tempel — men præsterne holder vandet tilbage for at tvinge konvertering.",
+      "options": [
+        { "label": "Tving præsterne med magt",          "consequence": "Vandet flyder, men templet bliver en åben fjende af partyen og landsbyen" },
+        { "label": "Hjælp landsbyen med at konvertere", "consequence": "Folk får vand — på bekostning af deres egen tro og kultur" },
+        { "label": "Find en alternativ vandkilde",      "consequence": "Kræver udforskning og tid — landsbyen lider imens" }
+      ],
+      "themes": ["political", "low_fantasy", "tragic"],
+      "fits_quest_types": ["diplomacy", "investigation", "moral_dilemma"]
+    },
+    {
+      "slug": "slave_revolt_economy",
+      "label": "Slaveopstand og økonomi",
+      "setup": "Slavearbejdere kan befries fra en mine — men minen er hele regionens økonomi. Tusinder af frie borgere mister deres levebrød.",
+      "options": [
+        { "label": "Befri slavernes nu",                "consequence": "Slaverne er frie, men regionen falder i fattigdom og uro inden for år" },
+        { "label": "Forhandl gradvis reform",           "consequence": "Slaverne lider videre i mange år — men en stabil overgang kan reddes" },
+        { "label": "Lad det være — det er ikke jeres kamp","consequence": "Status quo. Partyen lever med viden om at de kunne have ændret det" }
+      ],
+      "themes": ["political", "grim", "low_fantasy"],
+      "fits_quest_types": ["political_intrigue", "rescue", "moral_dilemma"]
+    },
+    {
+      "slug": "self_defense_murderer",
+      "label": "Mordet i selvforsvar",
+      "setup": "Quest-giveren betaler for hævn over sin søns morder — men morderen er en kvinde der dræbte sønnen i selvforsvar mod overgreb.",
+      "options": [
+        { "label": "Fuldfør hævnen som aftalt",        "consequence": "Partyen får betaling — men har dræbt et offer for vold to gange" },
+        { "label": "Afslør sandheden for quest-giver", "consequence": "Quest-giver afviser sandheden — partyen mister belønning og skaber en fjende" },
+        { "label": "Beskyt kvinden og forhandl fred",  "consequence": "Kræver overtalelse — quest-giver kan stadig hævne sig på egen hånd senere" }
+      ],
+      "themes": ["grim", "tragic", "low_fantasy"],
+      "fits_quest_types": ["revenge", "investigation", "moral_dilemma"]
+    }
+  ]
+}

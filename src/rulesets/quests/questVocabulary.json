@@ -1,0 +1,106 @@
+{
+  "$schema": "Quest taxonomy vocabulary. Used by quest UI (filters, dropdowns, tooltips) and AI generator prompts. Edit to add/rename/remove taxonomy entries.",
+  "$version": 1,
+  "$note": "Slugs are snake_case and stable — used as keys in quest.data. Labels and descriptions are user-facing and safe to edit.",
+
+  "scopes": [
+    { "slug": "hook_only",        "label": "Hook only",         "description": "Et frø — én sætnings idé, ikke udviklet endnu" },
+    { "slug": "single_encounter", "label": "Single encounter",  "description": "Én scene (kamp, social, puzzle), typisk under en time" },
+    { "slug": "one_shot",         "label": "One-shot",          "description": "Komplet historie der afsluttes i én session" },
+    { "slug": "side_quest",       "label": "Side quest",        "description": "Mindre afgrænset quest med klart mål, 2-4 scener" },
+    { "slug": "multi_session",    "label": "Multi-session",     "description": "Fuld eventyr-bue der kører over flere sessioner" },
+    { "slug": "campaign_arc",     "label": "Campaign arc",      "description": "Stor fortælling over måneder, ofte sammensat af flere quests" },
+    { "slug": "sandbox_rumor",    "label": "Sandbox rumor",     "description": "Passiv verdens-lore — aktiveres kun hvis spillerne snuser" }
+  ],
+
+  "quest_types": [
+    { "slug": "rescue",             "label": "Rescue",             "description": "Red en person eller gruppe fra fangenskab eller fare" },
+    { "slug": "investigation",      "label": "Investigation",      "description": "Find ud af hvad der skete (mord, forsvinden, mysterium)" },
+    { "slug": "escort",             "label": "Escort",             "description": "Beskyt en person eller karavane til et bestemmelsessted" },
+    { "slug": "delivery",           "label": "Delivery",           "description": "Bring noget fra A til B, ofte under fare" },
+    { "slug": "monster_problem",    "label": "Monster problem",    "description": "Et væsen plager området — dræb, fang eller fordriv det" },
+    { "slug": "missing_person",     "label": "Missing person",     "description": "En NPC er forsvundet — find ud af hvor og hvorfor" },
+    { "slug": "political_intrigue", "label": "Political intrigue", "description": "Magtspil mellem fraktioner — vælg side eller manipuler" },
+    { "slug": "heist",              "label": "Heist",              "description": "Stjæl noget specifikt fra et bevogtet sted" },
+    { "slug": "exploration",        "label": "Exploration",        "description": "Kortlæg eller udforsk et ukendt område" },
+    { "slug": "diplomacy",          "label": "Diplomacy",          "description": "Forhandl mellem stridende parter" },
+    { "slug": "curse_haunting",     "label": "Curse / haunting",   "description": "Bryd en forbandelse eller stop et hjemsøgt sted" },
+    { "slug": "ancient_ruin",       "label": "Ancient ruin",       "description": "Udforsk og høst hemmeligheder fra et gammelt sted" },
+    { "slug": "faction_conflict",   "label": "Faction conflict",   "description": "Aktiv konflikt mellem to eller flere fraktioner" },
+    { "slug": "revenge",            "label": "Revenge",            "description": "Personlig hævn — ofte med moralske gråzoner" },
+    { "slug": "moral_dilemma",      "label": "Moral dilemma",      "description": "Ingen klar god løsning — alle valg har omkostninger" },
+    { "slug": "survival",           "label": "Survival",           "description": "Overlev hård natur, sult, kulde, eller jagende fjender" },
+    { "slug": "siege_defense",      "label": "Siege / defense",    "description": "Forsvar et sted mod en overmagt eller belejring" },
+    { "slug": "mystery",            "label": "Mystery",            "description": "Struktureret investigations-quest med clues og afsløring" },
+    { "slug": "treasure_hunt",      "label": "Treasure hunt",      "description": "Find en specifik skat ud fra spor, kort, eller rygter" },
+    { "slug": "pilgrimage",         "label": "Pilgrimage",         "description": "Religiøs eller åndelig rejse til et helligt sted" }
+  ],
+
+  "tones": [
+    { "slug": "grim",              "label": "Grim",              "description": "Mørk, hård, kynisk — verden er ikke fair" },
+    { "slug": "heroic",            "label": "Heroic",            "description": "Klassisk eventyr — det gode kæmper mod det onde" },
+    { "slug": "weird",             "label": "Weird",             "description": "Surrealistisk, kosmisk, foruroligende fremmed" },
+    { "slug": "folkloric",         "label": "Folkloric",         "description": "Inspireret af folkeeventyr — talende dyr, treklange, varsler" },
+    { "slug": "gothic",            "label": "Gothic",            "description": "Spøgelser, slotte, gamle synder, tung atmosfære" },
+    { "slug": "sword_and_sorcery", "label": "Sword & sorcery",   "description": "Pulp-stil — barbariske helte, kult-magi, hurtig action" },
+    { "slug": "political",         "label": "Political",         "description": "Hofintriger, alliancer, forræderi, social manøvrering" },
+    { "slug": "low_fantasy",       "label": "Low fantasy",       "description": "Sjælden magi, troværdig middelalderlig setting" },
+    { "slug": "high_fantasy",      "label": "High fantasy",      "description": "Magi overalt, drager, episke konflikter" },
+    { "slug": "dark_fairy_tale",   "label": "Dark fairy tale",   "description": "Eventyr med tænder — uskyldige ofre, makabre løsninger" },
+    { "slug": "pulp_adventure",    "label": "Pulp adventure",    "description": "Lost worlds, fortabte civilisationer, cliffhangers" },
+    { "slug": "tragic",            "label": "Tragic",            "description": "Karakter-fokuseret, sympatiske antagonister, melankolsk" },
+    { "slug": "comedic",           "label": "Comedic",           "description": "Humor, parodi, slapstick — quest med en grin-faktor" }
+  ],
+
+  "environments": [
+    { "slug": "village",         "label": "Village",          "description": "Lille landsby, tæt sammenvævet samfund" },
+    { "slug": "city",            "label": "City",             "description": "Stor by med mange kvarterer, fraktioner, mængder" },
+    { "slug": "wilderness",      "label": "Wilderness",       "description": "Uberørte vildmarker, ingen civilisation i nærheden" },
+    { "slug": "road",            "label": "Road",             "description": "På rejsen — vejen mellem destinationer" },
+    { "slug": "forest",          "label": "Forest",           "description": "Skove — kan være lyse eller mørke, magiske eller almindelige" },
+    { "slug": "swamp",           "label": "Swamp",            "description": "Sumpede, mørke, fyldt med rådnen og fare" },
+    { "slug": "mountains",       "label": "Mountains",        "description": "Klipper, høje passer, kulde, isolation" },
+    { "slug": "desert",          "label": "Desert",           "description": "Tørt, sandet, livsfarligt uden vand" },
+    { "slug": "coast",           "label": "Coast",            "description": "Ved havet — strande, klipper, havne, smuglere" },
+    { "slug": "dungeon",         "label": "Dungeon",          "description": "Underjordisk kompleks — fælder, monstre, skatte" },
+    { "slug": "ruin",            "label": "Ruin",             "description": "Overgrøde rester af en tidligere civilisation" },
+    { "slug": "temple",          "label": "Temple",           "description": "Helligt sted — aktivt eller forladt, bevogtet" },
+    { "slug": "castle",          "label": "Castle",           "description": "Fæstning eller borg — bevogtet, hierarkisk" },
+    { "slug": "underworld",      "label": "Underworld",       "description": "Underjordiske byer, drow, duergar, dybe gange" },
+    { "slug": "fey_realm",       "label": "Fey realm",        "description": "Feeplanet — skæve regler, forførelse, evig tusmørke" },
+    { "slug": "shadow_realm",    "label": "Shadow realm",     "description": "Skyggeplanet — død, ekko af den levende verden" },
+    { "slug": "planar_location", "label": "Planar location",  "description": "Andet plan — elemental, helvedes-plan, paradis, etc." }
+  ],
+
+  "primary_challenges": [
+    { "slug": "combat",              "label": "Combat",              "description": "Quest løses primært gennem kamp" },
+    { "slug": "investigation",       "label": "Investigation",       "description": "Sammensæt clues for at afsløre sandheden" },
+    { "slug": "social",              "label": "Social",              "description": "Tale, overtale, manipulere, læse mennesker" },
+    { "slug": "exploration",         "label": "Exploration",         "description": "Naviger ukendt territorium, kortlæg, opdag" },
+    { "slug": "puzzle",              "label": "Puzzle",              "description": "Logiske eller mekaniske gåder skal løses" },
+    { "slug": "survival",            "label": "Survival",            "description": "Modstå sult, vejr, sygdom, eller udmattelse" },
+    { "slug": "moral_choice",        "label": "Moral choice",        "description": "Quest's klimaks er en svær etisk beslutning" },
+    { "slug": "stealth",             "label": "Stealth",             "description": "Undgå opdagelse, snig forbi vagter, infiltration" },
+    { "slug": "resource_management", "label": "Resource management", "description": "Begrænsede ressourcer — pile, mad, lys, magi" },
+    { "slug": "race_against_time",   "label": "Race against time",   "description": "Hård tidsfrist — forsinkelser har konsekvenser" },
+    { "slug": "negotiation",         "label": "Negotiation",         "description": "Forhandling mellem to eller flere parter" },
+    { "slug": "travel_hazard",       "label": "Travel hazard",       "description": "Selve rejsen er farlig — ikke kun destinationen" }
+  ],
+
+  "antagonist_types": [
+    { "slug": "monster",                "label": "Monster",                "description": "Et eller flere monstre er primær trussel" },
+    { "slug": "bandits",                "label": "Bandits",                "description": "Røverbande, desperados, lovløse" },
+    { "slug": "cult",                   "label": "Cult",                   "description": "Hemmelig religiøs gruppe med skjulte mål" },
+    { "slug": "noble",                  "label": "Noble",                  "description": "Aristokratisk modstander — magt, indflydelse, jura" },
+    { "slug": "merchant_faction",       "label": "Merchant faction",       "description": "Guild, kompagni, handelshus med økonomisk magt" },
+    { "slug": "rival_adventurers",      "label": "Rival adventurers",      "description": "Et andet eventyrer-hold med samme mål" },
+    { "slug": "cursed_spirit",          "label": "Cursed spirit",          "description": "Spøgelse, banshee, gengang — en bundet sjæl" },
+    { "slug": "ancient_evil",           "label": "Ancient evil",           "description": "Glemt magt der vågner — lich, dæmonprins, sovende drage" },
+    { "slug": "corrupt_official",       "label": "Corrupt official",       "description": "Borgmester, sherif, dommer der misbruger sin position" },
+    { "slug": "desperate_commoners",    "label": "Desperate commoners",    "description": "Almindelige mennesker drevet til ekstremer — sympatiske" },
+    { "slug": "outsider_entity",        "label": "Outsider entity",        "description": "Fra et andet plan — dæmon, devil, aberration, fey lord" },
+    { "slug": "misunderstood_creature", "label": "Misunderstood creature", "description": "Virker som monster, men har sympatisk motiv" },
+    { "slug": "natural_disaster",       "label": "Natural disaster",       "description": "Storm, flod, jordskælv, sygdom — ingen 'fjende' at slå" },
+    { "slug": "internal_betrayal",      "label": "Internal betrayal",      "description": "En allieret eller quest-giver er forræder" }
+  ]
+}
