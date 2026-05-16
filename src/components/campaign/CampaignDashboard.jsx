@@ -132,6 +132,8 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
       onNavigate('monsters');
     } else if (mod.id === 'knowledge') {
       onNavigate('party-hub');
+    } else if (mod.id === 'quests') {
+      onNavigate('quests');
     } else {
       // Module exists in backend but has no dedicated UI page yet
       setComingSoon(mod);

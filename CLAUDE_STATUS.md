@@ -1,6 +1,6 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-05-15_
+_Last updated: 2026-05-17_
 
 ---
 
@@ -167,6 +167,16 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - 311 nonweapon proficiencies (with sp_cp_cost)
 - 137 kits
 - Weapons catalog + armor catalog
+
+---
+
+### 🔶 Implemented, awaiting verification
+
+**Quest Module (Stage 1 + Stage 2)**
+- Stage 2 wired into `CampaignDashboard.jsx` + `App.jsx` — quest card now routes to a `quests` screen rendering `<QuestModule campaignId={...} />` instead of the "coming soon" overlay.
+- Files: `src/rules-engine/quests/{questSchema,defaultQuest,questPrompts,npcResolution,questAI}.ts`, `src/components/quests/{QuestModule,QuestList,QuestEditor,GenerateQuestDialog}.tsx` + `quests.css`, `src/rulesets/quests/{complicationPresets,moralDilemmaPresets,questVocabulary}.json`, `src/api/{aiClient,client}.d.ts`
+- `tsc -b --noEmit` passes clean.
+- Awaiting smoke test in browser (AI generate → editor → save → kanban) before promotion to ✅.
 
 ---
 
