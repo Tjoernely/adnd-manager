@@ -17,6 +17,14 @@ _Last updated: 2026-05-17_
 | Web server | nginx — port 80, `/api/` → Express :3001, everything else → `server/public/` |
 | Database | PostgreSQL (managed Oracle DB) |
 
+> **nginx `/api/ai/` timeout (2026-05-17):** `/etc/nginx/sites-enabled/adnd-manager`
+> has a dedicated `location /api/ai/` block with `proxy_read_timeout 600s` /
+> `proxy_send_timeout 600s` / `proxy_connect_timeout 60s` + `proxy_buffering off`,
+> so long AI quest generations no longer hit a gateway timeout. The general
+> `/api/` block keeps `proxy_read_timeout 180s`. This nginx config lives only on
+> the server (not in the repo). A backup of the pre-change config is at
+> `/etc/nginx/sites-enabled/adnd-manager.bak-20260517`.
+
 ### Deploy flows
 
 **Frontend (requires build):**

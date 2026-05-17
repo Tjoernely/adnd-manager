@@ -43,14 +43,19 @@
   margin-bottom: 0.75rem;
   border: 1px solid var(--quest-border);
 }
-.quest-banner--info     { background: rgba(96,165,250,0.15); border-color: var(--quest-info); }
-.quest-banner--success  { background: rgba(34,197,94,0.15); border-color: var(--quest-success); }
-.quest-banner--error    { background: rgba(239,68,68,0.15); border-color: var(--quest-danger); }
+/* Opaque backgrounds + explicit dark text. Banners render both on the light
+   page (quest module sits on the body) and inside the dark generate-dialog,
+   so a fixed text colour only contrasts reliably when the banner carries its
+   own opaque background. The previous translucent tints inherited the light
+   --quest-text, producing invisible light-on-light text. */
+.quest-banner--info     { background: #e8f1fd; border-color: #2563eb; color: #1e40af; }
+.quest-banner--success  { background: #e7f7ec; border-color: #16a34a; color: #15803d; }
+.quest-banner--error    { background: #fdeaea; border-color: #dc2626; color: #b91c1c; }
 .quest-banner__close {
   background: none; border: none; color: inherit; font-size: 1.2rem;
   cursor: pointer; padding: 0 0.4rem;
 }
-.quest-banner__close:hover { color: var(--quest-text); }
+.quest-banner__close:hover { opacity: 0.65; }
 
 /* ── List view ─────────────────────────────────────────────────────────── */
 
