@@ -70,9 +70,10 @@ function deriveParty(characters: CharacterLike[]): PartyInfo | undefined {
 
 interface QuestModuleProps {
   campaignId: number;
+  onBack: () => void;
 }
 
-export function QuestModule({ campaignId }: QuestModuleProps) {
+export function QuestModule({ campaignId, onBack }: QuestModuleProps) {
   // — Data —
   const [quests, setQuests] = useState<QuestRecord[]>([]);
   const [characters, setCharacters] = useState<CharacterLike[]>([]);
@@ -280,6 +281,7 @@ export function QuestModule({ campaignId }: QuestModuleProps) {
           onOpen={(id) => openEditor(id)}
           onDelete={handleDelete}
           onStatusChange={handleStatusChange}
+          onBack={onBack}
         />
       )}
 

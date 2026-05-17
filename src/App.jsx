@@ -195,7 +195,7 @@ export default function App() {
   // ── Quests screen ───────────────────────────────────────────
   if (screen === 'quests') {
     return (
-      <QuestModule campaignId={activeCampaign.id} />
+      <QuestModule campaignId={activeCampaign.id} onBack={() => setScreen('dashboard')} />
     );
   }
 

@@ -72,6 +72,7 @@ interface QuestListProps {
   onOpen: (questId: number) => void;
   onDelete: (questId: number) => void;
   onStatusChange: (questId: number, newStatus: QuestStatus) => void;
+  onBack: () => void;
 }
 
 export function QuestList({
@@ -82,6 +83,7 @@ export function QuestList({
   onOpen,
   onDelete,
   onStatusChange,
+  onBack,
 }: QuestListProps) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
 
@@ -124,7 +126,12 @@ export function QuestList({
   return (
     <div className="quest-list">
       <div className="quest-list__toolbar">
-        <h2 className="quest-list__title">Quests</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button className="quest-btn quest-btn--ghost" onClick={onBack}>
+            ← Dashboard
+          </button>
+          <h2 className="quest-list__title">Quests</h2>
+        </div>
         <div className="quest-list__actions">
           <button className="quest-btn quest-btn--primary" onClick={onGenerate}>
             ✨ Generate with AI

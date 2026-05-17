@@ -4,167 +4,167 @@
   "$note": "Categories organize the picker UI. ai_hint guides AI when expanding a preset into a quest-specific complication. Add freely — slugs are stable keys.",
 
   "categories": [
-    { "slug": "false_premise",        "label": "Falsk præmis",        "description": "Quest'ens åbenlyse historie er forkert" },
-    { "slug": "betrayal",             "label": "Forræderi",           "description": "Nogen vender sig mod partyen" },
-    { "slug": "competing_interests",  "label": "Konkurrerende parter","description": "Andre vil have det samme" },
-    { "slug": "moral_twist",          "label": "Moralsk twist",       "description": "Den 'rigtige' løsning er ikke så rigtig" },
-    { "slug": "escalating_stakes",    "label": "Eskalerende indsats", "description": "Tingene bliver værre undervejs" },
-    { "slug": "personal_stakes",      "label": "Personligt på spil",  "description": "Partyen er involveret personligt" },
-    { "slug": "external_pressure",    "label": "Ydre pres",           "description": "Tid, lov, eller natur tvinger hånden" }
+    { "slug": "false_premise",        "label": "False premise",        "description": "The quest's obvious story is wrong" },
+    { "slug": "betrayal",             "label": "Betrayal",             "description": "Someone turns against the party" },
+    { "slug": "competing_interests",  "label": "Competing parties",    "description": "Others want the same thing" },
+    { "slug": "moral_twist",          "label": "Moral twist",          "description": "The 'right' solution isn't so right" },
+    { "slug": "escalating_stakes",    "label": "Escalating stakes",    "description": "Things get worse along the way" },
+    { "slug": "personal_stakes",      "label": "Personal stakes",      "description": "The party is personally involved" },
+    { "slug": "external_pressure",    "label": "External pressure",    "description": "Time, law, or nature forces a hand" }
   ],
 
   "complications": [
     {
       "slug": "quest_giver_lies",
-      "label": "Quest-giver lyver",
+      "label": "Quest-giver lies",
       "category": "false_premise",
-      "description": "Den der gav quest'en har skjult eller fordrejet sandheden om motivet eller målet.",
-      "when_to_use": "Når en quest virker for ligetil — afslør at den oplagte historie ikke er hele billedet.",
-      "ai_hint": "Specifik løgn quest-giver har fortalt, og hvad sandheden faktisk er. Hvorfor løj de?"
+      "description": "The one who gave the quest has hidden or twisted the truth about the motive or goal.",
+      "when_to_use": "When a quest seems too straightforward — reveal that the obvious story isn't the whole picture.",
+      "ai_hint": "The specific lie the quest-giver told, and what the truth actually is. Why did they lie?"
     },
     {
       "slug": "target_does_not_want_rescue",
-      "label": "Offeret vil ikke reddes",
+      "label": "The victim doesn't want rescuing",
       "category": "false_premise",
-      "description": "Den partyen skal redde, har valgt sin situation — eller er bedre stillet hvor de er.",
-      "when_to_use": "Rescue-quests der trænger til et tvist. Tvinger spillerne til at overveje hvad 'redde' egentlig betyder.",
-      "ai_hint": "Hvorfor vil offeret ikke reddes? Tre konkrete grunde der gør valget svært."
+      "description": "The person the party must rescue has chosen their situation — or is better off where they are.",
+      "when_to_use": "Rescue quests that need a twist. Forces players to consider what 'rescue' really means.",
+      "ai_hint": "Why doesn't the victim want rescuing? Three concrete reasons that make the choice hard."
     },
     {
       "slug": "target_already_dead",
-      "label": "Målet er allerede dødt",
+      "label": "The target is already dead",
       "category": "false_premise",
-      "description": "Personen partyen skulle redde, eller objektet de skulle finde, er allerede tabt da de når frem.",
-      "when_to_use": "Når du vil flytte fokus fra 'kan vi nå det?' til 'hvad gør vi nu?'",
-      "ai_hint": "Hvordan døde/forsvandt målet? Hvilke spor er der tilbage? Hvad er nu på spil?"
+      "description": "The person the party was to rescue, or the object they were to find, is already lost by the time they arrive.",
+      "when_to_use": "When you want to shift focus from 'can we make it?' to 'what do we do now?'",
+      "ai_hint": "How did the target die or vanish? What traces remain? What is now at stake?"
     },
     {
       "slug": "reward_does_not_exist",
-      "label": "Belønningen findes ikke",
+      "label": "The reward doesn't exist",
       "category": "false_premise",
-      "description": "Den lovede betaling, skat eller relikvie eksisterer ikke — eller er allerede væk.",
-      "when_to_use": "Quests hvor partyen jagter rent guld. Tvinger en samtale om hvorfor de stadig gør det rette.",
-      "ai_hint": "Hvad opdager partyen i stedet for belønningen? Hvem vidste det fra start?"
+      "description": "The promised payment, treasure, or relic doesn't exist — or is already gone.",
+      "when_to_use": "Quests where the party chases pure gold. Forces a conversation about why they still do the right thing.",
+      "ai_hint": "What does the party discover instead of the reward? Who knew from the start?"
     },
     {
       "slug": "antagonist_is_protector",
-      "label": "Monsteret beskytter området",
+      "label": "The monster protects the area",
       "category": "false_premise",
-      "description": "Den 'onde' kraft holder faktisk noget værre tilbage. At dræbe den udløser katastrofen.",
-      "when_to_use": "Klassisk monster-quest med klar antagonist. Vend hele præmissen.",
-      "ai_hint": "Hvad holder antagonisten tilbage? Hvad sker der hvis partyen vinder konventionelt?"
+      "description": "The 'evil' force is actually holding something worse at bay. Killing it triggers the catastrophe.",
+      "when_to_use": "A classic monster quest with a clear antagonist. Flip the whole premise.",
+      "ai_hint": "What is the antagonist holding back? What happens if the party wins conventionally?"
     },
     {
       "slug": "ally_betrays",
-      "label": "Allieret NPC forråder partyen",
+      "label": "Allied NPC betrays the party",
       "category": "betrayal",
-      "description": "En NPC partyen stoler på, arbejder for modparten eller har egen dagsorden.",
-      "when_to_use": "Når en NPC har været 'for' nyttig. Plant clues tidligt så det føles fair.",
-      "ai_hint": "Hvilken NPC forråder dem, hvornår sker det, og hvad er forræderens egentlige motiv?"
+      "description": "An NPC the party trusts is working for the other side or has their own agenda.",
+      "when_to_use": "When an NPC has been 'too' helpful. Plant clues early so it feels fair.",
+      "ai_hint": "Which NPC betrays them, when does it happen, and what is the traitor's real motive?"
     },
     {
       "slug": "innocent_framed",
-      "label": "En uskyldig udpeges som skyldig",
+      "label": "An innocent is framed as guilty",
       "category": "betrayal",
-      "description": "Den åbenlyse mistænkte er ren — den faktiske skyldige har plantet beviser.",
-      "when_to_use": "Investigations og mysteries der har brug for et lag mere.",
-      "ai_hint": "Hvem er den uskyldige? Hvilke falske beviser peger på dem? Hvem plantede dem?"
+      "description": "The obvious suspect is innocent — the real culprit planted the evidence.",
+      "when_to_use": "Investigations and mysteries that need another layer.",
+      "ai_hint": "Who is the innocent? What false evidence points to them? Who planted it?"
     },
     {
       "slug": "two_factions_want_same",
-      "label": "To fraktioner vil have samme objekt",
+      "label": "Two factions want the same object",
       "category": "competing_interests",
-      "description": "Quest-objektet er eftertragtet af mindst to parter — partyen kan ikke gøre alle tilfredse.",
-      "when_to_use": "Når quest mangler social spænding. Tvinger valg om hvem partyen vil have som ven eller fjende.",
-      "ai_hint": "Hvilke to fraktioner? Hvorfor vil de hver have objektet? Hvad tilbyder de hver især?"
+      "description": "The quest object is coveted by at least two parties — the party can't satisfy everyone.",
+      "when_to_use": "When a quest lacks social tension. Forces a choice about whom to befriend or anger.",
+      "ai_hint": "Which two factions? Why does each want the object? What does each one offer?"
     },
     {
       "slug": "third_party_already_took_it",
-      "label": "En tredje part var der først",
+      "label": "A third party got there first",
       "category": "competing_interests",
-      "description": "Da partyen ankommer, er målet allerede taget af nogen anden — nu skal de spore det.",
-      "when_to_use": "Når en quest er ved at være forudsigelig. Skift fra direkte angreb til jagt.",
-      "ai_hint": "Hvem tog det? Hvor er de nu? Hvilke spor efterlod de?"
+      "description": "When the party arrives, the target has already been taken by someone else — now they must track it.",
+      "when_to_use": "When a quest is becoming predictable. Switch from a direct assault to a chase.",
+      "ai_hint": "Who took it? Where are they now? What traces did they leave?"
     },
     {
       "slug": "party_is_being_followed",
-      "label": "Partyen bliver fulgt",
+      "label": "The party is being followed",
       "category": "competing_interests",
-      "description": "En anden part skygger partyen — spion, snigmorder, eller rival der venter på chancen.",
-      "when_to_use": "Mid-quest når spændingen flader ud. Hint subtilt et par sessioner før det afsløres.",
-      "ai_hint": "Hvem følger? Hvad vil de? Hvornår slår de til, og hvordan?"
+      "description": "Another party shadows the group — a spy, assassin, or rival waiting for their chance.",
+      "when_to_use": "Mid-quest when tension flattens. Hint subtly a couple of sessions before the reveal.",
+      "ai_hint": "Who is following? What do they want? When do they strike, and how?"
     },
     {
       "slug": "solution_creates_worse_problem",
-      "label": "Løsningen skaber et større problem",
+      "label": "The solution creates a bigger problem",
       "category": "moral_twist",
-      "description": "At fuldføre quest'en korrekt udløser en større krise — kort sigt vinder, lang sigt taber.",
-      "when_to_use": "Sæt op til en længere bue. Lad partyen vinde, men plant frøet til næste storyline.",
-      "ai_hint": "Hvilken større krise opstår som direkte konsekvens af quest-løsningen?"
+      "description": "Completing the quest correctly triggers a larger crisis — short term wins, long term loses.",
+      "when_to_use": "Sets up a longer arc. Let the party win, but plant the seed of the next storyline.",
+      "ai_hint": "What larger crisis arises as a direct consequence of solving the quest?"
     },
     {
       "slug": "target_was_coerced",
-      "label": "Den skyldige var tvunget",
+      "label": "The culprit was coerced",
       "category": "moral_twist",
-      "description": "Antagonisten gjorde det forkerte under tvang — afpresning, magi, eller for at beskytte nogen.",
-      "when_to_use": "Når en klar 'ond' figur trænger til nuance. Tvinger valg om straf vs forståelse.",
-      "ai_hint": "Hvem tvang antagonisten? Hvordan? Hvad ville de tabe ved at modsætte sig?"
+      "description": "The antagonist did the wrong thing under duress — blackmail, magic, or to protect someone.",
+      "when_to_use": "When a clearly 'evil' figure needs nuance. Forces a choice between punishment and understanding.",
+      "ai_hint": "Who coerced the antagonist? How? What would they lose by refusing?"
     },
     {
       "slug": "local_custom_forbids_obvious_solution",
-      "label": "Lokal skik forbyder den oplagte løsning",
+      "label": "Local custom forbids the obvious solution",
       "category": "moral_twist",
-      "description": "Den nemmeste løsning bryder en lokal tradition, lov eller tabu — som lokalbefolkningen ikke vil tilgive.",
-      "when_to_use": "Når kulturel verdens-bygning skal frem. Tvinger kreativ problemløsning.",
-      "ai_hint": "Hvilken skik? Hvad er konsekvenserne af at bryde den? Findes en accepteret alternativ?"
+      "description": "The easiest solution breaks a local tradition, law, or taboo — one the locals will not forgive.",
+      "when_to_use": "When cultural worldbuilding should come forward. Forces creative problem-solving.",
+      "ai_hint": "Which custom? What are the consequences of breaking it? Is there an accepted alternative?"
     },
     {
       "slug": "party_member_becomes_target",
-      "label": "En PC bliver målet",
+      "label": "A PC becomes the target",
       "category": "personal_stakes",
-      "description": "Antagonisten skifter fokus — pludselig er en specifik party-medlem under direkte trussel.",
-      "when_to_use": "Når en spiller har været stille. Trækker dem i fokus.",
-      "ai_hint": "Hvilken PC? Hvorfor netop dem? Hvad er truslen, og hvor synlig er den?"
+      "description": "The antagonist shifts focus — suddenly a specific party member is under direct threat.",
+      "when_to_use": "When a player has been quiet. Pulls them into the spotlight.",
+      "ai_hint": "Which PC? Why them specifically? What is the threat, and how visible is it?"
     },
     {
       "slug": "antagonist_has_personal_tie",
-      "label": "Antagonisten har personligt bånd",
+      "label": "The antagonist has a personal tie",
       "category": "personal_stakes",
-      "description": "Antagonisten er en PCs gamle ven, familiemedlem, mentor, eller hævnobjekt.",
-      "when_to_use": "Når en quest trænger til følelsesmæssig vægt. Aftalt med spilleren i forvejen for bedst effekt.",
-      "ai_hint": "Hvilket bånd? Ved PC'en det? Hvad ændrer sig når sandheden afsløres?"
+      "description": "The antagonist is a PC's old friend, family member, mentor, or object of revenge.",
+      "when_to_use": "When a quest needs emotional weight. Arrange with the player beforehand for best effect.",
+      "ai_hint": "What tie? Does the PC know? What changes when the truth is revealed?"
     },
     {
       "slug": "environment_changes_mid_quest",
-      "label": "Verden ændrer sig undervejs",
+      "label": "The world changes mid-quest",
       "category": "escalating_stakes",
-      "description": "Naturkatastrofe, politisk omvæltning, eller magisk hændelse ændrer rammen for quest'en.",
-      "when_to_use": "Når en quest har trukket ud. Tvinger partyen til at omfortolke deres prioriteter.",
-      "ai_hint": "Hvilken ændring? Hvor pludseligt sker det? Hvordan påvirker det quest-målet?"
+      "description": "A natural disaster, political upheaval, or magical event changes the quest's frame.",
+      "when_to_use": "When a quest has dragged on. Forces the party to reinterpret their priorities.",
+      "ai_hint": "What change? How suddenly does it happen? How does it affect the quest goal?"
     },
     {
       "slug": "time_runs_out",
-      "label": "Tiden løber ud",
+      "label": "Time runs out",
       "category": "external_pressure",
-      "description": "Hård deadline introduceres eller forkortes — partyen kan ikke gøre alt de gerne ville.",
-      "when_to_use": "Når spillerne tøver eller optimerer for længe. Tvinger beslutninger.",
-      "ai_hint": "Hvad er deadline'en? Hvad sker der ved overskridelse? Hvad må partyen ofre for at nå den?"
+      "description": "A hard deadline is introduced or shortened — the party can't do everything they wanted.",
+      "when_to_use": "When players hesitate or over-optimize. Forces decisions.",
+      "ai_hint": "What is the deadline? What happens if it's missed? What must the party sacrifice to make it?"
     },
     {
       "slug": "authorities_pursue_party",
-      "label": "Myndigheder forfølger partyen",
+      "label": "Authorities pursue the party",
       "category": "external_pressure",
-      "description": "Vagter, riddere eller dusørjægere er efter partyen — ofte på baggrund af en misforståelse.",
-      "when_to_use": "Når en quest mangler urgency. Tilføj et lag af 'vi er også selv jaget'.",
-      "ai_hint": "Hvem er efter dem og hvorfor? Er det en misforståelse eller noget de faktisk gjorde?"
+      "description": "Guards, knights, or bounty hunters are after the party — often over a misunderstanding.",
+      "when_to_use": "When a quest lacks urgency. Add a layer of 'we're being hunted too'.",
+      "ai_hint": "Who is after them and why? Is it a misunderstanding or something they actually did?"
     },
     {
       "slug": "quest_giver_dies_before_payment",
-      "label": "Quest-giver dør før betaling",
+      "label": "Quest-giver dies before payment",
       "category": "external_pressure",
-      "description": "Den der hyrede partyen, dør eller forsvinder — uden testamente, og slægtninge benægter alt.",
-      "when_to_use": "Når en quest var rent transaktionel. Tvinger samtale om hvorfor partyen overhovedet gør dette.",
-      "ai_hint": "Hvordan dør quest-giver? Hvem benægter aftalen? Findes der vidner eller dokumenter?"
+      "description": "The one who hired the party dies or vanishes — with no will, and relatives deny everything.",
+      "when_to_use": "When a quest was purely transactional. Forces a conversation about why the party does this at all.",
+      "ai_hint": "How does the quest-giver die? Who denies the agreement? Are there witnesses or documents?"
     }
   ]
 }
