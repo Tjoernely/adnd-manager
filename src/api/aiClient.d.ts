@@ -14,6 +14,12 @@ export interface ClaudeRequest {
   userPrompt: string;
   /** Defaults to 4096 in aiClient.js if omitted. */
   maxTokens?: number;
+  /**
+   * AI model id forwarded to /api/ai/prompt.
+   * "claude-opus-4-7" | "claude-sonnet-4-6" | "gpt-5.4".
+   * Omitted → backend defaults to claude-sonnet-4-6.
+   */
+  model?: string;
 }
 
 /**

@@ -685,6 +685,103 @@
   background: var(--quest-accent);
 }
 
+/* ── AI generation controls (Stage 3) ─────────────────────────────────── */
+
+.quest-ai__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1.1rem 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--quest-accent);
+}
+.quest-ai__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--quest-border);
+}
+
+.quest-ai__models {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.quest-ai__model {
+  display: flex;
+  gap: 0.6rem;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: var(--quest-surface);
+  border: 1px solid var(--quest-border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--quest-text);
+  font: inherit;
+}
+.quest-ai__model:hover {
+  border-color: var(--quest-accent-dim);
+}
+.quest-ai__model.is-selected {
+  border-color: var(--quest-accent);
+  background: var(--quest-surface-2);
+}
+.quest-ai__model-radio {
+  color: var(--quest-accent);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.quest-ai__model-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.quest-ai__model-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.quest-ai__default-chip {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: var(--quest-accent-dim);
+  color: white;
+}
+.quest-ai__model-desc {
+  font-size: 0.78rem;
+  color: var(--quest-text-muted);
+}
+
+.quest-ai__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.quest-ai__estimate {
+  margin: 0.7rem 0 0.2rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--quest-surface);
+  border: 1px solid var(--quest-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--quest-text-muted);
+}
+.quest-ai__estimate strong {
+  color: var(--quest-text);
+}
+
+.quest-ai__warning {
+  border-left: 3px solid var(--quest-warning);
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {

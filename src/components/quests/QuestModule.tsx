@@ -107,7 +107,7 @@ export function QuestModule({ campaignId }: QuestModuleProps) {
       setQuests(q ?? []);
       setCharacters(c ?? []);
     } catch (err) {
-      setError(`Kunne ikke hente data: ${(err as Error).message ?? err}`);
+      setError(`Could not load data: ${(err as Error).message ?? err}`);
     } finally {
       setLoading(false);
     }
@@ -192,25 +192,25 @@ export function QuestModule({ campaignId }: QuestModuleProps) {
         }
       }
 
-      setBanner({ kind: 'success', text: 'Quest gemt.' });
+      setBanner({ kind: 'success', text: 'Quest saved.' });
       await refetch();
       closeEditor();
     } catch (err) {
-      setBanner({ kind: 'error', text: `Gem fejlede: ${(err as Error).message ?? err}` });
+      setBanner({ kind: 'error', text: `Save failed: ${(err as Error).message ?? err}` });
     }
   }, [campaignId, editingQuestId, pendingResolution, refetch, closeEditor]);
 
   // ── Delete quest ───────────────────────────────────────────────────────────
 
   const handleDelete = useCallback(async (questId: number) => {
-    if (!confirm('Slet denne quest permanent?')) return;
+    if (!confirm('Permanently delete this quest?')) return;
     try {
       await api.deleteQuest(questId);
-      setBanner({ kind: 'success', text: 'Quest slettet.' });
+      setBanner({ kind: 'success', text: 'Quest deleted.' });
       await refetch();
       if (editingQuestId === questId) closeEditor();
     } catch (err) {
-      setBanner({ kind: 'error', text: `Slet fejlede: ${(err as Error).message ?? err}` });
+      setBanner({ kind: 'error', text: `Delete failed: ${(err as Error).message ?? err}` });
     }
   }, [editingQuestId, refetch, closeEditor]);
 
@@ -224,7 +224,7 @@ export function QuestModule({ campaignId }: QuestModuleProps) {
       await api.updateQuest(questId, { title: updatedData.title, data: updatedData });
       await refetch();
     } catch (err) {
-      setBanner({ kind: 'error', text: `Status-skift fejlede: ${(err as Error).message ?? err}` });
+      setBanner({ kind: 'error', text: `Status change failed: ${(err as Error).message ?? err}` });
     }
   }, [quests, refetch]);
 
@@ -232,7 +232,7 @@ export function QuestModule({ campaignId }: QuestModuleProps) {
 
   const handleGenerate = useCallback(async (params: FullQuestPromptParams) => {
     setGenerating(true);
-    setBanner({ kind: 'info', text: 'Genererer quest med AI...' });
+    setBanner({ kind: 'info', text: 'Generating quest with AI...' });
     try {
       const result = await generateFullQuest(params, party, campaignId);
       setPendingResolution(result);
@@ -242,14 +242,14 @@ export function QuestModule({ campaignId }: QuestModuleProps) {
       const createdCount = result.resolvedNPCs.created.length;
       const linkedCount = result.resolvedNPCs.linked.length;
       const npcMsg = createdCount + linkedCount > 0
-        ? ` (${createdCount} nye NPCs oprettet, ${linkedCount} eksisterende NPCs linket)`
+        ? ` (${createdCount} new NPCs created, ${linkedCount} existing NPCs linked)`
         : '';
       setBanner({
         kind: 'info',
-        text: `Quest genereret${npcMsg}. Tjek og gem for at finalisere.`,
+        text: `Quest generated${npcMsg}. Review and save to finalize.`,
       });
     } catch (err) {
-      setBanner({ kind: 'error', text: `Generering fejlede: ${(err as Error).message ?? err}` });
+      setBanner({ kind: 'error', text: `Generation failed: ${(err as Error).message ?? err}` });
     } finally {
       setGenerating(false);
     }

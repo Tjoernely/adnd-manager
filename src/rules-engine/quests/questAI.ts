@@ -229,6 +229,7 @@ export async function generateFullQuest(
     systemPrompt: prompt.systemPrompt,
     userPrompt: prompt.userPrompt,
     maxTokens: prompt.maxTokens,
+    model: prompt.model,
   });
 
   const ai = parseAIResponse<AIFullQuestResponse>(rawResponse, 'full quest');

@@ -25,13 +25,13 @@ function labelFor(category: keyof typeof QUEST_VOCABULARY, slug: string): string
 }
 
 const STATUS_LABELS: Record<QuestStatus, string> = {
-  concept: 'Koncept',
-  draft: 'Udkast',
-  ready: 'Klar',
-  running: 'Aktiv',
-  completed: 'Afsluttet',
-  failed: 'Fiasko',
-  abandoned: 'Droppet',
+  concept: 'Concept',
+  draft: 'Draft',
+  ready: 'Ready',
+  running: 'Active',
+  completed: 'Completed',
+  failed: 'Failed',
+  abandoned: 'Abandoned',
 };
 
 const STATUS_DOT: Record<QuestStatus, string> = {
@@ -127,10 +127,10 @@ export function QuestList({
         <h2 className="quest-list__title">Quests</h2>
         <div className="quest-list__actions">
           <button className="quest-btn quest-btn--primary" onClick={onGenerate}>
-            ✨ Generér med AI
+            ✨ Generate with AI
           </button>
           <button className="quest-btn" onClick={onNew}>
-            + Ny quest
+            + New quest
           </button>
         </div>
       </div>
@@ -138,7 +138,7 @@ export function QuestList({
       <div className="quest-list__filters">
         <input
           type="text"
-          placeholder="Søg i titel/pitch..."
+          placeholder="Search title/pitch..."
           value={filters.search}
           onChange={e => setFilters({ ...filters, search: e.target.value })}
           className="quest-filter__input"
@@ -148,7 +148,7 @@ export function QuestList({
           onChange={e => setFilters({ ...filters, scope: e.target.value })}
           className="quest-filter__select"
         >
-          <option value="">Alle scopes</option>
+          <option value="">All scopes</option>
           {QUEST_VOCABULARY.scopes.map(s => (
             <option key={s.slug} value={s.slug}>{s.label}</option>
           ))}
@@ -158,7 +158,7 @@ export function QuestList({
           onChange={e => setFilters({ ...filters, questType: e.target.value })}
           className="quest-filter__select"
         >
-          <option value="">Alle typer</option>
+          <option value="">All types</option>
           {QUEST_VOCABULARY.quest_types.map(s => (
             <option key={s.slug} value={s.slug}>{s.label}</option>
           ))}
@@ -168,7 +168,7 @@ export function QuestList({
           onChange={e => setFilters({ ...filters, tone: e.target.value })}
           className="quest-filter__select"
         >
-          <option value="">Alle toner</option>
+          <option value="">All tones</option>
           {QUEST_VOCABULARY.tones.map(s => (
             <option key={s.slug} value={s.slug}>{s.label}</option>
           ))}
@@ -179,12 +179,12 @@ export function QuestList({
             checked={filters.showArchived}
             onChange={e => setFilters({ ...filters, showArchived: e.target.checked })}
           />
-          Vis afsluttede ({archivedCount})
+          Show archived ({archivedCount})
         </label>
       </div>
 
       {loading ? (
-        <div className="quest-list__loading">Henter quests...</div>
+        <div className="quest-list__loading">Loading quests...</div>
       ) : (
         <>
           <div className="quest-kanban">
@@ -202,7 +202,7 @@ export function QuestList({
 
           {filters.showArchived && (
             <div className="quest-archive">
-              <h3 className="quest-archive__heading">Arkiv</h3>
+              <h3 className="quest-archive__heading">Archive</h3>
               <div className="quest-kanban quest-kanban--archive">
                 {ARCHIVE_STATUSES.map(status => (
                   <KanbanColumn
@@ -243,7 +243,7 @@ function KanbanColumn({ status, quests, onOpen, onDelete, onStatusChange }: Kanb
       </div>
       <div className="quest-column__cards">
         {quests.length === 0 && (
-          <div className="quest-column__empty">Ingen quests</div>
+          <div className="quest-column__empty">No quests</div>
         )}
         {quests.map(q => (
           <QuestCard
@@ -276,8 +276,8 @@ function QuestCard({ quest, onOpen, onDelete, onStatusChange }: QuestCardProps) 
   return (
     <div className="quest-card" onClick={onOpen} role="button" tabIndex={0}>
       <div className="quest-card__title-row">
-        <span className="quest-card__title">{d.title || '(uden titel)'}</span>
-        {d.ai_generated && <span className="quest-card__ai-badge" title="AI-genereret">✨</span>}
+        <span className="quest-card__title">{d.title || '(untitled)'}</span>
+        {d.ai_generated && <span className="quest-card__ai-badge" title="AI-generated">✨</span>}
       </div>
       {d.pitch && <div className="quest-card__pitch">{d.pitch}</div>}
       <div className="quest-card__meta">
@@ -294,7 +294,7 @@ function QuestCard({ quest, onOpen, onDelete, onStatusChange }: QuestCardProps) 
           className="quest-card__status-select"
           value={d.status}
           onChange={e => onStatusChange(e.target.value as QuestStatus)}
-          title="Skift status"
+          title="Change status"
         >
           {ALL_STATUSES.map(s => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -303,8 +303,8 @@ function QuestCard({ quest, onOpen, onDelete, onStatusChange }: QuestCardProps) 
         <button
           className="quest-card__delete"
           onClick={onDelete}
-          title="Slet"
-          aria-label="Slet quest"
+          title="Delete"
+          aria-label="Delete quest"
         >
           🗑
         </button>

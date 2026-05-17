@@ -21,13 +21,15 @@ export function hasOpenAIKey()    { return !!getOpenAIKey(); }
  * @param {string} opts.systemPrompt
  * @param {string} opts.userPrompt
  * @param {number} [opts.maxTokens=4096]
+ * @param {string} [opts.model]  "claude-opus-4-7" | "claude-sonnet-4-6" | "gpt-5.4"
+ *                               omitted → backend defaults to claude-sonnet-4-6
  * @returns {Promise<object>}  parsed JSON
  */
-export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096 }) {
+export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096, model }) {
   const token        = localStorage.getItem('dnd_token');
   const anthropicKey = getAnthropicKey();
 
-  console.log('[callClaude] Proxying via /api/ai/prompt — maxTokens:', maxTokens);
+  console.log('[callClaude] Proxying via /api/ai/prompt — model:', model ?? '(default)', 'maxTokens:', maxTokens);
 
   const resp = await fetch('/api/ai/prompt', {
     method: 'POST',
@@ -36,7 +38,7 @@ export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096 })
       ...(token        ? { 'Authorization':  `Bearer ${token}` } : {}),
       ...(anthropicKey ? { 'x-anthropic-key': anthropicKey     } : {}),
     },
-    body: JSON.stringify({ systemPrompt, userPrompt, maxTokens }),
+    body: JSON.stringify({ systemPrompt, userPrompt, maxTokens, ...(model ? { model } : {}) }),
   });
 
   if (!resp.ok) {
@@ -67,6 +69,21 @@ function extractJSON(text) {
     .trim();
 
   try { return JSON.parse(cleaned); } catch (_) {}
+
+  // Detect truncation: a complete JSON value ends with } or ]. If it ends
+  // mid-string / mid-array / mid-object, the response almost certainly hit
+  // the maxTokens limit — report that clearly instead of a vague parse error.
+  const lastChar = cleaned[cleaned.length - 1];
+  const looksTruncated = !['}', ']'].includes(lastChar);
+
+  if (looksTruncated) {
+    const tail = cleaned.slice(-100);
+    throw new Error(
+      `AI response was truncated — likely hit the maxTokens limit. ` +
+      `Response ended mid-content: "...${tail}". ` +
+      `Try a lower detail level or shorter length, or use a model with higher token limit.`
+    );
+  }
 
   // Find the first { or [ and last matching } or ]
   const firstBrace   = cleaned.indexOf('{');

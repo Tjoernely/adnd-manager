@@ -56,39 +56,39 @@ import type { PartyInfo } from '../../rules-engine/quests/defaultQuest';
 // ── Labels ──────────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<QuestStatus, string> = {
-  concept: 'Koncept', draft: 'Udkast', ready: 'Klar', running: 'Aktiv',
-  completed: 'Afsluttet', failed: 'Fiasko', abandoned: 'Droppet',
+  concept: 'Concept', draft: 'Draft', ready: 'Ready', running: 'Active',
+  completed: 'Completed', failed: 'Failed', abandoned: 'Abandoned',
 };
 const HOOK_DELIVERY_LABELS: Record<HookDelivery, string> = {
-  encounter: 'Møde', rumor: 'Rygte', letter: 'Brev/opslag',
-  vision: 'Syn/drøm', discovery: 'Opdagelse', environmental: 'Miljø',
+  encounter: 'Encounter', rumor: 'Rumor', letter: 'Letter/notice',
+  vision: 'Vision/dream', discovery: 'Discovery', environmental: 'Environmental',
 };
 const OBJECTIVE_TYPE_LABELS: Record<ObjectiveType, string> = {
-  main: 'Hoved', side: 'Bi', hidden: 'Skjult (DM)',
+  main: 'Main', side: 'Side', hidden: 'Hidden (DM)',
 };
 const CLUE_CLARITY_LABELS: Record<ClueClarity, string> = {
-  obvious: 'Tydelig', moderate: 'Moderat', subtle: 'Subtil', cryptic: 'Kryptisk',
+  obvious: 'Obvious', moderate: 'Moderate', subtle: 'Subtle', cryptic: 'Cryptic',
 };
 const PLOT_TIER_LABELS: Record<PlotBeatTier, string> = {
-  intro: 'Intro', rising_action: 'Optrapning', midpoint: 'Midtpunkt',
-  climax: 'Klimaks', resolution: 'Afslutning',
+  intro: 'Intro', rising_action: 'Rising action', midpoint: 'Midpoint',
+  climax: 'Climax', resolution: 'Resolution',
 };
 const DIFFICULTY_LABELS: Record<DifficultyTier, string> = {
-  easy: 'Let', standard: 'Standard', tough: 'Hård', deadly: 'Dødelig',
+  easy: 'Easy', standard: 'Standard', tough: 'Hard', deadly: 'Deadly',
 };
 const TIME_PRESSURE_LABELS: Record<QuestTimePressure, string> = {
-  none: 'Ingen', soft: 'Blød', hard: 'Hård deadline',
+  none: 'None', soft: 'Soft', hard: 'Hard deadline',
 };
 
 type TabId = 'overview' | 'hooks' | 'objectives' | 'plot' | 'clues' | 'complications' | 'notes';
 const TABS: Array<{ id: TabId; label: string }> = [
-  { id: 'overview', label: 'Oversigt' },
+  { id: 'overview', label: 'Overview' },
   { id: 'hooks', label: 'Hooks' },
-  { id: 'objectives', label: 'Mål' },
+  { id: 'objectives', label: 'Objectives' },
   { id: 'plot', label: 'Plot' },
   { id: 'clues', label: 'Clues' },
-  { id: 'complications', label: 'Komplikationer' },
-  { id: 'notes', label: 'Noter' },
+  { id: 'complications', label: 'Complications' },
+  { id: 'notes', label: 'Notes' },
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -134,19 +134,19 @@ export function QuestEditor({
     if (!party) return null;
     const { min, max } = data.difficulty.level_range;
     const avg = party.avg_level;
-    if (avg < min - 1) return `Partyen er level ${avg.toFixed(1)} — quest er tunet til ${min}-${max}. For svært?`;
-    if (avg > max + 1) return `Partyen er level ${avg.toFixed(1)} — quest er tunet til ${min}-${max}. For let?`;
+    if (avg < min - 1) return `Party is level ${avg.toFixed(1)} — quest is tuned for ${min}-${max}. Too hard?`;
+    if (avg > max + 1) return `Party is level ${avg.toFixed(1)} — quest is tuned for ${min}-${max}. Too easy?`;
     return null;
   }, [party, data.difficulty.level_range]);
 
   const handleClose = () => {
-    if (dirty && !confirm('Du har ugemte ændringer. Luk alligevel?')) return;
+    if (dirty && !confirm('You have unsaved changes. Close anyway?')) return;
     onClose();
   };
 
   const handleSave = () => {
     if (!data.title.trim()) {
-      alert('Quest mangler en titel.');
+      alert('Quest needs a title.');
       setActiveTab('overview');
       return;
     }
@@ -160,21 +160,21 @@ export function QuestEditor({
       <div className="quest-editor__header">
         <div className="quest-editor__header-left">
           <h2 className="quest-editor__title">
-            {questId == null ? '✨ Ny quest' : 'Rediger quest'}
+            {questId == null ? '✨ New quest' : 'Edit quest'}
           </h2>
-          {dirty && <span className="quest-editor__dirty-dot" title="Ugemte ændringer">●</span>}
+          {dirty && <span className="quest-editor__dirty-dot" title="Unsaved changes">●</span>}
         </div>
         <div className="quest-editor__header-actions">
           <button
             className="quest-btn quest-btn--ghost"
             onClick={onToggleViewMode}
-            title={viewMode === 'modal' ? 'Skift til fuld side' : 'Skift til modal'}
+            title={viewMode === 'modal' ? 'Switch to full page' : 'Switch to modal'}
           >
-            {viewMode === 'modal' ? '⛶ Fuld side' : '⊟ Modal'}
+            {viewMode === 'modal' ? '⛶ Full page' : '⊟ Modal'}
           </button>
-          <button className="quest-btn" onClick={handleClose}>Luk</button>
+          <button className="quest-btn" onClick={handleClose}>Close</button>
           <button className="quest-btn quest-btn--primary" onClick={handleSave}>
-            💾 Gem
+            💾 Save
           </button>
         </div>
       </div>
@@ -242,22 +242,22 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
   return (
     <div className="quest-tab">
       <div className="quest-field">
-        <label>Titel</label>
+        <label>Title</label>
         <input
           type="text"
           value={data.title}
           onChange={e => update({ title: e.target.value })}
-          placeholder="Quest-titel..."
+          placeholder="Quest title..."
         />
       </div>
 
       <div className="quest-field">
-        <label>Pitch (én sætning)</label>
+        <label>Pitch (one sentence)</label>
         <input
           type="text"
           value={data.pitch}
           onChange={e => update({ pitch: e.target.value })}
-          placeholder="En kort beskrivelse..."
+          placeholder="A short description..."
         />
       </div>
 
@@ -277,7 +277,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
           </select>
         </div>
         <div className="quest-field">
-          <label>Tidspres</label>
+          <label>Time pressure</label>
           <select
             value={data.time_pressure}
             onChange={e => update({ time_pressure: e.target.value as QuestTimePressure })}
@@ -290,10 +290,10 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
       </div>
 
       <div className="quest-field">
-        <label>Sværhedsgrad & party</label>
+        <label>Difficulty & party</label>
         <div className="quest-row">
           <label className="quest-field__inline">
-            Anbefalede party-størrelse
+            Recommended party size
             <input
               type="number" min={1} max={10}
               value={data.difficulty.recommended_party_size}
@@ -332,7 +332,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
             />
           </label>
           <label className="quest-field__inline">
-            Sværhedsgrad
+            Difficulty
             <select
               value={data.difficulty.overall_difficulty}
               onChange={e => update({
@@ -346,7 +346,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
           </label>
         </div>
         <small className="quest-field__hint">
-          Kilde: {data.difficulty.party_level_source === 'auto' ? 'auto fra party' : 'manuel'}
+          Source: {data.difficulty.party_level_source === 'auto' ? 'auto from party' : 'manual'}
           {data.difficulty.captured_party_level != null && (
             <> · captured at level {data.difficulty.captured_party_level.toFixed(1)}</>
           )}
@@ -355,7 +355,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
 
       <div className="quest-row">
         <div className="quest-field">
-          <label>Forventet antal sessioner</label>
+          <label>Expected sessions</label>
           <input
             type="number" min={1} max={30}
             value={data.difficulty.expected_sessions ?? ''}
@@ -377,7 +377,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
           />
         </div>
         <div className="quest-field">
-          <label>Total XP-budget (estimat)</label>
+          <label>Total XP budget (estimate)</label>
           <input
             type="number" min={0}
             value={data.difficulty.total_xp_budget ?? ''}
@@ -390,7 +390,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
       </div>
 
       <div className="quest-field">
-        <label>Scaling-noter (hvordan op/nedjustere)</label>
+        <label>Scaling notes (how to adjust up/down)</label>
         <textarea
           rows={2}
           value={data.difficulty.scaling_notes}
@@ -401,25 +401,25 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
       </div>
 
       <TaxonomyMultiSelect
-        label="Quest typer"
+        label="Quest types"
         category="quest_types"
         selected={data.quest_types}
         onChange={vals => update({ quest_types: vals as QuestData['quest_types'] })}
       />
       <TaxonomyMultiSelect
-        label="Toner"
+        label="Tones"
         category="tones"
         selected={data.tones}
         onChange={vals => update({ tones: vals as QuestData['tones'] })}
       />
       <TaxonomyMultiSelect
-        label="Miljø"
+        label="Environments"
         category="environments"
         selected={data.environments}
         onChange={vals => update({ environments: vals as QuestData['environments'] })}
       />
       <TaxonomyMultiSelect
-        label="Primær udfordring"
+        label="Primary challenge"
         category="primary_challenges"
         selected={data.primary_challenges}
         onChange={vals => update({ primary_challenges: vals as QuestData['primary_challenges'] })}
@@ -432,7 +432,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
       />
 
       <div className="quest-field">
-        <label>Belønning (basis)</label>
+        <label>Rewards (base)</label>
         <div className="quest-row">
           <label className="quest-field__inline">
             XP
@@ -443,7 +443,7 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
             />
           </label>
           <label className="quest-field__inline">
-            Guld (gp)
+            Gold (gp)
             <input
               type="number" min={0}
               value={data.rewards.gold}
@@ -457,12 +457,12 @@ function OverviewTab({ data, update }: { data: QuestData; update: (p: Partial<Qu
             <ul>{data.rewards.items.map((it, i) => (
               <li key={i}>{it.name}{it.description ? ` — ${it.description}` : ''}</li>
             ))}</ul>
-            <small>(Items kan redigeres i Stage 3)</small>
+            <small>(Items editable in a future update)</small>
           </div>
         )}
         {data.rewards.story.length > 0 && (
           <div className="quest-readonly-list">
-            <strong>Story-belønninger:</strong>
+            <strong>Story rewards:</strong>
             <ul>{data.rewards.story.map((s, i) => <li key={i}>{s}</li>)}</ul>
           </div>
         )}
@@ -518,9 +518,9 @@ function HooksTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
   return (
     <div className="quest-tab">
       <div className="quest-tab__header">
-        <button className="quest-btn" onClick={add}>+ Tilføj hook</button>
+        <button className="quest-btn" onClick={add}>+ Add hook</button>
       </div>
-      {data.hooks.length === 0 && <p className="quest-empty">Ingen hooks endnu.</p>}
+      {data.hooks.length === 0 && <p className="quest-empty">No hooks yet.</p>}
       {data.hooks.map(h => (
         <div key={h.id} className="quest-item">
           <div className="quest-item__header">
@@ -538,11 +538,11 @@ function HooksTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
           <textarea
             rows={2}
             value={h.text}
-            placeholder="Hvordan møder partyen denne hook?"
+            placeholder="How does the party encounter this hook?"
             onChange={e => patch(h.id, x => ({ ...x, text: e.target.value }))}
           />
           {h.source_npc_id != null && (
-            <small className="quest-field__hint">Knyttet til NPC #{h.source_npc_id}</small>
+            <small className="quest-field__hint">Linked to NPC #{h.source_npc_id}</small>
           )}
         </div>
       ))}
@@ -561,11 +561,11 @@ function ObjectivesTab({ data, update }: { data: QuestData; update: (p: Partial<
   return (
     <div className="quest-tab">
       <div className="quest-tab__header">
-        <button className="quest-btn" onClick={() => add('main')}>+ Hovedmål</button>
-        <button className="quest-btn" onClick={() => add('side')}>+ Bimål</button>
-        <button className="quest-btn" onClick={() => add('hidden')}>+ Skjult mål</button>
+        <button className="quest-btn" onClick={() => add('main')}>+ Main objective</button>
+        <button className="quest-btn" onClick={() => add('side')}>+ Side objective</button>
+        <button className="quest-btn" onClick={() => add('hidden')}>+ Hidden objective</button>
       </div>
-      {data.objectives.length === 0 && <p className="quest-empty">Ingen mål endnu.</p>}
+      {data.objectives.length === 0 && <p className="quest-empty">No objectives yet.</p>}
       {data.objectives.map(o => (
         <div key={o.id} className="quest-item">
           <div className="quest-item__header">
@@ -575,7 +575,7 @@ function ObjectivesTab({ data, update }: { data: QuestData; update: (p: Partial<
                 checked={o.done}
                 onChange={e => patch(o.id, x => ({ ...x, done: e.target.checked }))}
               />
-              Fuldført
+              Completed
             </label>
             <select
               value={o.type}
@@ -590,13 +590,13 @@ function ObjectivesTab({ data, update }: { data: QuestData; update: (p: Partial<
           <input
             type="text"
             value={o.text}
-            placeholder="Mål-beskrivelse..."
+            placeholder="Objective description..."
             onChange={e => patch(o.id, x => ({ ...x, text: e.target.value }))}
           />
           <textarea
             rows={2}
             value={o.dm_notes}
-            placeholder="DM-noter: hvordan opfyldes målet?"
+            placeholder="DM notes: how is this fulfilled?"
             onChange={e => patch(o.id, x => ({ ...x, dm_notes: e.target.value }))}
           />
         </div>
@@ -630,34 +630,34 @@ function PlotTab({ data, update }: { data: QuestData; update: (p: Partial<QuestD
   return (
     <div className="quest-tab">
       <div className="quest-tab__header">
-        <button className="quest-btn" onClick={add}>+ Tilføj beat</button>
+        <button className="quest-btn" onClick={add}>+ Add beat</button>
       </div>
-      {data.plot_beats.length === 0 && <p className="quest-empty">Ingen plot beats endnu.</p>}
+      {data.plot_beats.length === 0 && <p className="quest-empty">No plot beats yet.</p>}
       {data.plot_beats.map((b, i) => (
         <div key={b.id} className="quest-item">
           <div className="quest-item__header">
             <strong>Beat {i + 1}</strong>
             <div className="quest-item__header-right">
-              <button className="quest-btn quest-btn--ghost" onClick={() => moveUp(b.id)} title="Op">↑</button>
-              <button className="quest-btn quest-btn--ghost" onClick={() => moveDown(b.id)} title="Ned">↓</button>
+              <button className="quest-btn quest-btn--ghost" onClick={() => moveUp(b.id)} title="Up">↑</button>
+              <button className="quest-btn quest-btn--ghost" onClick={() => moveDown(b.id)} title="Down">↓</button>
               <button className="quest-btn quest-btn--ghost" onClick={() => remove(b.id)}>×</button>
             </div>
           </div>
           <input
             type="text"
             value={b.title}
-            placeholder="Beat-titel..."
+            placeholder="Beat title..."
             onChange={e => patch(b.id, x => ({ ...x, title: e.target.value }))}
           />
           <textarea
             rows={3}
             value={b.description}
-            placeholder="Hvad sker der i denne scene?"
+            placeholder="What happens in this scene?"
             onChange={e => patch(b.id, x => ({ ...x, description: e.target.value }))}
           />
           <div className="quest-row">
             <label className="quest-field__inline">
-              Akt
+              Act
               <select
                 value={b.act ?? ''}
                 onChange={e => patch(b.id, x => ({
@@ -685,7 +685,7 @@ function PlotTab({ data, update }: { data: QuestData; update: (p: Partial<QuestD
               </select>
             </label>
             <label className="quest-field__inline">
-              Forventet level
+              Expected level
               <input
                 type="number" min={1} max={30}
                 value={b.expected_level ?? ''}
@@ -697,7 +697,7 @@ function PlotTab({ data, update }: { data: QuestData; update: (p: Partial<QuestD
             </label>
           </div>
           {b.npc_ids.length > 0 && (
-            <small className="quest-field__hint">{b.npc_ids.length} NPCs i denne scene</small>
+            <small className="quest-field__hint">{b.npc_ids.length} NPCs in this scene</small>
           )}
         </div>
       ))}
@@ -716,12 +716,12 @@ function CluesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
   return (
     <div className="quest-tab">
       <div className="quest-tab__header">
-        <button className="quest-btn" onClick={add}>+ Tilføj clue</button>
+        <button className="quest-btn" onClick={add}>+ Add clue</button>
         <small className="quest-tab__hint">
-          Hver vigtig clue bør have en backup — så partyen ikke sidder fast hvis de misser én.
+          Every important clue should have a backup — so the party doesn't get stuck if they miss one.
         </small>
       </div>
-      {data.clues.length === 0 && <p className="quest-empty">Ingen clues endnu.</p>}
+      {data.clues.length === 0 && <p className="quest-empty">No clues yet.</p>}
       {data.clues.map(c => (
         <div key={c.id} className="quest-item">
           <div className="quest-item__header">
@@ -738,12 +738,12 @@ function CluesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
           <textarea
             rows={2}
             value={c.text}
-            placeholder="Hvad er clue'en?"
+            placeholder="What is the clue?"
             onChange={e => patch(c.id, x => ({ ...x, text: e.target.value }))}
           />
           <div className="quest-row">
             <label className="quest-field__inline">
-              Hvor findes den?
+              Where is it found?
               <input
                 type="text"
                 value={c.location}
@@ -751,12 +751,12 @@ function CluesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
               />
             </label>
             <label className="quest-field__inline">
-              Backup-clue
+              Backup clue
               <select
                 value={c.backup_clue_id ?? ''}
                 onChange={e => patch(c.id, x => ({ ...x, backup_clue_id: e.target.value || null }))}
               >
-                <option value="">— ingen —</option>
+                <option value="">— none —</option>
                 {data.clues.filter(other => other.id !== c.id).map(other => (
                   <option key={other.id} value={other.id}>
                     Clue {data.clues.findIndex(cc => cc.id === other.id) + 1}: {other.text.slice(0, 30)}
@@ -768,13 +768,13 @@ function CluesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
           <textarea
             rows={2}
             value={c.reveals}
-            placeholder="Hvilken sandhed peger den mod?"
+            placeholder="What truth does it point to?"
             onChange={e => patch(c.id, x => ({ ...x, reveals: e.target.value }))}
           />
           <textarea
             rows={2}
             value={c.if_misunderstood}
-            placeholder="Hvad kan spillerne fejlagtigt konkludere?"
+            placeholder="What might players wrongly conclude?"
             onChange={e => patch(c.id, x => ({ ...x, if_misunderstood: e.target.value }))}
           />
         </div>
@@ -817,10 +817,10 @@ function ComplicationsTab({ data, update }: { data: QuestData; update: (p: Parti
   return (
     <div className="quest-tab">
       <div className="quest-tab__header">
-        <button className="quest-btn" onClick={addBlank}>+ Tom komplikation</button>
-        <span className="quest-tab__divider">eller fra preset:</span>
+        <button className="quest-btn" onClick={addBlank}>+ Empty complication</button>
+        <span className="quest-tab__divider">or from preset:</span>
         <select value={presetSlug} onChange={e => setPresetSlug(e.target.value)}>
-          <option value="">— vælg preset —</option>
+          <option value="">— choose preset —</option>
           {COMPLICATION_PRESETS.categories.map(cat => (
             <optgroup key={cat.slug} label={cat.label}>
               {(presetsByCategory.get(cat.slug) ?? []).map(p => (
@@ -830,10 +830,10 @@ function ComplicationsTab({ data, update }: { data: QuestData; update: (p: Parti
           ))}
         </select>
         <button className="quest-btn quest-btn--primary" onClick={addPreset} disabled={!presetSlug}>
-          Tilføj
+          Add
         </button>
       </div>
-      {data.complications.length === 0 && <p className="quest-empty">Ingen komplikationer endnu.</p>}
+      {data.complications.length === 0 && <p className="quest-empty">No complications yet.</p>}
       {data.complications.map(c => (
         <div key={c.id} className="quest-item">
           <div className="quest-item__header">
@@ -843,17 +843,17 @@ function ComplicationsTab({ data, update }: { data: QuestData; update: (p: Parti
           <textarea
             rows={2}
             value={c.text}
-            placeholder="Hvad er komplikationen?"
+            placeholder="What is the complication?"
             onChange={e => patch(c.id, x => ({ ...x, text: e.target.value }))}
           />
           <textarea
             rows={2}
             value={c.trigger}
-            placeholder="Hvornår/hvordan udløses den?"
+            placeholder="When/how is it triggered?"
             onChange={e => patch(c.id, x => ({ ...x, trigger: e.target.value }))}
           />
           {c.npc_ids.length > 0 && (
-            <small className="quest-field__hint">{c.npc_ids.length} NPCs involveret</small>
+            <small className="quest-field__hint">{c.npc_ids.length} NPCs involved</small>
           )}
         </div>
       ))}
@@ -867,28 +867,28 @@ function NotesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
   return (
     <div className="quest-tab">
       <div className="quest-field">
-        <label>DM-noter (kun DM ser)</label>
+        <label>DM notes (DM only)</label>
         <textarea
           rows={8}
           value={data.dm_notes}
           onChange={e => update({ dm_notes: e.target.value })}
-          placeholder="Hele historien: sandheden, twist, hvad der skal telegrafereres..."
+          placeholder="The full story: truth, twist, what to telegraph..."
         />
       </div>
 
       <div className="quest-field">
-        <label>Player summary (det spillerne ser)</label>
+        <label>Player summary (what players see)</label>
         <textarea
           rows={4}
           value={data.player_summary}
           onChange={e => update({ player_summary: e.target.value })}
-          placeholder="Kort beskrivelse spillerne får i deres party hub..."
+          placeholder="Brief description for the players' hub..."
         />
       </div>
 
       {data.moral_dilemma && (
         <div className="quest-field">
-          <label>Moralsk dilemma <small>(read-only — editor i Stage 3)</small></label>
+          <label>Moral dilemma <small>(read-only — editor coming soon)</small></label>
           <div className="quest-readonly-block">
             <strong>{data.moral_dilemma.setup}</strong>
             <ul>
@@ -904,18 +904,18 @@ function NotesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
 
       {data.rumors.length > 0 && (
         <div className="quest-field">
-          <label>Rygter <small>(read-only — editor i Stage 3)</small></label>
+          <label>Rumors <small>(read-only — editor coming soon)</small></label>
           <div className="quest-readonly-block">
             <ul>
               {data.rumors.map(r => (
                 <li key={r.id}>
                   <span className={r.is_true ? 'quest-tag--true' : 'quest-tag--false'}>
-                    {r.is_true ? 'sand' : 'falsk'}
+                    {r.is_true ? 'true' : 'false'}
                   </span>
                   {' '}{r.text}
                   {!r.is_true && r.actual_truth && (
                     <div className="quest-readonly-block__sub">
-                      Faktisk sandhed: {r.actual_truth}
+                      Actual truth: {r.actual_truth}
                     </div>
                   )}
                 </li>
@@ -927,18 +927,18 @@ function NotesTab({ data, update }: { data: QuestData; update: (p: Partial<Quest
 
       {data.npc_ids.length > 0 && (
         <div className="quest-field">
-          <label>Tilknyttede NPCs <small>(Cast tab i Stage 3 vil vise navne + links)</small></label>
+          <label>Linked NPCs <small>(Cast tab coming soon will show names + links)</small></label>
           <div className="quest-readonly-block">
-            {data.npc_ids.length} NPCs tilknyttet: {data.npc_ids.join(', ')}
+            {data.npc_ids.length} NPCs linked: {data.npc_ids.join(', ')}
           </div>
         </div>
       )}
 
       {data.ai_generated && data.ai_generation_params && (
         <div className="quest-field">
-          <label>AI-generering metadata</label>
+          <label>AI generation metadata</label>
           <small className="quest-field__hint">
-            Genereret med party {data.ai_generation_params.party_size}×lvl{data.ai_generation_params.party_level},
+            Generated with party {data.ai_generation_params.party_size} × Lvl {data.ai_generation_params.party_level},
             difficulty: {data.ai_generation_params.difficulty}
             {data.ai_generation_params.custom_prompt && (
               <><br/>Custom prompt: "{data.ai_generation_params.custom_prompt}"</>

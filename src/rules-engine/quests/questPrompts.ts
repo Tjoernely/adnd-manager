@@ -24,10 +24,15 @@ import type {
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
+/** AI model ids accepted by /api/ai/prompt. */
+export type QuestAIModel = 'claude-opus-4-7' | 'claude-sonnet-4-6' | 'gpt-5.4';
+
 export interface BuiltPrompt {
   systemPrompt: string;
   userPrompt: string;
   maxTokens: number;
+  /** Model to use. Omitted → backend default (claude-sonnet-4-6). */
+  model?: QuestAIModel;
 }
 
 export interface FullQuestPromptParams {
@@ -43,6 +48,10 @@ export interface FullQuestPromptParams {
   party_level?: number;
   difficulty?: DifficultyTier;
   custom_prompt?: string;
+  /** AI model — forwarded through callClaude to /api/ai/prompt. */
+  model?: QuestAIModel;
+  /** Computed max output tokens for this generation. Omitted → default 8192. */
+  max_tokens?: number;
 }
 
 export interface HookBatchPromptParams {
@@ -230,6 +239,8 @@ export function buildFullQuestPrompt(params: FullQuestPromptParams): BuiltPrompt
     party_level = 3,
     difficulty = 'standard',
     custom_prompt = '',
+    model,
+    max_tokens,
   } = params;
 
   const isMystery = quest_types.some(t =>
@@ -310,7 +321,10 @@ Return ONLY the JSON object. No markdown fences. No preamble. No commentary.`;
   return {
     systemPrompt: SYSTEM_BASE,
     userPrompt,
-    maxTokens: 8192,  // fuld quest med 6 NPCs + 7 plot beats + 5 clues kan blive stor
+    // Caller-supplied budget (length × detail × scope) wins; fallback covers a
+    // full quest with 6 NPCs + 7 plot beats + 5 clues.
+    maxTokens: max_tokens && max_tokens > 0 ? max_tokens : 8192,
+    model,
   };
 }
 

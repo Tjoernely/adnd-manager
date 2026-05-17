@@ -11,10 +11,23 @@ const express  = require('express');
 // @anthropic-ai/sdk may export the class as default or as the module itself
 const _AnthropicPkg = require('@anthropic-ai/sdk');
 const Anthropic     = _AnthropicPkg.default ?? _AnthropicPkg;
+const _OpenAIPkg    = require('openai');
+const OpenAI        = _OpenAIPkg.default ?? _OpenAIPkg;
 const db            = require('../db');
 const { auth }      = require('../middleware/auth');
 
 const router = express.Router();
+
+// ── Model registry ────────────────────────────────────────────────────────────
+// Maps client-facing model id → provider + the model's real max output tokens.
+// maxOutput doubles as the server-side token cap (replaces the old hard 4096).
+const MODEL_REGISTRY = {
+  'claude-opus-4-7':   { provider: 'anthropic', maxOutput: 128000 },
+  'claude-sonnet-4-6': { provider: 'anthropic', maxOutput: 64000  },
+  'gpt-5.4':           { provider: 'openai',    maxOutput: 128000 },
+};
+// Default when no model is specified — keeps NPCGenerator / MapGenerator working.
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 // Lazy-init the shared server-key client (only used when env key is present)
 let _client = null;
@@ -37,34 +50,76 @@ function getClientForRequest(req) {
   return new Anthropic({ apiKey });
 }
 
+// Lazy-init OpenAI client. Throws a clearly-worded error when the key is absent.
+let _openai = null;
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY not configured on server');
+  }
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
+
+// Run a single OpenAI chat completion and normalize the result to plain text.
+async function runOpenAIPrompt({ model, systemPrompt, userPrompt, maxTokens }) {
+  const client = getOpenAI();
+  const messages = [];
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+  messages.push({ role: 'user', content: userPrompt });
+
+  const completion = await client.chat.completions.create({
+    model,
+    max_completion_tokens: maxTokens,
+    messages,
+  });
+  return completion.choices?.[0]?.message?.content ?? '';
+}
+
 // ── POST /api/ai/prompt ───────────────────────────────────────────────────────
 // Generic text proxy — replaces direct browser calls to api.anthropic.com.
-// Body: { systemPrompt?: string, userPrompt: string, maxTokens?: number }
-// Returns: { text: string }
+// Body: { systemPrompt?: string, userPrompt: string, maxTokens?: number, model?: string }
+//   model: "claude-opus-4-7" | "claude-sonnet-4-6" | "gpt-5.4"
+//          omitted → claude-sonnet-4-6 (back-compat for NPCGenerator / MapGenerator)
+// Returns: { text: string } — identical shape for both providers.
 router.post('/prompt', auth, async (req, res) => {
   try {
-    const { systemPrompt, userPrompt, maxTokens = 300 } = req.body ?? {};
+    const { systemPrompt, userPrompt, maxTokens = 1024, model } = req.body ?? {};
     if (!userPrompt) return res.status(400).json({ error: '"userPrompt" is required' });
 
-    const client = getClientForRequest(req);
-    if (!client) return res.status(400).json({ error: 'AI not configured — provide an Anthropic API key' });
+    const modelId = (typeof model === 'string' && MODEL_REGISTRY[model]) ? model : DEFAULT_MODEL;
+    const entry   = MODEL_REGISTRY[modelId];
+    // Cap requested tokens to the model's real max output (replaces old hard 4096).
+    const cappedTokens = Math.min(Math.max(Number(maxTokens) || 1024, 1), entry.maxOutput);
 
-    const msgOpts = {
-      model:      'claude-sonnet-4-20250514',
-      max_tokens: Math.min(Number(maxTokens) || 300, 4096),
-      messages:   [{ role: 'user', content: userPrompt }],
-    };
-    if (systemPrompt) msgOpts.system = systemPrompt;
+    let text;
+    if (entry.provider === 'openai') {
+      text = await runOpenAIPrompt({ model: modelId, systemPrompt, userPrompt, maxTokens: cappedTokens });
+    } else {
+      const client = getClientForRequest(req);
+      if (!client) return res.status(400).json({ error: 'AI not configured — provide an Anthropic API key' });
 
-    const message = await client.messages.create(msgOpts);
-    const text = message.content
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('');
+      const msgOpts = {
+        model:      modelId,
+        max_tokens: cappedTokens,
+        messages:   [{ role: 'user', content: userPrompt }],
+      };
+      if (systemPrompt) msgOpts.system = systemPrompt;
+
+      const message = await client.messages.create(msgOpts);
+      text = message.content
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('');
+    }
 
     res.json({ text });
   } catch (e) {
     console.error('[ai/prompt]', e.message);
+    if (e.message?.includes('OPENAI_API_KEY')) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY not configured on server' });
+    }
     res.status(500).json({ error: 'AI request failed', detail: e.message });
   }
 });
