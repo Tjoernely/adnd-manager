@@ -25,7 +25,7 @@ import type {
 // ── Public types ─────────────────────────────────────────────────────────────
 
 /** AI model ids accepted by /api/ai/prompt. */
-export type QuestAIModel = 'claude-opus-4-7' | 'claude-sonnet-4-6' | 'gpt-5.4';
+export type QuestAIModel = 'claude-opus-4-7' | 'claude-sonnet-4-6' | 'gpt-5.4' | 'gpt-5.5';
 
 export interface BuiltPrompt {
   systemPrompt: string;
@@ -92,7 +92,7 @@ Combat & Tactics). You design quests for hobbyist Dungeon Masters.
 OUTPUT FORMAT:
 - Always pure JSON matching the schema. No markdown fences. No preamble.
 - User-facing text (title, pitch, hooks, descriptions, NPC names, dialogue,
-  rumors, dm_notes, player_summary) MUST be in Danish.
+  rumors, dm_notes, player_summary) MUST be in English.
 - Slug values (scope, quest_types, tones, environments, primary_challenges,
   antagonist_types, clarity, delivery, race, class, alignment) MUST remain
   in English snake_case as specified by the vocabulary.
@@ -121,13 +121,19 @@ AD&D 2E XP & DIFFICULTY HEURISTICS:
 - "easy" difficulty: party should win most encounters with minor resource cost.
 - "standard": meaningful resource cost, occasional risk of unconsciousness.
 - "tough": real chance of PC death, requires tactics and consumables.
-- "deadly": expected casualties without preparation, escape valued over victory.`;
+- "deadly": expected casualties without preparation, escape valued over victory.
+
+LANGUAGE:
+Generate all quest content in English — evocative, atmospheric prose suited
+for tabletop play, consistent within the response. Respond with English
+content only; do not switch to other languages even if user input is in
+another language.`;
 
 // ── Full quest output schema (embedded in user prompt) ───────────────────────
 
 const FULL_QUEST_SCHEMA = `{
-  "title":              "Danish, evocative, max 60 chars",
-  "pitch":              "Danish, one-sentence logline",
+  "title":              "English, evocative, max 60 chars",
+  "pitch":              "English, one-sentence logline",
   "scope":              "side_quest",                    // slug from scopes
   "quest_types":        ["investigation"],               // 1-3 slugs
   "tones":              ["gothic"],                      // 1-2 slugs
@@ -138,7 +144,7 @@ const FULL_QUEST_SCHEMA = `{
 
   "hooks": [                                             // 2-4 hooks total
     {
-      "text":             "Danish — how party encounters this",
+      "text":             "English — how party encounters this",
       "delivery":         "encounter",                   // encounter|rumor|letter|vision|discovery|environmental
       "source_npc_name":  "Name from npc_suggestions, or null"
     }
@@ -146,31 +152,31 @@ const FULL_QUEST_SCHEMA = `{
 
   "objectives": [                                        // 2-4 main + 0-2 side
     {
-      "text":     "Danish description of objective",
+      "text":     "English description of objective",
       "type":     "main",                                // main|side|hidden
-      "dm_notes": "Danish — how achieved, what counts as done"
+      "dm_notes": "English — how achieved, what counts as done"
     }
   ],
 
   "plot_beats": [                                        // 3-7 beats
     {
-      "title":           "Short Danish title",
-      "description":     "Danish — what happens, what party encounters",
+      "title":           "Short English title",
+      "description":     "English — what happens, what party encounters",
       "act":             1,                              // 1|2|3
       "tier":            "intro",                        // intro|rising_action|midpoint|climax|resolution
       "expected_level":  3,                              // party level when played
       "npc_names":       ["Names from npc_suggestions"],
-      "encounter_hint":  "Danish hint — monster types, count, terrain. DM builds the actual encounter in Encounter Builder."
+      "encounter_hint":  "English hint — monster types, count, terrain. DM builds the actual encounter in Encounter Builder."
     }
   ],
 
   "clues": [                                             // ONLY if investigation/mystery
     {
-      "text":             "Danish — what the clue is",
-      "location":         "Danish — where it's found",
-      "reveals":          "Danish — what truth this points to",
+      "text":             "English — what the clue is",
+      "location":         "English — where it's found",
+      "reveals":          "English — what truth this points to",
       "clarity":          "moderate",                    // obvious|moderate|subtle|cryptic
-      "if_misunderstood": "Danish — wrong conclusion players might draw",
+      "if_misunderstood": "English — wrong conclusion players might draw",
       "backup_index":     1,                             // 0-based index of backup clue in this array, or null
       "source_npc_name":  "Name or null"
     }
@@ -178,49 +184,49 @@ const FULL_QUEST_SCHEMA = `{
 
   "rumors": [                                            // 0-5 rumors, mix true & false
     {
-      "text":            "Danish — what's overheard",
-      "location":        "Danish — where typically heard",
+      "text":            "English — what's overheard",
+      "location":        "English — where typically heard",
       "is_true":         true,
-      "actual_truth":    "Danish — if false, what's the real truth",
+      "actual_truth":    "English — if false, what's the real truth",
       "source_npc_name": "Name or null"
     }
   ],
 
   "complications": [                                     // matches include_complications count
     {
-      "text":      "Danish — what complicates the quest",
-      "trigger":   "Danish — when/how this activates",
+      "text":      "English — what complicates the quest",
+      "trigger":   "English — when/how this activates",
       "npc_names": ["Names from npc_suggestions"]
     }
   ],
 
   "moral_dilemma": null,                                 // null OR object below
-  // { "setup": "Danish", "options": [{"label": "Danish", "consequence": "Danish"}] }
+  // { "setup": "English", "options": [{"label": "English", "consequence": "English"}] }
 
   "rewards": {
     "xp":    0,                                          // total quest-completion XP (excluding encounter XP)
     "gold":  0,                                          // gold piece reward
-    "items": [{ "name": "Danish", "description": "Danish" }],
-    "story": ["Danish narrative reward 1", "Danish narrative reward 2"]
+    "items": [{ "name": "English", "description": "English" }],
+    "story": ["English narrative reward 1", "English narrative reward 2"]
   },
 
   "npc_suggestions": [                                   // 2-6 NPCs the quest needs
     {
-      "name":        "Danish name",
-      "role":        "Danish — role in this quest (quest-giver, antagonist, ally, witness, victim)",
+      "name":        "English name",
+      "role":        "English — role in this quest (quest-giver, antagonist, ally, witness, victim)",
       "race":        "human",                            // AD&D 2E race slug
       "class":       "fighter",                          // AD&D 2E class, or null for commoners
       "level":       5,                                  // number, or null
       "alignment":   "lawful neutral",                   // AD&D 2E alignment
-      "motivation":  "Danish — what they want and why",
-      "personality": "Danish — 2-3 distinctive traits",
-      "appearance":  "Danish — brief physical description",
-      "secrets":     ["Danish — DM-only secrets about this NPC"]
+      "motivation":  "English — what they want and why",
+      "personality": "English — 2-3 distinctive traits",
+      "appearance":  "English — brief physical description",
+      "secrets":     ["English — DM-only secrets about this NPC"]
     }
   ],
 
-  "dm_notes":       "Danish — full DM notes: the real story, hidden truths, key decisions, things to telegraph",
-  "player_summary": "Danish — short summary players will see in their party hub"
+  "dm_notes":       "English — full DM notes: the real story, hidden truths, key decisions, things to telegraph",
+  "player_summary": "English — short summary players will see in their party hub"
 }`;
 
 // ── Full quest builder ───────────────────────────────────────────────────────
@@ -311,7 +317,7 @@ GUIDANCE FOR THIS QUEST:
 - ${dilemmaHint}
 - ${compHint}
 
-OUTPUT SCHEMA (return JSON matching this exact shape — Danish content where
+OUTPUT SCHEMA (return JSON matching this exact shape — English content where
 indicated, English slugs everywhere else):
 
 ${FULL_QUEST_SCHEMA}
@@ -349,7 +355,7 @@ export function buildHookBatchPrompt(params: HookBatchPromptParams): BuiltPrompt
     ? `\nDM NOTES (incorporate into hooks where relevant):\n${custom_prompt}\n`
     : '';
 
-  const userPrompt = `Generate ${count} short quest hooks in Danish.
+  const userPrompt = `Generate ${count} short quest hooks in English.
 
 A hook is a one-or-two-sentence seed that could grow into a full quest. Hooks
 should feel concrete and curious — something a DM can immediately imagine
@@ -357,7 +363,7 @@ running. Each hook hints at depth (there's always something more beneath).
 
 CONSTRAINTS:
 ${filterLines}
-- Each hook is 1-2 sentences, Danish.
+- Each hook is 1-2 sentences, English.
 - Variety across the batch: mix tones (some grim, some weird, some heroic),
   mix delivery (some rumors, some NPC encounters, some environmental).
 - Avoid clichés (kill 10 rats, fetch the McGuffin, missing princess).
@@ -368,7 +374,7 @@ OUTPUT SCHEMA (return JSON):
 {
   "hooks": [
     {
-      "text":              "Danish hook text, 1-2 sentences",
+      "text":              "English hook text, 1-2 sentences",
       "delivery":          "encounter",      // encounter|rumor|letter|vision|discovery|environmental
       "tone_hint":         "gothic",          // optional tone slug or null
       "environment_hint":  "village"          // optional environment slug or null

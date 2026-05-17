@@ -7,7 +7,7 @@
  * step.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PartyInfo } from '../../rules-engine/quests/defaultQuest';
 import type { FullQuestPromptParams, QuestAIModel } from '../../rules-engine/quests/questPrompts';
 import { QUEST_VOCABULARY } from '../../rules-engine/quests/questPrompts';
@@ -34,6 +34,9 @@ import {
   estimateMaxCostUSD,
   formatPrice,
   readDefaultModel,
+  forecastGenerationTime,
+  formatTimeRange,
+  formatDuration,
 } from './aiGenConfig';
 
 const DIFFICULTY_LABELS: Record<DifficultyTier, string> = {
@@ -91,7 +94,7 @@ export function GenerateQuestDialog({ party, generating, onGenerate, onClose }: 
   const hideLength = SCOPES_WITHOUT_LENGTH.has(scope);
   const effectiveLengthIdx: Tier = hideLength ? 0 : lengthIdx;
 
-  const { capped, warning, isLarge, maxCost } = useMemo(() => {
+  const { capped, warning, isLarge, maxCost, eta } = useMemo(() => {
     const raw = calculateMaxTokens(scope, effectiveLengthIdx, detailIdx);
     const cap = applyTokenCap(raw, model);
     return {
@@ -99,8 +102,28 @@ export function GenerateQuestDialog({ party, generating, onGenerate, onClose }: 
       warning: cap.warning,
       isLarge: cap.warning !== null || cap.capped > LARGE_GENERATION_THRESHOLD,
       maxCost: estimateMaxCostUSD(model, cap.capped),
+      eta: forecastGenerationTime(model, cap.capped),
     };
   }, [scope, effectiveLengthIdx, detailIdx, model]);
+
+  // ── Elapsed-time counter (runs only while a generation is in flight) ───────
+
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (!generating) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const id = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [generating]);
+
+  const modelLabel = MODEL_OPTIONS.find(m => m.id === model)?.label ?? model;
+  const checkBackMinutes = Math.ceil(eta.maxSeconds / 60);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -164,6 +187,17 @@ export function GenerateQuestDialog({ party, generating, onGenerate, onClose }: 
           {!party && (
             <div className="quest-banner quest-banner--info">
               No party data found. Enter values manually below.
+            </div>
+          )}
+
+          {generating && (
+            <div className="quest-banner quest-banner--info">
+              <div style={{ lineHeight: 1.55 }}>
+                <strong>Generating quest with AI...</strong><br />
+                {modelLabel} typically takes {formatTimeRange(eta)} for this size.<br />
+                You can safely wait or check back in {checkBackMinutes} minute
+                {checkBackMinutes === 1 ? '' : 's'} — do not close this window.
+              </div>
             </div>
           )}
 
@@ -271,6 +305,8 @@ export function GenerateQuestDialog({ party, generating, onGenerate, onClose }: 
           <div className="quest-ai__estimate">
             ▸ Estimated tokens: <strong>~{capped.toLocaleString()}</strong>
             &ensp;·&ensp; Max cost: <strong>{formatPrice(maxCost)}</strong>
+            <br />
+            ▸ Estimated time: <strong>{formatTimeRange(eta)}</strong> (depends on AI workload)
           </div>
 
           {isLarge && (
@@ -376,7 +412,9 @@ export function GenerateQuestDialog({ party, generating, onGenerate, onClose }: 
             onClick={handleSubmit}
             disabled={generating}
           >
-            {generating ? '⏳ Generating...' : '✨ Generate Quest'}
+            {generating
+              ? `⏳ Generating... (${formatDuration(elapsedSeconds)} elapsed)`
+              : '✨ Generate Quest'}
           </button>
         </div>
       </div>

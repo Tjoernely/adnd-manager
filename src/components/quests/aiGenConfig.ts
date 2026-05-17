@@ -40,7 +40,15 @@ export const MODEL_OPTIONS: ModelOption[] = [
     id: 'gpt-5.4',
     label: 'GPT-5.4',
     description:
-      'Best structured logic, tightest puzzle plotting. Less literary prose ($2.50/$15 per Mtok).',
+      'Previous OpenAI flagship. Excellent structured logic at half the price of GPT-5.5. ' +
+      'Good default OpenAI choice ($2.50/$15 per Mtok).',
+  },
+  {
+    id: 'gpt-5.5',
+    label: 'GPT-5.5',
+    description:
+      "OpenAI's newest flagship. Strongest reasoning, lowest hallucination rate, omnimodal. " +
+      'Most expensive of the OpenAI options ($5/$30 per Mtok).',
   },
 ];
 
@@ -50,7 +58,49 @@ export const MODEL_PRICING: Record<QuestAIModel, { input: number; output: number
   'claude-opus-4-7':   { input: 5,   output: 25, maxOutput: 128000 },
   'claude-sonnet-4-6': { input: 3,   output: 15, maxOutput: 64000  },
   'gpt-5.4':           { input: 2.5, output: 15, maxOutput: 128000 },
+  'gpt-5.5':           { input: 5,   output: 30, maxOutput: 128000 },
 };
+
+// ── Generation time forecast ─────────────────────────────────────────────────
+
+/** Conservative output tokens/second per model — benchmark + observed runs. */
+export const MODEL_THROUGHPUT_TPS: Record<QuestAIModel, number> = {
+  'claude-opus-4-7':   25,
+  'claude-sonnet-4-6': 40,
+  'gpt-5.4':           50,
+  'gpt-5.5':           45,
+};
+
+export interface TimeRange {
+  minSeconds: number;
+  maxSeconds: number;
+}
+
+/**
+ * Rough generation-time forecast. Approximate by design — AI rarely uses the
+ * full token budget, so optimistic assumes 50% usage, pessimistic 100% + 20%
+ * network/server buffer.
+ */
+export function forecastGenerationTime(model: QuestAIModel, maxTokens: number): TimeRange {
+  const tps = MODEL_THROUGHPUT_TPS[model];
+  const ttft = 2; // time to first token, seconds
+  return {
+    minSeconds: Math.round(ttft + (maxTokens * 0.5) / tps),
+    maxSeconds: Math.round(ttft + (maxTokens / tps) * 1.2),
+  };
+}
+
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${m} min`;
+}
+
+export function formatTimeRange(range: TimeRange): string {
+  if (range.minSeconds === range.maxSeconds) return formatDuration(range.minSeconds);
+  return `${formatDuration(range.minSeconds)} – ${formatDuration(range.maxSeconds)}`;
+}
 
 // ── Length & detail tiers ────────────────────────────────────────────────────
 

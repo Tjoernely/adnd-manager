@@ -25,6 +25,7 @@ const MODEL_REGISTRY = {
   'claude-opus-4-7':   { provider: 'anthropic', maxOutput: 128000 },
   'claude-sonnet-4-6': { provider: 'anthropic', maxOutput: 64000  },
   'gpt-5.4':           { provider: 'openai',    maxOutput: 128000 },
+  'gpt-5.5':           { provider: 'openai',    maxOutput: 128000 },
 };
 // Default when no model is specified — keeps NPCGenerator / MapGenerator working.
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
