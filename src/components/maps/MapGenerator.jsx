@@ -200,13 +200,14 @@ async function callDalleOnce(prompt, apiKey) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model:           'dall-e-3',
+      // NB: no `style` / `response_format` — OpenAI's current image API
+      // rejects `style` ("Unknown parameter"). Matches the working payload
+      // in server/lib/dalleProvider.js; `url` is the default response format.
+      model:   'dall-e-3',
       prompt,
-      n:               1,
-      size:            '1024x1024',
-      quality:         'standard',
-      style:           'vivid',
-      response_format: 'url',
+      n:       1,
+      size:    '1024x1024',
+      quality: 'standard',
     }),
   });
   const data = await resp.json();
