@@ -321,7 +321,7 @@ export default function App() {
               }}
                 onMouseEnter={e=>{ e.target.style.color=C.gold; e.target.style.borderColor=C.borderHi; }}
                 onMouseLeave={e=>{ e.target.style.color=C.textDim; e.target.style.borderColor=C.border; }}>
-                ‹ Dashboard
+                ← Dashboard
               </button>
               {/* Campaign + user pill */}
               <span style={{ fontSize:10, background:"rgba(0,0,0,.4)",

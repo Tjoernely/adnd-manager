@@ -85,7 +85,7 @@ export default function MonsterLibrary({ campaignId, onBack }) {
         }}
           onMouseEnter={e => { e.target.style.color = C.gold; e.target.style.borderColor = C.borderHi; }}
           onMouseLeave={e => { e.target.style.color = C.textDim; e.target.style.borderColor = C.border; }}>
-          ‹ Dashboard
+          ← Dashboard
         </button>
 
         <div>

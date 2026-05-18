@@ -85,6 +85,12 @@
   border-radius: 4px;
 }
 .quest-filter__input { flex: 1 1 200px; min-width: 200px; }
+/* Explicit placeholder colour — browser defaults are too faint on the dark surface. */
+.quest-filter__input::placeholder,
+.quest-filter__select::placeholder {
+  color: #9a9aa6;
+  opacity: 1;
+}
 .quest-filter__checkbox {
   display: flex; align-items: center; gap: 0.4rem;
   color: var(--quest-text-muted);
@@ -204,7 +210,7 @@
   background: var(--quest-bg);
   border: 1px solid var(--quest-border);
   border-radius: 3px;
-  color: var(--quest-text-muted);
+  color: var(--quest-text);
 }
 .quest-card__chip--diff {
   background: rgba(167,139,250,0.15);
@@ -256,7 +262,7 @@
   background: var(--quest-border);
 }
 .quest-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.62;
   cursor: not-allowed;
 }
 .quest-btn--primary {
@@ -609,7 +615,7 @@
   font-size: 0.9rem;
 }
 .quest-gen__help {
-  color: var(--quest-text-muted);
+  color: #a8a8b2;
   font-size: 0.85rem;
   font-weight: 400;
 }

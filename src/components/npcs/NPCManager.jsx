@@ -187,7 +187,7 @@ export function NPCManager({ campaign, user, onBack }) {
       {/* ── Header ── */}
       <header className="nm-header">
         <div className="nm-header-left">
-          <button className="nm-back-btn" onClick={onBack}>‹ Dashboard</button>
+          <button className="nm-back-btn" onClick={onBack}>← Dashboard</button>
         </div>
         <div className="nm-header-center">
           <div className="nm-edition-label">AD&amp;D 2nd Edition ✦ Skills &amp; Powers</div>
