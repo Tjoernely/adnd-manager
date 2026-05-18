@@ -245,6 +245,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 | 7 | ~~High~~ Resolved | Long AI quest generations (Campaign arc) failed with HTTP 504 after ~180s | **Fixed — nginx gained a dedicated `/api/ai/` block with `proxy_read_timeout 600s` (see §1 note). Server-side config only.** |
 | 8 | ~~Low~~ Resolved | Quest banners showed invisible light-on-light text | **Fixed `59c432b` — opaque banner backgrounds + explicit dark text.** |
 | 9 | ~~Low~~ Resolved | AI Map Generator modal rendered completely unstyled (overlapping labels, no backdrop) | **Fixed `8a1e574` — `MapGenerator.css` was imported nowhere; added the missing `import`. Verified by user.** |
+| 10 | Low | Cancel during AI quest generation closes the dialog but does not abort the in-flight `fetch` (no `AbortController` wired up) — generation continues in the background | Open — cosmetic, no data harm. Wire an `AbortController` in a future pass. |
 
 ### Bug #5 — Encounter Builder freeze (RESOLVED 2026-05-15)
 
@@ -429,6 +430,7 @@ These are suggested based on current state — confirm with user before starting
 6. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
 7. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
 8. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
+9. **Production readiness** (before opening the app to other DMs) — multi-user auth review, SQL-injection sweep, rate limiting on AI endpoints, a per-user daily AI cost cap, and React error boundaries so one crashing card cannot blank a whole module.
 
 ---
 
