@@ -20,6 +20,7 @@ import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment
 import mapTagsJson     from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
+import './MapGenerator.css';
 // mapTags.json is now { tags: [...], poi_influence_rules: {...} }
 const tagRules        = mapTagsJson.tags;
 const influenceRules  = mapTagsJson.poi_influence_rules ?? {};

@@ -735,6 +735,9 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
         {/* ── Left sidebar ── */}
         <aside className="mm-sidebar">
           <div className="mm-sidebar-header">
+            <button className="mm-back-btn" onClick={onClose} aria-label="Back to dashboard">
+              ← Dashboard
+            </button>
             <div className="mm-sidebar-title">🗺 Maps</div>
             <div className="mm-sidebar-actions">
               {isDM && (
@@ -745,7 +748,6 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                     onClick={() => fileRef.current?.click()}>📁</button>
                 </>
               )}
-              <button className="mm-icon-btn mm-icon-btn--close" onClick={onClose}>✕</button>
             </div>
           </div>
 

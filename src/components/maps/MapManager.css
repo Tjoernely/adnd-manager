@@ -54,6 +54,30 @@
   flex-wrap: wrap;
 }
 
+/* Back-to-dashboard control — closes the Maps overlay. Labeled and placed at
+   the top of the sidebar so it matches the other modules' ← Dashboard button. */
+.mm-back-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(200, 168, 75, 0.25);
+  border-radius: 6px;
+  color: #9a875a;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.mm-back-btn:hover {
+  color: #c8a84b;
+  border-color: rgba(200, 168, 75, 0.55);
+  background: rgba(200, 168, 75, 0.07);
+}
+
 /* ── Map tree ─────────────────────────────────────────────────────────────── */
 .mm-map-tree {
   flex: 1;
