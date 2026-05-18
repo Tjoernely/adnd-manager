@@ -32,7 +32,11 @@ server/dnd.db
 .env.production.local
 
 # Claude Code local config
-.claude/
+.claude/*
+# ...but track project-scoped skills so they ship with the repo
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/frontend-design/
 
 # PM2 ecosystem config (contains credentials — never commit)
 ecosystem.config.cjs
