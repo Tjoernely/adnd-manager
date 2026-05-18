@@ -14,6 +14,7 @@ import {
   ALL_STATUSES,
 } from '../../rules-engine/quests/questSchema';
 import { QUEST_VOCABULARY } from '../../rules-engine/quests/questPrompts';
+import { AdndModuleHeader } from '../ui/AdndModuleHeader';
 
 // ── Label helpers ────────────────────────────────────────────────────────────
 
@@ -125,13 +126,16 @@ export function QuestList({
 
   return (
     <div className="quest-list">
+      <AdndModuleHeader title="Quests" icon="📜" subtitle="Quest Tracker" />
+
       <div className="quest-list__toolbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button className="quest-btn quest-btn--ghost" onClick={onBack}>
-            ← Dashboard
-          </button>
-          <h2 className="quest-list__title">Quests</h2>
-        </div>
+        <button
+          className="quest-btn quest-btn--ghost"
+          onClick={onBack}
+          aria-label="Back to dashboard"
+        >
+          ← Dashboard
+        </button>
         <div className="quest-list__actions">
           <button className="quest-btn quest-btn--primary" onClick={onGenerate}>
             ✨ Generate with AI

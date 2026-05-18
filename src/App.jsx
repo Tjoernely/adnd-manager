@@ -309,11 +309,8 @@ export default function App() {
         <div style={{ display:"flex", alignItems:"flex-start", gap:18, marginBottom:14, flexWrap:"wrap" }}>
           <div style={{ flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:3, flexWrap:"wrap" }}>
-              <span style={{ fontSize:10, letterSpacing:6, color:C.goldDim, textTransform:"uppercase" }}>
-                AD&amp;D 2nd Edition ✦ Skills &amp; Powers ✦ Character Creation Engine
-              </span>
-              {/* ← Dashboard button */}
-              <button onClick={() => setScreen('dashboard')} style={{
+              {/* ← Dashboard button — leftmost, consistent with all other modules */}
+              <button onClick={() => setScreen('dashboard')} aria-label="Back to dashboard" style={{
                 fontSize:10, background:"rgba(0,0,0,.35)",
                 border:`1px solid ${C.border}`, borderRadius:6,
                 padding:"3px 10px", color:C.textDim, cursor:"pointer",
@@ -323,6 +320,9 @@ export default function App() {
                 onMouseLeave={e=>{ e.target.style.color=C.textDim; e.target.style.borderColor=C.border; }}>
                 ← Dashboard
               </button>
+              <span style={{ fontSize:10, letterSpacing:6, color:C.goldDim, textTransform:"uppercase" }}>
+                AD&amp;D 2nd Edition ✦ Skills &amp; Powers ✦ Character Creation Engine
+              </span>
               {/* Campaign + user pill */}
               <span style={{ fontSize:10, background:"rgba(0,0,0,.4)",
                 border:`1px solid ${C.border}`, borderRadius:12,

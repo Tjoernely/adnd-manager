@@ -6,26 +6,31 @@
  * ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --quest-bg: var(--bg, #1a1a1f);
-  --quest-surface: var(--surface, #25252d);
-  --quest-surface-2: var(--surface-2, #2f2f38);
-  --quest-border: var(--border, #3a3a45);
-  --quest-text: var(--text, #e5e5ea);
-  --quest-text-muted: var(--text-muted, #8a8a96);
-  --quest-accent: var(--accent, #a78bfa);
-  --quest-accent-dim: var(--accent-dim, #6d4ec7);
-  --quest-danger: var(--danger, #ef4444);
-  --quest-success: var(--success, #22c55e);
-  --quest-info: var(--info, #60a5fa);
-  --quest-warning: var(--warning, #facc15);
+  /* Re-pointed to the AD&D 2E theme (src/styles/adnd-theme.css) so the quest
+     module reads as the same leather-bound rulebook as the campaign dashboard. */
+  --quest-bg:         var(--adnd-bg, #0f0b04);
+  --quest-surface:    var(--adnd-surface, #1a1108);
+  --quest-surface-2:  #241a0c;
+  --quest-border:     var(--adnd-border, rgba(200, 168, 75, 0.22));
+  --quest-border-hi:  var(--adnd-border-hi, rgba(200, 168, 75, 0.60));
+  --quest-text:       var(--adnd-text, #d4c090);
+  --quest-text-muted: #9a8a5e;
+  --quest-accent:     var(--adnd-gold, #c8a84b);
+  --quest-accent-dim: var(--adnd-gold-dim, #7a6020);
+  --quest-danger:     #c85a4a;
+  --quest-success:    #6fae3f;
+  --quest-info:       #c8a84b;
+  --quest-warning:    #d6a93a;
 }
 
 /* ── Module container ──────────────────────────────────────────────────── */
 
 .quest-module {
   color: var(--quest-text);
+  background: var(--quest-bg);
   padding: 1rem;
-  min-height: 100%;
+  min-height: 100vh;
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
 }
 
 .quest-module--fullpage-active {
@@ -167,17 +172,17 @@
 /* ── Quest card ────────────────────────────────────────────────────────── */
 
 .quest-card {
-  background: var(--quest-surface-2);
+  background: linear-gradient(160deg, #1c1508, #141008);
   border: 1px solid var(--quest-border);
   border-radius: 6px;
   padding: 0.6rem;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
 }
 .quest-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-  border-color: var(--quest-accent-dim);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.6), 0 0 14px rgba(200,168,75,0.12);
+  border-color: var(--quest-border-hi);
 }
 .quest-card__title-row {
   display: flex;
@@ -192,6 +197,7 @@
 .quest-card__pitch {
   font-size: 0.85rem;
   color: var(--quest-text-muted);
+  font-style: italic;
   margin-bottom: 0.4rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -206,20 +212,21 @@
 }
 .quest-card__chip {
   font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
-  background: var(--quest-bg);
-  border: 1px solid var(--quest-border);
-  border-radius: 3px;
+  padding: 0.12rem 0.6rem;
+  background: rgba(200,168,75,0.08);
+  border: 1px solid rgba(200,168,75,0.3);
+  border-radius: 999px;
   color: var(--quest-text);
+  letter-spacing: 0.3px;
 }
 .quest-card__chip--diff {
-  background: rgba(167,139,250,0.15);
+  background: rgba(200,168,75,0.16);
   border-color: var(--quest-accent-dim);
   color: var(--quest-accent);
 }
 .quest-card__chip--tone {
-  background: rgba(250,204,21,0.1);
-  border-color: rgba(250,204,21,0.3);
+  background: rgba(214,169,58,0.12);
+  border-color: rgba(214,169,58,0.35);
 }
 .quest-card__footer {
   display: flex;
@@ -266,11 +273,14 @@
   cursor: not-allowed;
 }
 .quest-btn--primary {
-  background: var(--quest-accent-dim);
-  border-color: var(--quest-accent-dim);
+  background: linear-gradient(135deg, #7a5a10, var(--quest-accent));
+  border-color: var(--quest-accent);
+  color: #1a0f00;
+  font-weight: bold;
+  text-shadow: none;
 }
 .quest-btn--primary:hover:not(:disabled) {
-  background: var(--quest-accent);
+  background: linear-gradient(135deg, #8a6a14, #e0c060);
 }
 .quest-btn--ghost {
   background: transparent;
@@ -293,14 +303,16 @@
   padding: 1rem;
 }
 .quest-modal {
-  background: var(--quest-bg);
-  border: 1px solid var(--quest-border);
-  border-radius: 8px;
+  background: linear-gradient(160deg, #1e1608, #141008);
+  border: 1px solid var(--quest-border-hi);
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.9);
   width: min(900px, 100%);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
 }
 .quest-modal--generate { width: min(700px, 100%); }
 .quest-modal__header {
@@ -337,9 +349,10 @@
   background: var(--quest-bg);
 }
 .quest-editor--modal {
-  background: var(--quest-bg);
-  border: 1px solid var(--quest-border);
-  border-radius: 8px;
+  background: linear-gradient(160deg, #1e1608, #141008);
+  border: 1px solid var(--quest-border-hi);
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.9);
   width: min(1100px, 100%);
   max-height: 90vh;
   overflow: hidden;

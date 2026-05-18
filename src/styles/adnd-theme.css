@@ -114,6 +114,45 @@
   letter-spacing: 4px;
 }
 
+/* ── Reusable module header (banner + centered title + divider) ─ */
+/*
+  Usage:  <AdndModuleHeader title="Quests" icon="📜" subtitle="Quest Tracker" />
+  Mirrors the campaign dashboard's signature header so every module reads
+  as the same leather-bound rulebook.
+*/
+.adnd-module-header {
+  text-align: center;
+  padding: 18px 24px 0;
+}
+.adnd-module-header__edition {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--adnd-gold-dim);
+  text-transform: uppercase;
+}
+.adnd-module-header__title {
+  margin: 8px 0 2px;
+  font-size: clamp(20px, 3vw, 30px);
+  font-weight: bold;
+  color: var(--adnd-gold);
+  text-shadow:
+    0 0 20px rgba(200, 168, 75, 0.5),
+    0 0 60px rgba(200, 168, 75, 0.2);
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.adnd-module-header__icon { font-size: 0.95em; }
+.adnd-module-header__subtitle {
+  font-size: 11px;
+  color: var(--adnd-text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-style: italic;
+}
+
 /* ── Watermark backgrounds ───────────────────────────────────── */
 
 /*
