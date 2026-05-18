@@ -73,6 +73,16 @@ Do NOT start a local dev server or run preview verification after edits. All cha
 
 ## Known Outstanding Work
 
-- Webhook-based deploy is fixed (detached spawn)
-- sp_cp_cost updated for 311 NWPs
-- Weapon proficiencies not yet imported to DB
+See `CLAUDE_STATUS.md` for the authoritative, up-to-date project status (feature
+state, bugs, architecture decisions, priorities). Quick notes:
+
+- `CLAUDE_STATUS.md` is the living status doc — read it first.
+- Quest Module (Stages 1–3) shipped: AI quest generation with model picker
+  (Claude / GPT), kanban + 7-tab editor, AD&D theming.
+- `/api/ai/prompt` is multi-provider — accepts a `model` param, routes to
+  Anthropic or OpenAI; omitting it defaults to Claude Sonnet 4.6.
+- Webhook auto-deploy is intermittently unreliable — always verify the server
+  commit after a push and fall back to manual `git pull && pm2 restart`.
+- nginx has a dedicated `/api/ai/` block (`proxy_read_timeout 600s`) for long
+  AI generations — config lives on the server, not in the repo.
+- Weapon proficiencies still not imported to PostgreSQL (read from `src/data/`).

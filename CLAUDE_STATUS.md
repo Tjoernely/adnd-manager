@@ -1,6 +1,6 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-05-17_
+_Last updated: 2026-05-18_
 
 ---
 
@@ -48,6 +48,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - HMAC signature verified via `WEBHOOK_SECRET` in `server/.env`
 - Lock file prevents concurrent deploys
 - Frontend assets are NOT rebuilt by webhook (frontend requires manual build + commit of `server/public/`)
+- ⚠ **Reliability:** observed intermittent non-delivery in May 2026 — several pushes did not auto-deploy and needed a manual `ssh … "git pull && pm2 restart adnd-backend"`. Always verify the server commit after a push; fall back to manual deploy if it lags. Worth investigating the webhook handler / GitHub delivery log.
 
 ---
 
@@ -176,15 +177,16 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - 137 kits
 - Weapons catalog + armor catalog
 
----
-
-### 🔶 Implemented, awaiting verification
-
-**Quest Module (Stage 1 + Stage 2)**
-- Stage 2 wired into `CampaignDashboard.jsx` + `App.jsx` — quest card now routes to a `quests` screen rendering `<QuestModule campaignId={...} />` instead of the "coming soon" overlay.
-- Files: `src/rules-engine/quests/{questSchema,defaultQuest,questPrompts,npcResolution,questAI}.ts`, `src/components/quests/{QuestModule,QuestList,QuestEditor,GenerateQuestDialog}.tsx` + `quests.css`, `src/rulesets/quests/{complicationPresets,moralDilemmaPresets,questVocabulary}.json`, `src/api/{aiClient,client}.d.ts`
-- `tsc -b --noEmit` passes clean.
-- Awaiting smoke test in browser (AI generate → editor → save → kanban) before promotion to ✅.
+**Quest Module (Stages 1–3 + follow-ups, May 2026)**
+- Full quest tracker: kanban board (Concept / Draft / Ready / Active / Completed / Failed / Abandoned), 7-tab editor (Overview / Hooks / Objectives / Plot / Clues / Complications / Notes), AI quest generation, NPC auto-creation.
+- Wired into `App.jsx` (`screen === 'quests'`) + `CampaignDashboard.jsx`; `← Dashboard` back button.
+- AI generation: model picker (Claude Opus 4.7 / Sonnet 4.6 default / GPT-5.4 / GPT-5.5), length + detail two-axis picker with scope-dependent labels, live token + USD/EUR cost estimate, generation-time forecast + elapsed counter + reassurance banner, "Generate in chunks" placeholder (disabled, Stage 4).
+- Global AI defaults in Settings (model / length / detail, localStorage keys `quest-default-*`); per-quest override in the Generate dialog.
+- All UI in English; AI generates quest content in English.
+- AD&D-themed: quest palette re-pointed to the gold theme, `AdndModuleHeader` banner, tome-gradient kanban cards, parchment-gold buttons.
+- NPC auto-creation (`npcResolution.ts`): fuzzy-matches existing NPCs or creates new ones; `personality` stored as a trait array (see bug #6).
+- Files: `src/rules-engine/quests/*.ts`, `src/components/quests/*` (incl. `aiGenConfig.ts`), `src/rulesets/quests/*.json`, `src/api/aiClient.d.ts`.
+- Verified live: NPC module (quest-generated NPCs) confirmed by user; quest UI in active use. AI generation end-to-end relies on the 504 + truncation fixes (bug #7) — works for normal sizes; very large Campaign-arc generations are slow but no longer time out.
 
 ---
 
@@ -200,6 +202,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 
 **Map Generator general improvements**
 - User has paused work on this area
+- 2026-05-18: `MapGenerator.css` (which was imported nowhere — bug #9) is now wired in, so the "Generate from Prompt" modal renders correctly again. The CSS predates the AD&D gold theme pass, so the Maps module still looks a step behind the newly-themed modules — a Maps theming pass is a candidate follow-up.
 
 **Weapon proficiencies in DB**
 - Weapon prof data exists in `src/data/` but not yet imported to PostgreSQL
@@ -238,6 +241,10 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 | 3 | Low | Gemini sometimes renders mountains only in top corner even when they span full eastern edge | Partially mitigated by dominant-edge fact in promptBuilder |
 | 4 | Low | Swamp can be rendered as forest by Gemini | Mitigated by TERRAIN_ID_GUIDE in prompt |
 | 5 | ~~Critical~~ Resolved | Encounter Builder freeze (React error #520, infinite render loop) | **Fixed in commit `60bed3e` on 2026-05-15. Verified live, 0 console errors.** |
+| 6 | ~~Critical~~ Resolved | NPC module blank page — crashed on quest-generated NPCs (`personality` stored as a string, NPC list does `.slice().map()` expecting an array) | **Fixed `82e41ac` — `npcResolution.ts` now stores `personality` as a trait array; `questPrompts.ts` schema requests an array; `NPCManager.jsx` defensively normalizes either shape. Verified by user.** |
+| 7 | ~~High~~ Resolved | Long AI quest generations (Campaign arc) failed with HTTP 504 after ~180s | **Fixed — nginx gained a dedicated `/api/ai/` block with `proxy_read_timeout 600s` (see §1 note). Server-side config only.** |
+| 8 | ~~Low~~ Resolved | Quest banners showed invisible light-on-light text | **Fixed `59c432b` — opaque banner backgrounds + explicit dark text.** |
+| 9 | ~~Low~~ Resolved | AI Map Generator modal rendered completely unstyled (overlapping labels, no backdrop) | **Fixed `8a1e574` — `MapGenerator.css` was imported nowhere; added the missing `import`. Verified by user.** |
 
 ### Bug #5 — Encounter Builder freeze (RESOLVED 2026-05-15)
 
@@ -382,10 +389,31 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 
 ### State Persistence Convention
 - localStorage: `dnd_token` (JWT, survives browser restart)
+  - `quest-default-model` / `quest-default-length-tier` / `quest-default-detail-tier` — global AI generation defaults (set in Settings)
+  - `quest-editor-view-mode` — quest editor modal vs. fullpage
 - sessionStorage (per-tab):
   - `adnd_campaign` — active campaign id
+  - `adnd_screen` — active module screen (`dashboard` | `characters` | `quests` | …)
   - `adnd_filter_<storageKey>` — filter panel state (e.g. `adnd_filter_library`, `adnd_filter_generator`)
   - `adnd_custom_xp_range` — Custom XP Range panel state
+
+### Quest Module
+- Data layer (`src/rules-engine/quests/`): `questSchema.ts` (types — stable, do not edit casually), `defaultQuest.ts`, `questPrompts.ts` (AI prompt builders + `QuestAIModel` type), `questAI.ts` (orchestrator), `npcResolution.ts` (fuzzy NPC match/create).
+- `quest.data` is a JSONB blob; the `quests` table hoists `title` to a column.
+- `npcResolution.ts` writes NPC `personality` as a **trait array** — the NPC module reads it with `.map()`. Quest-AI suggestions may arrive as a string and are split into an array (see bug #6).
+- Vocabulary in `src/rulesets/quests/*.json` (scopes, types, tones, environments, challenges, antagonists, complication + moral-dilemma presets) — slugs are stable English keys; labels/descriptions are user-facing English.
+
+### Multi-provider AI endpoint
+- `POST /api/ai/prompt` accepts an optional `model` param: `claude-opus-4-7` / `claude-sonnet-4-6` (default) / `gpt-5.4` / `gpt-5.5`.
+- `claude-*` → Anthropic SDK; `gpt-*` → OpenAI SDK (chat completions). Both normalized to `{ text }`.
+- A `MODEL_REGISTRY` in `server/routes/ai.js` carries each model's provider + real max-output tokens; the requested `maxTokens` is capped to that (replaced the old hard 4096 cap that caused truncation).
+- Omitting `model` → defaults to Sonnet 4.6, so NPCGenerator / MapGenerator (which never pass `model`) keep working unchanged.
+- `OPENAI_API_KEY` missing → `503 "OPENAI_API_KEY not configured on server"`.
+
+### Shared AD&D theming
+- `src/styles/adnd-theme.css` holds the canonical theme variables (`--adnd-gold`, `--adnd-bg`, `--adnd-surface`, `--adnd-border`, …) plus reusable `.adnd-divider`, `.adnd-card`, `.adnd-module-header`.
+- `src/components/ui/AdndModuleHeader.tsx` — reusable edition banner + centered gold title + ornate divider. Currently used by the Quests module; retrofitting the other modules is a pending follow-up.
+- Project-scoped Anthropic `frontend-design` skill installed at `.claude/skills/frontend-design/SKILL.md` (tracked via a `.gitignore` exception) — auto-activates for UI work.
 
 ---
 
@@ -393,11 +421,14 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 
 These are suggested based on current state — confirm with user before starting:
 
-1. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
-2. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
-3. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
-4. **Resume Map Generator improvements** — when user is ready
-5. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
+1. **Retrofit `AdndModuleHeader` + AD&D theming to the remaining modules** — NPCs, Monsters, Spells, Magical Items, Party Hub, Characters. Component exists and is proven on Quests; rollout needs in-browser visual iteration.
+2. **Maps module theming pass** — `MapGenerator.css` predates the gold theme; the Maps overlay looks a step behind the rest.
+3. **Quest Stage 4** — "Generate in chunks" (split very long generations across multiple AI calls); the button placeholder is already in the dialog, disabled.
+4. **Webhook reliability** — investigate intermittent auto-deploy non-delivery (see §1 webhook note).
+5. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
+6. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
+7. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
+8. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
 
 ---
 
