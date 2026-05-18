@@ -304,9 +304,11 @@ function NPCCard({ npc, isDM, onClick }) {
             .filter(Boolean).join(' · ')}
         </div>
         {d.alignment && <div className="nm-card-align">{alignLabel(d.alignment)}</div>}
-        {(d.personality?.length ?? 0) > 0 && (
+        {normalizePersonality(d.personality).length > 0 && (
           <div className="nm-card-traits">
-            {d.personality.slice(0,3).map(t => <span key={t} className="nm-card-trait">{t}</span>)}
+            {normalizePersonality(d.personality).slice(0,3).map((t,i) => (
+              <span key={i} className="nm-card-trait">{t}</span>
+            ))}
           </div>
         )}
         {hasStats && (
@@ -330,8 +332,23 @@ function NPCCard({ npc, isDM, onClick }) {
 
 const DETAIL_TABS = ['overview','traits','equipment','loot','portrait','notes'];
 
+/**
+ * Normalize a personality value to an array of trait strings. Quest-generated
+ * NPCs (pre-fix) stored personality as a prose string; the NPC module expects
+ * an array. Tolerate both shapes so legacy records render without crashing.
+ */
+function normalizePersonality(p) {
+  if (Array.isArray(p)) return p.filter(t => typeof t === 'string' && t.trim() !== '');
+  if (typeof p === 'string') return p.split(/[;,•]\s*|\.\s+/).map(t => t.trim()).filter(Boolean);
+  return [];
+}
+
 function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle }) {
-  const [draft,      setDraft]      = useState(() => ({ ...(npc.data ?? {}) }));
+  const [draft,      setDraft]      = useState(() => {
+    const base = { ...(npc.data ?? {}) };
+    base.personality = normalizePersonality(base.personality);
+    return base;
+  });
   const [draftName,  setDraftName]  = useState(npc.name);
   const [activeTab,  setActiveTab]  = useState('overview');
   const [saving,     setSaving]     = useState(false);

@@ -219,7 +219,7 @@ const FULL_QUEST_SCHEMA = `{
       "level":       5,                                  // number, or null
       "alignment":   "lawful neutral",                   // AD&D 2E alignment
       "motivation":  "English — what they want and why",
-      "personality": "English — 2-3 distinctive traits",
+      "personality": ["3-5 short trait words, e.g. brave, paranoid, soft-spoken"],
       "appearance":  "English — brief physical description",
       "secrets":     ["English — DM-only secrets about this NPC"]
     }

@@ -29,7 +29,8 @@ export interface NPCSuggestion {
   level: number | null;
   alignment: string;
   motivation: string;
-  personality: string;
+  /** AI may return a prose string or an array of trait words — we normalize. */
+  personality: string | string[];
   appearance: string;
   secrets: string[];
 }
@@ -148,6 +149,18 @@ function findExistingNPC(name: string, existing: ExistingNPC[]): ExistingNPC | n
  * Affiliations start empty — the caller updates them after quest is saved
  * (we don't know the quest_id yet at NPC creation time).
  */
+/**
+ * Normalize a personality value to an array of trait strings — the shape the
+ * NPC module expects. A prose string is split on punctuation into traits.
+ */
+function toPersonalityArray(p: string | string[] | undefined): string[] {
+  if (Array.isArray(p)) return p.filter((t): t is string => typeof t === 'string' && t.trim() !== '');
+  if (typeof p === 'string') {
+    return p.split(/[;,•]\s*|\.\s+/).map(t => t.trim()).filter(Boolean).slice(0, 5);
+  }
+  return [];
+}
+
 function npcDataFromSuggestion(s: NPCSuggestion) {
   return {
     race: s.race ?? 'human',
@@ -155,7 +168,7 @@ function npcDataFromSuggestion(s: NPCSuggestion) {
     level: s.level,
     alignment: s.alignment ?? 'true neutral',
     motivation: s.motivation,
-    personality: s.personality,
+    personality: toPersonalityArray(s.personality),
     appearance: s.appearance,
     secrets: s.secrets ?? [],
     affiliations: [] as NPCAffiliation[],
