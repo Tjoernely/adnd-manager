@@ -126,8 +126,16 @@ function parentNote(ctx) {
 
 /** CALL 1 — map metadata only. Fast, ~800-1200 tokens output. */
 function buildMetadataPrompt(r, parentCtx) {
+  const desc = (r.user_description ?? '').trim();
+  // A substantial description is authoritative — the dropdown values are only
+  // fallback hints and must be overridden by anything explicit in it.
+  const descBlock = desc.length >= 30
+    ? `\nUSER DESCRIPTION (authoritative — this defines the location. The dropdown values below are fallback hints ONLY and must be overridden by anything explicit here):\n"${desc}"\n`
+    : desc
+      ? `\nUser description hint: "${desc}"\n`
+      : '';
   return `Generate metadata for an AD&D 2E ${r.mapType} map.
-Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
+${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
 ${parentNote(parentCtx)}
 ${FR_CONTEXT}
 

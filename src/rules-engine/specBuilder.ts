@@ -178,21 +178,36 @@ const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
 export function buildImagePrompt(spec: MapSpec): string {
   const baseDesc = TYPE_IMAGE_DESCRIPTIONS[spec.mapType] ?? 'top-down fantasy map';
 
+  // A substantial user description is authoritative — it must outweigh the
+  // dropdown terrain/atmosphere/era hints, which otherwise fight it (e.g. a
+  // "cozy roadside inn" turning into a "frozen tundra ruin").
+  const desc = (spec.user_description ?? '').trim();
+  const descAuthoritative = desc.length >= 30;
+
   const parts: string[] = [
     `A ${baseDesc},`,
     'hand-drawn ink style on aged parchment.',
     'Forgotten Realms / Faerûn setting.',
   ];
 
-  if (spec.terrain.length > 0) {
+  if (descAuthoritative) {
+    parts.push(
+      `This map depicts: ${desc.slice(0, 400)}. ` +
+      `Render this faithfully — it is the authoritative description and overrides any conflicting style hint.`,
+    );
+  }
+
+  // Dropdown structural fields — fallback hints only, suppressed when the
+  // user description is authoritative.
+  if (!descAuthoritative && spec.terrain.length > 0) {
     parts.push(`Terrain: ${spec.terrain.slice(0, 2).join(', ')}.`);
   }
 
-  if (spec.atmosphere && spec.atmosphere !== 'Random') {
+  if (!descAuthoritative && spec.atmosphere && spec.atmosphere !== 'Random') {
     parts.push(`${spec.atmosphere} atmosphere.`);
   }
 
-  if (spec.era && spec.era !== 'Random' && spec.era.toLowerCase() !== 'medieval') {
+  if (!descAuthoritative && spec.era && spec.era !== 'Random' && spec.era.toLowerCase() !== 'medieval') {
     parts.push(`${spec.era} era.`);
   }
 

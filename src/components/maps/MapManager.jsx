@@ -1089,10 +1089,33 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
 
   if (!mapImageSrc) {
     return (
-      <div className="mm-canvas-empty">
-        <div className="mm-canvas-empty-icon">🗺</div>
-        <div>{isDM ? 'No image — upload one or generate with DALL·E 3' : 'Map image not available.'}</div>
-        {isDM && <div className="mm-canvas-empty-hint">Use 🖼 Image in the toolbar to upload</div>}
+      <div className="mm-canvas-noimage">
+        <div className="mm-canvas-empty">
+          <div className="mm-canvas-empty-icon">🗺</div>
+          <div>{isDM ? 'No image — upload one or generate with DALL·E 3' : 'Map image not available.'}</div>
+          {isDM && <div className="mm-canvas-empty-hint">Use 🖼 Image in the toolbar to upload</div>}
+        </div>
+        {pois.length > 0 && (
+          <div className="mm-poi-list">
+            <div className="mm-poi-list-title">Points of Interest · {pois.length}</div>
+            {pois.map(poi => {
+              const info = poiInfo(poi.type);
+              return (
+                <button
+                  key={poi.id}
+                  type="button"
+                  className={`mm-poi-list-item${poi.id === selectedPoiId ? ' mm-poi-list-item--selected' : ''}`}
+                  onClick={() => onPoiSelect(poi.id)}
+                >
+                  <span className="mm-poi-list-icon" style={{ color: info.color }}>{info.icon}</span>
+                  <span className="mm-poi-list-name">{poi.name}</span>
+                  <span className="mm-poi-list-type" style={{ color: info.color }}>{info.label}</span>
+                  {poi.is_dm_only && !playerView && <span className="mm-poi-list-badge">🔒</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
