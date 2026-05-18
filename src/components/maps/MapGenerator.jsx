@@ -208,14 +208,14 @@ async function callDalleOnce(prompt, apiKey) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      // NB: no `style` / `response_format` — OpenAI's current image API
-      // rejects `style` ("Unknown parameter"). Matches the working payload
-      // in server/lib/dalleProvider.js; `url` is the default response format.
-      model:   'dall-e-3',
+      // gpt-image-1 — dall-e-3 was removed from OpenAI's API on 2026-05-12.
+      // gpt-image-1 takes no `style` / `response_format` and uses high/medium/low
+      // (not standard/hd) for `quality`, so we send only the universal fields.
+      // It always returns base64 (b64_json), never a URL.
+      model: 'gpt-image-1',
       prompt,
-      n:       1,
-      size:    '1024x1024',
-      quality: 'standard',
+      n:     1,
+      size:  '1024x1024',
     }),
   });
   const data = await resp.json();
@@ -227,11 +227,19 @@ async function callDalleOnce(prompt, apiKey) {
   return data;
 }
 
+// Convert a base64 string to a Blob — gpt-image-1 returns b64_json, not a URL.
+function b64ToBlob(b64, type = 'image/png') {
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type });
+}
+
 async function generateAndSaveImage(map, prompt) {
   const apiKey = getOpenAIKey();
   if (!apiKey) throw new Error('No OpenAI API key — skipping image generation.');
 
-  console.log('[Map] Calling DALL-E 3 for map image...');
+  console.log('[Map] Calling gpt-image-1 for map image...');
 
   let data;
   try {
@@ -239,7 +247,7 @@ async function generateAndSaveImage(map, prompt) {
   } catch (firstErr) {
     // Retry once on server_error after 3 s
     if (firstErr.code === 'server_error' || firstErr.message?.includes('server_error')) {
-      console.warn('[Map] DALL-E server_error — retrying in 3 s...');
+      console.warn('[Map] gpt-image-1 server_error — retrying in 3 s...');
       await new Promise(r => setTimeout(r, 3000));
       data = await callDalleOnce(prompt, apiKey);
     } else {
@@ -247,19 +255,22 @@ async function generateAndSaveImage(map, prompt) {
     }
   }
 
-  const imageUrl = data?.data?.[0]?.url;
-  if (!imageUrl) throw new Error('DALL-E returned no image URL.');
+  const b64 = data?.data?.[0]?.b64_json;
+  if (!b64) throw new Error('gpt-image-1 returned no image data.');
 
-  console.log('[Map] DALL-E URL received — persisting to server...');
+  console.log('[Map] Image received — persisting to server...');
 
-  // Download and persist the image server-side so it never expires.
-  // POST /api/maps/:id/image/from-url downloads the DALL-E URL to disk
-  // and returns the map record with a permanent /uploads/maps/... URL.
+  // gpt-image-1 returns a base64 PNG (no URL). Upload it through the existing
+  // multipart image endpoint, which writes it to /uploads/maps/ and returns
+  // the updated map record with a permanent image_url. (No Content-Type
+  // header — the browser sets the multipart boundary itself.)
   const token = localStorage.getItem('dnd_token');
-  const persistResp = await fetch(`/api/maps/${map.id}/image/from-url`, {
+  const form  = new FormData();
+  form.append('image', b64ToBlob(b64, 'image/png'), `map-${map.id}.png`);
+  const persistResp = await fetch(`/api/maps/${map.id}/image`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body:    JSON.stringify({ url: imageUrl }),
+    headers: { Authorization: `Bearer ${token}` },
+    body:    form,
   });
   if (!persistResp.ok) {
     const err = await persistResp.json().catch(() => ({}));
