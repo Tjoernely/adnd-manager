@@ -404,7 +404,7 @@ export function MapGenerator({
       if (resolved.user_description) {
         console.log('[MapGenerator] Enriching spec with AI (user_description present)...');
         try {
-          const enrichOpts = buildEnrichmentPrompt(spec);
+          const enrichOpts = buildEnrichmentPrompt(spec, pois);
           const enrichment = await callClaude(enrichOpts);
           spec = applyEnrichment(spec, enrichment);
           console.log('[MapGenerator] Spec enriched — visual_keywords:', spec.visual_keywords);
@@ -415,7 +415,7 @@ export function MapGenerator({
 
       // Build DALL-E prompt now — before map creation — so image_prompt_contract
       // is always stored in data.spec regardless of whether DALL-E succeeds.
-      const dallePrompt = buildImagePrompt(spec);
+      const dallePrompt = buildImagePrompt(spec, pois);
       spec = withImageContract(spec, dallePrompt);
       console.log('[MapGenerator] DALL-E prompt (%d chars): %s', dallePrompt.length, dallePrompt);
 

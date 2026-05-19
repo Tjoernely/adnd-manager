@@ -84,13 +84,37 @@ export function withImageContract(spec: MapSpec, prompt: string): MapSpec {
   return { ...spec, image_prompt_contract: prompt };
 }
 
+// ── POI-aware prompting (Bug #6) ──────────────────────────────────────────────
+// Step 2 (Claude POIs) can introduce new setting elements — harbours, sea
+// caves, etc. — that aren't in the original spec. These helpers feed that POI
+// content into the enrichment and image prompts so the generated image and
+// its visual keywords stay consistent with the POI narrative.
+
+export interface MapPOIInput {
+  name?:              string;
+  type?:              string;
+  short_description?: string;
+}
+
+function summarizePois(pois: MapPOIInput[]): string {
+  return pois
+    .filter((p): p is MapPOIInput => !!p && typeof p.name === 'string' && p.name.trim() !== '')
+    .map(p => {
+      const type = p.type ? ` [${p.type}]` : '';
+      const desc = p.short_description ? ` — ${p.short_description}` : '';
+      return `- ${p.name}${type}${desc}`;
+    })
+    .join('\n');
+}
+
 // ── buildEnrichmentPrompt ─────────────────────────────────────────────────────
 // Returns the AI call options for visual enrichment.
 // Called only when spec.user_description is set.
 // The caller (MapGenerator) executes the actual callClaude() and passes the
-// result to applyEnrichment().
+// result to applyEnrichment(). `pois` (Step 2 output) keeps the visual
+// keywords consistent with the POI-implied world.
 
-export function buildEnrichmentPrompt(spec: MapSpec): {
+export function buildEnrichmentPrompt(spec: MapSpec, pois: MapPOIInput[] = []): {
   systemPrompt: string;
   userPrompt:   string;
   maxTokens:    number;
@@ -99,8 +123,13 @@ export function buildEnrichmentPrompt(spec: MapSpec): {
     ? `Settlement: ${spec.settlement.archetype.replace(/_/g, ' ')} with districts: ${spec.settlement.districts.join(', ')}.`
     : '';
 
+  const poiSummary = summarizePois(pois);
+  const poiBlock = poiSummary
+    ? `\nPoints of interest already placed on this map — the visual elements you choose MUST be consistent with the world these imply (water, coastline, terrain, structures, etc.):\n${poiSummary}\n`
+    : '';
+
   return {
-    systemPrompt: `You are a visual art director for fantasy cartography. Given map parameters and a user description, return JSON with specific visual elements for a DALL-E map image. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences.`,
+    systemPrompt: `You are a visual art director for fantasy cartography. Given map parameters and a user description, return JSON with specific visual elements for a fantasy map image. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences.`,
     userPrompt: `Map type: ${spec.mapType}
 Terrain: ${spec.terrain.join(', ')}
 Atmosphere: ${spec.atmosphere}
@@ -108,7 +137,7 @@ Inhabitants: ${spec.inhabitants}
 Title: "${spec.title}"
 ${settlementLine}
 User description: ${spec.user_description ?? ''}
-
+${poiBlock}
 Return ONLY this JSON:
 {
   "visual_keywords": ["3-5 specific visual elements visible in the map image, e.g. crumbling watchtower, frozen waterfall, glowing runes"],
@@ -175,7 +204,7 @@ const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
 // dalle_prompt_additions from Claude are truncated to 80 chars to prevent
 // policy-triggering content from inflating or altering the core prompt.
 
-export function buildImagePrompt(spec: MapSpec): string {
+export function buildImagePrompt(spec: MapSpec, pois: MapPOIInput[] = []): string {
   const baseDesc = TYPE_IMAGE_DESCRIPTIONS[spec.mapType] ?? 'top-down fantasy map';
 
   // A substantial user description is authoritative — it must outweigh the
@@ -209,6 +238,15 @@ export function buildImagePrompt(spec: MapSpec): string {
 
   if (!descAuthoritative && spec.era && spec.era !== 'Random' && spec.era.toLowerCase() !== 'medieval') {
     parts.push(`${spec.era} era.`);
+  }
+
+  // POI-derived locations (Bug #6) — make the image reserve space for the
+  // places Step 2 actually generated, so it matches the POI narrative.
+  const poiNames = pois
+    .map(p => p?.name)
+    .filter((n): n is string => typeof n === 'string' && n.trim() !== '');
+  if (poiNames.length) {
+    parts.push(`The map must show distinct areas for these locations: ${poiNames.slice(0, 8).join(', ')}.`);
   }
 
   if (spec.settlement) {
