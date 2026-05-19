@@ -17,13 +17,18 @@ _Last updated: 2026-05-18_
 | Web server | nginx — port 80, `/api/` → Express :3001, everything else → `server/public/` |
 | Database | PostgreSQL (managed Oracle DB) |
 
-> **nginx `/api/ai/` timeout (2026-05-17):** `/etc/nginx/sites-enabled/adnd-manager`
-> has a dedicated `location /api/ai/` block with `proxy_read_timeout 600s` /
-> `proxy_send_timeout 600s` / `proxy_connect_timeout 60s` + `proxy_buffering off`,
-> so long AI quest generations no longer hit a gateway timeout. The general
-> `/api/` block keeps `proxy_read_timeout 180s`. This nginx config lives only on
-> the server (not in the repo). A backup of the pre-change config is at
-> `/etc/nginx/sites-enabled/adnd-manager.bak-20260517`.
+> **nginx custom config** (`/etc/nginx/sites-enabled/adnd-manager` — lives only
+> on the server, not in the repo):
+> - **`/api/ai/` timeout (2026-05-17):** dedicated `location /api/ai/` block with
+>   `proxy_read_timeout 600s` / `proxy_send_timeout 600s` /
+>   `proxy_connect_timeout 60s` + `proxy_buffering off`, so long AI quest
+>   generations don't hit a gateway timeout. The general `/api/` block keeps
+>   `proxy_read_timeout 180s`.
+> - **`client_max_body_size 20M` (2026-05-19):** server-level — nginx default is
+>   1M, which 413'd gpt-image-1 map PNG uploads (1–2.5 MB) to
+>   `POST /api/maps/:id/image`. Matches the route's multer limit (20M).
+> - Backups of pre-change configs: `…/adnd-manager.bak-20260517`,
+>   `…/adnd-manager.bak-20260519`.
 
 ### Deploy flows
 
