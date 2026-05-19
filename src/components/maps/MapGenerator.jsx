@@ -157,8 +157,17 @@ function buildPoisPrompt(r, numPois, meta, parentCtx) {
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
     ? 'For this region map include a variety of: settlements, ruins, caves, encounter areas, landmarks.'
     : 'For this interior/dungeon map include: rooms, traps, treasures, encounters, boss area.';
+  // Bug #6: the POIs must stay inside the setting the user described. Same
+  // authoritative treatment Phase 3 gave the metadata call (call 1) — without
+  // it, Step 2 drifts (a "coastal fishing village" became a swamp/undead map).
+  const desc = (r.user_description ?? '').trim();
+  const descBlock = desc.length >= 30
+    ? `\nUSER DESCRIPTION (authoritative — every POI MUST fit the location, setting, biome and terrain described here. Be creative and add rich lore WITHIN it, but do NOT relocate the map to a different biome or setting):\n"${desc}"\n`
+    : desc
+      ? `\nUser description hint: "${desc}"\n`
+      : '';
   return `For the Forgotten Realms AD&D 2E ${r.mapType} map "${meta.title}":
-Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
+${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
 ${parentNote(parentCtx)}
 ${typeHint}
 Use FR-appropriate names, factions and lore for all POIs. Keep each field to 1-2 sentences maximum.
