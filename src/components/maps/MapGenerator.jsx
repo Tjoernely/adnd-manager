@@ -291,6 +291,22 @@ async function generateAndSaveImage(map, prompt) {
   return updated;
 }
 
+// ── 5A: pre-fill Visual Description in the Generate-Sub-Map modal from the
+// spawning POI's narrative. Template-based (no Claude micro-call): joins the
+// POI's short_description with the first sentence of its dm_description. The
+// DM can edit before generating. Returns null when there's nothing usable.
+function buildVisualDescriptionFromPOI(poi) {
+  if (!poi) return null;
+  const parts = [];
+  if (poi.short_description) parts.push(String(poi.short_description).trim());
+  if (poi.dm_description) {
+    const firstSentence = String(poi.dm_description).match(/^[^.!?]+[.!?]/)?.[0];
+    if (firstSentence) parts.push(firstSentence.trim());
+  }
+  const joined = parts.join(' ').trim();
+  return joined || null;
+}
+
 // ── MapGenerator Component ────────────────────────────────────────────────────
 export function MapGenerator({
   campaignId,
@@ -314,7 +330,7 @@ export function MapGenerator({
     era:              presetParams?.era              ?? 'Random',
     inhabitants:      presetParams?.inhabitants      ?? 'Random',
     poiCount:         presetParams?.poiCount         ?? 'Random (3-8)',
-    user_description: presetParams?.user_description ?? '',
+    user_description: presetParams?.user_description ?? buildVisualDescriptionFromPOI(parentPoiCtx) ?? '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
   const [step1Done,   setStep1Done]   = useState(false); // metadata call

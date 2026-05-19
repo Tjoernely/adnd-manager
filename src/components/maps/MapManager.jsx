@@ -532,6 +532,19 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
 
   // ── Drill-down sub-map (auto or manual) ──────────────────────────────────────
   const handleDrillDown = useCallback((poi) => {
+    // ── 5A: depth guard ──────────────────────────────────────────────────────
+    // A sub-map's depth equals its ancestor count; cap chains at MAX_DEPTH so
+    // sub-sub-sub-maps don't grow indefinitely. Top-level = 0 ancestors.
+    const MAX_DEPTH = 3;
+    const currentDepth = getAncestors(maps, activeMapId).length;
+    if (currentDepth >= MAX_DEPTH) {
+      showToast(
+        `Maximum sub-map depth reached (${MAX_DEPTH} levels). ` +
+        `Generate a separate top-level map instead.`,
+      );
+      return;
+    }
+
     const submapPreset = SUBMAP_TYPE_MAP[poi.suggested_submap_type]
       ?? SUBMAP_TYPE_MAP[poi.drill_down_type]
       ?? POI_TYPE_TO_MAP_TYPE[poi.type]
@@ -603,7 +616,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       presetParams,
     });
     setShowGenerator(true);
-  }, [activeMapId, maps]);
+  }, [activeMapId, maps, showToast]);
 
   // ── After map created ────────────────────────────────────────────────────────
   const handleMapCreated = useCallback((newMap) => {
