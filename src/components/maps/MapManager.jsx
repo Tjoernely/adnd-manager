@@ -607,7 +607,13 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
 
     // 5B-a: inherit map style from the parent — sub-maps default to the same
     // visual treatment unless the DM picks a different style.
-    const parentStyle = parentMap?.data?.spec?.constraints?.style;
+    // Bug C: legacy maps stored 'parchment_map' (pre-5B-a default) which is
+    // NOT a slug in mapStylePresets.json — the <select> falls back to the
+    // first option visually but the value stays 'parchment_map' and gets
+    // round-tripped into the new sub-map's spec. Normalize the legacy alias
+    // to its real slug so both the UI and the saved spec are consistent.
+    const rawParentStyle = parentMap?.data?.spec?.constraints?.style;
+    const parentStyle = rawParentStyle === 'parchment_map' ? 'parchment' : rawParentStyle;
     if (parentStyle) {
       presetParams = { ...presetParams, mapStyle: parentStyle };
     }

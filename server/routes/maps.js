@@ -332,14 +332,14 @@ router.get('/', auth, async (req, res) => {
     if (access.isDM) {
       rows = await db.all(
         `SELECT id, campaign_id, name, type, image_url, data,
-                parent_map_id, parent_poi_id, created_at, updated_at
+                parent_map_id, parent_poi_id, purpose, created_at, updated_at
          FROM maps WHERE campaign_id=$1 ORDER BY created_at`,
         [campaign_id],
       );
     } else {
       const all = await db.all(
         `SELECT id, campaign_id, name, type, image_url, data,
-                parent_map_id, parent_poi_id, created_at, updated_at
+                parent_map_id, parent_poi_id, purpose, created_at, updated_at
          FROM maps WHERE campaign_id=$1`,
         [campaign_id],
       );
@@ -357,7 +357,7 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const map = await db.one(
       `SELECT id, campaign_id, name, type, image_url, data,
-              parent_map_id, parent_poi_id, created_at, updated_at
+              parent_map_id, parent_poi_id, purpose, created_at, updated_at
        FROM maps WHERE id=$1`, [req.params.id],
     );
     if (!map) return res.status(404).json({ error: 'Not found' });
@@ -446,7 +446,7 @@ router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
     const updated = await db.one(
       `UPDATE maps SET image_url=$1, updated_at=NOW() WHERE id=$2
        RETURNING id, campaign_id, name, type, image_url, data,
-                 parent_map_id, parent_poi_id, created_at, updated_at`,
+                 parent_map_id, parent_poi_id, purpose, created_at, updated_at`,
       [image_url, req.params.id],
     );
     res.json(updated);
@@ -505,7 +505,7 @@ router.post('/:id/image/from-url', auth, async (req, res) => {
     const updated = await db.one(
       `UPDATE maps SET image_url=$1, updated_at=NOW() WHERE id=$2
        RETURNING id, campaign_id, name, type, image_url, data,
-                 parent_map_id, parent_poi_id, created_at, updated_at`,
+                 parent_map_id, parent_poi_id, purpose, created_at, updated_at`,
       [image_url, req.params.id],
     );
     console.log(`[maps from-url] id=${req.params.id} DB updated image_url=${image_url}`);
@@ -572,7 +572,7 @@ router.put('/:id', auth, async (req, res) => {
            parent_map_id=$5, parent_poi_id=$6, updated_at=NOW()
        WHERE id=$7
        RETURNING id, campaign_id, name, type, image_url, data,
-                 parent_map_id, parent_poi_id, created_at, updated_at`,
+                 parent_map_id, parent_poi_id, purpose, created_at, updated_at`,
       [name.trim(), type, image_url, JSON.stringify(mergedData),
        parent_map_id || null, parent_poi_id || null, req.params.id],
     );
@@ -588,7 +588,7 @@ router.put('/:id', auth, async (req, res) => {
              updated_at = NOW()
          WHERE id = $2
          RETURNING id, campaign_id, name, type, image_url, data,
-                   parent_map_id, parent_poi_id, created_at, updated_at`,
+                   parent_map_id, parent_poi_id, purpose, created_at, updated_at`,
         [JSON.stringify(sketchFromBody), req.params.id],
       );
       console.log(`[maps PUT] id=${req.params.id} jsonb_set done — cells now in DB: ${updated.data?.sketch?.cells?.length ?? '?'}`);

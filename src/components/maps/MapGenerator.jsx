@@ -214,7 +214,8 @@ This sub-map represents a plausible side-location the party may have stumbled in
   - "An old well shaft" with stagnant water, a rusted bucket, lichen on the stones
 - Title should sound like a mundane place name, NOT an epic dungeon name.
   - GOOD: "Old Tannery", "The Bramble Path", "Cooper's Storeroom"
-  - BAD: "The Bloodied Sanctum", "Shrine of the Drowned Lord"`;
+  - BAD: "The Bloodied Sanctum", "Shrine of the Drowned Lord"
+- REINTERPRETATION RULE: Even if the user_description above mentions cursed, magical, undead or otherwise dramatic content (e.g. "skeletal fishermen reanimated by a curse"), REINTERPRET those elements as PAST and ABANDONED. Keep visual elements (boats, bones, ruined shrines) but strip out active plot ("OLD ABANDONED FISHING BOATS with bone-debris on the deck suggesting a long-past tragedy" — no active undead, no active curse, no active magic). The location must read as POST-PLOT: whatever happened here is OVER.`;
     case 'minor':
       return `
 [PURPOSE: MINOR LOCATION]
