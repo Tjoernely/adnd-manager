@@ -22,6 +22,12 @@ import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
 import mapStylePresets from '../../rulesets/mapStylePresets.json';
 import { MAP_PURPOSES, PURPOSE_BY_VALUE } from '../../constants/mapPurposes.js';
+import {
+  getAllSubcategoryKeys,
+  getSubcategory,
+  getRandomConceptSample,
+  formatSubcategoryForPrompt,
+} from '../../rulesets/poiTaxonomy.ts';
 import './MapGenerator.css';
 
 // Map style presets — derived from the shared JSON registry. The `$` keys are
@@ -271,8 +277,80 @@ Respond with ONLY this JSON object:
 }`;
 }
 
+/**
+ * Phase 6 — Step 1.5: Haiku picks 6-12 POI sub-categories that fit the map.
+ *
+ * Cheap (~$0.001), fast (~1-2 s), low-stakes (failure falls back silently).
+ * The result feeds Step 2 — Sonnet then sees a curated set of archetypes
+ * with sampled concepts, dramatically reducing the "every map gets a
+ * Sanctum and an Ossuary" monotony.
+ *
+ * @returns {Promise<{selected: string[], rationale: string} | null>}
+ *          null on any failure → caller falls back to SCOPE defaults.
+ */
+async function selectPOISubcategories(r, meta, parentCtx) {
+  try {
+    const allKeys = getAllSubcategoryKeys();
+    const subList = allKeys.map(k => formatSubcategoryForPrompt(k)).join('\n');
+    const parentLine = parentCtx
+      ? `\n- Parent location: "${parentCtx.name}" — ${parentCtx.short_description ?? ''}`
+      : '';
+    const purposeLine = r.purpose && r.purpose !== 'standard'
+      ? `\n- Sub-map purpose: ${r.purpose}`
+      : '';
+    const desc = (r.user_description ?? '').trim();
+    const userPrompt = `You are a tabletop RPG cartographer's assistant. Pick 6-12 POI sub-categories from the AVAILABLE list that genuinely fit this map.
+
+MAP CONTEXT:
+- Type: ${r.mapType}
+- Title: "${meta?.title ?? '(none)'}"
+- Atmosphere: ${r.atmosphere}
+- Era: ${r.era}
+- Terrain: ${r.terrain.join(', ')}
+- Inhabitants: ${r.inhabitants}
+- User description: ${desc || '(none provided)'}${parentLine}${purposeLine}
+
+AVAILABLE SUB-CATEGORIES (key — description):
+${subList}
+
+REQUIREMENTS:
+1. Pick 6-12 sub-category keys (verbatim from the list above) that genuinely fit.
+2. Favour sub-categories that match specific features in the description.
+3. Try to include at least one sub-category from each top-level (structure/natural/people/enigma) — unless the location strictly excludes one (e.g. a sealed cave has no people).
+4. For thematic locations (coastal, mountain, ruined), it's fine to weight several sub-categories from one top-level.
+5. For Decoy-purpose sub-maps, lean toward MUNDANE keys (structure:workshop, structure:civic, structure:dwelling, structure:infrastructure, people:small_settlement) — avoid enigma:relic_site, enigma:cursed_site, enigma:anomaly.
+
+Respond with ONLY this JSON, no markdown fences:
+{
+  "selected": ["category:subcategory", "category:subcategory", ...],
+  "rationale": "1-2 sentence explanation"
+}`;
+    const result = await callClaude({
+      systemPrompt: 'You are a tabletop RPG cartographer\'s assistant. Respond with raw JSON only — no markdown fences.',
+      userPrompt,
+      maxTokens: 500,
+      model:     'claude-haiku-4-5',
+    });
+    const validKeys = new Set(allKeys);
+    const selected = Array.isArray(result?.selected)
+      ? result.selected.filter(k => typeof k === 'string' && validKeys.has(k))
+      : [];
+    if (selected.length < 3) {
+      console.warn('[MapGenerator] Step 1.5 — Haiku returned too few valid keys:', selected);
+      return null;
+    }
+    return {
+      selected,
+      rationale: typeof result?.rationale === 'string' ? result.rationale : '',
+    };
+  } catch (e) {
+    console.warn('[MapGenerator] Step 1.5 — Haiku selection failed (falling back):', e.message);
+    return null;
+  }
+}
+
 /** CALL 2 — POIs + encounter table. Uses title from call 1 for context. */
-function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx) {
+function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx, selectedSubcategories) {
   // Cap at 6 to avoid token overflow
   const cappedPois = Math.min(numPois, 6);
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
@@ -289,10 +367,34 @@ function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx) {
       : '';
   // 5B-b: purpose biases how many / how rich the POIs should be.
   const purposeBlock = purposeGuidance(r.purpose);
+  // Phase 6: archetype block from Haiku's Step 1.5 selection — each POI
+  // should fit ONE archetype, with the specific concept varied for the
+  // location's described features. Counters the "every map is a Sanctum"
+  // bias by surfacing concrete alternatives Sonnet would otherwise default
+  // away from. Falls through silently when Step 1.5 failed.
+  let archetypeBlock = '';
+  if (Array.isArray(selectedSubcategories) && selectedSubcategories.length > 0) {
+    const lines = selectedSubcategories
+      .map(key => {
+        const sub = getSubcategory(key);
+        if (!sub) return null;
+        const sample = getRandomConceptSample([key], 6);
+        return `[${key}] ${sub.label} — ${sub.description}\n    Example concepts: ${sample.join(', ')}`;
+      })
+      .filter(Boolean);
+    if (lines.length > 0) {
+      archetypeBlock = `
+
+AVAILABLE ARCHETYPES (each POI should fit ONE archetype; vary the specific concept to suit the described features. Example concepts are inspiration — feel free to invent variations within the archetype):
+${lines.join('\n')}
+
+IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "Weeping", "Ossuary", "Sanctum", "Hollow", "Spire", "Forsaken", "Drowned" unless the description explicitly demands them. Mix tonal registers: not every POI needs to sound gothic or melancholic. A working tannery and a haunted shrine can live on the same map.`;
+    }
+  }
   return `For the tabletop fantasy ${r.mapType} map "${meta.title}":
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
 ${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
-${typeHint}${purposeBlock}
+${typeHint}${purposeBlock}${archetypeBlock}
 Use evocative original names, factions and lore for all POIs — no published-setting references. Keep each field to 1-2 sentences maximum.
 
 Generate exactly ${cappedPois} points of interest spread across the map.
@@ -465,6 +567,7 @@ export function MapGenerator({
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
   const [step1Done,   setStep1Done]   = useState(false); // metadata call
+  const [step1_5Done, setStep1_5Done] = useState(false); // Phase 6: Haiku archetype-selection call
   const [step2Done,   setStep2Done]   = useState(false); // POI call
   const [step3Done,   setStep3Done]   = useState(false); // DALL-E image
   const [step3Skip,   setStep3Skip]   = useState(false); // no OpenAI key / failed
@@ -500,6 +603,7 @@ export function MapGenerator({
     console.log('[MapGenerator] Params:', params);
     setStep('generating');
     setStep1Done(false);
+    setStep1_5Done(false);
     setStep2Done(false);
     setStep3Done(false);
     setStep3Skip(false);
@@ -523,11 +627,25 @@ export function MapGenerator({
       if (!meta?.title) throw new Error('AI returned invalid map metadata (missing title). Please try again.');
       setStep1Done(true);
 
+      // ── Step 1.5/3: Pick POI archetypes (Haiku) ───────────────────────────
+      // Cheap + fast (~$0.001, 1-2 s). Failure falls back silently — Sonnet
+      // still gets the existing SCOPE-based defaults via spec.poi_candidates.
+      console.log('[MapGenerator] Step 1.5/3 — selecting POI sub-categories via Haiku...');
+      const selection = await selectPOISubcategories(resolved, meta, parentPoiCtx);
+      const selectedSubcategories = selection?.selected ?? null;
+      if (selection) {
+        console.log('[MapGenerator] Step 1.5/3 done — selected:', selectedSubcategories,
+          '| rationale:', selection.rationale);
+      } else {
+        console.log('[MapGenerator] Step 1.5/3 — fell back to scope defaults.');
+      }
+      setStep1_5Done(true);
+
       // ── Step 2/3: POIs + encounter table (Claude) ─────────────────────────
       console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude...');
       const poiData = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
-        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx),
+        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx, selectedSubcategories),
         maxTokens:    4000,
       });
       console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
@@ -614,6 +732,11 @@ export function MapGenerator({
           ...(worldData.validation_errors ? { validation_errors: worldData.validation_errors } : {}),
           // MapSpec (Trin D) — includes image_prompt_contract
           spec,
+          // Phase 6: Haiku-selected POI archetypes (null on fallback)
+          ...(selectedSubcategories ? {
+            selected_subcategories: selectedSubcategories,
+            selection_rationale:    selection?.rationale ?? '',
+          } : {}),
           // Terrain sketch — persisted at creation so cells are never lost
           ...(sketchSpec ? { sketch: sketchSpec } : {}),
         },
@@ -898,6 +1021,13 @@ export function MapGenerator({
                 done={step1Done}
               />
               {step1Done && (
+                <ProgressRow
+                  label="Step 1.5/3: Selecting location archetypes…"
+                  subLabel="Haiku is choosing POI sub-categories that fit"
+                  done={step1_5Done}
+                />
+              )}
+              {step1_5Done && (
                 <ProgressRow
                   label="Step 2/3: Generating points of interest…"
                   subLabel="Claude is placing POIs, encounters & lore"

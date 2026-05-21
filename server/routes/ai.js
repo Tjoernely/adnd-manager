@@ -24,6 +24,11 @@ const router = express.Router();
 const MODEL_REGISTRY = {
   'claude-opus-4-7':   { provider: 'anthropic', maxOutput: 128000 },
   'claude-sonnet-4-6': { provider: 'anthropic', maxOutput: 64000  },
+  // Phase 6: cheap fast model for the POI sub-category selection step
+  // (~3× cheaper than Sonnet, 2-3× faster, plenty smart enough for "pick
+  // 6-12 from this list of 32"). Slug w/o date — Anthropic aliases the
+  // slug to the latest snapshot.
+  'claude-haiku-4-5':  { provider: 'anthropic', maxOutput: 64000  },
   'gpt-5.4':           { provider: 'openai',    maxOutput: 128000 },
   'gpt-5.5':           { provider: 'openai',    maxOutput: 128000 },
 };

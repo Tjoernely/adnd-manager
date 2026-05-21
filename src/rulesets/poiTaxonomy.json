@@ -1,0 +1,547 @@
+{
+  "$schema": "POI taxonomy used by the Map Generator's Step 1.5 selection (Haiku) and Step 2 generation (Sonnet). 4 top-level categories, 32 sub-categories, ~25 concepts each. All entries are IP-clean — no published-setting names or trademarked vocabulary. The pool deliberately includes plenty of neutral/mundane concepts (workshops, civic buildings, ordinary settlements) so the model has alternatives to the dark-fantasy bias of evocative names.",
+  "$version": 1,
+
+  "structure": {
+    "label": "Built Structures",
+    "description": "Man-made buildings, ruins, and infrastructure — homes, civic buildings, fortifications, religious sites, tombs, and workshops.",
+    "subcategories": {
+
+      "temple": {
+        "label": "Temple",
+        "description": "Religious buildings serving an active or extinct faith — places of worship, monastic life, and ritual.",
+        "concepts": [
+          "grand cathedral", "hidden chapel", "ruined sanctuary", "crypt-chapel",
+          "sky-temple", "underground rotunda", "processional way", "high altar",
+          "monastic chapter house", "pillared hall", "twin-spired chapel",
+          "stepped pyramid", "tiered ziggurat", "sunken nave", "cliffside oratory",
+          "river-temple", "grove-temple", "hilltop pantheon", "icon-walled basilica",
+          "mountainside chapel", "seaward chapel", "mortuary temple",
+          "hypostyle hall", "abbey choir", "wayside priory", "open-air sanctum"
+        ]
+      },
+      "shrine": {
+        "label": "Shrine",
+        "description": "Small religious markers — devotional sites smaller than a temple, often roadside, hilltop, or set into another structure.",
+        "concepts": [
+          "wayside altar", "hero-statue", "blessed well", "prayer-stone",
+          "ancestor cairn", "votive niche", "rooftop altar", "spring-shrine",
+          "weeping statue", "lantern-shrine", "household altar", "tree-shrine",
+          "bridge-altar", "boundary stone", "saint's grotto", "rune-pillar",
+          "ribbon-wrapped tree", "field altar", "crossroads marker",
+          "candle-niche", "river-stone shrine", "hilltop cairn", "memory-bench",
+          "consecrated spring", "harbour shrine", "watchpost icon"
+        ]
+      },
+      "dwelling": {
+        "label": "Dwelling",
+        "description": "Homes and residences — from labourer's huts to noble manors. Where ordinary people live.",
+        "concepts": [
+          "thatched cottage", "stone farmhouse", "timber longhouse", "merchant's townhouse",
+          "noble's manor", "tenement block", "stilted hut", "cliff dwelling",
+          "tower-house", "potter's home", "fisherman's shanty", "shepherd's croft",
+          "widow's cottage", "abandoned homestead", "guildmaster's residence",
+          "alderman's house", "courier's bothy", "innkeeper's quarters",
+          "weaver's row-house", "harbourside tenement", "monk's hermitage",
+          "midwife's cottage", "schoolmaster's lodgings", "carter's cottage",
+          "bargee's houseboat", "boarding house"
+        ]
+      },
+      "workshop": {
+        "label": "Workshop",
+        "description": "Craftspeople's workplaces — places where things are made, mended, or processed.",
+        "concepts": [
+          "blacksmith's forge", "cooper's workshop", "tannery", "glassworks",
+          "dyeworks", "potter's kiln", "weaver's loft", "carpenter's yard",
+          "stonemason's yard", "candle-maker's shop", "rope-walk", "sail-loft",
+          "wheelwright's shed", "fletcher's bench", "boatbuilder's slip",
+          "miller's grinding floor", "papermill", "smithy", "salt-house",
+          "chandlery", "tinker's wagon", "bookbinder's room", "cobbler's shop",
+          "armoury workshop", "smokehouse", "leatherworker's stall"
+        ]
+      },
+      "commercial": {
+        "label": "Commercial",
+        "description": "Trade, hospitality, and money — markets, shops, taverns, inns, exchanges.",
+        "concepts": [
+          "market square", "trading post", "tavern", "roadside inn",
+          "dockside warehouse", "money-changer's counter", "auction block",
+          "spice-stall row", "fish market", "covered bazaar", "grain exchange",
+          "wine-merchant's cellar", "caravan staging yard", "smuggler's safehouse",
+          "harbour customs house", "pawnbroker's shop", "horse trader's pen",
+          "weighbridge", "alehouse", "guild market", "scribe's stall",
+          "bookseller's shop", "cattle pen", "apothecary's storefront",
+          "bargeman's wharf", "general store"
+        ]
+      },
+      "civic": {
+        "label": "Civic",
+        "description": "Town government and public services — town halls, courts, schools, baths, granaries.",
+        "concepts": [
+          "town hall", "courthouse", "granary", "public bath", "schoolhouse",
+          "council chamber", "city archive", "public fountain", "stocks and pillory",
+          "watch station", "tax-collector's office", "almshouse", "orphanage",
+          "asylum", "weights-and-measures office", "alderman's bench",
+          "mustering ground", "embassy compound", "guild hall", "magistrate's hall",
+          "wardmoot square", "harbour authority", "public library",
+          "physic-garden", "civic clock-tower", "registrar's office"
+        ]
+      },
+      "fortification": {
+        "label": "Fortification",
+        "description": "Military structures — walls, towers, gatehouses, keeps, forts.",
+        "concepts": [
+          "stone keep", "gatehouse barbican", "watchtower", "curtain wall",
+          "border fort", "siege-camp earthworks", "moat and palisade",
+          "garrison barracks", "drum-tower", "harbour mole and battery",
+          "river chain-tower", "frontier blockhouse", "mountain redoubt",
+          "signal beacon", "cliff-top eyrie", "concentric castle ward",
+          "guardhouse complex", "town gate", "armoury vault", "powder magazine",
+          "outwork bastion", "ambush ridge fortlet", "river-toll tower",
+          "ringwork fort", "captain's lodging tower", "patrol way-station"
+        ]
+      },
+      "infrastructure": {
+        "label": "Infrastructure",
+        "description": "Roads, bridges, mills, dams, aqueducts — the bones of the settled world.",
+        "concepts": [
+          "stone bridge", "wooden ford-bridge", "aqueduct", "watermill",
+          "windmill", "lock and weir", "tow-path", "paved highway",
+          "milestone marker", "way-station", "cistern", "village pump",
+          "ferry crossing", "harbour mole", "dry dock", "lighthouse",
+          "drainage culvert", "irrigation channel", "dam and reservoir",
+          "ore-crusher mill", "pumping station", "log-flume",
+          "covered drovers' road", "embankment causeway", "rope ferry",
+          "horse-tram terminus"
+        ]
+      },
+      "ruin": {
+        "label": "Ruin",
+        "description": "Collapsed or abandoned structures — the remains of buildings whose purpose is forgotten or extinguished.",
+        "concepts": [
+          "toppled watchtower", "burnt longhouse", "fallen aqueduct arches",
+          "ruined manor", "collapsed shrine", "broken gatehouse", "sacked granary",
+          "shell of a chapel", "subsided ziggurat", "drowned tower",
+          "rubble-strewn forum", "moss-grown villa", "weed-choked theatre",
+          "abandoned smithy", "rotted dockworks", "broken-backed bridge",
+          "buried fortress", "scorched orchard wall", "splintered gibbet",
+          "windworn battlements", "hollowed-out keep", "subsided cistern",
+          "vandal-marked guildhall", "abandoned siege-camp", "frost-cracked walls",
+          "earthquake-shattered nave"
+        ]
+      },
+      "tomb": {
+        "label": "Tomb",
+        "description": "Burial structures and funerary sites — barrows, mausoleums, ossuaries, catacombs.",
+        "concepts": [
+          "hilltop barrow", "stone mausoleum", "stepped catacomb", "ossuary",
+          "warrior-cairn", "family vault", "boat-burial mound", "stone sarcophagus circle",
+          "passage tomb", "cliff-cut crypt", "underground necropolis", "memorial garden",
+          "potter's field", "noble's sepulchre", "twin-cairn pair", "child-burial grove",
+          "drowned grave-yard", "battlefield ossuary", "ancestor-niche colonnade",
+          "tumulus", "tower-tomb", "plague pit", "consecrated cemetery",
+          "sea-cave reliquary", "hermit's grave", "rune-marked dolmen"
+        ]
+      }
+
+    }
+  },
+
+  "natural": {
+    "label": "Natural Features",
+    "description": "Landforms, water, vegetation, weather, and wildlife sites — features of the landscape unaltered (or barely altered) by hands.",
+    "subcategories": {
+
+      "waterway": {
+        "label": "Waterway",
+        "description": "Flowing water — rivers, streams, springs, channels, falls.",
+        "concepts": [
+          "rushing river", "lazy meander", "spring source", "hot spring",
+          "tumbling waterfall", "cascade series", "subterranean stream",
+          "tidal estuary", "narrow gorge-river", "braided river-delta",
+          "icy meltwater channel", "blackwater creek", "mineral-rich rivulet",
+          "wandering brook", "salt-spring rivulet", "millrace channel",
+          "secret cave-fed spring", "boiling thermal vent", "tannin-dark stream",
+          "vanishing river", "fern-shaded brook", "frozen waterfall",
+          "underground siphon-stream", "wild rapids", "marsh-fed creek",
+          "moonlit pool-stream"
+        ]
+      },
+      "waterbody": {
+        "label": "Waterbody",
+        "description": "Still water — lakes, ponds, pools, marshes, lagoons, bogs.",
+        "concepts": [
+          "deep lake", "mirror-still pond", "salt lagoon", "peat bog",
+          "marshland", "tidepool cluster", "cenote sinkhole", "alpine tarn",
+          "millpond", "ox-bow lake", "fenland", "leech-thick swamp",
+          "geyser pool", "harbour lagoon", "village washing-pool",
+          "stagnant moat", "reed-fringed shallows", "ice-rim lake",
+          "stink-flat marsh", "kelp-thick coastal pool", "submerged ruin-pond",
+          "fishpond cluster", "drinking-trough fed pool", "lily-choked pool",
+          "saltpan", "tidewater inlet"
+        ]
+      },
+      "terrain_feature": {
+        "label": "Terrain Feature",
+        "description": "Distinctive landforms — hills, cliffs, valleys, outcroppings, scree slopes.",
+        "concepts": [
+          "lone hill", "cliff-edge", "knife-ridge", "hidden valley",
+          "stone outcrop", "boulder field", "windswept plateau", "narrow defile",
+          "scree slope", "natural amphitheatre", "rocky tor", "drumlin",
+          "shifting dune", "thunder gulch", "balanced stone", "drystone cairn",
+          "limestone pavement", "loess bluff", "glacial moraine", "fumarole field",
+          "mineral-stained badland", "talus pile", "earthen embankment",
+          "lava tube ridge", "fossil-rich bluff", "lichen-painted face"
+        ]
+      },
+      "cave_feature": {
+        "label": "Cave Feature",
+        "description": "Caves, grottoes, sinkholes, lava tubes, and other below-ground natural spaces.",
+        "concepts": [
+          "echoing cavern", "sea-cave", "lava tube", "crystal grotto",
+          "ice cave", "fissure-cleft", "sink-pit", "fumarole chamber",
+          "limestone cathedral", "bone-strewn cave", "bear den",
+          "shallow rock shelter", "bat-roost cavern", "submerged grotto",
+          "vertical shaft", "subterranean lake-cave", "smuggler's hollow",
+          "narrow squeeze passage", "honeycomb cliff-warren", "geode chamber",
+          "boil-stone cave", "wind-whistling fissure", "mushroom-grown cave",
+          "stalactite hall", "sand-floored cave", "ash-deposit chamber"
+        ]
+      },
+      "vegetation_site": {
+        "label": "Vegetation Site",
+        "description": "Distinctive plant communities — groves, ancient trees, thickets, gardens-gone-wild.",
+        "concepts": [
+          "ancient grove", "lone old tree", "thorn-thicket", "wildflower meadow",
+          "fern hollow", "berry-thicket", "mushroom ring", "moss-blanket clearing",
+          "burned-over slope", "windbreak hedgerow", "feral orchard",
+          "abandoned vineyard", "reedbed", "ivy-choked ruin-grove",
+          "willow-shaded brook-side", "stand of dead trees", "carnivorous-plant bog",
+          "twisted pine ridge", "lone yew at a crossroads", "memory-tree of a battle",
+          "lightning-struck oak", "moss-cushion knoll", "fungi-coated stump field",
+          "vine-tangled hollow", "patch of strange flowers", "bamboo grove"
+        ]
+      },
+      "boundary": {
+        "label": "Boundary",
+        "description": "Edges and transitions — coastlines, fords, treelines, mountain passes, borders.",
+        "concepts": [
+          "rocky coastline", "sandy beach", "tidal flat", "forest treeline",
+          "shallow river-ford", "mountain pass", "watershed divide",
+          "country border-stone", "sheep-fold dyke", "boundary cairn",
+          "estuary mouth", "marsh-to-meadow edge", "sea-cliff line",
+          "high-tide mark", "fog-line ridge", "tundra/forest edge",
+          "scrub/desert edge", "river/sea junction", "drovers' boundary",
+          "old defensive ditch", "buffer-strip clearing", "wildfire firebreak",
+          "ancient stone-row boundary", "river ferry-crossing point",
+          "salt-creek mouth", "snow-line edge"
+        ]
+      },
+      "weather_feature": {
+        "label": "Weather Feature",
+        "description": "Localized weather phenomena — fog banks, storm zones, calm pockets, unusual climates.",
+        "concepts": [
+          "perpetual fog bank", "storm-haunted ridge", "rain-shadow valley",
+          "windless hollow", "swirling dust-devil flat", "thunder gully",
+          "cold-air pocket", "auroral hilltop", "blizzard-prone pass",
+          "drought-cursed basin", "marsh-mist swamp", "sea-spray cliff",
+          "tornado alley", "warm-front meadow", "frost-hollow", "hail-prone slope",
+          "calm eye-of-storm clearing", "sun-trap valley", "permafrost flat",
+          "monsoon-watched coast", "salt-fog shore", "lightning-attractor peak",
+          "windrow snow-drift line", "blizzard-buried path", "ash-fall plain",
+          "perpetual drizzle wood"
+        ]
+      },
+      "fauna_site": {
+        "label": "Fauna Site",
+        "description": "Distinctive animal sites — lairs, nesting grounds, predator territories, herd paths.",
+        "concepts": [
+          "wolf den", "eagle eyrie", "bear cave", "deer-trail crossing",
+          "fox earth", "rookery cliffs", "salmon-run river", "swan nesting marsh",
+          "boar wallow", "rabbit warren", "owl-haunted ruin", "snake pit",
+          "spider-thick thicket", "herd-grazing meadow", "migratory flyway",
+          "feral cat colony", "wild horse plain", "bee-tree clearing",
+          "great cat territory", "scavenger battlefield", "carrion-attracting hollow",
+          "salt-lick clearing", "fish-spawning shallows", "seal haul-out beach",
+          "predator-marked tree", "amphibian-loud pond"
+        ]
+      }
+
+    }
+  },
+
+  "people": {
+    "label": "People & Settlements",
+    "description": "Where small groups of people live, work, or pass through — settlements smaller than a full town, plus camps, lone dwellers, and organized groups.",
+    "subcategories": {
+
+      "small_settlement": {
+        "label": "Small Settlement",
+        "description": "Hamlets, farmsteads, isolated villages, and clan compounds — fewer than a hundred residents.",
+        "concepts": [
+          "fishing hamlet", "farming clachan", "mountain shepherd hamlet",
+          "river-bend village", "isolated mill-hamlet", "salt-flat settlement",
+          "crossroads cluster of houses", "stockaded clan compound",
+          "stilt-village in the marsh", "abandoned hamlet partly rebuilt",
+          "monastery-village", "lumberjack camp turned village",
+          "lighthouse keepers' hamlet", "watchpost village", "hot-spring spa village",
+          "miners' clachan", "hedge-walled farmstead group", "single-family croft",
+          "garrison-supporting hamlet", "fortified family compound",
+          "mountain pass village", "river-fording village", "boatbuilders' cove",
+          "old colony of refugees", "hunters' winter camp turned permanent",
+          "kiln-folk hamlet"
+        ]
+      },
+      "trading_hub": {
+        "label": "Trading Hub",
+        "description": "Settlements oriented around trade — caravanserais, market towns, customs posts, exchanges.",
+        "concepts": [
+          "caravanserai", "river-port market", "border customs town",
+          "spice-route waystation", "frontier trade post", "horse-fair town",
+          "salt-market town", "amber-coast trading post", "fur-trading depot",
+          "weighing-station market", "tax-house and warehouse cluster",
+          "smugglers' free-port", "interior canal junction market",
+          "harbour town's commerce district", "highland trade-fair ground",
+          "annual market town", "coin-changing hub", "estuary trade island",
+          "ferry-junction market", "embassy quarter trading hub",
+          "treaty-market neutral ground", "wool-and-cloth town",
+          "ironmongery market", "silk-and-fine-goods market",
+          "drovers' market", "harvest-fair town"
+        ]
+      },
+      "transient_camp": {
+        "label": "Transient Camp",
+        "description": "Temporary settlements — refugees, nomads, pilgrims, retreating armies, gold-rush prospectors.",
+        "concepts": [
+          "refugee tent-camp", "pilgrim waystation", "nomad's seasonal camp",
+          "displaced army's bivouac", "gold-rush prospector camp",
+          "traveller-folk wagon ring", "plague-quarantine camp",
+          "trapper's winter encampment", "merchant caravan halted overnight",
+          "hunting expedition camp", "drovers' overnight stop",
+          "scribe-and-scholar expedition camp", "monk's pilgrimage camp",
+          "scattered tents of fugitives", "circuit-court travelling camp",
+          "shipwreck survivors' beach camp", "war-band's marshalling field",
+          "exodus column resting", "circus-folk seasonal camp",
+          "fortune-teller's bend-of-road tent", "mercenary company's encampment",
+          "engineer-corps work camp", "famine refugees' lean-tos",
+          "ferrymen's seasonal pole-shelter", "expedition base camp",
+          "diplomatic envoy's pavilion"
+        ]
+      },
+      "workforce_camp": {
+        "label": "Workforce Camp",
+        "description": "Semi-permanent work sites — mines, logging camps, fisheries, quarries.",
+        "concepts": [
+          "open-cast mining camp", "deep-shaft miners' settlement",
+          "logging camp", "lumber-floating river-camp", "quarry workers' barracks",
+          "salt-evaporation flat workers' shacks", "fishing fleet's shore camp",
+          "whaling-station outpost", "iron-smelting camp", "charcoal-burners' wood",
+          "amber-gathering coast camp", "peat-cutting camp",
+          "pearl divers' island camp", "kelp-burners' shore camp",
+          "fur-trappers' winter cabins", "tar-burners' clearing",
+          "stone-cutters' quarry camp", "lime-kiln workers' shacks",
+          "ore-washing river-camp", "rope-walk workers' settlement",
+          "salt-marsh harvesters' camp", "honey-gatherers' forest camp",
+          "ice-cutters' lakeside camp", "shrimp-drying coastal flats",
+          "alluvial gold-panners' bend", "boat-yard workers' shore cluster"
+        ]
+      },
+      "solo_dweller": {
+        "label": "Solo Dweller",
+        "description": "Single inhabitants — hermits, sages, witches, lighthouse keepers, exiles.",
+        "concepts": [
+          "forest hermit's hut", "mountain anchorite's cell",
+          "lighthouse keeper's tower", "ferry-keeper's cabin",
+          "wise-woman's cottage", "exiled scholar's tower",
+          "lone shepherd's hut", "trapper's solitary cabin",
+          "river-ferryman's shanty", "lone monk's cliff-cell",
+          "outcast warrior's tent", "old soldier's bothy",
+          "river-toll keeper's hut", "isolated apothecary's cottage",
+          "swamp-dweller's stilted hut", "stargazer's hilltop tower",
+          "exile prince's cottage", "blind seer's hovel",
+          "former courtier's woodland retreat", "lone bell-ringer's tower",
+          "drystone-walled monk's cell", "border watchman's lonely post",
+          "scribe-recluse's cottage", "widow's cliff-edge cottage",
+          "wandering tinker's halted wagon", "cave-dwelling sage"
+        ]
+      },
+      "organized_group": {
+        "label": "Organized Group",
+        "description": "Bands and orders with a defined purpose — patrols, militias, guilds, criminal crews, religious orders.",
+        "concepts": [
+          "border patrol", "town militia muster", "merchant guild caravan",
+          "highwayman's crew hideout", "smugglers' loading point",
+          "mercenary company's halt", "knightly order's commandery",
+          "mendicant friars on the road", "tax-collector's escort",
+          "tribal war-band gathering", "pilgrimage chapter on the move",
+          "scholars' research delegation", "engineers' survey team",
+          "diplomatic embassy in transit", "river-pirate crew's hideout",
+          "courier-relay riders", "lay brotherhood working a field",
+          "spy network's safehouse", "physic-corps medical caravan",
+          "monastic order's grange", "rural constabulary station",
+          "thieves' guild meeting", "harbour pilots' watch-room",
+          "circuit judge's escort", "siege-engineer corps", "cartographers' guild expedition"
+        ]
+      }
+
+    }
+  },
+
+  "enigma": {
+    "label": "Mysteries & Anomalies",
+    "description": "Strange, magical, or unexplained features — sites that resist mundane explanation, with or without active danger.",
+    "subcategories": {
+
+      "portal": {
+        "label": "Portal",
+        "description": "Doorways between places — gates, archways, threshold-points that lead somewhere odd.",
+        "concepts": [
+          "stone archway between hills", "submerged ring of standing stones",
+          "twin-pillar gate", "moonlight-only doorway", "cave-mouth that leads elsewhere",
+          "abandoned mirror in a forest clearing", "carved threshold-arch in a cliff",
+          "ruined door standing in a meadow", "doorway-shaped fog bank",
+          "spiral-staircase to nowhere", "rune-carved dolmen archway",
+          "lakebed gateway revealed at low tide", "iron-bound oak door in a hill",
+          "stone hoop in a thicket", "underwater grotto-mouth",
+          "doorway built into living tree", "bridge that ends in a drop",
+          "trapdoor in the middle of a meadow", "cliff-face crack of unnatural symmetry",
+          "loose archway between two ancient yews", "well that drops into a different sky",
+          "broken arch on a dry plain", "marshland pool reflecting wrong stars",
+          "stone ring at a crossroads", "tide-gate to a sunken place",
+          "abandoned ferry-mooring on a dry shore"
+        ]
+      },
+      "ley_node": {
+        "label": "Ley Node",
+        "description": "Sites of magical convergence — places where spells behave oddly, the air hums, compasses spin.",
+        "concepts": [
+          "humming stone circle", "compass-spinning hilltop",
+          "well where divinations fail", "spring that grants vivid dreams",
+          "meadow of perpetual twilight", "crackling lightning-stone field",
+          "ice that does not melt", "soil where iron rusts in moments",
+          "ridge where bells ring without wind", "pond that boils when watched",
+          "stone where shadows lengthen wrongly", "hill where sounds carry too far",
+          "field that hums with low resonance", "grove where time runs faster",
+          "salt-flat where compasses point down", "rock that warms without sun",
+          "stream that flows uphill briefly", "spot where echoes precede their sound",
+          "patch of ground that refuses snow", "thicket where directions reverse",
+          "outcrop magnetic enough to pull blades", "well from which voices answer",
+          "shoreline where waves freeze briefly", "knoll lit by an unseen moon",
+          "pillar that casts no shadow", "circle of stones that move at night"
+        ]
+      },
+      "cursed_site": {
+        "label": "Cursed Site",
+        "description": "Places under blight — haunted, plague-touched, or sapped by some old wrong.",
+        "concepts": [
+          "haunted moor", "village swallowed by curse", "plague-touched farmhouse",
+          "blighted orchard", "moss-grown gallows-hill", "battlefield where nothing grows",
+          "abandoned chapel of an angry saint", "cursed wishing-well",
+          "ill-fated bridge", "bones-rich ravine", "weeping statue meadow",
+          "manor where every owner has died young", "tower whose stairs go forever",
+          "valley where rain falls black", "shore where corpses wash up monthly",
+          "ruined inn that travellers refuse", "fields that grow only weeds",
+          "village where children don't speak", "pond that drowns swimmers",
+          "wood where the same path reappears", "barrow that opens at certain dates",
+          "well that cries on the equinox", "graveyard of the unburied",
+          "cliff where suicides are too common", "marsh where lights lead astray",
+          "spring that runs red on certain days"
+        ]
+      },
+      "relic_site": {
+        "label": "Relic Site",
+        "description": "Places centred on a powerful or ancient object — fallen monoliths, half-buried artifacts, sealed reliquaries.",
+        "concepts": [
+          "half-buried iron monolith", "weeping statue", "stone embedded with a blade",
+          "altar with an unmoved chalice", "armoured corpse on a hilltop",
+          "ancient throne in a clearing", "ring of bowls full of clear water",
+          "broken sword struck in the earth", "obsidian mirror in a pit",
+          "skull-set cairn", "rust-marked anvil at a crossroads",
+          "preserved hand in a glass case", "horn fragment lodged in a tree",
+          "fragment of a fallen star", "egg-shaped stone that warms to touch",
+          "rusted helm half-grown into the ground", "shield embedded in a cliff",
+          "scribe's table with frozen ink", "lyre played by no one but heard",
+          "bronze key in a sealed shrine", "iron crown chained to a stone",
+          "skeleton clutching a sealed scroll", "stone vessel that refills itself",
+          "buried bell that tolls underground", "wooden gate refusing to rot",
+          "loom that weaves an unknown banner"
+        ]
+      },
+      "anomaly": {
+        "label": "Anomaly",
+        "description": "Physics-bending oddities — places where the rules of the world misbehave.",
+        "concepts": [
+          "patch of ground with no gravity", "stream that flows uphill",
+          "rock that grows back when broken", "perpetually rotating boulder",
+          "shadow that detaches from its caster", "fire that burns underwater",
+          "spot of permanent twilight at noon", "puddle deeper than the ocean",
+          "tree that bears every fruit", "frost that survives midsummer",
+          "rope that ties itself", "boundary across which sound cannot travel",
+          "patch of grass that never grows", "stone that floats over its spot",
+          "tunnel longer than the hill it pierces", "ladder that lengthens overnight",
+          "pool that shows future skies", "stone with two opposite weather sides",
+          "field where seasons are wrong", "river that carries no reflection",
+          "patch of dirt that resists every plow", "vegetable that screams when picked",
+          "tree shaped like an open hand", "rock whose temperature inverts",
+          "stretch of road longer at night", "cave deeper inside than outside"
+        ]
+      },
+      "echo": {
+        "label": "Echo",
+        "description": "Repeating events and apparitions — ghosts of battles, recurring storms, replayed scenes.",
+        "concepts": [
+          "battlefield where ghost soldiers still march", "recurring storm at sea",
+          "ruined market where merchants are heard at dusk",
+          "burnt house that smokes at dawn", "shore where a phantom ship beaches",
+          "courtyard where a duel replays each midsummer",
+          "mill that grinds an unseen wheel", "harbour where unseen oars splash",
+          "tower window with a recurring scream", "field where horses gallop unseen",
+          "lake where a wedding party is heard", "well from which children's laughter rises",
+          "road where a coach passes unseen", "chapel where bells toll without ringers",
+          "hill where torches march on certain nights", "cell where chains rattle",
+          "barn where dancing thumps", "drowned village heard during storms",
+          "abandoned manor where dinner is set nightly", "monk's cell echoing chants",
+          "battlefield with phantom drums", "ferry that crosses unmanned at dusk",
+          "tavern where a song is sung by no one", "library shelf that turns its own pages",
+          "fountain that flows red at full moon", "doorway from which footsteps emerge"
+        ]
+      },
+      "crossroads_mystery": {
+        "label": "Crossroads Mystery",
+        "description": "Unsolved disappearances and puzzles tied to a specific place — locked rooms in the open.",
+        "concepts": [
+          "wagon abandoned mid-road, no passengers", "circle of footprints leading nowhere",
+          "lone child standing at a crossroads", "ferry with all hands missing",
+          "tavern locked from inside, all dead", "house's hearth still warm, no occupants",
+          "mill running but no miller", "fishing village empty, nets still wet",
+          "battlefield with weapons but no bodies", "shrine offerings replaced daily by no one",
+          "letter buried in a stone wall", "diary ending mid-sentence found in a hut",
+          "garden with food half-eaten", "barn full of children's toys, no homes nearby",
+          "wagon train whose driver vanished mid-road", "campfire still burning, no one near",
+          "boat moored with breakfast on the table", "well with a fresh hand-print on the rim",
+          "abandoned cart of corpses, all looking peaceful", "footprint trail that becomes hoofprints",
+          "doll left at intervals along a road", "knotted ribbons tied to specific trees",
+          "row of empty boots", "ship's manifest counting more crew than were aboard",
+          "village whose church-bell rings without ringer", "village hand-print on every door"
+        ]
+      },
+      "natural_oddity": {
+        "label": "Natural Oddity",
+        "description": "Rare-but-natural curiosities — fossil concentrations, bizarre rock formations, animal phenomena.",
+        "concepts": [
+          "field of giant fossilized bones", "petrified forest", "salt-rim crater lake",
+          "iron-bearing meteor strike", "geothermal bubbling pool", "perpetual rainbow gorge",
+          "monumental hoodoo rock", "mineral-rainbow stream-bed", "balanced boulder field",
+          "natural amphitheatre with strange acoustics", "tar pit", "sulphur-springs valley",
+          "buried glacier ice block", "natural saltworks", "tide-cave with starfish constellations",
+          "geode-rich cliff", "lake with crystal-clear water but no fish",
+          "perfectly circular pond", "lone tree on impossible cliff", "bee swarm that nests in a skull",
+          "swimming-pool sized footprint", "obsidian glass field", "petrified ship in a dry valley",
+          "bone-white sand cove", "shore of black sand and red shells",
+          "annual frog rain meadow"
+        ]
+      }
+
+    }
+  }
+}
