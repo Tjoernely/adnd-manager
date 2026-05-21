@@ -1,0 +1,34 @@
+{
+  "$schema": "Map style presets. Canonical data shared by the backend sketch-renderer (server/lib/mapRenderers/stylePresets.js) and the frontend typed-map flow (src/components/maps/MapGenerator.jsx + TerrainSketchEditor.jsx). UI labels and prompt strings must be IP-clean — no artist names, no published-setting references — because the prompts are sent to third-party image APIs.",
+  "$version": 1,
+
+  "schley": {
+    "label":          "🏔 Modern Classical Fantasy",
+    "description":    "Rich color palette, professional cartography polish. Best for overview maps and detailed regions.",
+    "promptAddition": "High-quality illustrated fantasy map with rich earth-tone color palette. Hand-painted terrain icons — illustrated mountain ranges, clusters of detailed tree symbols for forests, stylized coastlines and rivers. Hand-painted topographic relief, cream or light parchment background, decorative compass rose. Professional published-tabletop atlas aesthetic. Preserve the EXACT terrain layout and zone positions. No text labels. No grid lines."
+  },
+
+  "handwritten": {
+    "label":          "✏️ Crude Handwritten",
+    "description":    "Quick sketch feel. Informal pencil work. Best for casual session prep.",
+    "promptAddition": "Rough hand-drawn map as if sketched quickly by an adventurer or non-cartographer. Wobbly imprecise lines, uneven hatching for terrain, crude simple symbols (scrawled triangles for mountains, messy blobs for forests, wavy lines for water). Pencil or ballpoint pen on plain paper look. Imperfect, slightly crooked, charmingly amateurish. Preserve the EXACT terrain layout and zone positions. No text labels."
+  },
+
+  "parchment": {
+    "label":          "📜 Parchment Atlas",
+    "description":    "Aged paper with sepia tones. Classic adventure aesthetic. Best for travel and exploration.",
+    "promptAddition": "Top-down fantasy map illustration on aged parchment paper. Hand-drawn ink line work, sepia tones, weathered paper texture, vintage atlas aesthetic, decorative cartouche. Preserve the EXACT terrain layout and zone positions. No text labels. No grid lines."
+  },
+
+  "ink": {
+    "label":          "🖋 Hand-drawn Ink",
+    "description":    "Dark monochrome ink illustration. Best for dungeons, ruins, and gothic locations.",
+    "promptAddition": "Hand-drawn ink map on cream paper. Artistic pen strokes, cross-hatched shading, minimal color, monochrome line work, gothic ink-illustration aesthetic. Preserve the EXACT terrain layout and zone positions. No text labels."
+  },
+
+  "classic": {
+    "label":          "🗺 Vintage Tabletop",
+    "description":    "Retro 1980s module aesthetic. Limited palette, bold lines. Best for nostalgic feel.",
+    "promptAddition": "Vintage tabletop RPG module map in the aesthetic of 1980s adventure modules. Simple top-down symbols, bold black ink on light background, limited four-color palette (cream, blue, brown, dark green), iconic retro cartography style. Preserve the EXACT terrain layout and zone positions. No text labels."
+  }
+}

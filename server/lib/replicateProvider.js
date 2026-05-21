@@ -34,10 +34,12 @@ const TIMEOUT_MS       = 150_000;
 const PUBLIC_BASE_URL  = process.env.PUBLIC_BASE_URL || 'http://158.180.63.20';
 const UPLOADS_DIR      = path.join(__dirname, '..', 'public', 'uploads', 'maps');
 
+// IP-clean: no artist names, no published-setting references. These strings
+// are sent to the image API.
 const STYLE_PROMPT = [
   'top-down fantasy cartography map, hand-drawn ink illustration,',
-  'Tolkien-style map, parchment paper texture, medieval fantasy,',
-  'birds eye view, warm earth tones, detailed terrain, Forgotten Realms',
+  'classical fantasy atlas style, parchment paper texture, medieval fantasy,',
+  'birds eye view, warm earth tones, detailed terrain, vintage adventure aesthetic',
 ].join(' ');
 
 // ── Helper: save base64 PNG to disk, return public URL ───────────────────────

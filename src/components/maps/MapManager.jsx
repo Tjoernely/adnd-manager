@@ -126,7 +126,7 @@ function buildTree(maps) {
 }
 
 // ── AI POI system prompt ──────────────────────────────────────────────────────
-const FR_POI_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate POI content. Keep all descriptions concise — maximum 2 sentences per field. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+const FR_POI_SYSTEM = `You are an expert classic tabletop Dungeon Master running a campaign in the a classic tabletop fantasy setting. Generate vivid, lore-accurate POI content. Keep all descriptions concise — maximum 2 sentences per field. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 function mapCtx(map) {
   return `Parent map: "${map.name}" (type: ${map.type})
@@ -142,17 +142,17 @@ function buildLocationPoiPrompt(type, map, dmNote) {
     wilderness: 'Wilderness', bandit_camp: 'Wilderness', monster_lair: 'Dungeon',
   }[type] ?? 'Dungeon';
 
-  return `Generate a Forgotten Realms AD&D 2E ${type} POI for this map.
+  return `Generate a tabletop fantasy ${type} POI for this map.
 ${mapCtx(map)}
 Additional context: ${dmNote || 'none'}
 
 Respond with ONLY this JSON (keep descriptions to 1-2 sentences each):
 {
-  "name": "Evocative FR-appropriate location name",
+  "name": "Evocative evocative original location name",
   "type": "${type}",
   "short_description": "One sentence players might learn (rumors, visible features)",
   "dm_description": "1-2 sentence DM description",
-  "history": "One sentence FR-appropriate backstory",
+  "history": "One sentence evocative original backstory",
   "current_situation": "What is happening here RIGHT NOW",
   "notable_features": ["Feature 1", "Feature 2"],
   "inhabitants": "Who or what lives/lurks here",
@@ -166,7 +166,7 @@ Respond with ONLY this JSON (keep descriptions to 1-2 sentences each):
 }
 
 function buildEncounterPoiPrompt(map, dmNote) {
-  return `Generate a Forgotten Realms AD&D 2E encounter for this map.
+  return `Generate a tabletop fantasy encounter for this map.
 ${mapCtx(map)}
 Additional context: ${dmNote || 'none'}
 
@@ -200,7 +200,7 @@ Respond with ONLY this JSON:
 }
 
 function buildTrapPoiPrompt(map, dmNote) {
-  return `Generate a Forgotten Realms AD&D 2E trap or hazard for this map.
+  return `Generate a tabletop fantasy trap or hazard for this map.
 ${mapCtx(map)}
 Context: ${dmNote || 'none'}
 
@@ -225,7 +225,7 @@ Respond with ONLY this JSON:
 }
 
 function buildTreasurePoiPrompt(map, dmNote) {
-  return `Generate a Forgotten Realms AD&D 2E treasure cache for this map.
+  return `Generate a tabletop fantasy treasure cache for this map.
 ${mapCtx(map)}
 Context: ${dmNote || 'none'}
 
@@ -249,7 +249,7 @@ Respond with ONLY this JSON:
 }
 
 function buildMysteryPoiPrompt(map, dmNote) {
-  return `Generate a Forgotten Realms magical mystery or anomaly for this map.
+  return `Generate a tabletop fantasy magical mystery or anomaly for this map.
 ${mapCtx(map)}
 Context: ${dmNote || 'none'}
 
@@ -263,7 +263,7 @@ Respond with ONLY this JSON:
   "effects": ["Effect on players or environment 1", "Effect 2"],
   "investigation_clues": ["Discoverable clue 1", "Clue 2", "Clue 3"],
   "resolution": "How this can be resolved or what happens if ignored",
-  "connection": "Connection to larger FR plot, faction, or lore",
+  "connection": "Connection to larger original plot, faction, or lore",
   "secrets": ["The true nature of the mystery"],
   "quest_hooks": ["Investigation or resolution hook"],
   "is_dm_only": false,
@@ -272,13 +272,13 @@ Respond with ONLY this JSON:
 }
 
 function buildNpcPoiPrompt(map, dmNote) {
-  return `Generate a Forgotten Realms AD&D 2E NPC encounter for this map.
+  return `Generate a tabletop fantasy NPC encounter for this map.
 ${mapCtx(map)}
 Context: ${dmNote || 'none'}
 
 Respond with ONLY this JSON:
 {
-  "name": "NPC name (FR-appropriate for their race)",
+  "name": "NPC name (evocative original for their race)",
   "type": "npc",
   "short_description": "What players see — appearance and initial impression",
   "dm_description": "Full DM description of the NPC and the scene",
@@ -288,7 +288,7 @@ Respond with ONLY this JSON:
   "npc_motivation": "What does this NPC want?",
   "scene_description": "Where and how they are encountered in detail",
   "personality": "3 personality traits, comma-separated",
-  "history": "Brief FR-appropriate backstory",
+  "history": "Brief evocative original backstory",
   "current_situation": "What they are doing right now",
   "secrets": ["What this NPC is hiding"],
   "quest_hooks": ["How they can involve the party"],
@@ -298,20 +298,20 @@ Respond with ONLY this JSON:
 }
 
 function buildSimplePoiPrompt(type, map, dmNote) {
-  return `Generate a Forgotten Realms AD&D 2E point of interest for this map.
+  return `Generate a tabletop fantasy point of interest for this map.
 ${mapCtx(map)}
 POI Type: ${type}
 Context: ${dmNote || 'none'}
 
 Respond with ONLY this JSON:
 {
-  "name": "FR-appropriate evocative name",
+  "name": "evocative original evocative name",
   "type": "${type}",
   "short_description": "One sentence players might learn",
   "dm_description": "Full DM description (2-3 sentences)",
-  "history": "Brief FR-appropriate backstory",
+  "history": "Brief evocative original backstory",
   "secrets": ["Hidden detail or plot hook"],
-  "quest_hooks": ["One FR-flavoured hook"],
+  "quest_hooks": ["One original hook"],
   "is_dm_only": false,
   "can_generate_submap": false
 }`;
@@ -332,21 +332,21 @@ function buildPoiPromptByType(type, map, dmNote) {
 
 // ── Section regen prompts ─────────────────────────────────────────────────────
 function buildRegenEnemiesPrompt(poi, map) {
-  return `For the encounter "${poi.name}" in the Forgotten Realms map "${map.name}":
+  return `For the encounter "${poi.name}" in the tabletop fantasy map "${map.name}":
 ${poi.setting || poi.dm_description || ''}
-Generate a fresh set of FR-appropriate enemies with full AD&D 2E stat blocks.
+Generate a fresh set of evocative original enemies with full classic tabletop stat blocks.
 Respond with ONLY this JSON:
 {"enemies": [{"name":"...","type":"humanoid","count":"...","stat_block":"HD: X, AC: Y, THAC0: Z, HP: Xd8, ATT: X, DAM: Xd6","tactics":"...","morale":"..."}]}`;
 }
 
 function buildRegenTreasurePrompt(poi, map) {
-  return `For the POI "${poi.name}" (${poi.type}) in the Forgotten Realms map "${map.name}", generate fresh AD&D 2E loot appropriate for this location.
+  return `For the POI "${poi.name}" (${poi.type}) in the tabletop fantasy map "${map.name}", generate fresh classic tabletop loot appropriate for this location.
 Respond with ONLY this JSON:
 {"treasure": "brief loot description", "coins": {"pp":0,"gp":0,"sp":0,"cp":0}, "gems": [], "magic_items": [], "mundane_items": []}`;
 }
 
 function buildRegenSecretsPrompt(poi, map) {
-  return `For the Forgotten Realms POI "${poi.name}" (${poi.type}) in "${map.name}":
+  return `For the tabletop fantasy POI "${poi.name}" (${poi.type}) in "${map.name}":
 ${poi.dm_description || poi.short_description || ''}
 Generate 2-3 fresh secrets or hidden plot hooks.
 Respond with ONLY this JSON:
@@ -354,9 +354,9 @@ Respond with ONLY this JSON:
 }
 
 function buildRegenQuestHooksPrompt(poi, map) {
-  return `For the Forgotten Realms POI "${poi.name}" (${poi.type}) in "${map.name}":
+  return `For the tabletop fantasy POI "${poi.name}" (${poi.type}) in "${map.name}":
 ${poi.short_description || poi.dm_description || ''}
-Generate 2 fresh Forgotten Realms quest hooks.
+Generate 2 fresh tabletop fantasy quest hooks.
 Respond with ONLY this JSON:
 {"quest_hooks": ["Hook 1", "Hook 2"]}`;
 }
@@ -603,6 +603,13 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     const parentEra = parentMap?.data?.generated_params?.era;
     if (!presetParams.era && parentEra && parentEra !== 'Random') {
       presetParams = { ...presetParams, era: parentEra };
+    }
+
+    // 5B-a: inherit map style from the parent — sub-maps default to the same
+    // visual treatment unless the DM picks a different style.
+    const parentStyle = parentMap?.data?.spec?.constraints?.style;
+    if (parentStyle) {
+      presetParams = { ...presetParams, mapStyle: parentStyle };
     }
 
     // presetType (from POI type) overrides connection-derived mapType
@@ -1491,7 +1498,7 @@ function LocationMetaBar({ spec }) {
 }
 
 // ── POIPanel ──────────────────────────────────────────────────────────────────
-const POI_PANEL_SYSTEM = `You are an expert AD&D 2nd Edition DM in the Forgotten Realms. Keep responses concise — 1-2 sentences per item. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+const POI_PANEL_SYSTEM = `You are an expert classic tabletop DM in the tabletop fantasy. Keep responses concise — 1-2 sentences per item. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
 function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelete, onDrillDown, onNavigate, onShowApiKeys }) {
   const [activeTab,  setActiveTab]  = useState(isDM && !playerView ? 'dm' : 'player');

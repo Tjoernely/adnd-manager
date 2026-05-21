@@ -14,7 +14,7 @@ const renderers = {
  * Why gpt-image-1 first: empirical testing (9+ generations against
  * the same sketch, plus 6 mockup-format variants) showed gpt-image-1
  * produces ~77% checkpoint fidelity with proper labels, sharper
- * boundaries, and more authentic AD&D cartography style than Gemini
+ * boundaries, and a more authentic tabletop-fantasy cartography style than Gemini
  * Flash Image. Gemini remains as a fallback for when OPENAI_API_KEY
  * is missing or rate-limited.
  *

@@ -118,12 +118,12 @@ function buildEdges(areas, positions) {
 
 // ── POI generation via Claude ─────────────────────────────────────────────────
 
-const POI_SYSTEM = `You are an AD&D 2E dungeon master creating a detailed point of interest.
+const POI_SYSTEM = `You are an classic tabletop dungeon master creating a detailed point of interest.
 Return ONLY valid JSON:
 {
   "name": "string",
   "type": "monster|npc|trap|treasure|puzzle|lore|hazard",
-  "description": "string — 2-3 sentences with AD&D 2E mechanical detail",
+  "description": "string — 2-3 sentences with classic tabletop mechanical detail",
   "dm_notes": "string — 1-2 sentences of tactical or story advice"
 }`;
 
@@ -131,7 +131,7 @@ async function generatePOI(area, poiType, difficulty) {
   const prompt = `Area: ${area.name} (${area.type}) — ${area.description}
 POI Type: ${poiType}
 Difficulty: ${difficulty}
-Generate a memorable, dangerous point of interest appropriate for AD&D 2nd Edition.`;
+Generate a memorable, dangerous point of interest appropriate for classic tabletop fantasy.`;
   return callClaude({ systemPrompt: POI_SYSTEM, userPrompt: prompt, maxTokens: 512 });
 }
 

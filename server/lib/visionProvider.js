@@ -13,7 +13,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const axios     = require('axios');
 
-const SYSTEM_PROMPT = `You are an expert fantasy cartographer for AD&D 2E.
+const SYSTEM_PROMPT = `You are an expert fantasy cartographer for a classic tabletop RPG.
 You will receive a COLOR-CODED terrain map where each color zone represents a specific terrain type:
 - LIGHT YELLOW-GREEN (#9dc183) = Plains/Grasslands
 - DARK GREEN (#228b22) = Forest/Woodland
@@ -42,11 +42,13 @@ RULES:
 4. Apply the requested MAP STYLE at the end
 5. Under 950 characters. Return ONLY the prompt.`;
 
+// IP-clean: no artist names, no published-setting references. These strings
+// are sent to the image API.
 const STYLE_ENDINGS = {
-  parchment: 'Aged parchment, sepia ink, hand-drawn atlas style, Tolkien/Forgotten Realms aesthetic, no text labels.',
+  parchment: 'Aged parchment, sepia ink, hand-drawn atlas style, classical fantasy atlas aesthetic, no text labels.',
   fantasy:   'Full color fantasy illustration, painterly style, vibrant terrain colors, professional game art, bird\'s eye view, no text labels.',
   ink:       'Black ink on cream paper, hand-drawn sketch style, artistic pen strokes, minimal shading, no text labels.',
-  classic:   'Classic D&D module map, simple top-down symbols, black ink on light background, iconic RPG cartography style, no text labels.',
+  classic:   'Vintage tabletop RPG module map, simple top-down symbols, black ink on light background, retro 1980s cartography aesthetic, no text labels.',
 };
 
 const visionProvider = {

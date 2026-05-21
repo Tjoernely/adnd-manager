@@ -11,6 +11,26 @@
 import type { MapSpec, MapScope } from './mapTypes';
 import type { GeneratedParams, WorldDataResult } from './generationMapper';
 import { applyPOIInfluences, type InfluenceRules } from './influenceEngine';
+import mapStylePresets from '../rulesets/mapStylePresets.json';
+
+// ── Map style preset lookup ────────────────────────────────────────────────────
+// The promptAddition from the selected style preset replaces the previously
+// hardcoded "hand-drawn ink style on aged parchment" line — the DM now picks
+// from 5 style options in the AI Map Generator. All preset prompts are
+// IP-clean (no artist names, no published-setting references).
+
+type StylePreset = { label: string; description: string; promptAddition: string };
+const STYLE_PRESETS: Record<string, StylePreset> = Object.fromEntries(
+  Object.entries(mapStylePresets as Record<string, unknown>)
+    .filter(([k]) => !k.startsWith('$'))
+    .map(([k, v]) => [k, v as StylePreset]),
+);
+
+function resolveStylePreset(slug: string | undefined): StylePreset {
+  // Backward compat: legacy spec.constraints.style was 'parchment_map'.
+  const normalized = !slug || slug === 'parchment_map' ? 'parchment' : slug;
+  return STYLE_PRESETS[normalized] ?? STYLE_PRESETS.parchment;
+}
 
 // ── POI candidates per scope ──────────────────────────────────────────────────
 // Which POI types are valid/expected for each scope.
@@ -57,7 +77,9 @@ export function buildMapSpec(
     constraints: {
       max_poi_count:    6,
       prompt_max_chars: 900,
-      style:            'parchment_map',
+      // Slug from src/rulesets/mapStylePresets.json. 'parchment' is the
+      // backward-compatible default for specs created before the picker.
+      style:            params.mapStyle ?? 'parchment',
       view:             'top_down',
     },
     title:          meta.title,
@@ -213,10 +235,12 @@ export function buildImagePrompt(spec: MapSpec, pois: MapPOIInput[] = []): strin
   const desc = (spec.user_description ?? '').trim();
   const descAuthoritative = desc.length >= 30;
 
+  // Style preset drives the visual treatment (was hardcoded parchment/FR lines).
+  const stylePreset = resolveStylePreset(spec.constraints?.style);
+
   const parts: string[] = [
-    `A ${baseDesc},`,
-    'hand-drawn ink style on aged parchment.',
-    'Forgotten Realms / Faerûn setting.',
+    `A ${baseDesc}.`,
+    stylePreset.promptAddition,
   ];
 
   if (descAuthoritative) {
@@ -286,7 +310,8 @@ export function buildImagePrompt(spec: MapSpec, pois: MapPOIInput[] = []): strin
     if (safe) parts.push(safe);
   }
 
-  parts.push('Classic fantasy adventure module cartography style.');
+  // Closers — kept generic. The preset's promptAddition above is the dominant
+  // style instruction; these reinforce framing and the no-text rule.
   parts.push('No text or labels. Bird\'s eye view.');
   parts.push('Highly detailed illustration.');
 

@@ -9,7 +9,7 @@
 const axios = require('axios');
 
 const DALLE_API     = 'https://api.openai.com/v1/images/generations';
-const STYLE_PREFIX  = 'Top-down fantasy world map, parchment paper texture, hand-drawn ink style, Forgotten Realms aesthetic, orthographic view, cartographic illustration.';
+const STYLE_PREFIX  = 'Top-down fantasy world map, parchment paper texture, hand-drawn ink style, classical fantasy atlas aesthetic, orthographic view, cartographic illustration.';
 const STYLE_SUFFIX  = 'High detail, natural earth tones. No text, no labels, no watermarks.';
 
 const dalleProvider = {

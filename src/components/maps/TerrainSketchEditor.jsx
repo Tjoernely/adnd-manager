@@ -10,7 +10,12 @@ import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from '
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
 import { renderSketchForAI, getTileKey } from '../../utils/canvas/sketchToPng.ts';
 import { api }                          from '../../api/client.js';
+import mapStylePresets                  from '../../rulesets/mapStylePresets.json';
 import './TerrainSketchEditor.css';
+
+// Style preset options — read from the shared JSON registry so the sketch
+// editor and the AI Map Generator stay in sync.
+const MAP_STYLE_ENTRIES = Object.entries(mapStylePresets).filter(([k]) => !k.startsWith('$'));
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -719,11 +724,10 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
             <label className="tse-label">Map Style
               <select value={mapStyle} onChange={e => setMapStyle(e.target.value)} disabled={generating}>
-                <option value="schley">🏔 Modern Classical Fantasy</option>
-                <option value="handwritten">✏️ Crude Handwritten</option>
-                <option value="parchment">📜 Parchment Atlas</option>
-                <option value="ink">🖋 Hand-drawn Ink</option>
-                <option value="classic">🗺 Classic D&amp;D Module</option>
+                {/* Options read from src/rulesets/mapStylePresets.json so labels stay in sync. */}
+                {MAP_STYLE_ENTRIES.map(([slug, p]) => (
+                  <option key={slug} value={slug} title={p.description}>{p.label}</option>
+                ))}
               </select>
             </label>
 

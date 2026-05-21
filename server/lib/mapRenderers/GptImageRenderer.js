@@ -35,10 +35,12 @@ const MODEL = 'gpt-image-1';
 
 // The exact Danish prompt that worked in ChatGPT and reproduced 9/9 in
 // API testing. Do NOT extend this — testing showed verbose prompts hurt.
+// IP-clean — no published-setting names. Original Danish prompt mentioned
+// "AD&D brug"; replaced with a generic tabletop-fantasy framing.
 const PROMPT =
-  'Baseret på denne sketch, kan du så lave et lore friendly fantasy ' +
-  'map til AD&D brug? Det er vigtigt at du ikke ændrer på det ' +
-  'grundlæggende design.';
+  'Based on this sketch, please produce a lore-friendly fantasy ' +
+  'map for tabletop RPG use. It is important that you do not change ' +
+  'the underlying design.';
 
 class GptImageRenderer extends IMapRenderer {
   get name() { return 'gpt-image-1'; }

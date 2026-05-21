@@ -20,7 +20,12 @@ import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment
 import mapTagsJson     from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
+import mapStylePresets from '../../rulesets/mapStylePresets.json';
 import './MapGenerator.css';
+
+// Map style presets — derived from the shared JSON registry. The `$` keys are
+// metadata; filter them out so the picker only shows real presets.
+const MAP_STYLE_ENTRIES = Object.entries(mapStylePresets).filter(([k]) => !k.startsWith('$'));
 // mapTags.json is now { tags: [...], poi_influence_rules: {...} }
 const tagRules        = mapTagsJson.tags;
 const influenceRules  = mapTagsJson.poi_influence_rules ?? {};
@@ -85,6 +90,7 @@ function resolveParams(p) {
     era:              p.era         === 'Random' ? pickRandom(ERAS.slice(1))          : p.era,
     inhabitants:      p.inhabitants === 'Random' ? pickRandom(INHABITANTS.slice(1))   : p.inhabitants,
     poiCount:         p.poiCount,
+    mapStyle:         p.mapStyle ?? 'parchment',
     ...(p.user_description?.trim() ? { user_description: p.user_description.trim() } : {}),
   };
 }
@@ -106,17 +112,20 @@ function toBackendType(mapTypeStr) {
 // buildDallePrompt replaced by specBuilder.buildImagePrompt — see Trin D.
 
 // ── Claude system/user prompts (split into two smaller calls) ─────────────────
-const CLAUDE_SYSTEM = `You are an expert AD&D 2nd Edition Dungeon Master running a campaign in the Forgotten Realms (Faerûn). Generate vivid, lore-accurate locations that fit the Forgotten Realms setting — referencing real FR locations, factions, deities and history where appropriate. Keep responses concise — maximum 2 sentences per description field. For POI arrays, generate maximum 6 POIs. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+// IP-clean prompts: no artist names, no published-RPG-setting names. These
+// strings reach Claude and OpenAI; we keep them free of trademarked content so
+// the app can ship to a wider audience without compliance risk.
+const CLAUDE_SYSTEM = `You are an expert tabletop fantasy worldbuilder. Generate vivid, lore-rich locations suitable for a classic tabletop RPG. Invent original, evocative names, factions, and deities — do not use names from any published commercial RPG setting. Keep responses concise — maximum 2 sentences per description field. For POI arrays, generate maximum 6 POIs. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
-const FR_CONTEXT = `Setting: Forgotten Realms / Faerûn.
-Use appropriate FR place names, factions (Zhentarim, Harpers, Lords' Alliance, Emerald Enclave, Order of the Gauntlet), deities (Mystra, Tempus, Bane, Selûne, Tymora etc.), and lore.
-Reference real FR regions when appropriate based on terrain:
-- Mountains → Spine of the World, Thunder Peaks, or Graypeaks
-- Forest → Cormanthor, Neverwinter Wood, or High Forest
-- Coastal → Sword Coast, Sea of Fallen Stars
-- Desert → Anauroch, Calimshan
-- Swamp → Lizard Marsh, Vast Swamp
-- Underground → Underdark, Undermountain`;
+const FR_CONTEXT = `Setting: original tabletop fantasy.
+Invent original, atmospheric place names, factions, and deities. Do not use names from any published commercial RPG setting (no real-world brand, module, or campaign-setting names).
+Suggested naming vibe by terrain:
+- Mountains → ridge/peak names ("Iron Spire", "Greybacks", "Frostmaw Range")
+- Forest → ancient-woodland names ("Old Wood", "Thornveil", "Mistweave")
+- Coastal → sea-tinged names ("Saltwind Reach", "Drowned Shores")
+- Desert → harsh-land names ("Sunbleach", "The Ashen Waste")
+- Swamp → mire/marsh names ("Reedhollow", "The Sodden Mire")
+- Underground → deep-dark names ("Deepvein", "The Hollow Below")`;
 
 function parentNote(ctx) {
   return ctx
@@ -134,17 +143,17 @@ function buildMetadataPrompt(r, parentCtx) {
     : desc
       ? `\nUser description hint: "${desc}"\n`
       : '';
-  return `Generate metadata for an AD&D 2E ${r.mapType} map.
+  return `Generate metadata for a tabletop fantasy ${r.mapType} map.
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
 ${parentNote(parentCtx)}
 ${FR_CONTEXT}
 
 Respond with ONLY this JSON object:
 {
-  "title": "Evocative Forgotten Realms location name (3-5 words)",
+  "title": "Evocative original fantasy location name (3-5 words)",
   "subtitle": "Atmospheric tagline (5-8 words)",
-  "description": "2 sentence atmospheric overview referencing FR lore",
-  "history": "2 sentences of FR-appropriate backstory",
+  "description": "2 sentence atmospheric overview with rich original lore",
+  "history": "2 sentences of original fantasy backstory",
   "atmosphere_notes": "One sentence: sounds, smells, lighting",
   "dalle_prompt_additions": "Key visual details for image, max 100 chars"
 }`;
@@ -166,11 +175,11 @@ function buildPoisPrompt(r, numPois, meta, parentCtx) {
     : desc
       ? `\nUser description hint: "${desc}"\n`
       : '';
-  return `For the Forgotten Realms AD&D 2E ${r.mapType} map "${meta.title}":
+  return `For the tabletop fantasy ${r.mapType} map "${meta.title}":
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
 ${parentNote(parentCtx)}
 ${typeHint}
-Use FR-appropriate names, factions and lore for all POIs. Keep each field to 1-2 sentences maximum.
+Use evocative original names, factions and lore for all POIs — no published-setting references. Keep each field to 1-2 sentences maximum.
 
 Generate exactly ${cappedPois} points of interest spread across the map.
 
@@ -179,30 +188,30 @@ Respond with ONLY this JSON object:
   "pois": [
     {
       "id": "poi_1",
-      "name": "FR-appropriate location name",
+      "name": "evocative original location name",
       "type": "city|village|ruins|cave|dungeon|encounter|treasure|trap|npc|landmark|mystery",
       "x_percent": 20,
       "y_percent": 35,
       "is_dm_only": false,
       "short_description": "One sentence players might learn",
-      "dm_description": "1-2 sentence DM detail with FR lore",
-      "history": "One sentence FR-appropriate backstory",
+      "dm_description": "1-2 sentence DM detail with original lore",
+      "history": "One sentence original fantasy backstory",
       "current_situation": "One sentence current state",
       "encounters": "Possible encounter (or null)",
       "treasure": "Loot if any (or null)",
-      "secrets": "Hidden info or FR plot hook (or null)",
+      "secrets": "Hidden info or original plot hook (or null)",
       "can_drill_down": true,
       "drill_down_type": "dungeon|cave|city|ruins|null",
-      "quest_hooks": ["FR-themed hook"]
+      "quest_hooks": ["original fantasy hook"]
     }
   ],
   "random_encounter_table": [
-    {"roll": "1-2", "encounter": "FR-appropriate encounter"},
-    {"roll": "3-4", "encounter": "FR-appropriate encounter"},
-    {"roll": "5-6", "encounter": "FR-appropriate encounter"}
+    {"roll": "1-2", "encounter": "evocative original encounter"},
+    {"roll": "3-4", "encounter": "evocative original encounter"},
+    {"roll": "5-6", "encounter": "evocative original encounter"}
   ],
-  "secrets": ["One FR-flavoured map-level secret"],
-  "plot_hooks": ["One Forgotten Realms campaign hook"]
+  "secrets": ["One original map-level secret"],
+  "plot_hooks": ["One original tabletop fantasy campaign hook"]
 }
 
 Rules:
@@ -330,6 +339,9 @@ export function MapGenerator({
     era:              presetParams?.era              ?? 'Random',
     inhabitants:      presetParams?.inhabitants      ?? 'Random',
     poiCount:         presetParams?.poiCount         ?? 'Random (3-8)',
+    // mapStyle: sub-maps inherit from parent via presetParams.mapStyle
+    // (set in MapManager.handleDrillDown); top-level maps default to parchment.
+    mapStyle:         presetParams?.mapStyle         ?? 'parchment',
     user_description: presetParams?.user_description ?? buildVisualDescriptionFromPOI(parentPoiCtx) ?? '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
@@ -600,6 +612,24 @@ export function MapGenerator({
                   <select className="mgn-select" value={params.mapType} onChange={e => setP('mapType', e.target.value)}>
                     {MAP_TYPES.map(o => <option key={o}>{o}</option>)}
                   </select>
+                </div>
+
+                {/* Map Style (5B-a: drives the visual treatment of the rendered image) */}
+                <div className="mgn-field">
+                  <div className="mgn-field-label">Map Style</div>
+                  <select
+                    className="mgn-select"
+                    value={params.mapStyle}
+                    onChange={e => setP('mapStyle', e.target.value)}
+                    title={mapStylePresets[params.mapStyle]?.description ?? ''}
+                  >
+                    {MAP_STYLE_ENTRIES.map(([slug, p]) => (
+                      <option key={slug} value={slug} title={p.description}>{p.label}</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.72rem', color: '#9a875a', marginTop: 4, lineHeight: 1.35 }}>
+                    {mapStylePresets[params.mapStyle]?.description ?? ''}
+                  </div>
                 </div>
 
                 {/* Size */}

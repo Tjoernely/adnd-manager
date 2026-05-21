@@ -26,6 +26,8 @@ export interface GeneratedParams {
   inhabitants:       string;
   poiCount?:         string;
   user_description?: string;
+  /** Slug from src/rulesets/mapStylePresets.json — drives buildImagePrompt's style. */
+  mapStyle?:         string;
 }
 
 // ── mapTypeToScope ─────────────────────────────────────────────────────────────
