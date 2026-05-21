@@ -95,6 +95,11 @@ async function autoMigrate() {
     `);
 
     await db.query(`
+      ALTER TABLE maps
+        ADD COLUMN IF NOT EXISTS purpose VARCHAR(20) DEFAULT 'standard';
+    `);
+
+    await db.query(`
       CREATE TABLE IF NOT EXISTS party_inventory (
         id                       SERIAL PRIMARY KEY,
         campaign_id              INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,

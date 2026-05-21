@@ -385,6 +385,9 @@ router.post('/', auth, async (req, res) => {
       data          = {},
       parent_map_id = null,
       parent_poi_id = null,
+      // Sub-map purpose: 'standard' | 'minor' | 'decoy' | 'major'. Drives
+      // content scope / loot tier / plot relevance in the generation prompts.
+      purpose       = 'standard',
     } = req.body ?? {};
 
     if (!campaign_id || !name)
@@ -414,10 +417,10 @@ router.post('/', auth, async (req, res) => {
       console.log('[maps POST] WARNING: spec lost after enrichMapData');
     }
     const map = await db.one(
-      `INSERT INTO maps (campaign_id, name, type, image_url, data, parent_map_id, parent_poi_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      `INSERT INTO maps (campaign_id, name, type, image_url, data, parent_map_id, parent_poi_id, purpose)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [campaign_id, name.trim(), type, image_url, JSON.stringify(safeData),
-       parent_map_id || null, parent_poi_id || null],
+       parent_map_id || null, parent_poi_id || null, purpose || 'standard'],
     );
     res.status(201).json(map);
   } catch (e) { next500(e, res); }

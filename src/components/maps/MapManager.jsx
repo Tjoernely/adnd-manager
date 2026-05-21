@@ -619,6 +619,12 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       parentMapId:  activeMapId,
       parentPoiId:  poi.id,
       parentPoiCtx: poi,
+      // 5B-b: parent-map context (title/subtitle) is plumbed into the prompts
+      // so the sub-map's metadata and POIs stay coherent with the larger
+      // location the party is exploring within.
+      parentMapCtx: parentMap
+        ? { title: parentMap.name, subtitle: parentMap.data?.subtitle ?? '' }
+        : null,
       presetType:   submapPreset,
       presetParams,
     });
@@ -970,6 +976,7 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
           parentMapId={genContext?.parentMapId ?? null}
           parentPoiId={genContext?.parentPoiId ?? null}
           parentPoiCtx={genContext?.parentPoiCtx ?? null}
+          parentMapCtx={genContext?.parentMapCtx ?? null}
           presetType={genContext?.presetType ?? null}
           presetParams={genContext?.presetParams ?? null}
           presetImageUrl={genContext?.presetImageUrl ?? null}
@@ -1060,6 +1067,7 @@ function MapTreeNode({ map, allMaps, activeMapId, children_fn, onSelect, depth }
     <div className="mm-tree-node">
       <div
         className={`mm-tree-item${isActive ? ' mm-tree-item--active' : ''}${depth > 0 ? ' mm-tree-item--child' : ''}`}
+        data-purpose={map.purpose ?? 'standard'}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
         {/* Collapse toggle — invisible spacer when no children */}

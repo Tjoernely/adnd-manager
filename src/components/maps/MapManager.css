@@ -78,6 +78,25 @@
   background: rgba(200, 168, 75, 0.07);
 }
 
+/* ── 5B-b: decoy sub-map styling ───────────────────────────────────────────── */
+/* Decoy maps are "dead-end" locations a party stumbled into by mistake. They
+   render with a mundane title + minimal POIs, but in the sidebar the DM needs
+   to remember which ones are decorations vs. real content. Italic + muted +
+   mask glyph make them visually distinct. */
+.mm-tree-item[data-purpose="decoy"] .mm-tree-label {
+  color: #6a5a3a;
+  font-style: italic;
+  opacity: 0.78;
+}
+.mm-tree-item[data-purpose="decoy"] .mm-tree-icon {
+  opacity: 0.6;
+}
+.mm-tree-item[data-purpose="decoy"] .mm-tree-icon::after {
+  content: ' 🎭';
+  font-size: 10px;
+  margin-left: 1px;
+}
+
 /* ── Map tree ─────────────────────────────────────────────────────────────── */
 .mm-map-tree {
   flex: 1;

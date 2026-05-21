@@ -21,6 +21,7 @@ import mapTagsJson     from '../../rulesets/mapTags.json';
 import scopeRules      from '../../rulesets/mapScopes.json';
 import archetypeRules  from '../../rulesets/settlementArchetypes.json';
 import mapStylePresets from '../../rulesets/mapStylePresets.json';
+import { MAP_PURPOSES, PURPOSE_BY_VALUE } from '../../constants/mapPurposes.js';
 import './MapGenerator.css';
 
 // Map style presets — derived from the shared JSON registry. The `$` keys are
@@ -91,6 +92,7 @@ function resolveParams(p) {
     inhabitants:      p.inhabitants === 'Random' ? pickRandom(INHABITANTS.slice(1))   : p.inhabitants,
     poiCount:         p.poiCount,
     mapStyle:         p.mapStyle ?? 'parchment',
+    purpose:          PURPOSE_BY_VALUE[p.purpose] ? p.purpose : 'standard',
     ...(p.user_description?.trim() ? { user_description: p.user_description.trim() } : {}),
   };
 }
@@ -127,14 +129,117 @@ Suggested naming vibe by terrain:
 - Swamp → mire/marsh names ("Reedhollow", "The Sodden Mire")
 - Underground → deep-dark names ("Deepvein", "The Hollow Below")`;
 
+/**
+ * 5B-b: extended parent context for sub-map generation.
+ *
+ * Builds a multi-line block feeding the parent POI's rich narrative
+ * (history, current_situation) and the parent map's title/subtitle into
+ * Step 1 + Step 2 prompts so the sub-map stays coherent with what came
+ * before. Purpose-aware: Major maps additionally see quest hooks + secrets;
+ * Decoy maps are explicitly told to ignore them.
+ *
+ * @param {{ poi?: object, parentMap?: object, purpose?: string }} ctx
+ */
 function parentNote(ctx) {
-  return ctx
-    ? `Context: this map is located within/below "${ctx.name}" — ${ctx.short_description || ctx.dm_description || '(no description)'}`
-    : '';
+  const poi = ctx?.poi;
+  if (!poi) return '';
+
+  const head = poi.short_description
+    ? `Context: this sub-map is located within or near "${poi.name}" — ${poi.short_description}`
+    : `Context: this sub-map is located within or near "${poi.name}".`;
+  const parts = [head];
+
+  const firstSentence = (s) =>
+    typeof s === 'string' ? s.match(/^[^.!?]+[.!?]/)?.[0]?.trim() : null;
+
+  const dmFirst = firstSentence(poi.dm_description);
+  if (dmFirst) parts.push(`Physical setting: ${dmFirst}`);
+
+  const histFirst = firstSentence(poi.history);
+  if (histFirst) parts.push(`Historical context: ${histFirst}`);
+
+  const sitFirst = firstSentence(poi.current_situation);
+  if (sitFirst) parts.push(`Current activity: ${sitFirst}`);
+
+  const parentMap = ctx?.parentMap;
+  if (parentMap?.title) {
+    parts.push(
+      parentMap.subtitle
+        ? `This is a sub-location of "${parentMap.title}" — ${parentMap.subtitle}`
+        : `This is a sub-location of "${parentMap.title}".`,
+    );
+  }
+
+  // Purpose-aware exception: Major weaves hooks/secrets in; Decoy is told
+  // explicitly to ignore them (see purposeGuidance for the full content).
+  const purpose = ctx?.purpose;
+  if (purpose === 'major') {
+    if (poi.quest_hooks) {
+      const hooks = Array.isArray(poi.quest_hooks) ? poi.quest_hooks.join('; ') : String(poi.quest_hooks);
+      if (hooks.trim()) parts.push(`Quest hooks to weave in: ${hooks}`);
+    }
+    if (poi.secrets && String(poi.secrets).trim()) {
+      parts.push(`Hidden knowledge available: ${poi.secrets}`);
+    }
+  } else if (purpose === 'decoy') {
+    parts.push(
+      'NOTE: Even if the parent POI has secrets or quest hooks, DO NOT reference them in this sub-map. This is a decoy — it must not advance the plot.',
+    );
+  }
+
+  return parts.join('\n');
+}
+
+/**
+ * 5B-b: bias the generation prompts toward a specific content scope.
+ *
+ * - decoy:    mundane side-location, trivial loot, no plot
+ * - minor:    light flavour, modest loot
+ * - major:    rich quest location, key NPCs, plot-critical content
+ * - standard: no extra constraint (Claude's default behaviour)
+ */
+function purposeGuidance(purpose) {
+  switch (purpose) {
+    case 'decoy':
+      return `
+[PURPOSE: DECOY LOCATION]
+This sub-map represents a plausible side-location the party may have stumbled into by mistake. CRITICAL: it must look REAL but contain NO plot content.
+- Generate 1-3 MUNDANE POIs (everyday objects, abandoned items, environmental features).
+- Loot tier: TRIVIAL only — copper coins, broken pottery, faded letters, dusty tools, mouldy food, rusted nails.
+- NO quest hooks. NO major NPCs. NO plot-relevant secrets.
+- Atmosphere: ordinary, lived-in, slightly forgotten. NOT epic, NOT cursed, NOT magical.
+- Examples of good decoy content:
+  - "An abandoned root cellar" with dusty barrels of pickled cabbage, a forgotten broom, a mouse nest
+  - "A neglected gardener's shed" with rusted tools, a half-finished seedling tray, a sleeping cat
+  - "An old well shaft" with stagnant water, a rusted bucket, lichen on the stones
+- Title should sound like a mundane place name, NOT an epic dungeon name.
+  - GOOD: "Old Tannery", "The Bramble Path", "Cooper's Storeroom"
+  - BAD: "The Bloodied Sanctum", "Shrine of the Drowned Lord"`;
+    case 'minor':
+      return `
+[PURPOSE: MINOR LOCATION]
+This is a side-location with modest interest. Some flavour, but not plot-critical.
+- Generate 1-3 POIs with mild flavour.
+- Loot tier: MINOR — a few silver pieces, a weathered map, a moderate-quality common item.
+- Optional: 1 minor NPC with background flavour (not quest-relevant).
+- Quest hooks are background lore only — no active plots requiring party action.`;
+    case 'major':
+      return `
+[PURPOSE: MAJOR QUEST LOCATION]
+This sub-map is plot-critical.
+- Generate 5-8 rich, varied POIs.
+- Include 1-2 named NPCs with motivations and dialogue hooks.
+- Include 1-2 active quest hooks the party can pursue.
+- Loot tier: MODERATE to MAJOR — magical items, significant treasure caches, plot-relevant artifacts.
+- Secrets advance the main plot.`;
+    case 'standard':
+    default:
+      return ''; // No extra constraint — keep Claude's default behaviour.
+  }
 }
 
 /** CALL 1 — map metadata only. Fast, ~800-1200 tokens output. */
-function buildMetadataPrompt(r, parentCtx) {
+function buildMetadataPrompt(r, parentCtx, parentMapCtx) {
   const desc = (r.user_description ?? '').trim();
   // A substantial description is authoritative — the dropdown values are only
   // fallback hints and must be overridden by anything explicit in it.
@@ -143,10 +248,16 @@ function buildMetadataPrompt(r, parentCtx) {
     : desc
       ? `\nUser description hint: "${desc}"\n`
       : '';
+  // 5B-b: purpose biases scope/loot/plot. Title override prevents Decoy
+  // sub-maps from getting epic-sounding names that telegraph plot relevance.
+  const purposeBlock = purposeGuidance(r.purpose);
+  const titleOverride = r.purpose === 'decoy'
+    ? `\n\nIMPORTANT TITLE OVERRIDE: The title MUST sound like an ordinary, mundane place name. Use simple compound names like "Old Tannery", "Stonefoot Cellar", "Miller's Drying Shed". DO NOT use evocative titles with words like "Sanctum", "Shrine", "Whisper", "Doom", "Forsaken", or similar dramatic vocabulary. Players should NOT be able to tell this is plot-irrelevant.`
+    : '';
   return `Generate metadata for a tabletop fantasy ${r.mapType} map.
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
-${parentNote(parentCtx)}
-${FR_CONTEXT}
+${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
+${FR_CONTEXT}${purposeBlock}${titleOverride}
 
 Respond with ONLY this JSON object:
 {
@@ -160,7 +271,7 @@ Respond with ONLY this JSON object:
 }
 
 /** CALL 2 — POIs + encounter table. Uses title from call 1 for context. */
-function buildPoisPrompt(r, numPois, meta, parentCtx) {
+function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx) {
   // Cap at 6 to avoid token overflow
   const cappedPois = Math.min(numPois, 6);
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
@@ -175,10 +286,12 @@ function buildPoisPrompt(r, numPois, meta, parentCtx) {
     : desc
       ? `\nUser description hint: "${desc}"\n`
       : '';
+  // 5B-b: purpose biases how many / how rich the POIs should be.
+  const purposeBlock = purposeGuidance(r.purpose);
   return `For the tabletop fantasy ${r.mapType} map "${meta.title}":
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
-${parentNote(parentCtx)}
-${typeHint}
+${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
+${typeHint}${purposeBlock}
 Use evocative original names, factions and lore for all POIs — no published-setting references. Keep each field to 1-2 sentences maximum.
 
 Generate exactly ${cappedPois} points of interest spread across the map.
@@ -324,6 +437,7 @@ export function MapGenerator({
   parentMapId  = null,
   parentPoiId  = null,
   parentPoiCtx = null,
+  parentMapCtx = null,   // { title, subtitle } from MapManager.handleDrillDown
   presetType   = null,
   presetParams   = null,   // Partial<GeneratedParams> from connectionEngine or sketchToGeneratedParams
   presetImageUrl = null,   // pre-generated image URL from generate-from-sketch route
@@ -342,6 +456,10 @@ export function MapGenerator({
     // mapStyle: sub-maps inherit from parent via presetParams.mapStyle
     // (set in MapManager.handleDrillDown); top-level maps default to parchment.
     mapStyle:         presetParams?.mapStyle         ?? 'parchment',
+    // 5B-b: sub-map purpose. Default 'standard' even for sub-maps — parent's
+    // purpose is intentionally NOT inherited (a Major parent often spawns
+    // Decoy children, and vice versa). DM picks per-sub-map.
+    purpose:          'standard',
     user_description: presetParams?.user_description ?? buildVisualDescriptionFromPOI(parentPoiCtx) ?? '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
@@ -396,7 +514,7 @@ export function MapGenerator({
       console.log('[MapGenerator] Step 1/3 — requesting map metadata from Claude...');
       const meta = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
-        userPrompt:   buildMetadataPrompt(resolved, parentPoiCtx),
+        userPrompt:   buildMetadataPrompt(resolved, parentPoiCtx, parentMapCtx),
         maxTokens:    1200,
       });
       console.log('[MapGenerator] Step 1/3 done — title:', meta?.title);
@@ -408,7 +526,7 @@ export function MapGenerator({
       console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude...');
       const poiData = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
-        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx),
+        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx),
         maxTokens:    4000,
       });
       console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
@@ -473,6 +591,7 @@ export function MapGenerator({
         type:          toBackendType(resolved.mapType),
         parent_map_id: parentMapId,
         parent_poi_id: parentPoiId,
+        purpose:       resolved.purpose ?? 'standard',
         data: {
           pois,
           subtitle:               meta.subtitle                   || '',
@@ -631,6 +750,27 @@ export function MapGenerator({
                     {mapStylePresets[params.mapStyle]?.description ?? ''}
                   </div>
                 </div>
+
+                {/* Map Purpose — 5B-b: sub-maps only. Biases content scope,
+                    loot tier and plot relevance. Decoy = "looks real but isn't". */}
+                {parentPoiCtx && (
+                  <div className="mgn-field">
+                    <div className="mgn-field-label">Map Purpose</div>
+                    <select
+                      className="mgn-select"
+                      value={params.purpose}
+                      onChange={e => setP('purpose', e.target.value)}
+                      title={PURPOSE_BY_VALUE[params.purpose]?.description ?? ''}
+                    >
+                      {MAP_PURPOSES.map(p => (
+                        <option key={p.value} value={p.value} title={p.description}>{p.label}</option>
+                      ))}
+                    </select>
+                    <div style={{ fontSize: '0.72rem', color: '#9a875a', marginTop: 4, lineHeight: 1.35 }}>
+                      {PURPOSE_BY_VALUE[params.purpose]?.description ?? ''}
+                    </div>
+                  </div>
+                )}
 
                 {/* Size */}
                 <div className="mgn-field">
