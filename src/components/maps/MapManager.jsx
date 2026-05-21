@@ -487,6 +487,71 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
     savePois(newPois);
   }, [activeMap, savePois]);
 
+  // ── Phase 6d: Regenerate a single POI via Haiku ──────────────────────────────
+  // Keeps the POI's type + position + id (so map markers don't move) but rolls
+  // a fresh name + narrative. Cheap (~$0.001), fast (~1-2 s). Failure shows a
+  // toast and leaves the POI untouched.
+  const [regeneratingPoiId, setRegeneratingPoiId] = useState(null);
+  const handleRegeneratePoi = useCallback(async (poi) => {
+    if (!activeMap || !poi) return;
+    setRegeneratingPoiId(poi.id);
+    try {
+      const mapTitle    = activeMap.name ?? '(unknown)';
+      const mapSubtitle = activeMap.data?.subtitle ?? '';
+      const userDesc    = activeMap.data?.generated_params?.user_description ?? '';
+      const userPrompt = `Re-generate a single POI on a tabletop fantasy map. Keep the SAME POI TYPE; change the name and narrative to give the DM a different take. No published-setting references.
+
+MAP CONTEXT:
+- Title: "${mapTitle}"${mapSubtitle ? ` — ${mapSubtitle}` : ''}
+- Original user description: ${userDesc || '(none)'}
+
+CURRENT POI (to be replaced):
+- Type: ${poi.type}
+- Name: ${poi.name}
+- Short description: ${poi.short_description ?? ''}
+
+Respond with ONLY this JSON (no markdown fences):
+{
+  "name":              "evocative original name (different from current)",
+  "short_description": "1 sentence players might learn",
+  "dm_description":    "1-2 sentence DM detail with original lore",
+  "history":           "1 sentence original fantasy backstory",
+  "current_situation": "1 sentence current state",
+  "encounters":        "Possible encounter, or null",
+  "treasure":          "Loot if any, or null",
+  "secrets":           "Hidden info, or null",
+  "quest_hooks":       ["one original hook"]
+}`;
+      const fresh = await callClaude({
+        systemPrompt: 'You are a tabletop fantasy worldbuilder. Respond with raw JSON only — no markdown fences.',
+        userPrompt,
+        maxTokens: 800,
+        model:     'claude-haiku-4-5',
+      });
+      if (!fresh?.name) throw new Error('Haiku returned no name');
+      const updated = {
+        ...poi,
+        name:              fresh.name,
+        short_description: fresh.short_description ?? poi.short_description,
+        dm_description:    fresh.dm_description    ?? poi.dm_description,
+        history:           fresh.history           ?? poi.history,
+        current_situation: fresh.current_situation ?? poi.current_situation,
+        encounters:        fresh.encounters        ?? poi.encounters,
+        treasure:          fresh.treasure          ?? poi.treasure,
+        secrets:           fresh.secrets           ?? poi.secrets,
+        quest_hooks:       Array.isArray(fresh.quest_hooks) ? fresh.quest_hooks : poi.quest_hooks,
+      };
+      const newPois = (activeMap.data?.pois ?? []).map(p => p.id === poi.id ? updated : p);
+      await savePois(newPois);
+      showToast(`POI re-rolled: ${fresh.name}`);
+    } catch (e) {
+      console.error('[MapManager] regeneratePoi failed:', e.message);
+      showToast(`POI regen failed: ${e.message}`);
+    } finally {
+      setRegeneratingPoiId(null);
+    }
+  }, [activeMap, savePois, showToast]);
+
   // ── Visibility toggle ────────────────────────────────────────────────────────
   const toggleMapVisibility = useCallback(async () => {
     if (!activeMap || !isDM) return;
@@ -933,6 +998,8 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
                     onUpdate={(updates) => handleUpdatePoi(selectedPoi.id, updates)}
                     onDelete={() => handleDeletePoi(selectedPoi.id)}
                     onDrillDown={() => handleDrillDown(selectedPoi)}
+                    onRegenerate={() => handleRegeneratePoi(selectedPoi)}
+                    regenerating={regeneratingPoiId === selectedPoi.id}
                     onNavigate={navigateToMap}
                     onShowApiKeys={() => setShowApiKeys(true)}
                   />
@@ -1514,7 +1581,7 @@ function LocationMetaBar({ spec }) {
 // ── POIPanel ──────────────────────────────────────────────────────────────────
 const POI_PANEL_SYSTEM = `You are an expert classic tabletop DM in the tabletop fantasy. Keep responses concise — 1-2 sentences per item. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
-function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelete, onDrillDown, onNavigate, onShowApiKeys }) {
+function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelete, onDrillDown, onRegenerate, regenerating, onNavigate, onShowApiKeys }) {
   const [activeTab,  setActiveTab]  = useState(isDM && !playerView ? 'dm' : 'player');
   const [editing,    setEditing]    = useState(false);
   const [draft,      setDraft]      = useState(poi);
@@ -2134,6 +2201,18 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
                 </>
               ) : (
                 <button className="mm-poi-edit-btn" onClick={() => setEditing(true)}>✎ Edit</button>
+              )}
+              {/* Phase 6d: Haiku-powered single-POI reroll. Keeps type/id/position,
+                  swaps name + narrative. Cheap + fast. */}
+              {!editing && onRegenerate && (
+                <button
+                  className="mm-poi-edit-btn"
+                  onClick={onRegenerate}
+                  disabled={regenerating}
+                  title="Re-roll this POI's name and narrative (Haiku)"
+                >
+                  {regenerating ? '⏳ Regenerating…' : '⟳ Regenerate'}
+                </button>
               )}
               {delConfirm ? (
                 <>
