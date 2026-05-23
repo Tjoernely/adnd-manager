@@ -107,6 +107,16 @@ async function autoMigrate() {
         ADD COLUMN IF NOT EXISTS context VARCHAR(40) DEFAULT NULL;
     `);
 
+    // Sprint 4 — NPC provenance: when an NPC is created from a POI's
+    // suggested_npcs list, we tag it with the POI id (poi_xxx, a string in
+    // map JSONB.data.pois[].id) and the map id. NPC-detail panel uses these
+    // to render "Found at: <POI>, <Map>" with an open-map link.
+    await db.query(`
+      ALTER TABLE npcs
+        ADD COLUMN IF NOT EXISTS source_poi_id VARCHAR(255) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS source_map_id INTEGER REFERENCES maps(id) ON DELETE SET NULL;
+    `);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS party_inventory (
         id                       SERIAL PRIMARY KEY,

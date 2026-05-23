@@ -117,7 +117,7 @@ async function generatePortrait(npcData, npcName) {
 
 // ── NPCManager (root) ─────────────────────────────────────────────────────────
 
-export function NPCManager({ campaign, user, onBack }) {
+export function NPCManager({ campaign, user, onBack, onOpenMap }) {
   const isDM = campaign.dm_user_id === user.id;
 
   const [npcs,        setNpcs]        = useState([]);
@@ -254,6 +254,7 @@ export function NPCManager({ campaign, user, onBack }) {
           onSave={handleSaveNpc}
           onDelete={handleDeleteNpc}
           onRevealToggle={handleRevealToggle}
+          onOpenMap={onOpenMap}
         />
       )}
       {showGenerate && (
@@ -343,7 +344,7 @@ function normalizePersonality(p) {
   return [];
 }
 
-function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle }) {
+function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle, onOpenMap }) {
   const [draft,      setDraft]      = useState(() => {
     const base = { ...(npc.data ?? {}) };
     base.personality = normalizePersonality(base.personality);
@@ -357,6 +358,23 @@ function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle }
   const [portraitErr,setPortraitErr]= useState('');
   const [newEquip,   setNewEquip]   = useState('');
   const [newLootItem,setNewLootItem]= useState('');
+
+  // Sprint 4 — when the NPC was spawned from a POI's suggested_npcs list, the
+  // server stores source_poi_id + source_map_id. Lazily fetch the source map
+  // so we can show "Found at: <POI>, <Map>" with an open-map link.
+  const [sourceMap, setSourceMap] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (npc.source_map_id) {
+      api.getMap(npc.source_map_id)
+        .then(m => { if (alive) setSourceMap(m); })
+        .catch(() => { /* non-fatal — link just won't appear */ });
+    } else {
+      setSourceMap(null);
+    }
+    return () => { alive = false; };
+  }, [npc.source_map_id]);
+  const sourcePoi = sourceMap?.data?.pois?.find?.(p => p.id === npc.source_poi_id) ?? null;
 
   const pl    = plInfo(draft.powerLevel);
   const stats = draft.stats ?? {};
@@ -435,6 +453,50 @@ function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle }
               </button>
             )}
           </div>
+
+          {/* Sprint 4 — provenance bar (NPCs spawned from a map POI) */}
+          {npc.source_map_id && (
+            <div
+              style={{
+                display:       'flex',
+                alignItems:    'center',
+                gap:           10,
+                marginTop:     6,
+                padding:       '5px 10px',
+                background:    'rgba(0, 0, 0, 0.28)',
+                border:        '1px solid rgba(200, 168, 75, 0.2)',
+                borderRadius:  4,
+                fontSize:      '0.78rem',
+                color:         '#a89878',
+              }}
+            >
+              <span style={{ color: '#c8a84b' }}>📍 Found at:</span>
+              <span style={{ flex: 1, color: '#d4c090' }}>
+                {sourcePoi ? <strong>{sourcePoi.name}</strong> : <em style={{ color: '#9a875a' }}>(POI removed)</em>}
+                {sourceMap && <>, {sourceMap.name}</>}
+                {!sourceMap && <em style={{ color: '#9a875a' }}> Loading map…</em>}
+              </span>
+              {onOpenMap && sourceMap && (
+                <button
+                  type="button"
+                  onClick={() => { onOpenMap(npc.source_map_id, npc.source_poi_id); onClose(); }}
+                  title="Open this map and select the source POI"
+                  style={{
+                    padding:      '3px 9px',
+                    fontSize:     '0.74rem',
+                    fontFamily:   'inherit',
+                    background:   'rgba(200, 168, 75, 0.15)',
+                    color:        '#c8a84b',
+                    border:       '1px solid rgba(200, 168, 75, 0.4)',
+                    borderRadius: 3,
+                    cursor:       'pointer',
+                  }}
+                >
+                  ↗ Open map
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="nm-dm-info-row">
             {isDM ? (

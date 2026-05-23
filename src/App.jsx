@@ -49,6 +49,18 @@ export default function App() {
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
+  // Sprint 4 — deep-link state for opening MapManager focused on a specific
+  // map/POI (used by NPC detail panel's "↗ Open map" link). Cleared once the
+  // overlay closes so subsequent manual opens land on the user's last map.
+  const [mapFocus,     setMapFocus]     = useState({ mapId: null, poiId: null });
+  const openMapsAt     = useCallback((mapId, poiId = null) => {
+    setMapFocus({ mapId: mapId ?? null, poiId: poiId ?? null });
+    setShowMaps(true);
+  }, []);
+  const closeMaps      = useCallback(() => {
+    setShowMaps(false);
+    setMapFocus({ mapId: null, poiId: null });
+  }, []);
   // ── Screen navigation: stack-based so the global Back button can pop ──────
   // setScreen(x) keeps its old single-arg API. Behaviour:
   //   - x === 'dashboard' → reset the whole stack (modules' "← Dashboard"
@@ -230,7 +242,7 @@ export default function App() {
           campaignId={activeCampaign.id}
           isDM={activeCampaign.dm_user_id === user.id}
           isOpen={showMaps}
-          onClose={() => setShowMaps(false)}
+          onClose={closeMaps}
         />
         <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
       </>
@@ -278,7 +290,7 @@ export default function App() {
           campaignId={activeCampaign.id}
           isDM={activeCampaign.dm_user_id === user.id}
           isOpen={showMaps}
-          onClose={() => setShowMaps(false)}
+          onClose={closeMaps}
         />
         <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
       </>
@@ -317,12 +329,15 @@ export default function App() {
           campaign={activeCampaign}
           user={user}
           onBack={() => setScreen('dashboard')}
+          onOpenMap={openMapsAt}
         />
         <MapManager
           campaignId={activeCampaign.id}
           isDM={activeCampaign.dm_user_id === user.id}
           isOpen={showMaps}
-          onClose={() => setShowMaps(false)}
+          onClose={closeMaps}
+          initialFocusMapId={mapFocus.mapId}
+          initialFocusPoiId={mapFocus.poiId}
         />
         <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
       </>
@@ -887,7 +902,7 @@ export default function App() {
         campaignId={activeCampaign.id}
         isDM={activeCampaign.dm_user_id === user.id}
         isOpen={showMaps}
-        onClose={()=>setShowMaps(false)}
+        onClose={closeMaps}
       />
 
       <AppBackButton canGoBack={canGoBack} onBack={popScreen} />

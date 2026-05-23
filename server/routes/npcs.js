@@ -57,16 +57,22 @@ router.get('/:id', auth, async (req, res) => {
 // ── Create NPC (DM only) ─────────────────────────────────────────────────────
 router.post('/', auth, async (req, res) => {
   try {
-    const { campaign_id, name, data = {}, is_hidden = true } = req.body ?? {};
+    const {
+      campaign_id, name, data = {}, is_hidden = true,
+      // Sprint 4 — optional provenance for NPCs spawned from a map POI's
+      // suggested_npcs list. Both nullable; NPC-detail panel uses them to
+      // render "Found at: <POI>, <Map>".
+      source_poi_id = null, source_map_id = null,
+    } = req.body ?? {};
     if (!campaign_id || !name) return res.status(400).json({ error: 'campaign_id and name required' });
 
     if (!(await isDM(campaign_id, req.user.id)))
       return res.status(403).json({ error: 'DM only' });
 
     const npc = await db.one(
-      `INSERT INTO npcs (campaign_id, name, data, is_hidden)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [campaign_id, name.trim(), JSON.stringify(data), is_hidden],
+      `INSERT INTO npcs (campaign_id, name, data, is_hidden, source_poi_id, source_map_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [campaign_id, name.trim(), JSON.stringify(data), is_hidden, source_poi_id, source_map_id],
     );
     res.status(201).json(npc);
   } catch (e) { next500(e, res); }
@@ -79,11 +85,20 @@ router.put('/:id', auth, async (req, res) => {
     if (!npc) return res.status(404).json({ error: 'Not found' });
     if (!(await isDM(npc.campaign_id, req.user.id))) return res.status(403).json({ error: 'DM only' });
 
-    const { name = npc.name, data = npc.data, is_hidden = npc.is_hidden } = req.body ?? {};
+    const {
+      name          = npc.name,
+      data          = npc.data,
+      is_hidden     = npc.is_hidden,
+      // Sprint 4 — allow back-filling provenance on existing NPCs (e.g. if
+      // they were created before the POI link existed). Default to existing.
+      source_poi_id = npc.source_poi_id,
+      source_map_id = npc.source_map_id,
+    } = req.body ?? {};
     const updated = await db.one(
-      `UPDATE npcs SET name=$1, data=$2, is_hidden=$3, updated_at=NOW()
-       WHERE id=$4 RETURNING *`,
-      [name.trim(), JSON.stringify(data), is_hidden, req.params.id],
+      `UPDATE npcs SET name=$1, data=$2, is_hidden=$3, source_poi_id=$4, source_map_id=$5,
+                       updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [name.trim(), JSON.stringify(data), is_hidden, source_poi_id, source_map_id, req.params.id],
     );
     res.json(updated);
   } catch (e) { next500(e, res); }

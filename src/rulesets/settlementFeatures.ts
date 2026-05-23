@@ -16,6 +16,12 @@ export type FeaturePresence = 'required' | 'auto' | 'excluded';
 export type FeatureKey  = string;
 export type CategoryKey = string;
 
+export interface NpcSuggestionSpec {
+  enabled: boolean;
+  count?:  number;
+  roles?:  string[];
+}
+
 export interface SettlementFeature {
   label:                     string;
   subType:                   string;
@@ -24,6 +30,7 @@ export interface SettlementFeature {
   rarityBySize:              Record<string, number>;
   dm_only_default?:          boolean;
   requires_settlement_role?: string[];
+  npc_suggestions?:          NpcSuggestionSpec;
 }
 
 export interface FeatureCategory {
@@ -75,6 +82,21 @@ export function getFeature(key: FeatureKey): SettlementFeature | null {
   for (const cat of Object.values(getAllCategories())) {
     const f = cat.features[key];
     if (f) return f;
+  }
+  return null;
+}
+
+/**
+ * Sprint 4 — lookup a feature by its subType slug (snake_case, as emitted on
+ * POIs by Sonnet). Returns null if no feature matches. Used by the POI panel
+ * to decide whether to surface the Suggested NPCs section.
+ */
+export function getFeatureBySubType(subType: string | null | undefined): SettlementFeature | null {
+  if (!subType) return null;
+  for (const cat of Object.values(getAllCategories())) {
+    for (const f of Object.values(cat.features)) {
+      if (f.subType === subType) return f;
+    }
   }
   return null;
 }

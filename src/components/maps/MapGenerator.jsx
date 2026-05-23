@@ -533,10 +533,21 @@ IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "We
   // must honour. Each required/auto feature becomes a POI with the matching
   // subType; excluded features must NOT appear. Uses the trimmed
   // promptSelection so the must-include count matches cappedPois exactly.
+  //
+  // Sprint 4 — also surface npc_suggestions per feature so Sonnet emits a
+  // suggested_npcs array on each settlement-feature POI. These are sketches
+  // (role + name + brief), not full statblocks; the POI panel's "Add to NPCs"
+  // button later asks Haiku to expand each sketch into a full NPC record.
   let settlementBlock = '';
   if (promptSelection) {
     const fmt = (arr) => arr.length
-      ? arr.map(f => `- subType="${f.subType}" — ${f.label} — ${f.description}`).join('\n')
+      ? arr.map(f => {
+          const sug = f.npc_suggestions;
+          const npcHint = sug?.enabled
+            ? ` | suggest up to ${sug.count ?? 1} NPC(s) — roles: ${(sug.roles ?? []).join(', ') || 'staff'}`
+            : ' | NO suggested_npcs (building only, no canonical resident)';
+          return `- subType="${f.subType}" — ${f.label} — ${f.description}${npcHint}`;
+        }).join('\n')
       : '  (none)';
     const exc = promptSelection.excluded_features.length
       ? promptSelection.excluded_features.join(', ')
@@ -550,7 +561,9 @@ AUTO-ROLLED (also must appear, same subType convention):
 ${fmt(promptSelection.auto_picked_features)}
 EXCLUDED (MUST NOT appear even if the archetype suggests them): ${exc}
 
-For every POI that maps to one of the above features set "subType" to the EXACT slug shown. For POIs that don't match any feature, leave "subType" as null.`;
+For every POI that maps to one of the above features set "subType" to the EXACT slug shown. For POIs that don't match any feature, leave "subType" as null.
+
+SUGGESTED NPCs (Sprint 4): for each settlement-feature POI whose entry above lists "suggest up to N NPC(s)", emit a "suggested_npcs" array of up to N entries — one per listed role you choose to include (you may emit fewer than N, never more). Each entry: { "role": "<role label exactly as listed>", "name": "<short evocative original name>", "brief": "<1-sentence personality + hook>", "is_hidden": <true if this NPC belongs to a DM-only POI like thieves_guild, else false> }. For POIs marked "NO suggested_npcs" or for non-settlement-feature POIs, omit the field or leave it as []. Do NOT invent NPCs for buildings (warehouse, sewers) that explicitly say NO suggested_npcs.`;
   }
   return `For the tabletop fantasy ${r.mapType} map "${meta.title}":
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}${buildFieldHintBlock(r)}${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
@@ -579,7 +592,10 @@ Respond with ONLY this JSON object:
       "secrets": "Hidden info or original plot hook (or null)",
       "can_drill_down": true,
       "drill_down_type": "dungeon|cave|city|ruins|null",
-      "quest_hooks": ["original fantasy hook"]
+      "quest_hooks": ["original fantasy hook"],
+      "suggested_npcs": [
+        { "role": "innkeeper", "name": "evocative original name", "brief": "1-sentence personality + hook", "is_hidden": false }
+      ]
     }
   ],
   "random_encounter_table": [
@@ -988,6 +1004,10 @@ export function MapGenerator({
       // dm_only_default settlement feature (e.g. thieves' guild). The
       // narrative POI itself still exists; it just isn't surfaced in the
       // player view.
+      //
+      // Sprint 4 — also force suggested_npcs[*].is_hidden = true on the same
+      // POIs so the "Add to NPCs" button creates hidden NPCs even if Sonnet
+      // forgets to flag them. Belt-and-suspenders against prompt drift.
       if (settlementSelection) {
         const dmOnlySubtypes = new Set(
           [...settlementSelection.required_features, ...settlementSelection.auto_picked_features]
@@ -996,10 +1016,31 @@ export function MapGenerator({
         );
         if (dmOnlySubtypes.size > 0) {
           pois.forEach(p => {
-            if (p.subType && dmOnlySubtypes.has(p.subType)) p.is_dm_only = true;
+            if (p.subType && dmOnlySubtypes.has(p.subType)) {
+              p.is_dm_only = true;
+              if (Array.isArray(p.suggested_npcs)) {
+                p.suggested_npcs = p.suggested_npcs.map(s => ({ ...s, is_hidden: true }));
+              }
+            }
           });
         }
       }
+
+      // Sprint 4 — normalise suggested_npcs into a tidy shape regardless of
+      // what Sonnet emits. Drop entries that have no role/name; coerce
+      // is_hidden to boolean (defaulting from the POI's is_dm_only flag).
+      pois.forEach(p => {
+        if (!Array.isArray(p.suggested_npcs)) { p.suggested_npcs = []; return; }
+        p.suggested_npcs = p.suggested_npcs
+          .filter(s => s && (s.role || s.name))
+          .map(s => ({
+            role:        String(s.role  ?? '').trim() || 'resident',
+            name:        String(s.name  ?? '').trim() || 'Unnamed',
+            brief:       String(s.brief ?? '').trim(),
+            is_hidden:   s.is_hidden === true || !!p.is_dm_only,
+            added_npc_id: null,
+          }));
+      });
 
       setStep2Done(true);
 

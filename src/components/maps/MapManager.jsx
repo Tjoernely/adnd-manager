@@ -16,6 +16,9 @@ import { TerrainSketchEditor } from './TerrainSketchEditor.jsx';
 import { getChildGenerationParams, defaultConnectionForPOI } from '../../rules-engine/connectionEngine.ts';
 import { getPOITerrainAt, sketchToGeneratedParams, sketchToImagePromptAdditions } from '../../rules-engine/sketchToMapSpec.ts';
 import { BIOME_CONFIG }      from './TerrainSketchEditor.jsx';
+// Sprint 4 — look up the settlement feature for a POI's subType so the
+// SUGGESTED NPCs section can show the feature label as a friendly heading.
+import { getFeatureBySubType } from '../../rulesets/settlementFeatures.ts';
 import './MapManager.css';
 
 // ── POI type catalogue ────────────────────────────────────────────────────────
@@ -362,7 +365,11 @@ Respond with ONLY this JSON:
 }
 
 // ── MapManager (root) ─────────────────────────────────────────────────────────
-export function MapManager({ campaignId, isDM, isOpen, onClose }) {
+// Sprint 4 — `initialFocusMapId` / `initialFocusPoiId` let callers (e.g. the
+// NPC detail panel's "↗ Open map" link) open the overlay focused on a
+// specific map + POI. Both are nullable; when set we honour them once per
+// open transition then forget them.
+export function MapManager({ campaignId, isDM, isOpen, onClose, initialFocusMapId, initialFocusPoiId }) {
   const [maps,          setMaps]          = useState([]);
   const [activeMapId,   setActiveMapId]   = useState(null);
   const [selectedPoiId, setSelectedPoiId] = useState(null);
@@ -416,6 +423,17 @@ export function MapManager({ campaignId, isDM, isOpen, onClose }) {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [campaignId]); // load on mount regardless of overlay open state
+
+  // Sprint 4 — honour deep-link focus from NPC detail "Open map" button.
+  // Fires when the overlay opens (or initialFocusMapId changes) AFTER maps
+  // have loaded. Selects the requested map + POI in one shot.
+  useEffect(() => {
+    if (!isOpen || !initialFocusMapId || maps.length === 0) return;
+    const target = maps.find(m => m.id === initialFocusMapId);
+    if (!target) return;
+    setActiveMapId(initialFocusMapId);
+    setSelectedPoiId(initialFocusPoiId ?? null);
+  }, [isOpen, initialFocusMapId, initialFocusPoiId, maps]);
 
   // ── Patch helper ─────────────────────────────────────────────────────────────
   const patchMap = useCallback((updated) => {
@@ -1454,6 +1472,111 @@ function SectionHead({ icon, label, onRegen, regenLabel, regenning }) {
   );
 }
 
+// Sprint 4 — one row in the POI panel's "Suggested NPCs" section.
+// Shows role + name + brief; on "Add to NPCs" the parent runs the Haiku
+// expansion + POST flow and persists added_npc_id back on the POI so the
+// button switches to a permanent "✓ Added" indicator.
+function SuggestedNpcRow({ suggestion, busy, onAdd }) {
+  const added = !!suggestion.added_npc_id;
+  return (
+    <div
+      style={{
+        display:       'flex',
+        alignItems:    'flex-start',
+        gap:           10,
+        padding:       '6px 8px',
+        marginTop:     4,
+        background:    'rgba(0, 0, 0, 0.22)',
+        border:        '1px solid rgba(200, 168, 75, 0.18)',
+        borderRadius:  4,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '0.84rem', color: '#d4c090' }}>
+          <strong>{suggestion.name}</strong>
+          {suggestion.role && (
+            <span style={{ marginLeft: 8, color: '#9a875a', fontSize: '0.74rem' }}>
+              {suggestion.role}
+            </span>
+          )}
+          {suggestion.is_hidden && (
+            <span title="Will be created as a hidden (DM-only) NPC"
+              style={{ marginLeft: 6, fontSize: '0.7rem', color: '#f5d97a' }}>
+              🔒
+            </span>
+          )}
+        </div>
+        {suggestion.brief && (
+          <div style={{ fontSize: '0.76rem', color: '#a89878', marginTop: 2, lineHeight: 1.4 }}>
+            {suggestion.brief}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={busy || added}
+        title={added ? 'Already added to NPCs' : 'Expand with Haiku and add to NPCs'}
+        style={{
+          flex:         'none',
+          padding:      '5px 10px',
+          fontSize:     '0.74rem',
+          fontFamily:   'inherit',
+          background:   added ? 'rgba(74, 222, 128, 0.16)' : 'rgba(0, 0, 0, 0.4)',
+          color:        added ? '#4ade80' : busy ? '#9a875a' : '#c8a84b',
+          border:       `1px solid ${added ? 'rgba(74, 222, 128, 0.45)' : 'rgba(200, 168, 75, 0.4)'}`,
+          borderRadius: 3,
+          cursor:       added || busy ? 'default' : 'pointer',
+          whiteSpace:   'nowrap',
+        }}
+      >
+        {added ? '✓ Added' : busy ? '⏳ Adding…' : '+ Add to NPCs'}
+      </button>
+    </div>
+  );
+}
+
+// Sprint 4 — Haiku prompt that expands a suggested-NPC sketch into a full
+// NPC record. Keeps the response shape aligned with NPCManager's data model
+// (race / class / alignment / personality[] / motivation / background /
+// secrets[] / quest_hooks[]). Original tabletop fantasy lore only — no
+// published-setting references.
+function buildExpandSuggestedNpcPrompt(suggestion, poi, map) {
+  const mapName = map?.name ? `the map "${map.name}"` : 'this map';
+  const poiName = poi?.name ? `the POI "${poi.name}"` : 'this location';
+  const sub     = poi?.subType ? ` (${poi.subType})` : '';
+  const brief   = (suggestion.brief ?? '').trim();
+  return `Expand this suggested NPC sketch into a full tabletop NPC record for ${poiName}${sub} on ${mapName}.
+
+Sketch:
+- Name: ${suggestion.name}
+- Role: ${suggestion.role}
+- Brief: ${brief || '(none provided — invent something appropriate)'}
+
+POI context (use this for tone/setting alignment, do NOT contradict it):
+- Type: ${poi?.type ?? 'location'}
+- Description: ${(poi?.short_description ?? poi?.dm_description ?? '').slice(0, 280)}
+
+Respond with ONLY this JSON object (raw JSON, no markdown fences):
+{
+  "name":        "${suggestion.name}",
+  "race":        "human|elf|dwarf|halfling|gnome|half-elf|half-orc|other",
+  "class":       "AD&D class or role (e.g. fighter, priest, commoner, merchant)",
+  "alignment":   "LG|NG|CG|LN|N|CN|LE|NE|CE",
+  "appearance":  "1-2 sentence physical description",
+  "personality": ["trait 1", "trait 2", "trait 3"],
+  "motivation":  "1 sentence — what they want",
+  "background":  "1-2 sentence original backstory tying to ${poiName}",
+  "secrets":     ["one DM-only secret"],
+  "quest_hooks": ["one original hook the party could pull on"]
+}
+
+Rules:
+- Keep responses concise — 1-2 sentences per text field.
+- Use original tabletop fantasy lore; no Forgotten Realms / Greyhawk / Eberron names.
+- personality and secrets/quest_hooks MUST be arrays of strings.`;
+}
+
 function BulletList({ items }) {
   const arr = Array.isArray(items) ? items : (items ? [String(items)] : []);
   if (!arr.length) return null;
@@ -1630,9 +1753,67 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
   const regenHooks    = () => regen('hooks',    buildRegenQuestHooksPrompt(poi, map),
     r => ({ ...poi, quest_hooks: r.quest_hooks ?? poi.quest_hooks }));
 
+  // ── Sprint 4 — Suggested NPCs: expand sketch → full NPC via Haiku, then
+  // POST /api/npcs and persist the resulting npc.id back onto the POI so the
+  // UI can switch the row to "✓ Added" and link straight to the NPC record.
+  const [addingSugIdx, setAddingSugIdx] = useState(null);
+  const addSuggestedNpc = useCallback(async (idx) => {
+    const sug = poi.suggested_npcs?.[idx];
+    if (!sug || sug.added_npc_id) return;
+    if (!hasAnthropicKey()) { onShowApiKeys(); return; }
+    setAddingSugIdx(idx);
+    setGenError('');
+    try {
+      const userPrompt = buildExpandSuggestedNpcPrompt(sug, poi, map);
+      // Haiku — cheap + fast. Returns a full NPC sketch we can persist.
+      const full = await callClaude({
+        systemPrompt: POI_PANEL_SYSTEM,
+        userPrompt,
+        model:        'claude-haiku-4-5',
+        maxTokens:    1200,
+      });
+      const finalName = (full?.name ?? sug.name ?? 'Unnamed').toString().trim();
+      const npcData = {
+        race:        full?.race        ?? '',
+        class_:      full?.class       ?? '',
+        alignment:   full?.alignment   ?? '',
+        role:        sug.role,
+        appearance:  full?.appearance  ?? '',
+        personality: Array.isArray(full?.personality) ? full.personality
+                    : full?.personality ? [String(full.personality)] : [],
+        motivation:  full?.motivation  ?? '',
+        background:  full?.background  ?? '',
+        secrets:     Array.isArray(full?.secrets) ? full.secrets
+                    : full?.secrets ? [String(full.secrets)] : [],
+        quest_hooks: Array.isArray(full?.quest_hooks) ? full.quest_hooks
+                    : full?.quest_hooks ? [String(full.quest_hooks)] : [],
+        notes:       sug.brief ?? '',
+      };
+      const created = await api.createNpc({
+        campaign_id:   map.campaign_id,
+        name:          finalName,
+        data:          npcData,
+        is_hidden:     sug.is_hidden === true || !!poi.is_dm_only,
+        source_poi_id: poi.id,
+        source_map_id: map.id,
+      });
+      // Persist added_npc_id back on the POI so we don't re-create on re-click
+      const nextSuggestions = poi.suggested_npcs.map((s, i) =>
+        i === idx ? { ...s, added_npc_id: created.id } : s
+      );
+      onUpdate({ ...poi, suggested_npcs: nextSuggestions });
+    } catch (e) {
+      setGenError(`Could not add NPC: ${e.message}`);
+    } finally {
+      setAddingSugIdx(null);
+    }
+  }, [poi, map, onUpdate, onShowApiKeys]);
+
   // Normalise secrets/quest_hooks to array for display
   const secretsArr  = Array.isArray(poi.secrets)     ? poi.secrets     : poi.secrets     ? [String(poi.secrets)]     : [];
   const hooksArr    = Array.isArray(poi.quest_hooks)  ? poi.quest_hooks : poi.quest_hooks ? [String(poi.quest_hooks)] : [];
+  const suggestionsArr = Array.isArray(poi.suggested_npcs) ? poi.suggested_npcs : [];
+  const featureForSub  = getFeatureBySubType(poi.subType);
 
   return (
     <aside className="mm-poi-panel">
@@ -2137,6 +2318,21 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
                     : <em className="mm-poi-empty">None — click 🔄 to generate</em>}
                 </div>
               </>
+            )}
+
+            {/* ── Sprint 4 — Suggested NPCs (settlement-feature POIs) ──────── */}
+            {suggestionsArr.length > 0 && (
+              <div className="mm-poi-section mm-poi-section--npcs">
+                <SectionHead icon="🧑" label={`Suggested NPCs${featureForSub ? ` — ${featureForSub.label}` : ''}`} />
+                {suggestionsArr.map((sug, i) => (
+                  <SuggestedNpcRow
+                    key={i}
+                    suggestion={sug}
+                    busy={addingSugIdx === i}
+                    onAdd={() => addSuggestedNpc(i)}
+                  />
+                ))}
+              </div>
             )}
 
             {/* ── Engine Data (any type) ───────────────────────────────────── */}
