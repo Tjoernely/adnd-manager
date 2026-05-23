@@ -45,6 +45,10 @@ export function mapTypeToScope(mapType: string): MapScope {
   if (norm === 'tavern/inn')                   return 'interior';
   if (norm === 'temple')                       return 'building';
   if (norm === 'interior' || norm === 'building') return 'interior';
+  // Sprint 1 — new schema labels
+  if (norm === 'wilderness')                   return 'region';
+  if (norm === 'castle/fortress')              return 'building';
+  if (norm === 'building interior')            return 'interior';
   return 'region'; // fallback
 }
 

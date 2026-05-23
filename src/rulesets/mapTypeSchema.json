@@ -1,0 +1,118 @@
+{
+  "$schema": "Sprint 1 — config-driven map-type schema. Each map-type declares its own field-set; MapGenerator renders the form dynamically. _field_definitions hold the global defaults; field_overrides per map-type adjust them. Top-level keys whose name starts with _ or $ are metadata and skipped by helpers.",
+  "$schema_version": 1,
+
+  "_field_definitions": {
+    "map_style":          { "type": "select",     "source":  "mapStylePresets", "label": "Map Style" },
+    "size":               { "type": "select",     "label":   "Size",
+                            "options_global": ["Random", "Small", "Medium", "Large"] },
+    "atmosphere":         { "type": "select",     "label":   "Atmosphere",
+                            "options_global": ["Random", "Peaceful", "Neutral", "Tense", "Dangerous", "Hostile", "Eerie", "Sacred", "Cursed", "Bustling"] },
+    "era":                { "type": "select",     "label":   "Era",
+                            "options_global": ["Random", "Ancient", "Dark Ages", "Medieval", "Renaissance", "Modern Fantasy"] },
+    "inhabitants":        { "type": "select",     "label":   "Inhabitants",
+                            "options_global": ["Random", "Humans", "Elves", "Dwarves", "Halflings", "Gnomes", "Half-Orcs", "Mixed Races", "Undead", "Beasts", "Monsters", "Abandoned", "Demons", "Fey"] },
+    "terrain":            { "type": "multi_chip", "label":   "Terrain", "max": 3,
+                            "options_global": ["Plains", "Forest", "Dense Forest", "Jungle", "Mountains", "Hills", "Desert", "Swamp", "Tundra", "Coastal", "Underground"] },
+    "poi_count":          { "type": "select",     "label":   "POI Count",
+                            "options_global": ["Random (3-8)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] },
+    "purpose":            { "type": "select",     "label":   "Map Purpose", "submap_only": true,
+                            "options_global": ["Standard", "Minor", "Decoy", "Major"] },
+    "population":         { "type": "select",     "label":   "Population" },
+    "settlement_role":    { "type": "select",     "label":   "Settlement Role",
+                            "options_global": ["Random", "Farming Village", "Fishing Village", "Mining Town", "Market Town", "Port City", "Fortress Town", "Temple City", "Trade Hub", "Frontier Settlement", "Noble Capital"] },
+    "wealth_tier":        { "type": "select",     "label":   "Wealth",
+                            "options_global": ["Random", "Impoverished", "Modest", "Comfortable", "Wealthy", "Opulent"] },
+    "room_count":         { "type": "select",     "label":   "Room Count",
+                            "options_global": ["Random", "Small (5-10)", "Medium (15-25)", "Large (30-50)", "Massive (50+)"] },
+    "danger_level":       { "type": "select",     "label":   "Danger Level",
+                            "options_global": ["Random", "Low", "Moderate", "High", "Lethal"] },
+    "depth":              { "type": "select",     "label":   "Depth",
+                            "options_global": ["Random", "Surface", "Shallow Underground", "Deep", "Abyssal"] },
+    "biome":              { "type": "select",     "label":   "Biome",
+                            "options_global": ["Random", "Temperate", "Tropical", "Arid", "Frigid", "Volcanic", "Magical"] },
+    "area_size":          { "type": "select",     "label":   "Area Size",
+                            "options_global": ["Random", "Small (1 hex)", "Medium (3-5 hex)", "Large (region)", "Vast"] },
+    "civilization_level": { "type": "select",     "label":   "Civilization Level",
+                            "options_global": ["Random", "Wild", "Hunters/Foragers", "Sparse Settlements", "Civilized", "Heavily Populated"] },
+    "floor_count":        { "type": "select",     "label":   "Floors",
+                            "options_global": ["1", "2", "3", "4", "5"] },
+    "condition":          { "type": "select",     "label":   "Condition",
+                            "options_global": ["Random", "Pristine", "Well-maintained", "Worn", "Damaged", "Ruined", "Collapsing"] },
+    "visual_description": { "type": "textarea",   "label":   "Visual Description",
+                            "placeholder": "e.g. a ruined keep overlooking a frozen lake..." }
+  },
+
+  "city": {
+    "label":     "City/Town",
+    "context":   "settlement",
+    "fields":    ["map_style", "population", "settlement_role", "era", "wealth_tier", "inhabitants", "atmosphere", "poi_count", "terrain", "visual_description"],
+    "field_overrides": {
+      "population": {
+        "options_global": ["Random", "Small City (2,000-10,000)", "Large City (10,000-25,000)", "Metropolis (25,000+)"]
+      },
+      "terrain": { "max": 2 }
+    }
+  },
+
+  "village": {
+    "label":     "Village",
+    "context":   "settlement",
+    "fields":    ["map_style", "population", "settlement_role", "era", "wealth_tier", "inhabitants", "atmosphere", "poi_count", "terrain", "visual_description"],
+    "field_overrides": {
+      "population": {
+        "options_global": ["Random", "Hamlet (<100)", "Village (100-500)", "Town (500-2,000)"]
+      },
+      "terrain": { "max": 2 }
+    }
+  },
+
+  "wilderness": {
+    "label":     "Wilderness",
+    "context":   "wilderness",
+    "fields":    ["map_style", "area_size", "terrain", "biome", "civilization_level", "era", "inhabitants", "atmosphere", "poi_count", "visual_description"]
+  },
+
+  "dungeon": {
+    "label":     "Dungeon",
+    "context":   "dungeon",
+    "fields":    ["map_style", "room_count", "danger_level", "depth", "era", "inhabitants", "atmosphere", "poi_count", "visual_description"]
+  },
+
+  "cave_system": {
+    "label":     "Cave System",
+    "context":   "cave",
+    "fields":    ["map_style", "room_count", "depth", "danger_level", "inhabitants", "atmosphere", "poi_count", "terrain", "visual_description"],
+    "field_overrides": {
+      "terrain": { "options_global": ["Coastal", "Mountains", "Underground", "Volcanic"], "max": 2 }
+    }
+  },
+
+  "ruins": {
+    "label":     "Ruins",
+    "context":   "ruins",
+    "fields":    ["map_style", "size", "condition", "era", "inhabitants", "atmosphere", "poi_count", "terrain", "visual_description"],
+    "field_overrides": {
+      "size":      { "options_global": ["Random", "Small (single building)", "Medium (cluster)", "Large (city ruins)"] },
+      "condition": { "options_global": ["Random", "Recently Abandoned", "Worn", "Crumbling", "Mostly Rubble", "Ancient (almost gone)"] }
+    }
+  },
+
+  "temple": {
+    "label":     "Temple",
+    "context":   "buildingInterior",
+    "fields":    ["map_style", "size", "floor_count", "condition", "era", "inhabitants", "atmosphere", "poi_count", "visual_description"]
+  },
+
+  "castle": {
+    "label":     "Castle/Fortress",
+    "context":   "buildingInterior",
+    "fields":    ["map_style", "size", "floor_count", "condition", "era", "inhabitants", "atmosphere", "poi_count", "visual_description"]
+  },
+
+  "building_interior": {
+    "label":     "Building Interior",
+    "context":   "buildingInterior",
+    "fields":    ["map_style", "size", "floor_count", "condition", "era", "inhabitants", "atmosphere", "poi_count", "visual_description"]
+  }
+}

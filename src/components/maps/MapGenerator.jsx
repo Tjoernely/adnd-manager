@@ -28,6 +28,15 @@ import {
   getRandomConceptSample,
   formatSubcategoryForPrompt,
 } from '../../rulesets/poiTaxonomy.ts';
+import {
+  getMapTypeKeys,
+  getMapTypeConfig,
+  getFieldDefinition,
+  getFieldsForMapType,
+  getMapContext,
+  normalizeMapType,
+  mapTypeToLegacyLabel,
+} from '../../rulesets/mapTypeSchema.ts';
 import './MapGenerator.css';
 
 // Map style presets — derived from the shared JSON registry. The `$` keys are
@@ -38,10 +47,10 @@ const tagRules        = mapTagsJson.tags;
 const influenceRules  = mapTagsJson.poi_influence_rules ?? {};
 
 // ── Option lists ──────────────────────────────────────────────────────────────
-const MAP_TYPES = [
-  'Random','Region','City/Town','Village','Dungeon',
-  'Cave System','Ruins','Castle/Keep','Tavern/Inn','Temple',
-];
+// Sprint 1 — dropdown options derived from the schema. Legacy values (Region,
+// Castle/Keep, Tavern/Inn) still parse via normalizeMapType so old maps load,
+// but new maps come from the canonical list.
+const MAP_TYPES = ['Random', ...getMapTypeKeys().map(k => mapTypeToLegacyLabel(k))];
 const MAP_SIZES = ['Random','Small','Medium','Large'];
 const TERRAIN_OPTIONS = [
   'Plains','Forest','Dense Forest','Jungle','Mountains',
@@ -78,10 +87,37 @@ const INHABITANTS = [
 const POI_COUNTS = ['Random (3-8)','Few (2-4)','Many (6-10)','Dense (10-15)'];
 
 const BACKEND_TYPE_MAP = {
-  'Region':'region','City/Town':'city','Village':'town',
-  'Dungeon':'dungeon','Cave System':'dungeon','Ruins':'dungeon',
-  'Castle/Keep':'interior','Tavern/Inn':'interior','Temple':'interior',
+  // Legacy values (still in DB / dropdowns)
+  'Region':            'region',
+  'City/Town':         'city',
+  'Village':           'town',
+  'Dungeon':           'dungeon',
+  'Cave System':       'dungeon',
+  'Ruins':             'dungeon',
+  'Castle/Keep':       'interior',
+  'Tavern/Inn':        'interior',
+  'Temple':            'interior',
+  // Sprint 1 — new schema labels
+  'Wilderness':        'region',
+  'Castle/Fortress':   'interior',
+  'Building Interior': 'interior',
 };
+
+// Sprint 1 — schema field-key (snake_case) → params object key (mostly camelCase
+// for legacy keys, snake_case for newly-added ones). Used by DynamicField + the
+// prompt-injection helper so the schema can drive both UI and prompts.
+const SCHEMA_TO_PARAM = {
+  map_style:          'mapStyle',
+  poi_count:          'poiCount',
+  visual_description: 'user_description',
+  // others (size, atmosphere, era, inhabitants, terrain, purpose, population,
+  // settlement_role, wealth_tier, room_count, danger_level, depth, biome,
+  // area_size, civilization_level, floor_count, condition) — schema key
+  // matches the params key directly.
+};
+function paramKeyFor(fieldKey) {
+  return SCHEMA_TO_PARAM[fieldKey] ?? fieldKey;
+}
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -99,6 +135,20 @@ function resolveParams(p) {
     poiCount:         p.poiCount,
     mapStyle:         p.mapStyle ?? 'parchment',
     purpose:          PURPOSE_BY_VALUE[p.purpose] ? p.purpose : 'standard',
+    // Sprint 1 — new schema fields are passed through verbatim. The prompt
+    // builder only injects hints for non-'Random' values, so a stale value
+    // from a previous map-type doesn't leak into the prompt.
+    population:         p.population         ?? 'Random',
+    settlement_role:    p.settlement_role    ?? 'Random',
+    wealth_tier:        p.wealth_tier        ?? 'Random',
+    room_count:         p.room_count         ?? 'Random',
+    danger_level:       p.danger_level       ?? 'Random',
+    depth:              p.depth              ?? 'Random',
+    biome:              p.biome              ?? 'Random',
+    area_size:          p.area_size          ?? 'Random',
+    civilization_level: p.civilization_level ?? 'Random',
+    floor_count:        p.floor_count        ?? '1',
+    condition:          p.condition          ?? 'Random',
     ...(p.user_description?.trim() ? { user_description: p.user_description.trim() } : {}),
   };
 }
@@ -124,6 +174,33 @@ function toBackendType(mapTypeStr) {
 // strings reach Claude and OpenAI; we keep them free of trademarked content so
 // the app can ship to a wider audience without compliance risk.
 const CLAUDE_SYSTEM = `You are an expert tabletop fantasy worldbuilder. Generate vivid, lore-rich locations suitable for a classic tabletop RPG. Invent original, evocative names, factions, and deities — do not use names from any published commercial RPG setting. Keep responses concise — maximum 2 sentences per description field. For POI arrays, generate maximum 6 POIs. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
+
+// Sprint 1 — generic per-field prompt hints. When a schema-driven field has a
+// non-'Random' value the AI gets a one-liner with the value + a soft hint on
+// what to bias. Works across all map-types so dungeon/cave/etc. also benefit.
+const FIELD_PROMPT_HINTS = [
+  ['settlement_role',    'Settlement role',    'Reflect this in character and economy.'],
+  ['population',         'Population tier',    'Scale buildings, services and POIs accordingly.'],
+  ['wealth_tier',        'Wealth level',       'Reflect in architecture and offerings.'],
+  ['room_count',         'Room count',         'Scale the number and variety of areas accordingly.'],
+  ['danger_level',       'Danger level',       'Bias monsters, traps and risk accordingly.'],
+  ['depth',              'Depth underground',  'Bias darkness, isolation and unfamiliar fauna.'],
+  ['biome',              'Biome',              'Reflect in flora, fauna and weather.'],
+  ['area_size',          'Area size',          'Scale the number of POIs and travel distance accordingly.'],
+  ['civilization_level', 'Civilization level', 'Bias settlements and infrastructure density.'],
+  ['floor_count',        'Floor count',        'Distribute POIs across the indicated number of levels.'],
+  ['condition',          'Condition',          'Reflect in the physical state of structures.'],
+];
+function buildFieldHintBlock(r) {
+  const lines = [];
+  for (const [key, label, hint] of FIELD_PROMPT_HINTS) {
+    const v = r[key];
+    if (v && v !== 'Random' && v !== 'random' && v !== '') {
+      lines.push(`${label}: ${v}. ${hint}`);
+    }
+  }
+  return lines.length ? '\n' + lines.join('\n') + '\n' : '';
+}
 
 const FR_CONTEXT = `Setting: original tabletop fantasy.
 Invent original, atmospheric place names, factions, and deities. Do not use names from any published commercial RPG setting (no real-world brand, module, or campaign-setting names).
@@ -262,8 +339,7 @@ function buildMetadataPrompt(r, parentCtx, parentMapCtx) {
     ? `\n\nIMPORTANT TITLE OVERRIDE: The title MUST sound like an ordinary, mundane place name. Use simple compound names like "Old Tannery", "Stonefoot Cellar", "Miller's Drying Shed". DO NOT use evocative titles with words like "Sanctum", "Shrine", "Whisper", "Doom", "Forsaken", or similar dramatic vocabulary. Players should NOT be able to tell this is plot-irrelevant.`
     : '';
   return `Generate metadata for a tabletop fantasy ${r.mapType} map.
-${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}
-${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
+${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Era: ${r.era} | Inhabitants: ${r.inhabitants} | Size: ${r.size}${buildFieldHintBlock(r)}${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
 ${FR_CONTEXT}${purposeBlock}${titleOverride}
 
 Respond with ONLY this JSON object:
@@ -392,8 +468,7 @@ IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "We
     }
   }
   return `For the tabletop fantasy ${r.mapType} map "${meta.title}":
-${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}
-${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
+${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}${buildFieldHintBlock(r)}${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
 ${typeHint}${purposeBlock}${archetypeBlock}
 Use evocative original names, factions and lore for all POIs — no published-setting references. Keep each field to 1-2 sentences maximum.
 
@@ -532,6 +607,132 @@ function buildVisualDescriptionFromPOI(poi) {
   return joined || null;
 }
 
+/**
+ * Sprint 1 — DynamicField: renders one schema-driven field into the
+ * MapGenerator form. Reads the merged FieldDefinition (global + per-map-type
+ * override), resolves the params key via paramKeyFor, and dispatches by
+ * `type` (select / multi_chip / textarea). Special-cases map_style and
+ * purpose because they use external registries (mapStylePresets, MAP_PURPOSES)
+ * rather than `options_global`.
+ */
+function DynamicField({ fieldKey, mapType, params, setP }) {
+  const def = getFieldDefinition(mapType, fieldKey);
+  if (!def) return null;
+  const pKey  = paramKeyFor(fieldKey);
+  const value = params[pKey];
+
+  if (def.type === 'select') {
+    if (def.source === 'mapStylePresets') {
+      return (
+        <div className="mgn-field">
+          <div className="mgn-field-label">{def.label}</div>
+          <select className="mgn-select" value={value ?? 'parchment'}
+                  onChange={e => setP(pKey, e.target.value)}
+                  title={mapStylePresets[value]?.description ?? ''}>
+            {MAP_STYLE_ENTRIES.map(([slug, p]) => (
+              <option key={slug} value={slug} title={p.description}>{p.label}</option>
+            ))}
+          </select>
+          <div style={{ fontSize: '0.72rem', color: '#9a875a', marginTop: 4, lineHeight: 1.35 }}>
+            {mapStylePresets[value]?.description ?? ''}
+          </div>
+        </div>
+      );
+    }
+    if (fieldKey === 'purpose') {
+      return (
+        <div className="mgn-field">
+          <div className="mgn-field-label">{def.label}</div>
+          <select className="mgn-select" value={value ?? 'standard'}
+                  onChange={e => setP(pKey, e.target.value)}
+                  title={PURPOSE_BY_VALUE[value]?.description ?? ''}>
+            {MAP_PURPOSES.map(p => (
+              <option key={p.value} value={p.value} title={p.description}>{p.label}</option>
+            ))}
+          </select>
+          <div style={{ fontSize: '0.72rem', color: '#9a875a', marginTop: 4, lineHeight: 1.35 }}>
+            {PURPOSE_BY_VALUE[value]?.description ?? ''}
+          </div>
+        </div>
+      );
+    }
+    const opts = def.options_global ?? def.options ?? [];
+    const fallback = opts[0]
+      ? (typeof opts[0] === 'string' ? opts[0] : opts[0].value)
+      : '';
+    return (
+      <div className="mgn-field">
+        <div className="mgn-field-label">{def.label}</div>
+        <select className="mgn-select" value={value ?? fallback}
+                onChange={e => setP(pKey, e.target.value)}>
+          {opts.map(o => (
+            typeof o === 'string'
+              ? <option key={o} value={o}>{o}</option>
+              : <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (def.type === 'multi_chip') {
+    const opts     = def.options_global ?? [];
+    const max      = def.max ?? 99;
+    const selected = Array.isArray(value) ? value : [];
+    return (
+      <div className="mgn-field" style={{ gridColumn: '1 / -1' }}>
+        <div className="mgn-field-label">
+          {def.label}{' '}
+          <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>
+            (pick up to {max}{selected.length > 0 ? ` — ${selected.length} selected` : ''})
+          </span>
+        </div>
+        <div className="mgn-terrain-grid">
+          {opts.map(o => {
+            const isSel   = selected.includes(o);
+            const canPick = isSel || selected.length < max;
+            return (
+              <button
+                key={o}
+                type="button"
+                className={`mgn-terrain-chip${isSel ? ' mgn-terrain-chip--on' : ''}`}
+                disabled={!canPick}
+                onClick={() => {
+                  if (isSel) setP(pKey, selected.filter(x => x !== o));
+                  else if (selected.length < max) setP(pKey, [...selected, o]);
+                }}
+              >
+                {o}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (def.type === 'textarea') {
+    return (
+      <div className="mgn-field" style={{ gridColumn: '1 / -1' }}>
+        <div className="mgn-field-label">
+          {def.label}{' '}
+          <span className="mgn-field-optional">(optional — enhances map image)</span>
+        </div>
+        <textarea
+          className="mgn-textarea"
+          rows={2}
+          placeholder={def.placeholder ?? ''}
+          value={value ?? ''}
+          onChange={e => setP(pKey, e.target.value)}
+          maxLength={300}
+        />
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ── MapGenerator Component ────────────────────────────────────────────────────
 export function MapGenerator({
   campaignId,
@@ -563,6 +764,19 @@ export function MapGenerator({
     // purpose is intentionally NOT inherited (a Major parent often spawns
     // Decoy children, and vice versa). DM picks per-sub-map.
     purpose:          'standard',
+    // Sprint 1 — new schema fields. Defaulted to 'Random' / first option so
+    // they don't get injected into prompts until the DM picks something.
+    population:         presetParams?.population         ?? 'Random',
+    settlement_role:    presetParams?.settlement_role    ?? 'Random',
+    wealth_tier:        presetParams?.wealth_tier        ?? 'Random',
+    room_count:         presetParams?.room_count         ?? 'Random',
+    danger_level:       presetParams?.danger_level       ?? 'Random',
+    depth:              presetParams?.depth              ?? 'Random',
+    biome:              presetParams?.biome              ?? 'Random',
+    area_size:          presetParams?.area_size          ?? 'Random',
+    civilization_level: presetParams?.civilization_level ?? 'Random',
+    floor_count:        presetParams?.floor_count        ?? '1',
+    condition:          presetParams?.condition          ?? 'Random',
     user_description: presetParams?.user_description ?? buildVisualDescriptionFromPOI(parentPoiCtx) ?? '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
@@ -711,6 +925,11 @@ export function MapGenerator({
         parent_map_id: parentMapId,
         parent_poi_id: parentPoiId,
         purpose:       resolved.purpose ?? 'standard',
+        // Sprint 1 — map context. Computed via the schema's getMapContext; the
+        // server stores it in a new `context` column. Sprint 2 will read it as
+        // the daughter-map foundation. Falls back to 'wilderness' when the
+        // map-type doesn't resolve (e.g. legacy 'Region').
+        context:       getMapContext(normalizeMapType(resolved.mapType)),
         data: {
           pois,
           subtitle:               meta.subtitle                   || '',
@@ -848,146 +1067,34 @@ export function MapGenerator({
                 );
               })()}
 
+              {/* Sprint 1 — schema-driven form. Map Type is always rendered first
+                  outside the dynamic loop; the rest of the fields come from the
+                  map-type's `fields[]` array (with `purpose` auto-injected for
+                  sub-maps via getFieldsForMapType). DynamicField handles select /
+                  multi_chip / textarea. The multi_chip + textarea types span the
+                  full grid width via inline gridColumn. */}
               <div className="mgn-options-grid">
-                {/* Map Type */}
                 <div className="mgn-field">
                   <div className="mgn-field-label">Map Type</div>
                   <select className="mgn-select" value={params.mapType} onChange={e => setP('mapType', e.target.value)}>
                     {MAP_TYPES.map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
-
-                {/* Map Style (5B-a: drives the visual treatment of the rendered image) */}
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Map Style</div>
-                  <select
-                    className="mgn-select"
-                    value={params.mapStyle}
-                    onChange={e => setP('mapStyle', e.target.value)}
-                    title={mapStylePresets[params.mapStyle]?.description ?? ''}
-                  >
-                    {MAP_STYLE_ENTRIES.map(([slug, p]) => (
-                      <option key={slug} value={slug} title={p.description}>{p.label}</option>
-                    ))}
-                  </select>
-                  <div style={{ fontSize: '0.72rem', color: '#9a875a', marginTop: 4, lineHeight: 1.35 }}>
-                    {mapStylePresets[params.mapStyle]?.description ?? ''}
-                  </div>
-                </div>
-
-                {/* Map Purpose — 5B-b: sub-maps only. Biases content scope,
-                    loot tier and plot relevance. Decoy = "looks real but isn't". */}
-                {parentPoiCtx && (
-                  <div className="mgn-field">
-                    <div className="mgn-field-label">Map Purpose</div>
-                    <select
-                      className="mgn-select"
-                      value={params.purpose}
-                      onChange={e => setP('purpose', e.target.value)}
-                      title={PURPOSE_BY_VALUE[params.purpose]?.description ?? ''}
-                    >
-                      {MAP_PURPOSES.map(p => (
-                        <option key={p.value} value={p.value} title={p.description}>{p.label}</option>
-                      ))}
-                    </select>
-                    <div style={{ fontSize: '0.72rem', color: '#9a875a', marginTop: 4, lineHeight: 1.35 }}>
-                      {PURPOSE_BY_VALUE[params.purpose]?.description ?? ''}
-                    </div>
-                  </div>
-                )}
-
-                {/* Size */}
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Size</div>
-                  <select className="mgn-select" value={params.size} onChange={e => setP('size', e.target.value)}>
-                    {MAP_SIZES.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-
-                {/* Atmosphere */}
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Atmosphere</div>
-                  <select className="mgn-select" value={params.atmosphere} onChange={e => setP('atmosphere', e.target.value)}>
-                    {ATMOSPHERES.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-
-                {/* Era */}
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Era</div>
-                  <select className="mgn-select" value={params.era} onChange={e => setP('era', e.target.value)}>
-                    {ERAS.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-
-                {/* Inhabitants */}
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Inhabitants</div>
-                  <select className="mgn-select" value={params.inhabitants} onChange={e => setP('inhabitants', e.target.value)}>
-                    {INHABITANTS.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-
-                {/* POI Count */}
-                <div className="mgn-field">
-                  <div className="mgn-field-label">POI Count</div>
-                  <select className="mgn-select" value={params.poiCount} onChange={e => setP('poiCount', e.target.value)}>
-                    {POI_COUNTS.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Terrain multi-select — hidden for building/interior scopes */}
-              {showTerrain && (
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Terrain (pick up to 3 — leave empty for Random)</div>
-                  <div className="mgn-terrain-grid">
-                    {terrainOptions.map(t => (
-                      <button
-                        key={t}
-                        className={`mgn-terrain-chip${params.terrain.includes(t) ? ' mgn-terrain-chip--on' : ''}`}
-                        onClick={() => toggleTerrain(t)}
-                        disabled={!params.terrain.includes(t) && params.terrain.length >= 3}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Environment chips — shown instead of terrain for building/interior */}
-              {showEnvChips && (
-                <div className="mgn-field">
-                  <div className="mgn-field-label">Environment (pick up to 3 — shapes the atmosphere)</div>
-                  <div className="mgn-terrain-grid">
-                    {ENVIRONMENT_CHIPS.map(e => (
-                      <button
-                        key={e}
-                        className={`mgn-terrain-chip${params.terrain.includes(e) ? ' mgn-terrain-chip--on' : ''}`}
-                        onClick={() => toggleTerrain(e)}
-                        disabled={!params.terrain.includes(e) && params.terrain.length >= 3}
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Optional user description — triggers AI visual enrichment */}
-              <div className="mgn-field">
-                <div className="mgn-field-label">
-                  Visual Description <span className="mgn-field-optional">(optional — enhances map image)</span>
-                </div>
-                <textarea
-                  className="mgn-textarea"
-                  rows={2}
-                  placeholder="e.g. a ruined keep overlooking a frozen lake, haunted by the ghost of its former lord…"
-                  value={params.user_description}
-                  onChange={e => setP('user_description', e.target.value)}
-                  maxLength={300}
-                />
+                {(() => {
+                  const schemaKey     = normalizeMapType(params.mapType);
+                  const visibleFields = schemaKey
+                    ? getFieldsForMapType(schemaKey, !!parentPoiCtx)
+                    : [];
+                  return visibleFields.map(f => (
+                    <DynamicField
+                      key={f}
+                      fieldKey={f}
+                      mapType={params.mapType}
+                      params={params}
+                      setP={setP}
+                    />
+                  ));
+                })()}
               </div>
 
               {/* Sketch image preview — shown when image was pre-generated */}

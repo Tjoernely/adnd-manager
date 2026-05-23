@@ -99,6 +99,14 @@ async function autoMigrate() {
         ADD COLUMN IF NOT EXISTS purpose VARCHAR(20) DEFAULT 'standard';
     `);
 
+    // Sprint 1 — map context (settlement / dungeon / cave / buildingInterior
+    // / wilderness / ...). Nullable: legacy maps fall back via the
+    // LEGACY_TO_KEY bridge in mapTypeSchema.ts when context is missing.
+    await db.query(`
+      ALTER TABLE maps
+        ADD COLUMN IF NOT EXISTS context VARCHAR(40) DEFAULT NULL;
+    `);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS party_inventory (
         id                       SERIAL PRIMARY KEY,
