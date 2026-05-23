@@ -38,7 +38,7 @@ import {
   normalizeMapType,
   mapTypeToLegacyLabel,
 } from '../../rulesets/mapTypeSchema.ts';
-import { autoSelectFeatures } from '../../rulesets/settlementFeatures.ts';
+import { autoSelectFeatures, normalizePopulation } from '../../rulesets/settlementFeatures.ts';
 import { SettlementCompositionPanel } from './SettlementCompositionPanel.jsx';
 import './MapGenerator.css';
 
@@ -468,6 +468,29 @@ function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx, selectedSubc
     ? settlementSelection.required_features.length + settlementSelection.auto_picked_features.length
     : 0;
   const cappedPois = Math.min(12, Math.max(featuresNeeded, Math.min(numPois, 6)));
+
+  // Sprint 3 bug-fix: trim the settlement feature list passed to Sonnet so
+  // the "must include" set never exceeds cappedPois — otherwise Sonnet is
+  // asked to emit 12 POIs while being told 17 are required, and either
+  // truncates or fails. Required features always survive; auto-rolled are
+  // sorted by population-specific rarity descending (highest rarity = most
+  // "canonical" building for that size) and trimmed to fit.
+  let promptSelection = settlementSelection;
+  if (settlementSelection) {
+    const reqCount   = settlementSelection.required_features.length;
+    const autoCount  = settlementSelection.auto_picked_features.length;
+    if (reqCount + autoCount > cappedPois) {
+      const keepAuto = Math.max(0, cappedPois - reqCount);
+      const popSlug  = normalizePopulation(r.population);
+      const sortedAuto = [...settlementSelection.auto_picked_features].sort((a, b) =>
+        (b.rarityBySize?.[popSlug] ?? 0) - (a.rarityBySize?.[popSlug] ?? 0),
+      );
+      promptSelection = {
+        ...settlementSelection,
+        auto_picked_features: sortedAuto.slice(0, keepAuto),
+      };
+    }
+  }
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
     ? 'For this region map include a variety of: settlements, ruins, caves, encounter areas, landmarks.'
     : 'For this interior/dungeon map include: rooms, traps, treasures, encounters, boss area.';
@@ -508,22 +531,23 @@ IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "We
   }
   // Sprint 3 — settlement composition: concrete structural directives Sonnet
   // must honour. Each required/auto feature becomes a POI with the matching
-  // subType; excluded features must NOT appear.
+  // subType; excluded features must NOT appear. Uses the trimmed
+  // promptSelection so the must-include count matches cappedPois exactly.
   let settlementBlock = '';
-  if (settlementSelection) {
+  if (promptSelection) {
     const fmt = (arr) => arr.length
       ? arr.map(f => `- subType="${f.subType}" — ${f.label} — ${f.description}`).join('\n')
       : '  (none)';
-    const exc = settlementSelection.excluded_features.length
-      ? settlementSelection.excluded_features.join(', ')
+    const exc = promptSelection.excluded_features.length
+      ? promptSelection.excluded_features.join(', ')
       : '(none)';
     settlementBlock = `
 
 SETTLEMENT COMPOSITION (these are concrete structural requirements — each MUST become a POI with the listed subType set EXACTLY):
 REQUIRED (must appear; the name + narrative are yours, the building type is fixed):
-${fmt(settlementSelection.required_features)}
+${fmt(promptSelection.required_features)}
 AUTO-ROLLED (also must appear, same subType convention):
-${fmt(settlementSelection.auto_picked_features)}
+${fmt(promptSelection.auto_picked_features)}
 EXCLUDED (MUST NOT appear even if the archetype suggests them): ${exc}
 
 For every POI that maps to one of the above features set "subType" to the EXACT slug shown. For POIs that don't match any feature, leave "subType" as null.`;
@@ -939,11 +963,15 @@ export function MapGenerator({
       setStep1_5Done(true);
 
       // ── Step 2/3: POIs + encounter table (Claude) ─────────────────────────
+      // Sprint 3 bug-fix: raised from 4000 to 16000 because settlement maps
+      // with many features (metropolis can roll 8-12 buildings + their POIs)
+      // were truncating the JSON mid-response. Sonnet 4.6's registered
+      // maxOutput is 64000 so 16000 is well within the per-call budget.
       console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude...');
       const poiData = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
         userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx, selectedSubcategories, settlementSelection),
-        maxTokens:    4000,
+        maxTokens:    16000,
       });
       console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
 
