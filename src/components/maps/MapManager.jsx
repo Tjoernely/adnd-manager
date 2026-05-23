@@ -1647,6 +1647,24 @@ function POIPanel({ poi, map, maps, isDM, playerView, onClose, onUpdate, onDelet
             <span className="mm-poi-panel-name">{poi.name}</span>
           )}
           <span className="mm-poi-panel-type" style={{ color: info.color }}>{info.label}</span>
+          {poi.subType && (
+            <span
+              className="mm-poi-panel-type"
+              title="Settlement feature (Sprint 3 subType)"
+              style={{
+                marginLeft:  6,
+                fontSize:    '0.7rem',
+                color:       '#c8a84b',
+                background:  'rgba(200, 168, 75, 0.12)',
+                border:      '1px solid rgba(200, 168, 75, 0.35)',
+                borderRadius: 3,
+                padding:     '1px 6px',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {poi.subType}
+            </span>
+          )}
         </div>
         <button className="mm-icon-btn" onClick={onClose}>✕</button>
       </div>

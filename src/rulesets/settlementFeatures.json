@@ -1,0 +1,113 @@
+{
+  "$schema": "Sprint 3 — settlement feature taxonomy. Maps to POI subType slugs. Each feature has minSize + rarityBySize so the auto-selector can pick a size-appropriate composition without overwhelming small settlements. Magic-shop / wizard's tower are deliberately rare. Thieves' guild is dm_only by default. requires_settlement_role gates features that only make sense for specific roles (docks → coastal, mill → farming). Top-level keys starting with _ or $ are metadata.",
+  "$schema_version": 1,
+
+  "_size_order":  ["hamlet", "village", "town", "small_city", "large_city", "metropolis"],
+
+  "lodging_food": {
+    "label": "Lodging & Food",
+    "features": {
+      "inn_tavern":  { "label": "Inn/Tavern",        "subType": "inn_tavern", "description": "Combined lodging and meals; central social hub",
+                       "minSize": "hamlet",     "rarityBySize": { "hamlet": 0.30, "village": 0.80, "town": 0.95, "small_city": 1.00, "large_city": 1.00, "metropolis": 1.00 } },
+      "tavern":      { "label": "Tavern (no lodging)","subType": "tavern",    "description": "Drinks and meals, no rooms; gathering spot for locals",
+                       "minSize": "village",    "rarityBySize": { "village": 0.40, "town": 0.70, "small_city": 0.90, "large_city": 1.00, "metropolis": 1.00 } },
+      "alehouse":    { "label": "Public alehouse",   "subType": "alehouse",  "description": "Working-class drinking house, often raucous",
+                       "minSize": "town",       "rarityBySize": { "town": 0.50, "small_city": 0.70, "large_city": 0.85, "metropolis": 0.90 } }
+    }
+  },
+
+  "trade": {
+    "label": "Trade",
+    "features": {
+      "market_square": { "label": "Market square",   "subType": "market_square", "description": "Open-air trading plaza with stalls; central commerce",
+                         "minSize": "village",  "rarityBySize": { "village": 0.50, "town": 0.90, "small_city": 1.00, "large_city": 1.00, "metropolis": 1.00 } },
+      "general_store": { "label": "General store",   "subType": "general_store", "description": "Mundane supplies, dry goods, traveling gear",
+                         "minSize": "village",  "rarityBySize": { "village": 0.60, "town": 0.90, "small_city": 1.00, "large_city": 1.00, "metropolis": 1.00 } },
+      "trading_post":  { "label": "Trading post",    "subType": "trading_post",  "description": "Long-distance trade hub for caravans and merchants",
+                         "minSize": "village",  "rarityBySize": { "village": 0.25, "town": 0.50, "small_city": 0.70, "large_city": 0.85, "metropolis": 0.90 } },
+      "warehouse":     { "label": "Warehouse",       "subType": "warehouse",     "description": "Storage for trade goods, often near docks or gates",
+                         "minSize": "town",     "rarityBySize": { "town": 0.40, "small_city": 0.70, "large_city": 0.90, "metropolis": 0.95 } }
+    }
+  },
+
+  "craft": {
+    "label": "Craft",
+    "features": {
+      "smith":        { "label": "Smith",             "subType": "smith",        "description": "General blacksmith; horseshoes, tools, basic repairs",
+                        "minSize": "hamlet",    "rarityBySize": { "hamlet": 0.40, "village": 0.85, "town": 0.95, "small_city": 1.00, "large_city": 1.00, "metropolis": 1.00 } },
+      "weapon_smith": { "label": "Weapon smith",      "subType": "weapon_smith", "description": "Specialist in weapons; rare in small settlements",
+                        "minSize": "town",      "rarityBySize": { "town": 0.35, "small_city": 0.60, "large_city": 0.85, "metropolis": 0.95 } },
+      "armor_smith":  { "label": "Armor smith",       "subType": "armor_smith",  "description": "Specialist in armor crafting; rare and expensive",
+                        "minSize": "town",      "rarityBySize": { "town": 0.25, "small_city": 0.50, "large_city": 0.80, "metropolis": 0.95 } },
+      "carpenter":    { "label": "Carpenter / Woodworker", "subType": "carpenter", "description": "Furniture, tool handles, structural repairs",
+                        "minSize": "village",   "rarityBySize": { "village": 0.50, "town": 0.85, "small_city": 0.95, "large_city": 1.00, "metropolis": 1.00 } },
+      "stables":      { "label": "Stables",           "subType": "stables",      "description": "Horse-keeping, often combined with farrier or coach rental",
+                        "minSize": "village",   "rarityBySize": { "village": 0.40, "town": 0.70, "small_city": 0.90, "large_city": 0.95, "metropolis": 1.00 } }
+    }
+  },
+
+  "religion_healing": {
+    "label": "Religion & Healing",
+    "features": {
+      "shrine":     { "label": "Shrine",            "subType": "shrine",     "description": "Small religious site; outdoor or roadside",
+                      "minSize": "hamlet",  "rarityBySize": { "hamlet": 0.50, "village": 0.80, "town": 0.85, "small_city": 0.90, "large_city": 1.00, "metropolis": 1.00 } },
+      "temple":     { "label": "Temple",            "subType": "temple",     "description": "Established religious building; clergy and services",
+                      "minSize": "village", "rarityBySize": { "village": 0.30, "town": 0.70, "small_city": 0.95, "large_city": 1.00, "metropolis": 1.00 } },
+      "healer":     { "label": "Healer / Herbalist","subType": "healer",     "description": "Common folk medicine, herb-craft, midwifery",
+                      "minSize": "hamlet",  "rarityBySize": { "hamlet": 0.35, "village": 0.70, "town": 0.85, "small_city": 0.95, "large_city": 0.95, "metropolis": 1.00 } },
+      "apothecary": { "label": "Apothecary",        "subType": "apothecary", "description": "Refined medicine, potions; rarer and pricier than healer",
+                      "minSize": "town",    "rarityBySize": { "town": 0.40, "small_city": 0.70, "large_city": 0.90, "metropolis": 0.95 } }
+    }
+  },
+
+  "authority_defense": {
+    "label": "Authority & Defense",
+    "features": {
+      "town_hall":  { "label": "Town hall / Council hall", "subType": "town_hall",  "description": "Local government seat, public meetings",
+                      "minSize": "village",  "rarityBySize": { "village": 0.40, "town": 0.85, "small_city": 1.00, "large_city": 1.00, "metropolis": 1.00 } },
+      "guard_post": { "label": "Guard post",               "subType": "guard_post", "description": "Small watch station; checkpoints at gates",
+                      "minSize": "village",  "rarityBySize": { "village": 0.40, "town": 0.85, "small_city": 1.00, "large_city": 1.00, "metropolis": 1.00 } },
+      "barracks":   { "label": "Barracks",                 "subType": "barracks",   "description": "Standing military force; only large settlements",
+                      "minSize": "town",     "rarityBySize": { "town": 0.30, "small_city": 0.70, "large_city": 0.90, "metropolis": 0.95 } },
+      "prison":     { "label": "Prison / Stocks",          "subType": "prison",     "description": "Detention facility; ranges from village stocks to city gaol",
+                      "minSize": "village",  "rarityBySize": { "village": 0.30, "town": 0.70, "small_city": 0.95, "large_city": 1.00, "metropolis": 1.00 } },
+      "manor":      { "label": "Manor / Noble estate",     "subType": "manor",      "description": "Local noble's residence, often with grounds and staff",
+                      "minSize": "village",  "rarityBySize": { "village": 0.20, "town": 0.50, "small_city": 0.70, "large_city": 0.80, "metropolis": 0.85 } },
+      "castle":     { "label": "Castle / Keep",            "subType": "castle",     "description": "Significant fortification; seat of regional power",
+                      "minSize": "town",     "rarityBySize": { "town": 0.20, "small_city": 0.45, "large_city": 0.70, "metropolis": 0.80 } }
+    }
+  },
+
+  "knowledge_magic": {
+    "label": "Knowledge & Magic",
+    "features": {
+      "scribe":         { "label": "Scribe",                   "subType": "scribe",         "description": "Letter-writing, document copying, ledger keeping",
+                          "minSize": "town",       "rarityBySize": { "town": 0.45, "small_city": 0.80, "large_city": 0.95, "metropolis": 1.00 } },
+      "library":        { "label": "Library / Archive",        "subType": "library",        "description": "Repository of books and records; often guild- or temple-affiliated",
+                          "minSize": "town",       "rarityBySize": { "town": 0.15, "small_city": 0.40, "large_city": 0.70, "metropolis": 0.90 } },
+      "alchemist":      { "label": "Alchemist",                "subType": "alchemist",      "description": "Brews potions, sells reagents; not always trustworthy",
+                          "minSize": "town",       "rarityBySize": { "town": 0.20, "small_city": 0.50, "large_city": 0.75, "metropolis": 0.90 } },
+      "magic_shop":     { "label": "Magic shop",               "subType": "magic_shop",     "description": "Rare magical items for sale; AD&D-rare, eccentric proprietor",
+                          "minSize": "small_city", "rarityBySize": { "small_city": 0.15, "large_city": 0.40, "metropolis": 0.60 } },
+      "wizards_tower":  { "label": "Wizard's tower / residence","subType": "wizards_tower","description": "Notable arcane practitioner's home; reclusive or political",
+                          "minSize": "small_city", "rarityBySize": { "small_city": 0.10, "large_city": 0.30, "metropolis": 0.50 } }
+    }
+  },
+
+  "underworld_infrastructure": {
+    "label": "Underworld & Infrastructure",
+    "features": {
+      "thieves_guild": { "label": "Thieves' guild", "subType": "thieves_guild", "description": "Hidden faction headquarters; not on public maps. DM only.",
+                         "minSize": "town",        "rarityBySize": { "town": 0.15, "small_city": 0.40, "large_city": 0.65, "metropolis": 0.85 },
+                         "dm_only_default": true },
+      "sewers":        { "label": "Sewers",        "subType": "sewers",        "description": "Underground drainage and waste system; only in larger settlements",
+                         "minSize": "small_city",  "rarityBySize": { "small_city": 0.50, "large_city": 0.85, "metropolis": 0.95 } },
+      "docks":         { "label": "Docks / Harbor","subType": "docks",         "description": "Wharves and piers; only for coastal/river settlements",
+                         "minSize": "village",     "rarityBySize": { "village": 0.20, "town": 0.30, "small_city": 0.40, "large_city": 0.50, "metropolis": 0.50 },
+                         "requires_settlement_role": ["fishing_village", "port_city", "trade_hub"] },
+      "mill":          { "label": "Mill",          "subType": "mill",          "description": "Water or wind mill for grain; vital for grain-growing regions",
+                         "minSize": "village",     "rarityBySize": { "village": 0.60, "town": 0.85, "small_city": 0.95, "large_city": 1.00, "metropolis": 1.00 },
+                         "requires_settlement_role": ["farming_village", "market_town", "frontier_settlement"] }
+    }
+  }
+}

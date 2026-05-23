@@ -38,6 +38,8 @@ import {
   normalizeMapType,
   mapTypeToLegacyLabel,
 } from '../../rulesets/mapTypeSchema.ts';
+import { autoSelectFeatures } from '../../rulesets/settlementFeatures.ts';
+import { SettlementCompositionPanel } from './SettlementCompositionPanel.jsx';
 import './MapGenerator.css';
 
 // Map style presets — derived from the shared JSON registry. The `$` keys are
@@ -150,6 +152,7 @@ function resolveParams(p) {
     civilization_level: p.civilization_level ?? 'Random',
     floor_count:        p.floor_count        ?? '1',
     condition:          p.condition          ?? 'Random',
+    feature_presences:  p.feature_presences  ?? {},
     ...(p.user_description?.trim() ? { user_description: p.user_description.trim() } : {}),
   };
 }
@@ -365,7 +368,7 @@ Respond with ONLY this JSON object:
  * @returns {Promise<{selected: string[], rationale: string} | null>}
  *          null on any failure → caller falls back to SCOPE defaults.
  */
-async function selectPOISubcategories(r, meta, parentCtx) {
+async function selectPOISubcategories(r, meta, parentCtx, settlementSelection) {
   try {
     const allKeys = getAllSubcategoryKeys();
 
@@ -418,7 +421,13 @@ REQUIREMENTS:
 3. Try to include at least one sub-category from each top-level (structure/natural/people/enigma) present in the filtered set — unless the location strictly excludes one.
 4. For thematic locations (coastal, mountain, ruined), it's fine to weight several sub-categories from one top-level.
 5. For Decoy-purpose sub-maps, lean toward MUNDANE keys (structure:workshop, structure:civic, structure:dwelling, structure:infrastructure, people:small_settlement) — avoid enigma:relic_site, enigma:cursed_site, enigma:anomaly.
-
+${settlementSelection ? `
+SETTLEMENT COMPOSITION (Sprint 3 — your selected sub-categories MUST cover the structural archetypes these required / auto-rolled features map to, since Step 2 will be told to emit a POI for each):
+REQUIRED features: ${settlementSelection.required_features.map(f => f.subType).join(', ') || '(none)'}
+AUTO-ROLLED features: ${settlementSelection.auto_picked_features.map(f => f.subType).join(', ') || '(none)'}
+EXCLUDED features (must NOT appear): ${settlementSelection.excluded_features.length ? settlementSelection.excluded_features.join(', ') : '(none)'}
+Hint mapping: inn_tavern/tavern/alehouse/market_square/general_store/trading_post/warehouse/magic_shop/scribe/library/apothecary → structure:commercial. smith/weapon_smith/armor_smith/carpenter/stables → structure:workshop. town_hall/guard_post/prison/barracks → structure:civic. castle/manor → structure:fortification. temple/shrine → structure:temple OR structure:shrine. wizards_tower → structure:fortification OR enigma:ley_node. sewers/docks/mill → structure:infrastructure. thieves_guild → people:organized_group.
+` : ''}
 Respond with ONLY this JSON, no markdown fences:
 {
   "selected": ["category:subcategory", "category:subcategory", ...],
@@ -451,9 +460,14 @@ Respond with ONLY this JSON, no markdown fences:
 }
 
 /** CALL 2 — POIs + encounter table. Uses title from call 1 for context. */
-function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx, selectedSubcategories) {
-  // Cap at 6 to avoid token overflow
-  const cappedPois = Math.min(numPois, 6);
+function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx, selectedSubcategories, settlementSelection) {
+  // Sprint 3 — accommodate settlement composition: if the auto-selector rolled
+  // more buildings than the base cap, raise the POI quota so the prompt can
+  // actually include them. Upper cap stays at 12 to protect Sonnet's budget.
+  const featuresNeeded = settlementSelection
+    ? settlementSelection.required_features.length + settlementSelection.auto_picked_features.length
+    : 0;
+  const cappedPois = Math.min(12, Math.max(featuresNeeded, Math.min(numPois, 6)));
   const typeHint = ['Region', 'City/Town', 'Village'].includes(r.mapType)
     ? 'For this region map include a variety of: settlements, ruins, caves, encounter areas, landmarks.'
     : 'For this interior/dungeon map include: rooms, traps, treasures, encounters, boss area.';
@@ -492,9 +506,31 @@ ${lines.join('\n')}
 IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "Weeping", "Ossuary", "Sanctum", "Hollow", "Spire", "Forsaken", "Drowned" unless the description explicitly demands them. Mix tonal registers: not every POI needs to sound gothic or melancholic. A working tannery and a haunted shrine can live on the same map.`;
     }
   }
+  // Sprint 3 — settlement composition: concrete structural directives Sonnet
+  // must honour. Each required/auto feature becomes a POI with the matching
+  // subType; excluded features must NOT appear.
+  let settlementBlock = '';
+  if (settlementSelection) {
+    const fmt = (arr) => arr.length
+      ? arr.map(f => `- subType="${f.subType}" — ${f.label} — ${f.description}`).join('\n')
+      : '  (none)';
+    const exc = settlementSelection.excluded_features.length
+      ? settlementSelection.excluded_features.join(', ')
+      : '(none)';
+    settlementBlock = `
+
+SETTLEMENT COMPOSITION (these are concrete structural requirements — each MUST become a POI with the listed subType set EXACTLY):
+REQUIRED (must appear; the name + narrative are yours, the building type is fixed):
+${fmt(settlementSelection.required_features)}
+AUTO-ROLLED (also must appear, same subType convention):
+${fmt(settlementSelection.auto_picked_features)}
+EXCLUDED (MUST NOT appear even if the archetype suggests them): ${exc}
+
+For every POI that maps to one of the above features set "subType" to the EXACT slug shown. For POIs that don't match any feature, leave "subType" as null.`;
+  }
   return `For the tabletop fantasy ${r.mapType} map "${meta.title}":
 ${descBlock}Terrain: ${r.terrain.join(', ')} | Atmosphere: ${r.atmosphere} | Inhabitants: ${r.inhabitants}${buildFieldHintBlock(r)}${parentNote({ poi: parentCtx, parentMap: parentMapCtx, purpose: r.purpose })}
-${typeHint}${purposeBlock}${archetypeBlock}
+${typeHint}${purposeBlock}${archetypeBlock}${settlementBlock}
 Use evocative original names, factions and lore for all POIs — no published-setting references. Keep each field to 1-2 sentences maximum.
 
 Generate exactly ${cappedPois} points of interest spread across the map.
@@ -506,6 +542,7 @@ Respond with ONLY this JSON object:
       "id": "poi_1",
       "name": "evocative original location name",
       "type": "city|village|ruins|cave|dungeon|encounter|treasure|trap|npc|landmark|mystery",
+      "subType": "Sprint 3 — snake_case slug when this POI matches a listed settlement feature (e.g. inn_tavern, smith, market_square, magic_shop, town_hall); null otherwise",
       "x_percent": 20,
       "y_percent": 35,
       "is_dm_only": false,
@@ -802,6 +839,10 @@ export function MapGenerator({
     civilization_level: presetParams?.civilization_level ?? 'Random',
     floor_count:        presetParams?.floor_count        ?? '1',
     condition:          presetParams?.condition          ?? 'Random',
+    // Sprint 3 — per-feature presence overrides for city/village maps.
+    // Shape: { feature_subType: 'required' | 'excluded' } — entries with
+    // 'auto' default are simply absent from the object.
+    feature_presences:  presetParams?.feature_presences  ?? {},
     user_description: presetParams?.user_description ?? buildVisualDescriptionFromPOI(parentPoiCtx) ?? '',
   });
   const [step,        setStep]        = useState('form'); // 'form'|'generating'|'error'
@@ -866,11 +907,28 @@ export function MapGenerator({
       if (!meta?.title) throw new Error('AI returned invalid map metadata (missing title). Please try again.');
       setStep1Done(true);
 
+      // ── Sprint 3 — settlement composition (city / village only) ──────────
+      // Computed once, threaded into both the Haiku selection (Step 1.5) and
+      // the Sonnet POI generation (Step 2) so both pieces see the same set
+      // of required / auto-rolled / excluded buildings.
+      const mapContextSlug = getMapContext(normalizeMapType(resolved.mapType));
+      let settlementSelection = null;
+      if (mapContextSlug === 'settlement') {
+        settlementSelection = autoSelectFeatures({
+          population:      resolved.population,
+          settlement_role: resolved.settlement_role,
+          presences:       resolved.feature_presences ?? {},
+        });
+        console.log(
+          `[MapGenerator] Step 1.5/3 — settlement composition: ${settlementSelection.required_features.length} required, ${settlementSelection.auto_picked_features.length} auto, ${settlementSelection.excluded_features.length} excluded. Rationale: ${settlementSelection.rationale}`,
+        );
+      }
+
       // ── Step 1.5/3: Pick POI archetypes (Haiku) ───────────────────────────
       // Cheap + fast (~$0.001, 1-2 s). Failure falls back silently — Sonnet
       // still gets the existing SCOPE-based defaults via spec.poi_candidates.
       console.log('[MapGenerator] Step 1.5/3 — selecting POI sub-categories via Haiku...');
-      const selection = await selectPOISubcategories(resolved, meta, parentPoiCtx);
+      const selection = await selectPOISubcategories(resolved, meta, parentPoiCtx, settlementSelection);
       const selectedSubcategories = selection?.selected ?? null;
       if (selection) {
         console.log('[MapGenerator] Step 1.5/3 done — selected:', selectedSubcategories,
@@ -884,7 +942,7 @@ export function MapGenerator({
       console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude...');
       const poiData = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
-        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx, selectedSubcategories),
+        userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx, selectedSubcategories, settlementSelection),
         maxTokens:    4000,
       });
       console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
@@ -897,6 +955,24 @@ export function MapGenerator({
         y_percent:    Math.max(5, Math.min(95, Number(p.y_percent) || (10 + i * 7))),
         child_map_id: null,
       }));
+
+      // Sprint 3 — auto-mark POIs as DM-only when their subType matches a
+      // dm_only_default settlement feature (e.g. thieves' guild). The
+      // narrative POI itself still exists; it just isn't surfaced in the
+      // player view.
+      if (settlementSelection) {
+        const dmOnlySubtypes = new Set(
+          [...settlementSelection.required_features, ...settlementSelection.auto_picked_features]
+            .filter(f => f.dm_only_default)
+            .map(f => f.subType),
+        );
+        if (dmOnlySubtypes.size > 0) {
+          pois.forEach(p => {
+            if (p.subType && dmOnlySubtypes.has(p.subType)) p.is_dm_only = true;
+          });
+        }
+      }
+
       setStep2Done(true);
 
       // ── Build world-engine data (scope, tags, context) ────────────────────
@@ -980,6 +1056,15 @@ export function MapGenerator({
           ...(selectedSubcategories ? {
             selected_subcategories: selectedSubcategories,
             selection_rationale:    selection?.rationale ?? '',
+          } : {}),
+          // Sprint 3 — settlement composition (city / village only)
+          ...(settlementSelection ? {
+            settlement_selection: {
+              required:    settlementSelection.required_features.map(f => f.subType),
+              auto_picked: settlementSelection.auto_picked_features.map(f => f.subType),
+              excluded:    settlementSelection.excluded_features,
+              rationale:   settlementSelection.rationale,
+            },
           } : {}),
           // Terrain sketch — persisted at creation so cells are never lost
           ...(sketchSpec ? { sketch: sketchSpec } : {}),
@@ -1121,6 +1206,22 @@ export function MapGenerator({
                   ));
                 })()}
               </div>
+
+              {/* Sprint 3 — Settlement Composition (Advanced) panel.
+                  Only shown for city / village. Lets the DM override the auto
+                  composition (require / exclude specific buildings). */}
+              {(() => {
+                const slug = normalizeMapType(params.mapType);
+                if (slug !== 'city' && slug !== 'village') return null;
+                return (
+                  <SettlementCompositionPanel
+                    population={params.population}
+                    settlement_role={params.settlement_role}
+                    presences={params.feature_presences}
+                    onChange={presences => setParams(p => ({ ...p, feature_presences: presences }))}
+                  />
+                );
+              })()}
 
               {/* Sketch image preview — shown when image was pre-generated */}
               {presetImageUrl && (
