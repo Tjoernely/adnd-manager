@@ -28,6 +28,7 @@ import MonsterLibrary         from "./components/monsters/MonsterLibrary.jsx";
 import MagicalItemLibrary     from "./components/items/MagicalItemLibrary.jsx";
 import PartyHub               from "./components/partyhub/PartyHub.jsx";
 import { QuestModule }        from "./components/quests/QuestModule";
+import { AppBackButton }      from "./components/ui/AppBackButton.jsx";
 import "./styles/adnd-theme.css";
 
 export default function App() {
@@ -48,9 +49,40 @@ export default function App() {
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
-  const [screen,       setScreen]       = useState(() => {
-    try { return sessionStorage.getItem('adnd_screen') || 'dashboard'; } catch { return 'dashboard'; }
-  }); // 'dashboard' | 'characters' | 'npcs' | 'spells' | 'magical-items' | 'monsters' | 'party-hub' | 'quests'
+  // ── Screen navigation: stack-based so the global Back button can pop ──────
+  // setScreen(x) keeps its old single-arg API. Behaviour:
+  //   - x === 'dashboard' → reset the whole stack (modules' "← Dashboard"
+  //     button always lands you on a clean root, no history clutter).
+  //   - else, push onto stack (forward navigation). Consecutive duplicates
+  //     are deduped so re-selecting the same module doesn't bloat history.
+  // The global AppBackButton calls popScreen() to step back one entry.
+  const [screenStack, setScreenStack] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('adnd_screen_stack');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      // Legacy migration from the pre-Sprint-0 single-string key.
+      const legacy = sessionStorage.getItem('adnd_screen');
+      if (legacy && legacy !== 'dashboard') return ['dashboard', legacy];
+      return ['dashboard'];
+    } catch {
+      return ['dashboard'];
+    }
+  });
+  const screen    = screenStack[screenStack.length - 1];
+  const canGoBack = screenStack.length > 1;
+  const setScreen = useCallback((s) => {
+    setScreenStack(prev => {
+      if (s === 'dashboard') return ['dashboard'];
+      if (prev[prev.length - 1] === s) return prev;
+      return [...prev, s];
+    });
+  }, []);
+  const popScreen = useCallback(() => {
+    setScreenStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
+  }, []);
 
   // ── Sync navigation state to sessionStorage ──────────────────────
   useEffect(() => {
@@ -68,8 +100,12 @@ export default function App() {
   }, [dbCharId]);
 
   useEffect(() => {
-    try { sessionStorage.setItem('adnd_screen', screen); } catch {}
-  }, [screen]);
+    try {
+      sessionStorage.setItem('adnd_screen_stack', JSON.stringify(screenStack));
+      // Keep adnd_screen in sync for any legacy reader that still expects it.
+      sessionStorage.setItem('adnd_screen', screenStack[screenStack.length - 1]);
+    } catch {}
+  }, [screenStack]);
 
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
@@ -148,17 +184,25 @@ export default function App() {
 
   // ── Auth gate ───────────────────────────────────────────────────
   if (!user) {
-    return <LoginScreen onLogin={login} onRegister={register} loading={authLoading} error={authError} />;
+    return (
+      <>
+        <LoginScreen onLogin={login} onRegister={register} loading={authLoading} error={authError} />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
+      </>
+    );
   }
 
   // ── Campaign gate ───────────────────────────────────────────────
   if (!activeCampaign) {
     return (
-      <CampaignSelector
-        user={user}
-        onSelect={camp => { setActiveCampaign(camp); setDbCharId(null); setScreen('dashboard'); }}
-        onLogout={logout}
-      />
+      <>
+        <CampaignSelector
+          user={user}
+          onSelect={camp => { setActiveCampaign(camp); setDbCharId(null); setScreen('dashboard'); }}
+          onLogout={logout}
+        />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
+      </>
     );
   }
 
@@ -188,6 +232,7 @@ export default function App() {
           isOpen={showMaps}
           onClose={() => setShowMaps(false)}
         />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
       </>
     );
   }
@@ -195,14 +240,20 @@ export default function App() {
   // ── Quests screen ───────────────────────────────────────────
   if (screen === 'quests') {
     return (
-      <QuestModule campaignId={activeCampaign.id} onBack={() => setScreen('dashboard')} />
+      <>
+        <QuestModule campaignId={activeCampaign.id} onBack={() => setScreen('dashboard')} />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
+      </>
     );
   }
 
   // ── Monsters & Encounters screen ────────────────────────────
   if (screen === 'monsters') {
     return (
-      <MonsterLibrary campaignId={activeCampaign?.id} onBack={() => setScreen('dashboard')} />
+      <>
+        <MonsterLibrary campaignId={activeCampaign?.id} onBack={() => setScreen('dashboard')} />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
+      </>
     );
   }
 
@@ -229,6 +280,7 @@ export default function App() {
           isOpen={showMaps}
           onClose={() => setShowMaps(false)}
         />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
       </>
     );
   }
@@ -236,18 +288,24 @@ export default function App() {
   // ── Magical Items screen ────────────────────────────────────
   if (screen === 'magical-items') {
     return (
-      <MagicalItemLibrary onBack={() => setScreen('dashboard')} campaignId={activeCampaign?.id} />
+      <>
+        <MagicalItemLibrary onBack={() => setScreen('dashboard')} campaignId={activeCampaign?.id} />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
+      </>
     );
   }
 
   // ── Spell Library screen ────────────────────────────────────
   if (screen === 'spells') {
     return (
-      <SpellLibrary
-        onBack={() => setScreen('dashboard')}
-        campaignId={activeCampaign?.id}
-        characters={characters}
-      />
+      <>
+        <SpellLibrary
+          onBack={() => setScreen('dashboard')}
+          campaignId={activeCampaign?.id}
+          characters={characters}
+        />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
+      </>
     );
   }
 
@@ -266,6 +324,7 @@ export default function App() {
           isOpen={showMaps}
           onClose={() => setShowMaps(false)}
         />
+        <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
       </>
     );
   }
@@ -831,6 +890,7 @@ export default function App() {
         onClose={()=>setShowMaps(false)}
       />
 
+      <AppBackButton canGoBack={canGoBack} onBack={popScreen} />
     </div>
   );
 }
