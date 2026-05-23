@@ -11,9 +11,16 @@ import raw from './poiTaxonomy.json';
 export type CategoryKey = 'structure' | 'natural' | 'people' | 'enigma';
 
 export interface POISubcategory {
-  label:       string;
-  description: string;
-  concepts:    string[];
+  label:                 string;
+  description:           string;
+  concepts:              string[];
+  /** Sprint 2 — whitelist. Only present subs whose value includes the map's
+   *  context are kept by getCompatibleSubcategories. When omitted entirely,
+   *  the sub is treated as universal (kept for any context). */
+  compatibleContexts?:   string[];
+  /** Sprint 2 — blacklist. Always blocks the sub for the listed contexts,
+   *  even if compatibleContexts would otherwise allow it. */
+  incompatibleContexts?: string[];
 }
 
 export interface POICategory {
@@ -106,4 +113,23 @@ export function formatSubcategoryForPrompt(key: string): string {
   const sub = getSubcategory(key);
   if (!sub) return `- ${key}: (unknown sub-category)`;
   return `- ${key}: ${sub.description}`;
+}
+
+/**
+ * Sprint 2 — sub-categories whose compatibility metadata permits the given
+ * map context. Whitelist semantics when `compatibleContexts` is populated;
+ * `incompatibleContexts` is an explicit block that always wins. Subs with
+ * neither field are universal (kept for any context).
+ */
+export function getCompatibleSubcategories(mapContext: string): string[] {
+  return getAllSubcategoryKeys().filter(key => {
+    const sub = getSubcategory(key);
+    if (!sub) return false;
+    if (sub.incompatibleContexts?.includes(mapContext)) return false;
+    if (sub.compatibleContexts && sub.compatibleContexts.length > 0
+        && !sub.compatibleContexts.includes(mapContext)) {
+      return false;
+    }
+    return true;
+  });
 }

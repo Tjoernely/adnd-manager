@@ -27,6 +27,7 @@ import {
   getSubcategory,
   getRandomConceptSample,
   formatSubcategoryForPrompt,
+  getCompatibleSubcategories,
 } from '../../rulesets/poiTaxonomy.ts';
 import {
   getMapTypeKeys,
@@ -367,7 +368,23 @@ Respond with ONLY this JSON object:
 async function selectPOISubcategories(r, meta, parentCtx) {
   try {
     const allKeys = getAllSubcategoryKeys();
-    const subList = allKeys.map(k => formatSubcategoryForPrompt(k)).join('\n');
+
+    // Sprint 2 — filter the pool to context-compatible sub-categories so a
+    // world map never gets a tomb POI, a settlement never gets a cave-feature,
+    // etc. Description override still lets Haiku reach into the excluded set
+    // when the user explicitly calls for it.
+    const mapContext      = getMapContext(normalizeMapType(r.mapType));
+    const compatibleKeys  = getCompatibleSubcategories(mapContext);
+    const usableKeys      = compatibleKeys.length > 0 ? compatibleKeys : allKeys;
+    const excludedKeys    = allKeys.filter(k => !usableKeys.includes(k));
+    console.log(
+      `[MapGenerator] Step 1.5/3 — context: ${mapContext}, compatible pool size: ${usableKeys.length}/${allKeys.length}`,
+    );
+
+    const subList     = usableKeys.map(k => formatSubcategoryForPrompt(k)).join('\n');
+    const excludedList = excludedKeys.length > 0
+      ? excludedKeys.map(k => `- ${k}`).join('\n')
+      : '(none)';
     const parentLine = parentCtx
       ? `\n- Parent location: "${parentCtx.name}" — ${parentCtx.short_description ?? ''}`
       : '';
@@ -377,7 +394,7 @@ async function selectPOISubcategories(r, meta, parentCtx) {
     const desc = (r.user_description ?? '').trim();
     const userPrompt = `You are a tabletop RPG cartographer's assistant. Pick 6-12 POI sub-categories from the AVAILABLE list that genuinely fit this map.
 
-MAP CONTEXT:
+MAP CONTEXT (compatibility filter applied — context: ${mapContext}):
 - Type: ${r.mapType}
 - Title: "${meta?.title ?? '(none)'}"
 - Atmosphere: ${r.atmosphere}
@@ -386,13 +403,19 @@ MAP CONTEXT:
 - Inhabitants: ${r.inhabitants}
 - User description: ${desc || '(none provided)'}${parentLine}${purposeLine}
 
-AVAILABLE SUB-CATEGORIES (key — description):
+AVAILABLE SUB-CATEGORIES (filtered for context "${mapContext}"):
 ${subList}
 
+DESCRIPTION OVERRIDE:
+If the user description explicitly calls for something normally incompatible with this map's context (e.g. "ancient portal in the village square" on a settlement map), you MAY include the relevant sub-category from the EXCLUDED list below even though it isn't in the filtered set. The description takes precedence over default context filtering. Otherwise, do NOT reach into the excluded list.
+
+Sub-categories EXCLUDED for context "${mapContext}" (only use if user description specifically calls for them):
+${excludedList}
+
 REQUIREMENTS:
-1. Pick 6-12 sub-category keys (verbatim from the list above) that genuinely fit.
+1. Pick 6-12 sub-category keys (verbatim — from the AVAILABLE list above, or from EXCLUDED if user description warrants it).
 2. Favour sub-categories that match specific features in the description.
-3. Try to include at least one sub-category from each top-level (structure/natural/people/enigma) — unless the location strictly excludes one (e.g. a sealed cave has no people).
+3. Try to include at least one sub-category from each top-level (structure/natural/people/enigma) present in the filtered set — unless the location strictly excludes one.
 4. For thematic locations (coastal, mountain, ruined), it's fine to weight several sub-categories from one top-level.
 5. For Decoy-purpose sub-maps, lean toward MUNDANE keys (structure:workshop, structure:civic, structure:dwelling, structure:infrastructure, people:small_settlement) — avoid enigma:relic_site, enigma:cursed_site, enigma:anomaly.
 
@@ -407,6 +430,8 @@ Respond with ONLY this JSON, no markdown fences:
       maxTokens: 500,
       model:     'claude-haiku-4-5',
     });
+    // Validate against the full key set so Haiku is allowed to reach into the
+    // excluded list when the description override applies.
     const validKeys = new Set(allKeys);
     const selected = Array.isArray(result?.selected)
       ? result.selected.filter(k => typeof k === 'string' && validKeys.has(k))

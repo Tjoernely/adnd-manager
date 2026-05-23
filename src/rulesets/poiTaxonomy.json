@@ -1,6 +1,6 @@
 {
-  "$schema": "POI taxonomy used by the Map Generator's Step 1.5 selection (Haiku) and Step 2 generation (Sonnet). 4 top-level categories, 32 sub-categories, ~25 concepts each. All entries are IP-clean — no published-setting names or trademarked vocabulary. The pool deliberately includes plenty of neutral/mundane concepts (workshops, civic buildings, ordinary settlements) so the model has alternatives to the dark-fantasy bias of evocative names.",
-  "$version": 1,
+  "$schema": "POI taxonomy used by the Map Generator's Step 1.5 selection (Haiku) and Step 2 generation (Sonnet). 4 top-level categories, 32 sub-categories, ~25 concepts each. All entries are IP-clean — no published-setting names or trademarked vocabulary. The pool deliberately includes plenty of neutral/mundane concepts (workshops, civic buildings, ordinary settlements) so the model has alternatives to the dark-fantasy bias of evocative names. Sprint 2 — each sub-category carries `compatibleContexts` (whitelist; whitelist-only filtering when populated) and optional `incompatibleContexts` (blacklist; explicit block even if otherwise compatible). The 10 contexts: world, region, wilderness, settlement, buildingExterior, buildingInterior, dungeon, cave, ruins, sewer.",
+  "$version": 2,
 
   "structure": {
     "label": "Built Structures",
@@ -18,7 +18,8 @@
           "river-temple", "grove-temple", "hilltop pantheon", "icon-walled basilica",
           "mountainside chapel", "seaward chapel", "mortuary temple",
           "hypostyle hall", "abbey choir", "wayside priory", "open-air sanctum"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "buildingInterior", "buildingExterior", "ruins"]
       },
       "shrine": {
         "label": "Shrine",
@@ -31,7 +32,8 @@
           "ribbon-wrapped tree", "field altar", "crossroads marker",
           "candle-niche", "river-stone shrine", "hilltop cairn", "memory-bench",
           "consecrated spring", "harbour shrine", "watchpost icon"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "wilderness", "buildingInterior", "ruins"]
       },
       "dwelling": {
         "label": "Dwelling",
@@ -45,7 +47,8 @@
           "weaver's row-house", "harbourside tenement", "monk's hermitage",
           "midwife's cottage", "schoolmaster's lodgings", "carter's cottage",
           "bargee's houseboat", "boarding house"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "wilderness", "ruins"]
       },
       "workshop": {
         "label": "Workshop",
@@ -58,7 +61,8 @@
           "miller's grinding floor", "papermill", "smithy", "salt-house",
           "chandlery", "tinker's wagon", "bookbinder's room", "cobbler's shop",
           "armoury workshop", "smokehouse", "leatherworker's stall"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "buildingInterior"]
       },
       "commercial": {
         "label": "Commercial",
@@ -72,7 +76,8 @@
           "weighbridge", "alehouse", "guild market", "scribe's stall",
           "bookseller's shop", "cattle pen", "apothecary's storefront",
           "bargeman's wharf", "general store"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "buildingInterior"]
       },
       "civic": {
         "label": "Civic",
@@ -85,7 +90,8 @@
           "mustering ground", "embassy compound", "guild hall", "magistrate's hall",
           "wardmoot square", "harbour authority", "public library",
           "physic-garden", "civic clock-tower", "registrar's office"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "buildingInterior"]
       },
       "fortification": {
         "label": "Fortification",
@@ -99,7 +105,8 @@
           "guardhouse complex", "town gate", "armoury vault", "powder magazine",
           "outwork bastion", "ambush ridge fortlet", "river-toll tower",
           "ringwork fort", "captain's lodging tower", "patrol way-station"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "wilderness", "ruins", "buildingExterior"]
       },
       "infrastructure": {
         "label": "Infrastructure",
@@ -113,7 +120,8 @@
           "ore-crusher mill", "pumping station", "log-flume",
           "covered drovers' road", "embankment causeway", "rope ferry",
           "horse-tram terminus"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "wilderness"]
       },
       "ruin": {
         "label": "Ruin",
@@ -128,7 +136,8 @@
           "windworn battlements", "hollowed-out keep", "subsided cistern",
           "vandal-marked guildhall", "abandoned siege-camp", "frost-cracked walls",
           "earthquake-shattered nave"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "ruins", "settlement", "dungeon"]
       },
       "tomb": {
         "label": "Tomb",
@@ -141,7 +150,8 @@
           "drowned grave-yard", "battlefield ossuary", "ancestor-niche colonnade",
           "tumulus", "tower-tomb", "plague pit", "consecrated cemetery",
           "sea-cave reliquary", "hermit's grave", "rune-marked dolmen"
-        ]
+        ],
+        "compatibleContexts": ["dungeon", "ruins", "cave", "wilderness"]
       }
 
     }
@@ -165,7 +175,8 @@
           "vanishing river", "fern-shaded brook", "frozen waterfall",
           "underground siphon-stream", "wild rapids", "marsh-fed creek",
           "moonlit pool-stream"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "settlement", "cave"]
       },
       "waterbody": {
         "label": "Waterbody",
@@ -179,7 +190,8 @@
           "stink-flat marsh", "kelp-thick coastal pool", "submerged ruin-pond",
           "fishpond cluster", "drinking-trough fed pool", "lily-choked pool",
           "saltpan", "tidewater inlet"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "region", "world"]
       },
       "terrain_feature": {
         "label": "Terrain Feature",
@@ -192,7 +204,8 @@
           "limestone pavement", "loess bluff", "glacial moraine", "fumarole field",
           "mineral-stained badland", "talus pile", "earthen embankment",
           "lava tube ridge", "fossil-rich bluff", "lichen-painted face"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "region", "world"]
       },
       "cave_feature": {
         "label": "Cave Feature",
@@ -206,7 +219,8 @@
           "narrow squeeze passage", "honeycomb cliff-warren", "geode chamber",
           "boil-stone cave", "wind-whistling fissure", "mushroom-grown cave",
           "stalactite hall", "sand-floored cave", "ash-deposit chamber"
-        ]
+        ],
+        "compatibleContexts": ["cave", "dungeon"]
       },
       "vegetation_site": {
         "label": "Vegetation Site",
@@ -220,7 +234,8 @@
           "twisted pine ridge", "lone yew at a crossroads", "memory-tree of a battle",
           "lightning-struck oak", "moss-cushion knoll", "fungi-coated stump field",
           "vine-tangled hollow", "patch of strange flowers", "bamboo grove"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "settlement"]
       },
       "boundary": {
         "label": "Boundary",
@@ -235,7 +250,8 @@
           "old defensive ditch", "buffer-strip clearing", "wildfire firebreak",
           "ancient stone-row boundary", "river ferry-crossing point",
           "salt-creek mouth", "snow-line edge"
-        ]
+        ],
+        "compatibleContexts": ["region", "world", "wilderness"]
       },
       "weather_feature": {
         "label": "Weather Feature",
@@ -250,7 +266,8 @@
           "monsoon-watched coast", "salt-fog shore", "lightning-attractor peak",
           "windrow snow-drift line", "blizzard-buried path", "ash-fall plain",
           "perpetual drizzle wood"
-        ]
+        ],
+        "compatibleContexts": ["region", "world", "wilderness"]
       },
       "fauna_site": {
         "label": "Fauna Site",
@@ -264,7 +281,8 @@
           "great cat territory", "scavenger battlefield", "carrion-attracting hollow",
           "salt-lick clearing", "fish-spawning shallows", "seal haul-out beach",
           "predator-marked tree", "amphibian-loud pond"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "region"]
       }
 
     }
@@ -290,7 +308,8 @@
           "mountain pass village", "river-fording village", "boatbuilders' cove",
           "old colony of refugees", "hunters' winter camp turned permanent",
           "kiln-folk hamlet"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "region", "world"]
       },
       "trading_hub": {
         "label": "Trading Hub",
@@ -307,7 +326,8 @@
           "treaty-market neutral ground", "wool-and-cloth town",
           "ironmongery market", "silk-and-fine-goods market",
           "drovers' market", "harvest-fair town"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "wilderness", "region"]
       },
       "transient_camp": {
         "label": "Transient Camp",
@@ -326,7 +346,8 @@
           "engineer-corps work camp", "famine refugees' lean-tos",
           "ferrymen's seasonal pole-shelter", "expedition base camp",
           "diplomatic envoy's pavilion"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "ruins", "dungeon"]
       },
       "workforce_camp": {
         "label": "Workforce Camp",
@@ -344,7 +365,8 @@
           "salt-marsh harvesters' camp", "honey-gatherers' forest camp",
           "ice-cutters' lakeside camp", "shrimp-drying coastal flats",
           "alluvial gold-panners' bend", "boat-yard workers' shore cluster"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "cave", "ruins"]
       },
       "solo_dweller": {
         "label": "Solo Dweller",
@@ -363,7 +385,8 @@
           "drystone-walled monk's cell", "border watchman's lonely post",
           "scribe-recluse's cottage", "widow's cliff-edge cottage",
           "wandering tinker's halted wagon", "cave-dwelling sage"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "ruins", "settlement"]
       },
       "organized_group": {
         "label": "Organized Group",
@@ -381,7 +404,8 @@
           "monastic order's grange", "rural constabulary station",
           "thieves' guild meeting", "harbour pilots' watch-room",
           "circuit judge's escort", "siege-engineer corps", "cartographers' guild expedition"
-        ]
+        ],
+        "compatibleContexts": ["settlement", "buildingInterior", "dungeon"]
       }
 
     }
@@ -409,7 +433,8 @@
           "broken arch on a dry plain", "marshland pool reflecting wrong stars",
           "stone ring at a crossroads", "tide-gate to a sunken place",
           "abandoned ferry-mooring on a dry shore"
-        ]
+        ],
+        "compatibleContexts": ["dungeon", "ruins", "wilderness", "cave"]
       },
       "ley_node": {
         "label": "Ley Node",
@@ -428,7 +453,8 @@
           "outcrop magnetic enough to pull blades", "well from which voices answer",
           "shoreline where waves freeze briefly", "knoll lit by an unseen moon",
           "pillar that casts no shadow", "circle of stones that move at night"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "ruins", "dungeon"]
       },
       "cursed_site": {
         "label": "Cursed Site",
@@ -446,7 +472,8 @@
           "well that cries on the equinox", "graveyard of the unburied",
           "cliff where suicides are too common", "marsh where lights lead astray",
           "spring that runs red on certain days"
-        ]
+        ],
+        "compatibleContexts": ["ruins", "dungeon", "wilderness", "sewer"]
       },
       "relic_site": {
         "label": "Relic Site",
@@ -465,7 +492,8 @@
           "skeleton clutching a sealed scroll", "stone vessel that refills itself",
           "buried bell that tolls underground", "wooden gate refusing to rot",
           "loom that weaves an unknown banner"
-        ]
+        ],
+        "compatibleContexts": ["dungeon", "ruins", "buildingInterior"]
       },
       "anomaly": {
         "label": "Anomaly",
@@ -484,7 +512,8 @@
           "patch of dirt that resists every plow", "vegetable that screams when picked",
           "tree shaped like an open hand", "rock whose temperature inverts",
           "stretch of road longer at night", "cave deeper inside than outside"
-        ]
+        ],
+        "compatibleContexts": ["dungeon", "ruins", "wilderness", "cave"]
       },
       "echo": {
         "label": "Echo",
@@ -504,7 +533,8 @@
           "battlefield with phantom drums", "ferry that crosses unmanned at dusk",
           "tavern where a song is sung by no one", "library shelf that turns its own pages",
           "fountain that flows red at full moon", "doorway from which footsteps emerge"
-        ]
+        ],
+        "compatibleContexts": ["ruins", "dungeon", "buildingInterior", "sewer"]
       },
       "crossroads_mystery": {
         "label": "Crossroads Mystery",
@@ -523,7 +553,8 @@
           "doll left at intervals along a road", "knotted ribbons tied to specific trees",
           "row of empty boots", "ship's manifest counting more crew than were aboard",
           "village whose church-bell rings without ringer", "village hand-print on every door"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "region"]
       },
       "natural_oddity": {
         "label": "Natural Oddity",
@@ -539,7 +570,8 @@
           "swimming-pool sized footprint", "obsidian glass field", "petrified ship in a dry valley",
           "bone-white sand cove", "shore of black sand and red shells",
           "annual frog rain meadow"
-        ]
+        ],
+        "compatibleContexts": ["wilderness", "cave"]
       }
 
     }

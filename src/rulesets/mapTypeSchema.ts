@@ -140,10 +140,19 @@ export function getMapTypeKeys(): MapTypeKey[] {
   return out;
 }
 
-/** Full config for one map-type, or null if the slug is unknown. */
+/**
+ * Full config for one map-type, or null if the slug is unknown. Accepts BOTH
+ * canonical schema slugs ('city') and legacy human labels ('City/Town') —
+ * needed because params.mapType is the legacy label and DynamicField reaches
+ * here every render. Without this normalisation field_overrides (Population
+ * options, Terrain.max) silently never get applied.
+ */
 export function getMapTypeConfig(key: string | null | undefined): MapTypeConfig | null {
   if (!key) return null;
-  const cfg = (SCHEMA as unknown as Record<string, unknown>)[key];
+  const schemaMap = SCHEMA as unknown as Record<string, unknown>;
+  const slug = schemaMap[key] ? key : normalizeMapType(key);
+  if (!slug) return null;
+  const cfg = schemaMap[slug];
   if (!cfg || typeof cfg !== 'object') return null;
   return cfg as MapTypeConfig;
 }
