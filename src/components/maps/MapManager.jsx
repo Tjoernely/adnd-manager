@@ -90,6 +90,58 @@ function mapTypeIcon(type) {
   return icons[type] ?? '🗺';
 }
 
+// Sprint 5 — map-type whitelist for the multi-floor feature. Floors only make
+// sense for buildings + dungeons. Settlements / wilderness / world / region
+// stay single-floor (a "floor" doesn't model a kingdom). Backend map.type
+// (lower-case slug) is the source of truth — see VALID_TYPES in routes/maps.js.
+const FLOOR_SUPPORTED_TYPES = new Set([
+  'dungeon',   // multi-level dungeons (classic)
+  'interior',  // tavern/inn upper floors, tower stages, etc.
+  'cave',      // caves can stack
+  'other',     // catch-all — DM picks whether to use floors
+]);
+// Default floor labels by number — used when DM leaves the input blank.
+function defaultFloorLabel(n) {
+  if (n === 0)      return 'Ground Floor';
+  if (n === -1)     return 'Cellar';
+  if (n < -1)       return `Sub-level ${Math.abs(n)}`;
+  if (n === 1)      return 'First Floor';
+  if (n === 2)      return 'Second Floor';
+  if (n === 3)      return 'Third Floor';
+  return `Floor ${n}`;
+}
+// v1 connector taxonomy. Adding new types is a server + client change.
+const CONNECTOR_TYPES = [
+  { id: 'stairs',   icon: '🪜', label: 'Stairs'   },
+  { id: 'ladder',   icon: '▤',  label: 'Ladder'   },
+  { id: 'trapdoor', icon: '⊟',  label: 'Trapdoor' },
+];
+function connectorTypeInfo(id) {
+  return CONNECTOR_TYPES.find(t => t.id === id) ?? CONNECTOR_TYPES[0];
+}
+// Direction icon for a connector marker — looks at where the OTHER endpoints
+// sit relative to the current floor. Up only → ⬆, down only → ⬇, mixed → ⬍.
+function directionIcon(currentFloor, otherEndpoints) {
+  let up = false, down = false;
+  for (const e of otherEndpoints) {
+    if (e.floor > currentFloor) up = true;
+    if (e.floor < currentFloor) down = true;
+  }
+  if (up && down) return '⬍';
+  if (up)         return '⬆';
+  if (down)       return '⬇';
+  return '◇'; // same-floor / degenerate (shouldn't happen v1)
+}
+// Max floors per building. UI blocks the 6th Add Floor with a toast.
+const MAX_FLOORS_PER_GROUP = 5;
+// Client-side connector id; format conn_<uuid> (8-char shorthand for log readability).
+function newConnectorId() {
+  return 'conn_' + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36));
+}
+function newMapGroupId() {
+  return 'mg_' + (crypto.randomUUID ? crypto.randomUUID().slice(0, 12) : Date.now().toString(36));
+}
+
 const LOCATION_TYPES  = new Set(['city','village','ruins','cave','dungeon','wilderness','temple','bandit_camp','monster_lair']);
 const ENCOUNTER_TYPES = new Set(['encounter']);
 const TRAP_TYPES      = new Set(['trap']);
@@ -406,6 +458,92 @@ export function MapManager({ campaignId, isDM, isOpen, onClose, initialFocusMapI
   const ancestors   = useMemo(() => getAncestors(maps, activeMapId), [maps, activeMapId]);
   const { roots, children } = useMemo(() => buildTree(maps), [maps]);
 
+  // ── Sprint 5 — Multi-level state ────────────────────────────────────────────
+  // We piggyback on the existing `maps` list rather than refetching: a map
+  // group is just maps[] filtered by map_group_id. Connectors however live
+  // in their own table and need their own fetch keyed by group id.
+  const mapGroup = useMemo(() => {
+    if (!activeMap) return null;
+    const gid = activeMap.map_group_id;
+    if (!gid) {
+      // Solo map — pretend it's a 1-floor group so downstream UI can iterate
+      // floors uniformly. Switcher stays hidden when floors.length < 2.
+      return {
+        groupId: null,
+        floors:  [{ map: activeMap, floorNumber: activeMap.floor_number ?? 0,
+                    floorLabel: activeMap.floor_label || defaultFloorLabel(activeMap.floor_number ?? 0) }],
+      };
+    }
+    const floors = maps
+      .filter(m => m.map_group_id === gid)
+      .sort((a, b) => (a.floor_number ?? 0) - (b.floor_number ?? 0))
+      .map(m => ({
+        map:         m,
+        floorNumber: m.floor_number ?? 0,
+        floorLabel:  m.floor_label || defaultFloorLabel(m.floor_number ?? 0),
+      }));
+    return { groupId: gid, floors };
+  }, [activeMap, maps]);
+
+  const [connectors, setConnectors] = useState([]);
+  const [connectorsLoading, setConnectorsLoading] = useState(false);
+  useEffect(() => {
+    const gid = mapGroup?.groupId;
+    if (!gid) { setConnectors([]); return; }
+    let alive = true;
+    setConnectorsLoading(true);
+    api.listConnectors(gid)
+      .then(r => { if (alive) setConnectors(Array.isArray(r) ? r : []); })
+      .catch(e => { if (alive) { console.warn('[MapManager] listConnectors:', e.message); setConnectors([]); } })
+      .finally(() => { if (alive) setConnectorsLoading(false); });
+    return () => { alive = false; };
+  }, [mapGroup?.groupId]);
+
+  // Connectors that touch the current floor (used for marker rendering).
+  const currentFloorNumber = activeMap?.floor_number ?? 0;
+  const currentFloorConnectors = useMemo(() => {
+    return connectors.filter(c =>
+      Array.isArray(c.endpoints) && c.endpoints.some(e => e.floor === currentFloorNumber)
+    );
+  }, [connectors, currentFloorNumber]);
+
+  // Switch active map to a different floor by floor_number within the group.
+  const switchToFloor = useCallback((targetFloorNumber) => {
+    if (!mapGroup) return;
+    const target = mapGroup.floors.find(f => f.floorNumber === targetFloorNumber);
+    if (!target) { showToast(`No map for floor ${targetFloorNumber}`); return; }
+    setActiveMapId(target.map.id);
+    setSelectedPoiId(null);
+    try { sessionStorage.setItem(`map_floor_${mapGroup.groupId}`, String(targetFloorNumber)); } catch {}
+  }, [mapGroup, showToast]);
+
+  // Restore last-active floor on group entry (Sprint 5.5 verifikation #10).
+  useEffect(() => {
+    if (!mapGroup?.groupId || mapGroup.floors.length < 2) return;
+    try {
+      const raw = sessionStorage.getItem(`map_floor_${mapGroup.groupId}`);
+      const n   = raw == null ? null : Number(raw);
+      if (n != null && Number.isFinite(n) && n !== currentFloorNumber) {
+        const target = mapGroup.floors.find(f => f.floorNumber === n);
+        if (target) setActiveMapId(target.map.id);
+      }
+    } catch {}
+    // Only fire on group transitions, not every floor change inside the group.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapGroup?.groupId]);
+
+  // Sprint 5 — modal state for Add Floor / Add Connector / Edit Connector.
+  const [showAddFloor,      setShowAddFloor]      = useState(false);
+  const [showAddConnector,  setShowAddConnector]  = useState(false);
+  const [editingConnector,  setEditingConnector]  = useState(null); // connector object
+  // Two-phase Add Connector / Add Floor click-to-place state.
+  const [pendingConnectorPlacement, setPendingConnectorPlacement] = useState(null);
+  // Shape: { phase: 'first'|'second', type, label, locked, hidden,
+  //          firstEndpoint: {floor,x,y}|null, targetFloor: N|null,
+  //          callback: (conn) => void }
+
+  const floorsSupported = activeMap ? FLOOR_SUPPORTED_TYPES.has(activeMap.type) : false;
+
   // ── Load maps on mount (and whenever campaignId changes) ────────────────────
   useEffect(() => {
     if (!campaignId) return;
@@ -463,12 +601,47 @@ export function MapManager({ campaignId, isDM, isOpen, onClose, initialFocusMapI
     savePois(newPois);
   }, [activeMap, savePois]);
 
-  // ── Map click — open type-selection modal ────────────────────────────────────
-  const handleMapClickForPoi = useCallback((xPct, yPct) => {
-    if (!isDM || !addPoiMode || !activeMap) return;
-    setPendingPoiPos({ x: xPct, y: yPct });
-    setAddPoiMode(false);
-  }, [isDM, addPoiMode, activeMap]);
+  // ── Map click router (POI placement OR Sprint 5 connector placement) ───────
+  const handleMapClick = useCallback((xPct, yPct) => {
+    if (!isDM || !activeMap) return;
+    // Connector placement takes precedence — both flows are mutually exclusive
+    // because their "begin" buttons turn each other off.
+    if (pendingConnectorPlacement) {
+      const p = pendingConnectorPlacement;
+      // Single-click mode (used by Add Floor) — fire handler and exit.
+      if (p.singleClick && typeof p.singleClickHandler === 'function') {
+        const fn = p.singleClickHandler;
+        setPendingConnectorPlacement(null);
+        fn(xPct, yPct);
+        return;
+      }
+      if (p.phase === 'first') {
+        // Record first endpoint; switch to target floor for second click.
+        const firstEndpoint = { floor: currentFloorNumber, x_percent: xPct, y_percent: yPct };
+        const target = mapGroup?.floors.find(f => f.floorNumber === p.targetFloor);
+        if (!target) { showToast('Target floor not found.'); setPendingConnectorPlacement(null); return; }
+        setPendingConnectorPlacement({ ...p, phase: 'second', firstEndpoint });
+        setActiveMapId(target.map.id);
+        showToast(`First endpoint placed. Click on ${target.map.floor_label || defaultFloorLabel(p.targetFloor)} to set the second.`);
+        return;
+      }
+      if (p.phase === 'second') {
+        const secondEndpoint = { floor: currentFloorNumber, x_percent: xPct, y_percent: yPct };
+        if (typeof p.callback === 'function') {
+          p.callback({ first: p.firstEndpoint, second: secondEndpoint });
+        }
+        setPendingConnectorPlacement(null);
+        return;
+      }
+    }
+    if (addPoiMode) {
+      setPendingPoiPos({ x: xPct, y: yPct });
+      setAddPoiMode(false);
+    }
+  }, [isDM, addPoiMode, activeMap, pendingConnectorPlacement, currentFloorNumber, mapGroup, showToast]);
+
+  // Backward-compat alias kept for MapCanvas prop name; routed through handleMapClick.
+  const handleMapClickForPoi = handleMapClick;
 
   // ── POI created via the type modal ───────────────────────────────────────────
   const handlePoiModalCreated = useCallback((poiData) => {
@@ -602,6 +775,139 @@ Respond with ONLY this JSON (no markdown fences):
     setActiveMapId(next?.id ?? null);
     setSelectedPoiId(null);
   }, [activeMap, isDM, maps]);
+
+  // ── Sprint 5 — Connector CRUD ───────────────────────────────────────────────
+  const createConnector = useCallback(async (payload) => {
+    try {
+      const conn = await api.createConnector(payload);
+      setConnectors(prev => [...prev, conn]);
+      return conn;
+    } catch (e) {
+      console.error('[MapManager] createConnector:', e.message);
+      showToast(`Connector save failed: ${e.message}`);
+      return null;
+    }
+  }, [showToast]);
+
+  const updateConnector = useCallback(async (id, patch) => {
+    try {
+      const updated = await api.updateConnector(id, patch);
+      setConnectors(prev => prev.map(c => c.id === id ? updated : c));
+      return updated;
+    } catch (e) {
+      console.error('[MapManager] updateConnector:', e.message);
+      showToast(`Connector update failed: ${e.message}`);
+      return null;
+    }
+  }, [showToast]);
+
+  const deleteConnector = useCallback(async (id) => {
+    try {
+      await api.deleteConnector(id);
+      setConnectors(prev => prev.filter(c => c.id !== id));
+    } catch (e) {
+      console.error('[MapManager] deleteConnector:', e.message);
+      showToast(`Connector delete failed: ${e.message}`);
+    }
+  }, [showToast]);
+
+  // ── Sprint 5 — Add Floor ───────────────────────────────────────────────────
+  // Wires solo→group conversion AND new-floor creation in one place.
+  //
+  // payload: {
+  //   floor_number, floor_label,
+  //   useExistingImage: boolean,  // true → blank canvas, false → AI generate later
+  //   connector?: { type, label, locked, hidden, currentEndpoint: {x%,y%}, newEndpoint: {x%,y%} }
+  // }
+  const handleAddFloor = useCallback(async (payload) => {
+    if (!activeMap || !isDM) return null;
+    if (!mapGroup) return null;
+    if (mapGroup.floors.length >= MAX_FLOORS_PER_GROUP) {
+      showToast(`Max ${MAX_FLOORS_PER_GROUP} floors per building.`);
+      return null;
+    }
+    if (mapGroup.floors.some(f => f.floorNumber === payload.floor_number)) {
+      showToast(`Floor ${payload.floor_number} already exists.`);
+      return null;
+    }
+
+    // 1. Solo→group conversion: if the active map has no group, mint one and
+    //    flip it to floor 0 first so the new floor has somewhere to attach.
+    let groupId = mapGroup.groupId;
+    let rootMap = activeMap;
+    if (!groupId) {
+      groupId = newMapGroupId();
+      try {
+        const flipped = await api.updateMap(activeMap.id, {
+          name: activeMap.name, type: activeMap.type, image_url: activeMap.image_url,
+          data: activeMap.data,
+          map_group_id: groupId,
+          floor_number: 0,
+          floor_label:  activeMap.floor_label || 'Ground Floor',
+        });
+        patchMap(flipped);
+        rootMap = flipped;
+      } catch (e) {
+        showToast(`Could not convert to multi-floor: ${e.message}`);
+        return null;
+      }
+    }
+
+    // 2. Create the new floor's map record. Inherits type + context from root.
+    const newName = payload.floor_label
+      ? `${rootMap.name} — ${payload.floor_label}`
+      : `${rootMap.name} — Floor ${payload.floor_number}`;
+    let newFloor;
+    try {
+      newFloor = await api.createMap({
+        campaign_id:   campaignId,
+        name:          newName,
+        type:          rootMap.type,
+        parent_map_id: rootMap.parent_map_id ?? null,
+        parent_poi_id: rootMap.parent_poi_id ?? null,
+        purpose:       rootMap.purpose ?? 'standard',
+        context:       rootMap.context ?? null,
+        map_group_id:  groupId,
+        floor_number:  payload.floor_number,
+        floor_label:   payload.floor_label || defaultFloorLabel(payload.floor_number),
+        data: {
+          visible_to_players: false,
+          pins:               [],
+          pois:               [],
+          // Carry parent's spec where useful so AI regen has context.
+          ...(rootMap.data?.spec ? { spec: rootMap.data.spec } : {}),
+        },
+      });
+      setMaps(prev => [...prev, newFloor]);
+    } catch (e) {
+      showToast(`New floor failed: ${e.message}`);
+      return null;
+    }
+
+    // 3. Optional connector between current floor and new floor.
+    if (payload.connector) {
+      const c = payload.connector;
+      await createConnector({
+        id:            newConnectorId(),
+        map_group_id:  groupId,
+        campaign_id:   campaignId,
+        type:          c.type,
+        label:         c.label || `${connectorTypeInfo(c.type).label} to ${defaultFloorLabel(payload.floor_number)}`,
+        locked:        !!c.locked,
+        hidden:        !!c.hidden,
+        endpoints: [
+          { floor: rootMap.floor_number ?? 0, x_percent: c.currentEndpoint.x, y_percent: c.currentEndpoint.y },
+          { floor: payload.floor_number,      x_percent: c.newEndpoint.x,     y_percent: c.newEndpoint.y     },
+        ],
+      });
+    }
+
+    // 4. Switch view to the new floor.
+    setActiveMapId(newFloor.id);
+    setSelectedPoiId(null);
+    showToast(`Added ${newFloor.floor_label}`, newFloor.id);
+    return newFloor;
+  }, [activeMap, isDM, mapGroup, campaignId, patchMap, createConnector, showToast]);
 
   // ── Random encounter ─────────────────────────────────────────────────────────
   const handleRandomEncounter = useCallback(() => {
@@ -980,6 +1286,22 @@ Respond with ONLY this JSON (no markdown fences):
                 )}
               </div>
 
+              {/* Sprint 5 — Floor switcher (only when group has 2+ floors OR
+                  map-type supports floors so the DM sees the [+ Add Floor] button) */}
+              {(mapGroup && mapGroup.floors.length > 1) || (isDM && floorsSupported) ? (
+                <FloorSwitcher
+                  mapGroup={mapGroup}
+                  currentFloorNumber={currentFloorNumber}
+                  canAddFloor={isDM && floorsSupported}
+                  canAddConnector={isDM && mapGroup && mapGroup.floors.length > 1}
+                  onSwitch={switchToFloor}
+                  onAddFloor={() => setShowAddFloor(true)}
+                  onAddConnector={() => setShowAddConnector(true)}
+                  pendingPlacement={pendingConnectorPlacement}
+                  onCancelPlacement={() => { setPendingConnectorPlacement(null); showToast('Connector placement cancelled.'); }}
+                />
+              ) : null}
+
               {randEnc && (
                 <div className="mm-rand-enc" onClick={() => setRandEnc(null)}>
                   <span className="mm-rand-enc-roll">⚔ {randEnc.roll}</span>
@@ -999,10 +1321,18 @@ Respond with ONLY this JSON (no markdown fences):
                   selectedPoiId={selectedPoiId}
                   isDM={isDM}
                   playerView={playerView}
-                  addPoiMode={addPoiMode}
+                  addPoiMode={addPoiMode || !!pendingConnectorPlacement}
                   onPoiSelect={setSelectedPoiId}
                   onPoiDragEnd={handlePoiDragEnd}
                   onMapClick={handleMapClickForPoi}
+                  connectors={currentFloorConnectors}
+                  currentFloorNumber={currentFloorNumber}
+                  onConnectorClick={(conn) => {
+                    if (isDM && !playerView) { setEditingConnector(conn); return; }
+                    // Player or DM in player-view: navigate to first other floor
+                    const other = conn.endpoints.find(e => e.floor !== currentFloorNumber);
+                    if (other) switchToFloor(other.floor);
+                  }}
                 />
 
                 {selectedPoi && (
@@ -1056,6 +1386,97 @@ Respond with ONLY this JSON (no markdown fences):
           onCreated={handlePoiModalCreated}
           onClose={() => setPendingPoiPos(null)}
           onShowApiKeys={() => setShowApiKeys(true)}
+        />
+      )}
+
+      {/* Sprint 5 — Add Floor modal */}
+      {showAddFloor && isDM && activeMap && (
+        <AddFloorModal
+          mapGroup={mapGroup}
+          currentFloorNumber={currentFloorNumber}
+          existingFloorNumbers={(mapGroup?.floors ?? []).map(f => f.floorNumber)}
+          onClose={() => setShowAddFloor(false)}
+          onConfirm={async (payload) => {
+            if (!payload.connector) {
+              await handleAddFloor(payload);
+              setShowAddFloor(false);
+              return;
+            }
+            // With connector: single click on current floor places both endpoints
+            // (the new floor inherits the same coord by default; DM can move
+            // the marker later via Edit Connector). Avoids a confusing
+            // second-click on a brand-new blank map image.
+            setShowAddFloor(false);
+            showToast('Click on the map to place the staircase.');
+            setPendingConnectorPlacement({
+              singleClick: true,
+              singleClickHandler: async (xPct, yPct) => {
+                await handleAddFloor({
+                  ...payload,
+                  connector: {
+                    type:            payload.connector.type,
+                    label:           payload.connector.label,
+                    locked:          payload.connector.locked,
+                    hidden:          payload.connector.hidden,
+                    currentEndpoint: { x: xPct, y: yPct },
+                    newEndpoint:     { x: xPct, y: yPct },
+                  },
+                });
+              },
+            });
+          }}
+        />
+      )}
+
+      {/* Sprint 5 — Add Connector modal (between two existing floors) */}
+      {showAddConnector && isDM && mapGroup && mapGroup.floors.length > 1 && (
+        <AddConnectorModal
+          floors={mapGroup.floors}
+          currentFloorNumber={currentFloorNumber}
+          onClose={() => setShowAddConnector(false)}
+          onConfirm={(payload) => {
+            setShowAddConnector(false);
+            showToast(`Click on the current floor to place the ${payload.type}'s first endpoint.`);
+            setPendingConnectorPlacement({
+              phase: 'first',
+              type:  payload.type,
+              label: payload.label,
+              locked: payload.locked,
+              hidden: payload.hidden,
+              targetFloor: payload.targetFloor,
+              callback: async (eps) => {
+                await createConnector({
+                  id:           newConnectorId(),
+                  map_group_id: mapGroup.groupId,
+                  campaign_id:  campaignId,
+                  type:         payload.type,
+                  label:        payload.label || `${connectorTypeInfo(payload.type).label} (${defaultFloorLabel(eps.first.floor)} ↔ ${defaultFloorLabel(eps.second.floor)})`,
+                  locked:       payload.locked,
+                  hidden:       payload.hidden,
+                  endpoints:    [eps.first, eps.second],
+                });
+                showToast('Connector added.');
+              },
+            });
+          }}
+        />
+      )}
+
+      {/* Sprint 5 — Edit Connector popup */}
+      {editingConnector && isDM && (
+        <EditConnectorModal
+          connector={editingConnector}
+          floors={mapGroup?.floors ?? []}
+          onClose={() => setEditingConnector(null)}
+          onSave={async (patch) => {
+            await updateConnector(editingConnector.id, patch);
+            setEditingConnector(null);
+          }}
+          onDelete={async () => {
+            await deleteConnector(editingConnector.id);
+            setEditingConnector(null);
+          }}
+          onNavigateTo={(floor) => { switchToFloor(floor); setEditingConnector(null); }}
         />
       )}
 
@@ -1193,7 +1614,9 @@ function MapTreeNode({ map, allMaps, activeMapId, children_fn, onSelect, depth }
 }
 
 // ── MapCanvas ─────────────────────────────────────────────────────────────────
-function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onPoiSelect, onPoiDragEnd, onMapClick }) {
+function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onPoiSelect, onPoiDragEnd, onMapClick,
+                     // Sprint 5
+                     connectors = [], currentFloorNumber = 0, onConnectorClick }) {
   const containerRef = useRef(null);
 
   const handleContainerClick = (e) => {
@@ -1262,6 +1685,29 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
             />
           ))}
         </div>
+        {/* Sprint 5 — connector markers (stairs/ladder/trapdoor) */}
+        {Array.isArray(connectors) && connectors.length > 0 && (
+          <div className="mm-connector-layer">
+            {connectors.map(conn => {
+              const here = conn.endpoints.find(e => e.floor === currentFloorNumber);
+              if (!here) return null;
+              if (conn.hidden && playerView) return null;
+              const others = conn.endpoints.filter(e => e.floor !== currentFloorNumber);
+              return (
+                <ConnectorMarker
+                  key={conn.id}
+                  connector={conn}
+                  endpoint={here}
+                  otherEndpoints={others}
+                  currentFloor={currentFloorNumber}
+                  isDM={isDM}
+                  playerView={playerView}
+                  onClick={() => onConnectorClick?.(conn)}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1338,6 +1784,453 @@ function POIMarker({ poi, isSelected, isDM, playerView, containerRef, onSelect, 
       {isSelected && <span className="mm-poi-label">{poi.name}</span>}
       {poi.is_dm_only && !playerView && <span className="mm-poi-dm-badge">🔒</span>}
       {poi.child_map_id && <span className="mm-poi-child-badge">⛓</span>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 5 — Multi-level: FloorSwitcher + ConnectorMarker + modals
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FloorSwitcher({ mapGroup, currentFloorNumber, canAddFloor, canAddConnector,
+                         onSwitch, onAddFloor, onAddConnector,
+                         pendingPlacement, onCancelPlacement }) {
+  if (!mapGroup) return null;
+  const showFloors = mapGroup.floors.length > 1;
+  return (
+    <div
+      style={{
+        display:        'flex',
+        alignItems:     'center',
+        gap:            8,
+        flexWrap:       'wrap',
+        padding:        '6px 12px',
+        background:     'rgba(0, 0, 0, 0.32)',
+        border:         '1px solid rgba(200, 168, 75, 0.18)',
+        borderRadius:   6,
+        margin:         '6px 0 0',
+      }}
+    >
+      {showFloors && (
+        <>
+          <span style={{ fontSize: '0.72rem', color: '#9a875a', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            Floors
+          </span>
+          {mapGroup.floors.map(f => {
+            const active = f.floorNumber === currentFloorNumber;
+            return (
+              <button
+                key={f.map.id}
+                type="button"
+                onClick={() => !active && onSwitch(f.floorNumber)}
+                title={`${f.floorLabel} (${f.floorNumber >= 0 ? '+' : ''}${f.floorNumber})`}
+                style={{
+                  padding:      '4px 10px',
+                  fontSize:     '0.78rem',
+                  fontFamily:   'inherit',
+                  background:   active ? 'rgba(200, 168, 75, 0.2)' : 'rgba(0, 0, 0, 0.35)',
+                  color:        active ? '#f5d97a' : '#c8a84b',
+                  border:       `1px solid ${active ? 'rgba(245, 217, 122, 0.55)' : 'rgba(200, 168, 75, 0.3)'}`,
+                  borderRadius: 4,
+                  cursor:       active ? 'default' : 'pointer',
+                  fontWeight:   active ? 600 : 400,
+                }}
+              >
+                {active ? '● ' : ''}{f.floorLabel}
+                <span style={{ marginLeft: 6, opacity: 0.65, fontSize: '0.68rem' }}>
+                  ({f.floorNumber >= 0 ? '+' : ''}{f.floorNumber})
+                </span>
+              </button>
+            );
+          })}
+        </>
+      )}
+      <span style={{ flex: 1 }} />
+      {pendingPlacement && (
+        <button
+          type="button"
+          onClick={onCancelPlacement}
+          style={{
+            padding: '4px 10px', fontSize: '0.74rem', fontFamily: 'inherit',
+            background: 'rgba(192, 48, 48, 0.22)', color: '#f08080',
+            border: '1px solid rgba(192, 48, 48, 0.5)', borderRadius: 4, cursor: 'pointer',
+          }}
+        >
+          ✕ Cancel placement
+        </button>
+      )}
+      {canAddConnector && (
+        <button
+          type="button"
+          onClick={onAddConnector}
+          disabled={!!pendingPlacement}
+          style={{
+            padding: '4px 10px', fontSize: '0.76rem', fontFamily: 'inherit',
+            background: 'rgba(0, 0, 0, 0.4)', color: '#c8a84b',
+            border: '1px solid rgba(200, 168, 75, 0.4)', borderRadius: 4,
+            cursor: pendingPlacement ? 'not-allowed' : 'pointer',
+          }}
+          title="Add a connector between two existing floors"
+        >
+          🪜 Add Connector
+        </button>
+      )}
+      {canAddFloor && (
+        <button
+          type="button"
+          onClick={onAddFloor}
+          disabled={!!pendingPlacement}
+          style={{
+            padding: '4px 10px', fontSize: '0.76rem', fontFamily: 'inherit',
+            background: 'rgba(0, 0, 0, 0.4)', color: '#f5d97a',
+            border: '1px solid rgba(245, 217, 122, 0.5)', borderRadius: 4,
+            cursor: pendingPlacement ? 'not-allowed' : 'pointer',
+          }}
+          title={mapGroup.floors.length >= MAX_FLOORS_PER_GROUP
+            ? `Max ${MAX_FLOORS_PER_GROUP} floors per building`
+            : 'Add a new floor to this building'}
+        >
+          + Add Floor
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ConnectorMarker({ connector, endpoint, otherEndpoints, currentFloor, isDM, playerView, onClick }) {
+  const ti  = connectorTypeInfo(connector.type);
+  const dir = directionIcon(currentFloor, otherEndpoints);
+  return (
+    <div
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      title={`${connector.label || ti.label} → ${otherEndpoints.map(o => `floor ${o.floor}`).join(', ')}`}
+      style={{
+        position:      'absolute',
+        left:          `${endpoint.x_percent}%`,
+        top:           `${endpoint.y_percent}%`,
+        transform:     'translate(-50%, -50%)',
+        width:         28,
+        height:        28,
+        borderRadius:  '50%',
+        background:    connector.hidden
+                         ? 'rgba(40, 0, 60, 0.85)'
+                         : 'rgba(40, 30, 10, 0.9)',
+        border:        `2px solid ${connector.hidden ? '#9040c0' : '#f5d97a'}`,
+        color:         '#f5d97a',
+        display:       'flex',
+        alignItems:    'center',
+        justifyContent:'center',
+        fontSize:      '0.82rem',
+        cursor:        'pointer',
+        boxShadow:     '0 0 6px rgba(0, 0, 0, 0.55)',
+        zIndex:        4,
+      }}
+    >
+      <span aria-hidden>{dir}</span>
+      {connector.locked && (
+        <span style={{ position: 'absolute', right: -6, bottom: -6, fontSize: '0.7rem',
+                       background: '#000', borderRadius: '50%', padding: '0 2px' }}>🔒</span>
+      )}
+      {connector.hidden && isDM && !playerView && (
+        <span style={{ position: 'absolute', left: -6, top: -6, fontSize: '0.6rem',
+                       background: '#000', borderRadius: '50%', padding: '0 2px', color: '#c08fff' }}>👁</span>
+      )}
+    </div>
+  );
+}
+
+// ── Add Floor modal ──────────────────────────────────────────────────────────
+function AddFloorModal({ mapGroup, currentFloorNumber, existingFloorNumbers, onClose, onConfirm }) {
+  // Step 1 — position picker. Most DMs add Above or Below; Custom is escape hatch.
+  const usedSet  = new Set(existingFloorNumbers);
+  const tryAbove = currentFloorNumber + 1;
+  const tryBelow = currentFloorNumber - 1;
+  const defaultPos = !usedSet.has(tryAbove) ? tryAbove
+                   : !usedSet.has(tryBelow) ? tryBelow
+                   : currentFloorNumber + 2;
+
+  const [floorNumber,   setFloorNumber]   = useState(defaultPos);
+  const [floorLabel,    setFloorLabel]    = useState('');
+  const [addConnector,  setAddConnector]  = useState(true);
+  const [connType,      setConnType]      = useState('stairs');
+  const [connLabel,     setConnLabel]     = useState('');
+  const [connLocked,    setConnLocked]    = useState(false);
+  const [connHidden,    setConnHidden]    = useState(false);
+  const [err,           setErr]           = useState('');
+
+  const duplicate = usedSet.has(floorNumber);
+  const atLimit   = (mapGroup?.floors?.length ?? 0) >= MAX_FLOORS_PER_GROUP;
+
+  const submit = () => {
+    if (duplicate) { setErr(`Floor ${floorNumber} already exists.`); return; }
+    if (atLimit)   { setErr(`Max ${MAX_FLOORS_PER_GROUP} floors per building.`); return; }
+    onConfirm({
+      floor_number: floorNumber,
+      floor_label:  floorLabel.trim(),
+      connector:    addConnector ? {
+        type:   connType,
+        label:  connLabel.trim(),
+        locked: connLocked,
+        hidden: connHidden,
+      } : null,
+    });
+  };
+
+  return (
+    <div className="mm-type-backdrop" onClick={onClose}>
+      <div className="mm-type-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="mm-type-header">
+          <span className="mm-type-title">➕ Add Floor</span>
+          <button className="mm-icon-btn mm-icon-btn--close" onClick={onClose}>✕</button>
+        </div>
+        <div className="mm-type-body">
+          <div className="mm-type-section-label">Position</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {[tryAbove, tryBelow, defaultPos + 1, defaultPos - 1]
+              .filter((n, i, arr) => arr.indexOf(n) === i)
+              .map(n => (
+                <button key={n} type="button"
+                  disabled={usedSet.has(n)}
+                  onClick={() => setFloorNumber(n)}
+                  style={{
+                    padding: '4px 10px', fontSize: '0.78rem',
+                    background: floorNumber === n ? 'rgba(200, 168, 75, 0.25)' : 'rgba(0, 0, 0, 0.35)',
+                    color: usedSet.has(n) ? '#5a4a30' : '#c8a84b',
+                    border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4,
+                    cursor: usedSet.has(n) ? 'not-allowed' : 'pointer',
+                  }}>
+                  Floor {n} {usedSet.has(n) && '(exists)'}
+                </button>
+              ))}
+            <input type="number" value={floorNumber}
+              onChange={e => setFloorNumber(parseInt(e.target.value || '0', 10))}
+              style={{
+                width: 80, padding: '4px 8px', fontSize: '0.78rem',
+                background: 'rgba(0, 0, 0, 0.4)', color: '#d4c090',
+                border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4,
+              }} />
+          </div>
+
+          <div className="mm-type-field" style={{ marginBottom: 12 }}>
+            <label className="mm-type-field-label">Floor label (optional)</label>
+            <input className="mm-type-field-input" value={floorLabel}
+              onChange={e => setFloorLabel(e.target.value)}
+              placeholder={defaultFloorLabel(floorNumber)} />
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#d4c090', fontSize: '0.84rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={addConnector} onChange={e => setAddConnector(e.target.checked)} />
+            Add a connector linking the two floors
+          </label>
+
+          {addConnector && (
+            <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(0, 0, 0, 0.22)',
+                          border: '1px solid rgba(200, 168, 75, 0.18)', borderRadius: 4 }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                {CONNECTOR_TYPES.map(t => (
+                  <button key={t.id} type="button" onClick={() => setConnType(t.id)}
+                    style={{
+                      padding: '4px 10px', fontSize: '0.78rem',
+                      background: connType === t.id ? 'rgba(200, 168, 75, 0.25)' : 'rgba(0, 0, 0, 0.35)',
+                      color: '#c8a84b', border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4,
+                      cursor: 'pointer',
+                    }}>
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
+              <input type="text" value={connLabel} onChange={e => setConnLabel(e.target.value)}
+                placeholder={`${connectorTypeInfo(connType).label} to ${defaultFloorLabel(floorNumber)}`}
+                style={{ width: '100%', padding: '4px 8px', fontSize: '0.78rem',
+                         background: 'rgba(0, 0, 0, 0.4)', color: '#d4c090',
+                         border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4, marginBottom: 8 }} />
+              <div style={{ display: 'flex', gap: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a89878', fontSize: '0.78rem' }}>
+                  <input type="checkbox" checked={connLocked} onChange={e => setConnLocked(e.target.checked)} /> 🔒 Locked
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a89878', fontSize: '0.78rem' }}>
+                  <input type="checkbox" checked={connHidden} onChange={e => setConnHidden(e.target.checked)} /> 👁 Hidden (DM-only)
+                </label>
+              </div>
+            </div>
+          )}
+
+          {err && <div className="mm-type-error" style={{ marginTop: 8 }}>{err}</div>}
+        </div>
+        <div className="mm-type-footer">
+          <button className="mm-type-generate-btn" onClick={submit} disabled={duplicate || atLimit}>
+            ✓ Add Floor{addConnector ? ' + Place Connector' : ''}
+          </button>
+          <button className="mm-type-cancel-btn" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Connector modal (between two existing floors) ────────────────────────
+function AddConnectorModal({ floors, currentFloorNumber, onClose, onConfirm }) {
+  const targets = floors.filter(f => f.floorNumber !== currentFloorNumber);
+  const [type,        setType]        = useState('stairs');
+  const [label,       setLabel]       = useState('');
+  const [targetFloor, setTargetFloor] = useState(targets[0]?.floorNumber ?? 0);
+  const [locked,      setLocked]      = useState(false);
+  const [hidden,      setHidden]      = useState(false);
+
+  return (
+    <div className="mm-type-backdrop" onClick={onClose}>
+      <div className="mm-type-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="mm-type-header">
+          <span className="mm-type-title">🪜 Add Connector</span>
+          <button className="mm-icon-btn mm-icon-btn--close" onClick={onClose}>✕</button>
+        </div>
+        <div className="mm-type-body">
+          <div className="mm-type-section-label">Type</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {CONNECTOR_TYPES.map(t => (
+              <button key={t.id} type="button" onClick={() => setType(t.id)}
+                style={{
+                  padding: '4px 10px', fontSize: '0.78rem',
+                  background: type === t.id ? 'rgba(200, 168, 75, 0.25)' : 'rgba(0, 0, 0, 0.35)',
+                  color: '#c8a84b', border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4,
+                  cursor: 'pointer',
+                }}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mm-type-field" style={{ marginBottom: 12 }}>
+            <label className="mm-type-field-label">Target floor</label>
+            <select value={targetFloor} onChange={e => setTargetFloor(parseInt(e.target.value, 10))}
+              style={{ width: '100%', padding: '4px 8px', fontSize: '0.84rem',
+                       background: 'rgba(0, 0, 0, 0.4)', color: '#d4c090',
+                       border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4 }}>
+              {targets.map(t => (
+                <option key={t.map.id} value={t.floorNumber}>
+                  {t.floorLabel} (floor {t.floorNumber})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mm-type-field" style={{ marginBottom: 12 }}>
+            <label className="mm-type-field-label">Label (optional)</label>
+            <input className="mm-type-field-input" value={label} onChange={e => setLabel(e.target.value)}
+              placeholder={`${connectorTypeInfo(type).label} to ${defaultFloorLabel(targetFloor)}`} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a89878', fontSize: '0.84rem' }}>
+              <input type="checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} /> 🔒 Locked
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a89878', fontSize: '0.84rem' }}>
+              <input type="checkbox" checked={hidden} onChange={e => setHidden(e.target.checked)} /> 👁 Hidden (DM-only)
+            </label>
+          </div>
+        </div>
+        <div className="mm-type-footer">
+          <button className="mm-type-generate-btn"
+            disabled={targets.length === 0}
+            onClick={() => onConfirm({ type, label, targetFloor, locked, hidden })}>
+            ✓ Place Endpoints
+          </button>
+          <button className="mm-type-cancel-btn" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Connector popup ─────────────────────────────────────────────────────
+function EditConnectorModal({ connector, floors, onClose, onSave, onDelete, onNavigateTo }) {
+  const [type,     setType]     = useState(connector.type);
+  const [label,    setLabel]    = useState(connector.label ?? '');
+  const [locked,   setLocked]   = useState(!!connector.locked);
+  const [hidden,   setHidden]   = useState(!!connector.hidden);
+  const [endpoints,setEndpoints]= useState(connector.endpoints);
+  const [delConf,  setDelConf]  = useState(false);
+
+  const labelForFloor = (n) => floors.find(f => f.floorNumber === n)?.floorLabel ?? defaultFloorLabel(n);
+
+  return (
+    <div className="mm-type-backdrop" onClick={onClose}>
+      <div className="mm-type-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="mm-type-header">
+          <span className="mm-type-title">✎ Edit Connector</span>
+          <button className="mm-icon-btn mm-icon-btn--close" onClick={onClose}>✕</button>
+        </div>
+        <div className="mm-type-body">
+          <div className="mm-type-section-label">Type</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {CONNECTOR_TYPES.map(t => (
+              <button key={t.id} type="button" onClick={() => setType(t.id)}
+                style={{
+                  padding: '4px 10px', fontSize: '0.78rem',
+                  background: type === t.id ? 'rgba(200, 168, 75, 0.25)' : 'rgba(0, 0, 0, 0.35)',
+                  color: '#c8a84b', border: '1px solid rgba(200, 168, 75, 0.3)', borderRadius: 4,
+                  cursor: 'pointer',
+                }}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mm-type-field" style={{ marginBottom: 12 }}>
+            <label className="mm-type-field-label">Label</label>
+            <input className="mm-type-field-input" value={label} onChange={e => setLabel(e.target.value)} />
+          </div>
+
+          <div className="mm-type-section-label">Endpoints</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+            {endpoints.map((e, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: '#a89878' }}>
+                <span style={{ flex: 1 }}>
+                  {labelForFloor(e.floor)} — {e.x_percent.toFixed(0)}%, {e.y_percent.toFixed(0)}%
+                </span>
+                <button type="button" onClick={() => onNavigateTo(e.floor)}
+                  style={{ padding: '2px 6px', fontSize: '0.7rem',
+                           background: 'rgba(200, 168, 75, 0.18)', color: '#c8a84b',
+                           border: '1px solid rgba(200, 168, 75, 0.35)', borderRadius: 3, cursor: 'pointer' }}>
+                  ↗ Go
+                </button>
+              </div>
+            ))}
+            <div style={{ fontSize: '0.7rem', color: '#5a4a30', marginTop: 4 }}>
+              To move an endpoint: click ↗ Go to that floor, delete this connector, and add a new one with the desired position.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a89878', fontSize: '0.84rem' }}>
+              <input type="checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} /> 🔒 Locked
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a89878', fontSize: '0.84rem' }}>
+              <input type="checkbox" checked={hidden} onChange={e => setHidden(e.target.checked)} /> 👁 Hidden (DM-only)
+            </label>
+          </div>
+        </div>
+        <div className="mm-type-footer">
+          {delConf ? (
+            <>
+              <button className="mm-type-generate-btn" style={{ background: 'rgba(192, 48, 48, 0.4)', borderColor: '#c03030' }}
+                onClick={onDelete}>
+                ⚠ Confirm Delete
+              </button>
+              <button className="mm-type-cancel-btn" onClick={() => setDelConf(false)}>Keep</button>
+            </>
+          ) : (
+            <>
+              <button className="mm-type-generate-btn"
+                onClick={() => onSave({ type, label, locked, hidden, endpoints })}>
+                ✓ Save
+              </button>
+              <button className="mm-type-cancel-btn" onClick={() => setDelConf(true)}>🗑 Delete</button>
+              <button className="mm-type-cancel-btn" onClick={onClose}>Cancel</button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

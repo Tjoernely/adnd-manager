@@ -221,12 +221,67 @@ const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
   ruins:            'collapsed buildings, overgrown streets, crumbling walls',
 };
 
+// ── Sprint 5 — Connector hints for floor image generation ────────────────────
+// Multi-level building floors include stairs/ladder/trapdoor connectors. The
+// image AI is asked to render them as visual elements at the indicated
+// coordinates (best-effort — data-marker overlay compensates for drift).
+//
+// Connector shape: { type, label?, hidden?, endpoints: [{floor,x_percent,y_percent}] }
+export interface FloorConnectorHint {
+  type:      'stairs' | 'ladder' | 'trapdoor' | string;
+  label?:    string | null;
+  hidden?:   boolean;
+  endpoints: Array<{ floor: number; x_percent: number; y_percent: number }>;
+}
+
+export function buildConnectorHintsForFloor(
+  connectors: FloorConnectorHint[],
+  currentFloor: number,
+  currentFloorLabel?: string | null,
+): string {
+  if (!Array.isArray(connectors) || connectors.length === 0) return '';
+  const lines: string[] = [];
+  for (const c of connectors) {
+    const here = c.endpoints.find(e => e.floor === currentFloor);
+    if (!here) continue;
+    if (c.hidden) continue; // DM-only connectors are not visually drawn
+    const others = c.endpoints.filter(e => e.floor !== currentFloor);
+    const dirWords = others.map(o => {
+      const verb = o.floor > currentFloor ? 'ascending to' : 'descending to';
+      return `${verb} floor ${o.floor}`;
+    }).join(', ');
+    const typeWord = c.type === 'ladder'   ? 'ladder'
+                    : c.type === 'trapdoor' ? 'trapdoor'
+                    : 'stairway';
+    const desc = c.label ? `"${c.label}"` : typeWord;
+    lines.push(`- A ${typeWord} ${desc} ${dirWords}, located at approximately ${Math.round(here.x_percent)}% from left, ${Math.round(here.y_percent)}% from top.`);
+  }
+  if (lines.length === 0) return '';
+  const floorTitle = currentFloorLabel ? `${currentFloorLabel} (floor ${currentFloor})` : `Floor ${currentFloor}`;
+  return [
+    `\nCONNECTORS on this floor (${floorTitle}) — render as hand-drawn visual elements at the indicated positions, leaving floor space around each:`,
+    ...lines,
+    'The architectural style should match the building type and atmosphere above.',
+  ].join('\n');
+}
+
 // ── buildImagePrompt ──────────────────────────────────────────────────────────
 // Deterministic: same MapSpec → same prompt. Used as the DALL-E 3 input.
 // dalle_prompt_additions from Claude are truncated to 80 chars to prevent
 // policy-triggering content from inflating or altering the core prompt.
+//
+// Sprint 5: third arg `floorContext` injects connector visual hints for
+// multi-level building floors. Caller passes connectors on the current floor.
 
-export function buildImagePrompt(spec: MapSpec, pois: MapPOIInput[] = []): string {
+export function buildImagePrompt(
+  spec: MapSpec,
+  pois: MapPOIInput[] = [],
+  floorContext?: {
+    currentFloor: number;
+    currentFloorLabel?: string | null;
+    connectors: FloorConnectorHint[];
+  },
+): string {
   const baseDesc = TYPE_IMAGE_DESCRIPTIONS[spec.mapType] ?? 'top-down fantasy map';
 
   // A substantial user description is authoritative — it must outweigh the
@@ -310,10 +365,23 @@ export function buildImagePrompt(spec: MapSpec, pois: MapPOIInput[] = []): strin
     if (safe) parts.push(safe);
   }
 
+  // Sprint 5 — connector hints (best-effort visual drawing). Inserted before
+  // the closers so the no-text/bird's-eye rule wins if budget is tight.
+  if (floorContext) {
+    const hints = buildConnectorHintsForFloor(
+      floorContext.connectors,
+      floorContext.currentFloor,
+      floorContext.currentFloorLabel,
+    );
+    if (hints) parts.push(hints);
+  }
+
   // Closers — kept generic. The preset's promptAddition above is the dominant
   // style instruction; these reinforce framing and the no-text rule.
   parts.push('No text or labels. Bird\'s eye view.');
   parts.push('Highly detailed illustration.');
 
-  return parts.filter(Boolean).join(' ').substring(0, 900);
+  // Budget bumped from 900 → 1400 to accommodate connector-hint lines on
+  // multi-floor maps without truncating the preset/POI/style instructions.
+  return parts.filter(Boolean).join(' ').substring(0, 1400);
 }
