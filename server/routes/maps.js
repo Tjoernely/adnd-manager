@@ -320,28 +320,42 @@ function enrichMapData(data, backendType) {
 }
 
 // ── List maps ─────────────────────────────────────────────────────────────────
+// Sprint 5: optional ?map_group_id=X to fetch only the floors of one building.
 router.get('/', auth, async (req, res) => {
   try {
-    const { campaign_id } = req.query;
+    const { campaign_id, map_group_id } = req.query;
     if (!campaign_id) return res.status(400).json({ error: 'campaign_id required' });
 
     const access = await campaignAccess(campaign_id, req.user.id);
     if (!access) return res.status(403).json({ error: 'Access denied' });
 
+    // Build optional group filter — keep parameter ordering safe
+    const params  = [campaign_id];
+    let   groupFx = '';
+    if (map_group_id) {
+      params.push(map_group_id);
+      groupFx = ` AND map_group_id=$${params.length}`;
+    }
+
     let rows;
     if (access.isDM) {
       rows = await db.all(
         `SELECT id, campaign_id, name, type, image_url, data,
-                parent_map_id, parent_poi_id, purpose, context, created_at, updated_at
-         FROM maps WHERE campaign_id=$1 ORDER BY created_at`,
-        [campaign_id],
+                parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at
+         FROM maps WHERE campaign_id=$1${groupFx}
+         ORDER BY COALESCE(floor_number, 0), created_at`,
+        params,
       );
     } else {
       const all = await db.all(
         `SELECT id, campaign_id, name, type, image_url, data,
-                parent_map_id, parent_poi_id, purpose, context, created_at, updated_at
-         FROM maps WHERE campaign_id=$1`,
-        [campaign_id],
+                parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at
+         FROM maps WHERE campaign_id=$1${groupFx}`,
+        params,
       );
       rows = all
         .filter(m => m.data?.visible_to_players)
@@ -357,7 +371,9 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const map = await db.one(
       `SELECT id, campaign_id, name, type, image_url, data,
-              parent_map_id, parent_poi_id, purpose, context, created_at, updated_at
+              parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at
        FROM maps WHERE id=$1`, [req.params.id],
     );
     if (!map) return res.status(404).json({ error: 'Not found' });
@@ -392,6 +408,11 @@ router.post('/', auth, async (req, res) => {
       // 'buildingInterior', ...) used by the daughter-map system + prompt
       // builders. Null when omitted; consumers fall back via LEGACY_TO_KEY.
       context       = null,
+      // Sprint 5 — multi-level: client-generated group string + signed floor
+      // index + optional label. Solo maps stay map_group_id=null, floor_number=null.
+      map_group_id  = null,
+      floor_number  = null,
+      floor_label   = null,
     } = req.body ?? {};
 
     if (!campaign_id || !name)
@@ -421,10 +442,15 @@ router.post('/', auth, async (req, res) => {
       console.log('[maps POST] WARNING: spec lost after enrichMapData');
     }
     const map = await db.one(
-      `INSERT INTO maps (campaign_id, name, type, image_url, data, parent_map_id, parent_poi_id, purpose, context)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO maps (campaign_id, name, type, image_url, data,
+                         parent_map_id, parent_poi_id, purpose, context,
+                         map_group_id, floor_number, floor_label)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [campaign_id, name.trim(), type, image_url, JSON.stringify(safeData),
-       parent_map_id || null, parent_poi_id || null, purpose || 'standard', context || null],
+       parent_map_id || null, parent_poi_id || null, purpose || 'standard', context || null,
+       map_group_id || null,
+       Number.isInteger(floor_number) ? floor_number : null,
+       floor_label || null],
     );
     res.status(201).json(map);
   } catch (e) { next500(e, res); }
@@ -450,7 +476,9 @@ router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
     const updated = await db.one(
       `UPDATE maps SET image_url=$1, updated_at=NOW() WHERE id=$2
        RETURNING id, campaign_id, name, type, image_url, data,
-                 parent_map_id, parent_poi_id, purpose, context, created_at, updated_at`,
+                 parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at`,
       [image_url, req.params.id],
     );
     res.json(updated);
@@ -509,7 +537,9 @@ router.post('/:id/image/from-url', auth, async (req, res) => {
     const updated = await db.one(
       `UPDATE maps SET image_url=$1, updated_at=NOW() WHERE id=$2
        RETURNING id, campaign_id, name, type, image_url, data,
-                 parent_map_id, parent_poi_id, purpose, context, created_at, updated_at`,
+                 parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at`,
       [image_url, req.params.id],
     );
     console.log(`[maps from-url] id=${req.params.id} DB updated image_url=${image_url}`);
@@ -535,6 +565,11 @@ router.put('/:id', auth, async (req, res) => {
       data          = map.data,
       parent_map_id = map.parent_map_id,
       parent_poi_id = map.parent_poi_id,
+      // Sprint 5 — accept floor/group updates. PUT is used to convert solo
+      // maps to grouped maps (first Add Floor) and to rename a floor label.
+      map_group_id  = map.map_group_id,
+      floor_number  = map.floor_number,
+      floor_label   = map.floor_label,
     } = req.body ?? {};
 
     // DEBUG: trace image_url for every PUT so we can spot any overwrite
@@ -573,12 +608,20 @@ router.put('/:id', auth, async (req, res) => {
     let updated = await db.one(
       `UPDATE maps
        SET name=$1, type=$2, image_url=$3, data=$4,
-           parent_map_id=$5, parent_poi_id=$6, updated_at=NOW()
-       WHERE id=$7
+           parent_map_id=$5, parent_poi_id=$6,
+           map_group_id=$7, floor_number=$8, floor_label=$9,
+           updated_at=NOW()
+       WHERE id=$10
        RETURNING id, campaign_id, name, type, image_url, data,
-                 parent_map_id, parent_poi_id, purpose, context, created_at, updated_at`,
+                 parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at`,
       [name.trim(), type, image_url, JSON.stringify(mergedData),
-       parent_map_id || null, parent_poi_id || null, req.params.id],
+       parent_map_id || null, parent_poi_id || null,
+       map_group_id || null,
+       Number.isInteger(floor_number) ? floor_number : null,
+       floor_label || null,
+       req.params.id],
     );
 
     // Belt-and-suspenders: if body contained sketch cells, ensure they are
@@ -592,7 +635,9 @@ router.put('/:id', auth, async (req, res) => {
              updated_at = NOW()
          WHERE id = $2
          RETURNING id, campaign_id, name, type, image_url, data,
-                   parent_map_id, parent_poi_id, purpose, context, created_at, updated_at`,
+                   parent_map_id, parent_poi_id, purpose, context,
+              map_group_id, floor_number, floor_label,
+              created_at, updated_at`,
         [JSON.stringify(sketchFromBody), req.params.id],
       );
       console.log(`[maps PUT] id=${req.params.id} jsonb_set done — cells now in DB: ${updated.data?.sketch?.cells?.length ?? '?'}`);

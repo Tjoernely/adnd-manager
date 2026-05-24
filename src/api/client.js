@@ -185,11 +185,28 @@ export const api = {
   deleteMonster:     (id)        => apiFetch(`/monsters/${id}`,  { method: 'DELETE' }),
 
   // ── Maps ──────────────────────────────────────────────────────────
-  getMaps:     (campaignId) => apiFetch(`/maps?campaign_id=${campaignId}`),
+  // Sprint 5: opts.map_group_id filters to one building's floors.
+  getMaps:     (campaignId, opts = {}) => {
+    const qs = new URLSearchParams({ campaign_id: campaignId });
+    if (opts.map_group_id) qs.set('map_group_id', opts.map_group_id);
+    return apiFetch(`/maps?${qs.toString()}`);
+  },
   getMap:      (id)         => apiFetch(`/maps/${id}`),
   createMap:   (data)       => apiFetch('/maps',        { method: 'POST',   body: JSON.stringify(data) }),
   updateMap:   (id, data)   => apiFetch(`/maps/${id}`,   { method: 'PUT',   body: JSON.stringify(data) }),
   deleteMap:   (id)         => apiFetch(`/maps/${id}`,   { method: 'DELETE' }),
+
+  // ── Map Connectors (Sprint 5 — multi-level maps) ──────────────────
+  // Connectors span 2+ floors of one building (map_group_id). IDs are
+  // client-generated strings ("conn_<uuid>") so optimistic insert works.
+  listConnectors:  (mapGroupId) =>
+    apiFetch(`/map-connectors?map_group_id=${encodeURIComponent(mapGroupId)}`),
+  createConnector: (data)       =>
+    apiFetch('/map-connectors',        { method: 'POST',   body: JSON.stringify(data) }),
+  updateConnector: (id, data)   =>
+    apiFetch(`/map-connectors/${id}`,  { method: 'PUT',    body: JSON.stringify(data) }),
+  deleteConnector: (id)         =>
+    apiFetch(`/map-connectors/${id}`,  { method: 'DELETE' }),
 
   /**
    * Upload / replace the image for an existing map.

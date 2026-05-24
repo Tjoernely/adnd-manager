@@ -117,6 +117,46 @@ async function autoMigrate() {
         ADD COLUMN IF NOT EXISTS source_map_id INTEGER REFERENCES maps(id) ON DELETE SET NULL;
     `);
 
+    // ── Sprint 5 — Multi-level maps ────────────────────────────────────────
+    // map_group_id groups N maps into one building/dungeon; client-generated
+    // string UUID so we can link maps before the new map's DB id exists.
+    // floor_number is signed (cellars are negative). floor_label is optional
+    // ("Tower Top", "Servant's Quarters") and defaults to "Floor N" at render.
+    // Solo maps stay map_group_id=NULL; first Add Floor flips them to a group.
+    await db.query(`
+      ALTER TABLE maps
+        ADD COLUMN IF NOT EXISTS map_group_id VARCHAR(64) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS floor_number INTEGER     DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS floor_label  VARCHAR(100) DEFAULT NULL;
+    `);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_maps_group ON maps(map_group_id);`);
+
+    // Connectors live in their own table (not in maps.data JSONB) because each
+    // connector spans 2+ floors and we need to fetch them with a single query
+    // when loading a group. id is client-generated ("conn_<uuid>") so the
+    // frontend can optimistic-insert. endpoints JSONB:
+    //   [{floor: N, x_percent: 0-100, y_percent: 0-100}, ...]  (typically 2)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS map_connectors (
+        id            VARCHAR(64)  PRIMARY KEY,
+        map_group_id  VARCHAR(64)  NOT NULL,
+        campaign_id   INTEGER      NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        type          VARCHAR(20)  NOT NULL,
+        label         VARCHAR(100),
+        locked        BOOLEAN      NOT NULL DEFAULT false,
+        hidden        BOOLEAN      NOT NULL DEFAULT false,
+        endpoints     JSONB        NOT NULL DEFAULT '[]'::jsonb,
+        created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_connectors_group ON map_connectors(map_group_id);`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_connectors_campaign ON map_connectors(campaign_id);`);
+    try {
+      const u = process.env.DB_USER || 'adnduser';
+      await db.query(`GRANT ALL ON map_connectors TO ${u};`);
+    } catch (_) { /* ignore on managed DBs */ }
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS party_inventory (
         id                       SERIAL PRIMARY KEY,
