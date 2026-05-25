@@ -1614,18 +1614,124 @@ function MapTreeNode({ map, allMaps, activeMapId, children_fn, onSelect, depth }
 }
 
 // ── MapCanvas ─────────────────────────────────────────────────────────────────
+// Sprint 6 — zoom constants. 1× is fit-to-container, 5× is the practical cap
+// for a 1536px image (10x would be pure pixels). 1.2× per wheel step gives ~9
+// steps from 1× to 5× — feels natural.
+const MIN_ZOOM      = 1;
+const MAX_ZOOM      = 5;
+const WHEEL_STEP    = 1.2;
+const DEFAULT_VIEW  = { zoom: 1, panX: 0, panY: 0 };
+
+function loadViewState(mapId) {
+  if (mapId == null) return { ...DEFAULT_VIEW };
+  try {
+    const raw = sessionStorage.getItem(`map_view_${mapId}`);
+    if (!raw) return { ...DEFAULT_VIEW };
+    const parsed = JSON.parse(raw);
+    return {
+      zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +parsed.zoom || 1)),
+      panX: +parsed.panX || 0,
+      panY: +parsed.panY || 0,
+    };
+  } catch { return { ...DEFAULT_VIEW }; }
+}
+function saveViewState(mapId, view) {
+  if (mapId == null) return;
+  try { sessionStorage.setItem(`map_view_${mapId}`, JSON.stringify(view)); } catch {}
+}
+
 function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onPoiSelect, onPoiDragEnd, onMapClick,
                      // Sprint 5
                      connectors = [], currentFloorNumber = 0, onConnectorClick }) {
   const containerRef = useRef(null);
+  const scrollRef    = useRef(null);
 
+  // ── Sprint 6 — zoom + pan ──────────────────────────────────────────────────
+  // CSS transform on the inner container scales POI markers automatically
+  // (they're absolute-positioned by %). getBoundingClientRect returns the
+  // post-transform size so existing POI drag math keeps working without
+  // changes. View state is persisted per-map_id in sessionStorage so
+  // floor-switches and tab navigations don't lose the DM's zoom level.
+  const [view, setView] = useState(() => loadViewState(map?.id));
+  useEffect(() => { setView(loadViewState(map?.id)); }, [map?.id]);
+  useEffect(() => { saveViewState(map?.id, view); }, [map?.id, view]);
+
+  const zoomBy = useCallback((factor, originClient) => {
+    setView(prev => {
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev.zoom * factor));
+      if (newZoom === prev.zoom) return prev;
+      // Keep the point under the cursor stationary while zooming
+      // (cursor-anchored zoom). If no cursor info, anchor to centre.
+      let panX = prev.panX, panY = prev.panY;
+      const el = containerRef.current?.parentElement; // .mm-zoom-wrap
+      if (originClient && el) {
+        const rect = el.getBoundingClientRect();
+        const cx   = originClient.x - rect.left - rect.width  / 2;
+        const cy   = originClient.y - rect.top  - rect.height / 2;
+        const scale = newZoom / prev.zoom;
+        panX = (prev.panX - cx) * scale + cx;
+        panY = (prev.panY - cy) * scale + cy;
+      }
+      return { zoom: newZoom, panX, panY };
+    });
+  }, []);
+
+  const resetView = useCallback(() => setView({ ...DEFAULT_VIEW }), []);
+
+  // Wheel zoom — only when hovering inside the map. Prevents default scroll
+  // so we don't fight the page below. Cmd/Ctrl modifier NOT required —
+  // single-wheel is the most common map-editor UX.
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
+    zoomBy(factor, { x: e.clientX, y: e.clientY });
+  }, [zoomBy]);
+
+  // Pan with mousedown+drag when zoomed in (zoom > 1) AND not in placement
+  // mode (else clicks would still try to place a POI). Skips when the
+  // mousedown target is a POI/connector marker — those use pointerCapture
+  // already so their move events don't bubble here.
+  const panStart = useRef(null);
+  const handleContainerPointerDown = (e) => {
+    if (addPoiMode) return;                            // placement click takes precedence
+    if (view.zoom <= 1.001) return;                    // nothing to pan at 1×
+    if (e.target.closest?.('.mm-poi-marker')) return;  // POI drag wins
+    if (e.target.closest?.('.mm-connector-layer'))     // connector click wins
+      return;
+    panStart.current = { mx: e.clientX, my: e.clientY, panX: view.panX, panY: view.panY, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const handleContainerPointerMove = (e) => {
+    if (!panStart.current) return;
+    const dx = e.clientX - panStart.current.mx;
+    const dy = e.clientY - panStart.current.my;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panStart.current.moved = true;
+    setView(prev => ({ ...prev, panX: panStart.current.panX + dx, panY: panStart.current.panY + dy }));
+  };
+  const handleContainerPointerUp = () => {
+    panStart.current = null;
+  };
+
+  // The click handler stays for POI placement only — pan is handled above
+  // via pointer events, so a click that's actually a drag won't fire onClick.
   const handleContainerClick = (e) => {
+    if (panStart.current?.moved) return;
     if (!addPoiMode) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width)  * 100;
     const y = ((e.clientY - rect.top)  / rect.height) * 100;
     onMapClick(Math.max(2, Math.min(98, x)), Math.max(2, Math.min(98, y)));
   };
+
+  // Native wheel listener (React onWheel is passive in some browsers and
+  // can't preventDefault on a non-capturing scroll container).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const fn = (e) => handleWheel(e);
+    el.addEventListener('wheel', fn, { passive: false });
+    return () => el.removeEventListener('wheel', fn);
+  }, [handleWheel]);
 
   const mapImageSrc = map.image_url || map.data?.imageUrl || null;
 
@@ -1662,13 +1768,39 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
     );
   }
 
+  // Pan cursor hint when zoomed in
+  const canPan = view.zoom > 1.001 && !addPoiMode;
+  const cursorStyle = addPoiMode ? 'crosshair' : (canPan ? 'grab' : 'default');
+
   return (
-    <div className="mm-canvas-scroll">
+    <div className="mm-canvas-scroll" ref={scrollRef} style={{ position: 'relative', overflow: 'hidden' }}>
       <div
-        ref={containerRef}
-        className={`mm-map-container${addPoiMode ? ' mm-map-container--place' : ''}`}
-        onClick={handleContainerClick}
+        className="mm-zoom-wrap"
+        style={{
+          width:           '100%',
+          height:          '100%',
+          display:         'flex',
+          alignItems:      'center',
+          justifyContent:  'center',
+          overflow:        'hidden',
+        }}
       >
+        <div
+          ref={containerRef}
+          className={`mm-map-container${addPoiMode ? ' mm-map-container--place' : ''}`}
+          onClick={handleContainerClick}
+          onPointerDown={handleContainerPointerDown}
+          onPointerMove={handleContainerPointerMove}
+          onPointerUp={handleContainerPointerUp}
+          onPointerCancel={handleContainerPointerUp}
+          style={{
+            transform:       `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
+            transformOrigin: 'center center',
+            transition:      panStart.current ? 'none' : 'transform 0.08s linear',
+            cursor:          cursorStyle,
+            willChange:      'transform',
+          }}
+        >
         <img src={mapImageSrc} alt={map.name} className="mm-map-image" draggable={false} />
         <div className="mm-map-border" aria-hidden="true" />
         <div className="mm-poi-layer">
@@ -1708,7 +1840,59 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
             })}
           </div>
         )}
+        </div>
       </div>
+      {/* Sprint 6 — zoom controls (bottom-right overlay) */}
+      <ZoomControls
+        zoom={view.zoom}
+        onZoomIn={() => zoomBy(WHEEL_STEP, null)}
+        onZoomOut={() => zoomBy(1 / WHEEL_STEP, null)}
+        onReset={resetView}
+      />
+    </div>
+  );
+}
+
+function ZoomControls({ zoom, onZoomIn, onZoomOut, onReset }) {
+  const btnStyle = {
+    width:        32,
+    height:       32,
+    padding:      0,
+    fontFamily:   'inherit',
+    fontSize:     '0.95rem',
+    background:   'rgba(0, 0, 0, 0.62)',
+    color:        '#c8a84b',
+    border:       '1px solid rgba(200, 168, 75, 0.45)',
+    borderRadius: 4,
+    cursor:       'pointer',
+    display:      'flex',
+    alignItems:   'center',
+    justifyContent:'center',
+  };
+  return (
+    <div
+      style={{
+        position:    'absolute',
+        right:       12,
+        bottom:      12,
+        display:     'flex',
+        flexDirection: 'column',
+        gap:         4,
+        zIndex:      10,
+        pointerEvents: 'auto',
+      }}
+    >
+      <button type="button" style={btnStyle}
+        title="Zoom in"
+        disabled={zoom >= MAX_ZOOM - 0.001}
+        onClick={onZoomIn}>＋</button>
+      <button type="button" style={{ ...btnStyle, fontSize: '0.74rem' }}
+        title={`Reset to 1× (current ${zoom.toFixed(1)}×)`}
+        onClick={onReset}>{zoom.toFixed(1)}×</button>
+      <button type="button" style={btnStyle}
+        title="Zoom out"
+        disabled={zoom <= MIN_ZOOM + 0.001}
+        onClick={onZoomOut}>－</button>
     </div>
   );
 }

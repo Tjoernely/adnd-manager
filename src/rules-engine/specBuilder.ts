@@ -221,6 +221,89 @@ const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
   ruins:            'collapsed buildings, overgrown streets, crumbling walls',
 };
 
+// ── Sprint 6 — Building-specific architectural hints (settlement maps) ──────
+//
+// When the POI list contains settlement-feature POIs (subType set by Sprint 3
+// auto-selection), we feed gpt-image-1 a list of concrete architectural cues
+// so it draws recognisable inns / smithies / temples / etc. instead of
+// generic look-alike buildings. Counts collapse duplicates so "3 inn/taverns"
+// becomes one line, keeping the prompt compact.
+//
+// Skipped subTypes:
+//   - thieves_guild (dm_only — must NOT be visible on the player map)
+//   - sewers        (underground — not a surface building)
+// Other subTypes with no architectural hint fall back to a generic phrase.
+
+const ARCHITECTURAL_HINTS: Record<string, string> = {
+  inn_tavern:    'inn/tavern (with hanging sign, lanterns, prominent door)',
+  tavern:        'tavern (smaller than inn, with hanging sign)',
+  alehouse:      'public alehouse (humble, working-class)',
+  market_square: 'open market square with stalls and tents',
+  general_store: 'general store (with goods displayed outside)',
+  trading_post:  'trading post (often near road/gate, caravan-friendly)',
+  warehouse:     'warehouse (large, plain, near docks or gate)',
+  smith:         'smithy/forge (with chimney, anvil visible, smoke)',
+  weapon_smith:  'weapon smithy (chimney, displayed weapons)',
+  armor_smith:   'armor smithy (chimney, displayed armor)',
+  carpenter:     "carpenter's workshop (with lumber yard)",
+  stables:       'stables (long building with stalls, hay)',
+  shrine:        'small roadside shrine',
+  temple:        'temple (with steeple, spire, or dome)',
+  healer:        "healer's cottage (with herb garden)",
+  apothecary:    'apothecary (with hanging plants, signs)',
+  town_hall:     'town hall (large official building, columns)',
+  guard_post:    'guard post (small fortified building)',
+  barracks:      'barracks (long military building, training yard)',
+  prison:        'prison or stocks (small barred building)',
+  manor:         'noble manor (large estate with grounds)',
+  castle:        'castle or keep (significant fortification, towers)',
+  scribe:        "scribe's shop (small with quill sign)",
+  library:       'library (large with columns, prominent windows)',
+  alchemist:     "alchemist's lab (smoke, unusual chimney)",
+  magic_shop:    'magic shop (mystical symbols, glowing windows)',
+  wizards_tower: "wizard's tower (tall, isolated, arcane)",
+  docks:         'docks/harbor (wharves, piers, fishing boats)',
+  mill:          'mill (with water wheel or windmill blades)',
+};
+// Hidden / non-surface buildings — explicitly omitted from the image prompt.
+const HIDDEN_SUBTYPES = new Set(['thieves_guild', 'sewers']);
+
+function getArchitecturalHint(subType: string): string {
+  if (HIDDEN_SUBTYPES.has(subType)) return '';
+  return ARCHITECTURAL_HINTS[subType] ?? `${subType.replace(/_/g, ' ')} building`;
+}
+
+/**
+ * Sprint 6 — build a compact "the settlement contains these specific
+ * buildings" block for gpt-image-1. Counts collapse duplicates so 3 inns
+ * become "3 inn/taverns" on a single line. Returns an empty string when
+ * no POI has a subType (i.e. non-settlement maps, or settlement maps with
+ * no Sprint-3 composition applied).
+ */
+export function buildBuildingListForImage(pois: MapPOIInput[]): string {
+  if (!Array.isArray(pois) || pois.length === 0) return '';
+  const grouped: Record<string, number> = {};
+  for (const p of pois) {
+    const st = (p as { subType?: string } | undefined)?.subType;
+    if (!st) continue;
+    if (HIDDEN_SUBTYPES.has(st)) continue;
+    grouped[st] = (grouped[st] ?? 0) + 1;
+  }
+  const entries = Object.entries(grouped);
+  if (entries.length === 0) return '';
+  const lines = entries.map(([subType, count]) => {
+    const hint = getArchitecturalHint(subType);
+    if (!hint) return null;
+    return `- ${count} ${hint}`;
+  }).filter(Boolean);
+  if (lines.length === 0) return '';
+  return [
+    '\nThe settlement contains these specific buildings (draw each as a recognisable structure of its type, distributed naturally across the layout):',
+    ...lines,
+    'Use architectural details that make each building\'s purpose recognisable at a glance.',
+  ].join('\n');
+}
+
 // ── Sprint 5 — Connector hints for floor image generation ────────────────────
 // Multi-level building floors include stairs/ladder/trapdoor connectors. The
 // image AI is asked to render them as visual elements at the indicated
@@ -334,6 +417,11 @@ export function buildImagePrompt(
     if (spec.settlement.districts.length > 0) {
       parts.push(`Districts visible: ${spec.settlement.districts.slice(0, 3).join(', ')}.`);
     }
+    // Sprint 6 — concrete building list (only when POIs carry subType, i.e.
+    // settlement maps with Sprint 3 composition data). Hidden / underground
+    // subtypes are filtered out inside the helper.
+    const buildingHints = buildBuildingListForImage(pois);
+    if (buildingHints) parts.push(buildingHints);
   }
 
   // ── POI influence-derived atmosphere ─────────────────────────────────────
