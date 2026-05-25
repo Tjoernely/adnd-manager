@@ -12,9 +12,43 @@ import raw from './settlementFeatures.json';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type FeaturePresence = 'required' | 'auto' | 'excluded';
+/**
+ * Sprint 3: 'required' | 'auto' | 'excluded'.
+ * Sprint 6 rewrite: 'auto' | number (0 = excluded, 1..5 = exact count).
+ * The old strings are still accepted for backward compatibility — see
+ * normalizeFeaturePresence — so DB rows / sessionStorage values written
+ * before Sprint 6 keep loading correctly.
+ */
+export type FeaturePresence = 'auto' | number;
+export type FeaturePresenceInput = FeaturePresence | 'required' | 'excluded';
+
 export type FeatureKey  = string;
 export type CategoryKey = string;
+
+/** Max count selectable in the dropdown (Sprint 6 spec: 0..5). */
+export const MAX_FEATURE_COUNT = 5;
+
+/**
+ * Bridge: turn anything a caller might pass us into the canonical Sprint 6
+ * presence value. Tolerates legacy 'required'/'excluded' strings, numeric
+ * strings ("3"), and the new direct values.
+ */
+export function normalizeFeaturePresence(v: unknown): FeaturePresence {
+  if (v == null) return 'auto';
+  if (v === 'auto')                     return 'auto';
+  if (v === 'required')                 return 1;          // legacy → 1 copy
+  if (v === 'excluded')                 return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    return Math.max(0, Math.min(MAX_FEATURE_COUNT, Math.trunc(v))) as FeaturePresence;
+  }
+  if (typeof v === 'string') {
+    const n = Number(v);
+    if (Number.isFinite(n)) {
+      return Math.max(0, Math.min(MAX_FEATURE_COUNT, Math.trunc(n))) as FeaturePresence;
+    }
+  }
+  return 'auto';
+}
 
 export interface NpcSuggestionSpec {
   enabled: boolean;
@@ -204,46 +238,58 @@ export function isFeatureAvailable(
 export interface AutoSelectionInput {
   population:      string;
   settlement_role: string;
-  presences:       Record<FeatureKey, FeaturePresence>;
+  /** Accepts new (number) and legacy ('required'/'excluded') shapes. */
+  presences:       Record<FeatureKey, FeaturePresenceInput>;
 }
 
+/**
+ * Each required feature carries a `requested_count` (Sprint 6) so the prompt
+ * builder can emit "3× inn_tavern" and Sonnet can generate that many distinct
+ * POIs of that subType. Auto-picked features remain count=1 by definition.
+ */
 export interface AutoSelectionResult {
-  required_features:    Array<SettlementFeature & { key: FeatureKey }>;
+  required_features:    Array<SettlementFeature & { key: FeatureKey; requested_count: number }>;
   auto_picked_features: Array<SettlementFeature & { key: FeatureKey }>;
   excluded_features:    FeatureKey[];
+  /** Sprint 6 — total POI count required by explicit numeric presences. */
+  required_poi_total:   number;
   rationale:            string;
 }
 
 /**
  * Roll the auto-composition for a settlement.
  *
- *   - 'required' overrides always include the feature (UI greys out unavailable
- *      ones so DM shouldn't be able to mark them required in the first place,
- *      but we honour the override either way).
- *   - 'excluded' overrides always block the feature.
- *   - Defaults / 'auto' presence:
- *       * skipped when popOrder(population) < popOrder(minSize)
- *       * skipped when requires_settlement_role is set and role doesn't match
- *       * otherwise rolled: include when Math.random() < rarityBySize[pop]
+ * Sprint 6 semantics — presence per feature:
+ *   - 'auto'   → rolled (population + role gates, then Math.random < rarity)
+ *   - 0        → excluded (won't appear regardless of rarity)
+ *   - 1..5     → exactly N copies of this feature must appear; emitted to
+ *                Sonnet as "N× <subType>". Unavailable features (wrong
+ *                min_size / wrong role) still get the explicit count
+ *                honoured because the UI greys them out, but if the DM
+ *                bypasses that we trust their intent.
+ *
+ * Legacy 'required'/'excluded' strings are normalised on the way in.
  */
 export function autoSelectFeatures(input: AutoSelectionInput): AutoSelectionResult {
-  const popSlug  = normalizePopulation(input.population);
-  const roleSlug = normalizeSettlementRole(input.settlement_role);
+  const popSlug   = normalizePopulation(input.population);
+  const roleSlug  = normalizeSettlementRole(input.settlement_role);
   const presences = input.presences ?? {};
 
-  const required: Array<SettlementFeature & { key: FeatureKey }> = [];
+  const required: Array<SettlementFeature & { key: FeatureKey; requested_count: number }> = [];
   const auto:     Array<SettlementFeature & { key: FeatureKey }> = [];
   const excluded: FeatureKey[] = [];
+  let requiredPoiTotal = 0;
 
   for (const cat of Object.values(getAllCategories())) {
     for (const [fk, f] of Object.entries(cat.features)) {
-      const p = presences[fk] ?? 'auto';
-      if (p === 'excluded') {
+      const p = normalizeFeaturePresence(presences[fk]);
+      if (p === 0) {
         excluded.push(fk);
         continue;
       }
-      if (p === 'required') {
-        required.push({ ...f, key: fk });
+      if (typeof p === 'number' && p >= 1) {
+        required.push({ ...f, key: fk, requested_count: p });
+        requiredPoiTotal += p;
         continue;
       }
       // 'auto' path
@@ -262,12 +308,14 @@ export function autoSelectFeatures(input: AutoSelectionInput): AutoSelectionResu
 
   const rationale =
     `${popSlug}${roleSlug ? ' / ' + roleSlug : ''} → ` +
-    `${required.length} required, ${auto.length} auto-rolled, ${excluded.length} excluded`;
+    `${required.length} required type(s) (${requiredPoiTotal} POIs), ` +
+    `${auto.length} auto-rolled, ${excluded.length} excluded`;
 
   return {
     required_features:    required,
     auto_picked_features: auto,
     excluded_features:    excluded,
+    required_poi_total:   requiredPoiTotal,
     rationale,
   };
 }

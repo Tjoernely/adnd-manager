@@ -1,8 +1,9 @@
 /**
- * Sprint 3 — Settlement Composition (Advanced) panel.
+ * Sprint 3+6 — Settlement Composition (Advanced) panel.
  *
  * Collapsible UI under the city/village form fields. Each feature has an
- * Auto / Required / Excluded dropdown. Unavailable features (wrong
+ * Auto / 0 / 1-5 dropdown so the DM can pin an exact count (Sprint 6 rewrite
+ * of the old Auto / Required / Excluded scheme). Unavailable features (wrong
  * population size or wrong settlement role) are greyed out with a tooltip.
  *
  * Default closed so DMs aren't overwhelmed. Reset-all is a one-click escape
@@ -15,12 +16,19 @@ import {
   normalizePopulation,
   normalizeSettlementRole,
   isFeatureAvailable,
+  normalizeFeaturePresence,
+  MAX_FEATURE_COUNT,
 } from '../../rulesets/settlementFeatures.ts';
 
+// Sprint 6: Auto + 0..MAX_FEATURE_COUNT. "0" labelled as "None (0)" so
+// the dropdown reads naturally; counts 1..5 are bare numbers.
 const PRESENCE_OPTIONS = [
-  { value: 'auto',     label: 'Auto' },
-  { value: 'required', label: '★ Required' },
-  { value: 'excluded', label: '✗ Excluded' },
+  { value: 'auto', label: 'Auto' },
+  { value: '0',    label: 'None (0)' },
+  ...Array.from({ length: MAX_FEATURE_COUNT }, (_, i) => {
+    const n = i + 1;
+    return { value: String(n), label: String(n) };
+  }),
 ];
 
 const SELECT_STYLE = {
@@ -45,18 +53,39 @@ export function SettlementCompositionPanel({ population, settlement_role, presen
   const roleSlug = normalizeSettlementRole(settlement_role);
   const cats     = useMemo(() => getFeaturesByCategory(), []);
 
-  const overrideCount = Object.keys(presences ?? {}).length;
+  // Sprint 6 — override count counts any non-Auto entry (including 0/None).
+  const overrideCount = Object.values(presences ?? {}).filter(v => {
+    const n = normalizeFeaturePresence(v);
+    return n !== 'auto';
+  }).length;
 
-  const setPresence = (featureKey, value) => {
+  // Total POIs explicitly requested via numeric counts — surfaced in the
+  // header so the DM knows how much they're piling onto the map.
+  const explicitPoiTotal = Object.values(presences ?? {}).reduce((sum, v) => {
+    const n = normalizeFeaturePresence(v);
+    return typeof n === 'number' && n > 0 ? sum + n : sum;
+  }, 0);
+
+  const setPresence = (featureKey, valueStr) => {
     const next = { ...(presences ?? {}) };
-    if (value === 'auto') {
+    if (valueStr === 'auto') {
       delete next[featureKey];
     } else {
-      next[featureKey] = value;
+      // Persist as a number so consumers (autoSelectFeatures) get the new
+      // shape directly without re-normalising. Legacy strings remain
+      // tolerated on read via normalizeFeaturePresence.
+      next[featureKey] = Number(valueStr);
     }
     onChange(next);
   };
   const resetAll = () => onChange({});
+
+  // Translate stored value (number | 'auto' | legacy string) back to a
+  // dropdown option value.
+  const presenceToOption = (v) => {
+    const n = normalizeFeaturePresence(v);
+    return n === 'auto' ? 'auto' : String(n);
+  };
 
   return (
     <div className="mgn-field" style={{ gridColumn: '1 / -1' }}>
@@ -86,6 +115,11 @@ export function SettlementCompositionPanel({ population, settlement_role, presen
         {overrideCount > 0 && (
           <span style={{ fontSize: '0.72rem', color: '#f5d97a' }}>
             {overrideCount} override{overrideCount === 1 ? '' : 's'}
+            {explicitPoiTotal > 0 && (
+              <span style={{ marginLeft: 6, color: '#9a875a' }}>
+                · {explicitPoiTotal} forced POI{explicitPoiTotal === 1 ? '' : 's'}
+              </span>
+            )}
           </span>
         )}
       </button>
@@ -100,9 +134,9 @@ export function SettlementCompositionPanel({ population, settlement_role, presen
         }}>
           <div style={{ fontSize: '0.74rem', color: '#9a875a', marginBottom: 12, lineHeight: 1.45 }}>
             Auto-defaults are rolled from Population + Settlement Role + per-feature rarity.
-            Override individual buildings to <strong>Require</strong> them (always include) or{' '}
-            <strong>Exclude</strong> them (never include). Greyed-out features aren't available
-            for the current population size or settlement role.
+            Pick a number (1-5) to pin an exact count of that building type, or
+            <strong> None (0)</strong> to exclude it entirely. Greyed-out features aren't
+            available for the current population size or settlement role.
           </div>
 
           {cats.map(cat => (
@@ -118,8 +152,8 @@ export function SettlementCompositionPanel({ population, settlement_role, presen
                 {cat.label}
               </div>
               {cat.features.map(({ key, def }) => {
-                const avail    = isFeatureAvailable(def, popSlug, roleSlug);
-                const presence = presences?.[key] ?? 'auto';
+                const avail = isFeatureAvailable(def, popSlug, roleSlug);
+                const sel   = presenceToOption(presences?.[key]);
                 return (
                   <div key={key} style={{
                     display:    'flex',
@@ -138,7 +172,7 @@ export function SettlementCompositionPanel({ population, settlement_role, presen
                       )}
                     </span>
                     <select
-                      value={presence}
+                      value={sel}
                       disabled={!avail.ok}
                       title={avail.reason ?? def.description}
                       onChange={e => setPresence(key, e.target.value)}

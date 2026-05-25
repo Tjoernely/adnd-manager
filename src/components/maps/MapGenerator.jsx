@@ -37,8 +37,12 @@ import {
   getMapContext,
   normalizeMapType,
   mapTypeToLegacyLabel,
+  // Sprint 6
+  getCompatibleRoleOptions,
+  resolveImageSize,
+  getPoiCountTier,
 } from '../../rulesets/mapTypeSchema.ts';
-import { autoSelectFeatures, normalizePopulation } from '../../rulesets/settlementFeatures.ts';
+import { autoSelectFeatures, normalizePopulation, normalizeFeaturePresence } from '../../rulesets/settlementFeatures.ts';
 import { SettlementCompositionPanel } from './SettlementCompositionPanel.jsx';
 import './MapGenerator.css';
 
@@ -461,33 +465,40 @@ Respond with ONLY this JSON, no markdown fences:
 
 /** CALL 2 — POIs + encounter table. Uses title from call 1 for context. */
 function buildPoisPrompt(r, numPois, meta, parentCtx, parentMapCtx, selectedSubcategories, settlementSelection) {
-  // Sprint 3 — accommodate settlement composition: if the auto-selector rolled
-  // more buildings than the base cap, raise the POI quota so the prompt can
-  // actually include them. Upper cap stays at 12 to protect Sonnet's budget.
-  const featuresNeeded = settlementSelection
-    ? settlementSelection.required_features.length + settlementSelection.auto_picked_features.length
-    : 0;
-  const cappedPois = Math.min(12, Math.max(featuresNeeded, Math.min(numPois, 6)));
+  // Sprint 6 — POI count tier resolves the recommended + hard_cap for this
+  // (map-type, population). cappedPois targets the upper end of the
+  // recommended range but never crosses hard_cap and always covers explicit
+  // forced POIs from numeric composition presences (Sprint 6 multi-count).
+  const popSlugForTier = normalizePopulation(r.population);
+  const tier           = getPoiCountTier(r.mapType, popSlugForTier);
+  // Total POIs required by numeric presences (3× inn + 2× smith = 5).
+  const forcedPoiTotal = settlementSelection?.required_poi_total ?? 0;
+  // Distinct auto-rolled feature types — one POI each.
+  const autoFeatureTypes = settlementSelection?.auto_picked_features.length ?? 0;
+  // Sonnet's quota must be >= forcedPoiTotal + autoFeatureTypes; clamp to
+  // hard_cap to avoid truncation. numPois (the legacy dropdown) is honored
+  // as a floor when no settlement composition is in play.
+  const floor = settlementSelection
+    ? forcedPoiTotal + autoFeatureTypes
+    : Math.min(numPois, tier.recommended[1]);
+  const cappedPois = Math.min(tier.hard_cap, Math.max(floor, tier.recommended[1]));
 
-  // Sprint 3 bug-fix: trim the settlement feature list passed to Sonnet so
-  // the "must include" set never exceeds cappedPois — otherwise Sonnet is
-  // asked to emit 12 POIs while being told 17 are required, and either
-  // truncates or fails. Required features always survive; auto-rolled are
-  // sorted by population-specific rarity descending (highest rarity = most
-  // "canonical" building for that size) and trimmed to fit.
+  // Sprint 3 bug-fix / Sprint 6 rework: trim auto-picked features when the
+  // forced-required total already saturates the cap. Required survive in full
+  // (DM's explicit picks); auto-rolled are sorted by population-specific
+  // rarity descending and trimmed to fit the remaining slots.
   let promptSelection = settlementSelection;
   if (settlementSelection) {
-    const reqCount   = settlementSelection.required_features.length;
-    const autoCount  = settlementSelection.auto_picked_features.length;
-    if (reqCount + autoCount > cappedPois) {
-      const keepAuto = Math.max(0, cappedPois - reqCount);
-      const popSlug  = normalizePopulation(r.population);
+    const requiredSlots = forcedPoiTotal;                     // 3× + 2× + 1× = 6
+    const remaining     = Math.max(0, cappedPois - requiredSlots);
+    if (autoFeatureTypes > remaining) {
+      const popSlug = popSlugForTier;
       const sortedAuto = [...settlementSelection.auto_picked_features].sort((a, b) =>
         (b.rarityBySize?.[popSlug] ?? 0) - (a.rarityBySize?.[popSlug] ?? 0),
       );
       promptSelection = {
         ...settlementSelection,
-        auto_picked_features: sortedAuto.slice(0, keepAuto),
+        auto_picked_features: sortedAuto.slice(0, remaining),
       };
     }
   }
@@ -540,7 +551,21 @@ IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "We
   // button later asks Haiku to expand each sketch into a full NPC record.
   let settlementBlock = '';
   if (promptSelection) {
-    const fmt = (arr) => arr.length
+    // Sprint 6 — required features carry requested_count (1..5). Emit
+    // "3× subType" so Sonnet knows to create three distinct POIs of that
+    // type, each with a unique name + identity.
+    const fmtRequired = (arr) => arr.length
+      ? arr.map(f => {
+          const sug = f.npc_suggestions;
+          const npcHint = sug?.enabled
+            ? ` | suggest up to ${sug.count ?? 1} NPC(s) per instance — roles: ${(sug.roles ?? []).join(', ') || 'staff'}`
+            : ' | NO suggested_npcs (building only, no canonical resident)';
+          const count = f.requested_count ?? 1;
+          const xLabel = count > 1 ? `${count}× ` : '';
+          return `- ${xLabel}subType="${f.subType}" — ${f.label} — ${f.description}${npcHint}`;
+        }).join('\n')
+      : '  (none)';
+    const fmtAuto = (arr) => arr.length
       ? arr.map(f => {
           const sug = f.npc_suggestions;
           const npcHint = sug?.enabled
@@ -555,11 +580,13 @@ IMPORTANT — vary your POI names and tone. Do NOT reuse the words "Sunken", "We
     settlementBlock = `
 
 SETTLEMENT COMPOSITION (these are concrete structural requirements — each MUST become a POI with the listed subType set EXACTLY):
-REQUIRED (must appear; the name + narrative are yours, the building type is fixed):
-${fmt(promptSelection.required_features)}
-AUTO-ROLLED (also must appear, same subType convention):
-${fmt(promptSelection.auto_picked_features)}
+REQUIRED (must appear with the EXACT count shown; the names + narratives are yours, the building type is fixed):
+${fmtRequired(promptSelection.required_features)}
+AUTO-ROLLED (one of each must appear, same subType convention):
+${fmtAuto(promptSelection.auto_picked_features)}
 EXCLUDED (MUST NOT appear even if the archetype suggests them): ${exc}
+
+DUPLICATES — when a required entry shows "3× inn_tavern" you must create three separate POIs with subType="inn_tavern", each with a unique name, distinct personality, and slightly different niche (e.g. a coaching inn near the gate, a quiet riverside tavern, and a rowdy soldiers' hangout). Do NOT collapse multiple required entries into a single POI.
 
 For every POI that maps to one of the above features set "subType" to the EXACT slug shown. For POIs that don't match any feature, leave "subType" as null.
 
@@ -614,7 +641,13 @@ Rules:
 }
 
 // ── DALL-E generation ─────────────────────────────────────────────────────────
-async function callDalleOnce(prompt, apiKey) {
+// Sprint 6: `size` is now per-call — resolved upstream from mapTypeSchema's
+// resolveImageSize(mapType, popSlug). gpt-image-1 supports 1024x1024,
+// 1024x1536, 1536x1024, and 'auto' as of 2026-04. We never request 'auto'
+// because we want deterministic widescreen for settlement + wilderness maps.
+const VALID_IMAGE_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024']);
+async function callDalleOnce(prompt, apiKey, size = '1024x1024') {
+  const safeSize = VALID_IMAGE_SIZES.has(size) ? size : '1024x1024';
   const resp = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -626,7 +659,7 @@ async function callDalleOnce(prompt, apiKey) {
       model: 'gpt-image-1',
       prompt,
       n:     1,
-      size:  '1024x1024',
+      size:  safeSize,
     }),
   });
   const data = await resp.json();
@@ -646,21 +679,21 @@ function b64ToBlob(b64, type = 'image/png') {
   return new Blob([arr], { type });
 }
 
-async function generateAndSaveImage(map, prompt) {
+async function generateAndSaveImage(map, prompt, size = '1024x1024') {
   const apiKey = getOpenAIKey();
   if (!apiKey) throw new Error('No OpenAI API key — skipping image generation.');
 
-  console.log('[Map] Calling gpt-image-1 for map image...');
+  console.log('[Map] Calling gpt-image-1 for map image (size=%s)...', size);
 
   let data;
   try {
-    data = await callDalleOnce(prompt, apiKey);
+    data = await callDalleOnce(prompt, apiKey, size);
   } catch (firstErr) {
     // Retry once on server_error after 3 s
     if (firstErr.code === 'server_error' || firstErr.message?.includes('server_error')) {
       console.warn('[Map] gpt-image-1 server_error — retrying in 3 s...');
       await new Promise(r => setTimeout(r, 3000));
-      data = await callDalleOnce(prompt, apiKey);
+      data = await callDalleOnce(prompt, apiKey, size);
     } else {
       throw firstErr;
     }
@@ -722,6 +755,29 @@ function DynamicField({ fieldKey, mapType, params, setP }) {
   if (!def) return null;
   const pKey  = paramKeyFor(fieldKey);
   const value = params[pKey];
+
+  // Sprint 6 — Settlement Role × Population gating. Filter the role
+  // dropdown down to roles that match the currently selected population,
+  // and auto-reset to "Random" if the previously chosen role is now
+  // incompatible. Quiet (no warning) per spec.
+  if (fieldKey === 'settlement_role') {
+    const popSlug = normalizePopulation(params.population);
+    const opts    = getCompatibleRoleOptions(popSlug);
+    const valid   = new Set(opts.map(o => o.value));
+    if (value && value !== 'Random' && !valid.has(value)) {
+      // Defer to next tick so we don't setState during render.
+      queueMicrotask(() => setP(pKey, 'Random'));
+    }
+    return (
+      <div className="mgn-field">
+        <div className="mgn-field-label">{def.label}</div>
+        <select className="mgn-select" value={valid.has(value) ? value : 'Random'}
+                onChange={e => setP(pKey, e.target.value)}>
+          {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+    );
+  }
 
   if (def.type === 'select') {
     if (def.source === 'mapStylePresets') {
@@ -916,9 +972,70 @@ export function MapGenerator({
     if (valid.length !== params.terrain.length) setP('terrain', valid);
   }, [params.mapType]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sprint 6 — pre-flight POI count check. Surfaces a warning modal when the
+  // DM's manual composition + auto selection would land above the recommended
+  // range, and a hard-block (no "Generate anyway") when they'd exceed the
+  // hard cap. Skipped silently for non-settlement maps with no composition.
+  const [poiWarning, setPoiWarning] = useState(null);
+  // Shape: { kind: 'soft'|'hard', expected: number, tier: { recommended, hard_cap }, mapTypeLabel, popLabel }
+
+  const computeExpectedPoiCount = () => {
+    const popSlug = normalizePopulation(params.population);
+    const tier    = getPoiCountTier(params.mapType, popSlug);
+    // Forced count from numeric presences
+    const presences = params.feature_presences ?? {};
+    let forced = 0;
+    for (const v of Object.values(presences)) {
+      const n = normalizeFeaturePresence(v);
+      if (typeof n === 'number' && n > 0) forced += n;
+    }
+    // Estimated auto-rolled count: ~50% of available features at the
+    // mid-range rarity. Use the larger of the legacy dropdown POI count
+    // and the recommended midpoint as the baseline.
+    const ctxSlug = getMapContext(normalizeMapType(params.mapType));
+    const isSettlement = ctxSlug === 'settlement';
+    let estAuto = 0;
+    if (isSettlement) {
+      // Rough heuristic — Sprint 3 auto-selection lands close to the recommended
+      // upper bound for the size, so use that minus the forced count as the
+      // estimate of additional auto POIs.
+      estAuto = Math.max(0, tier.recommended[1] - forced);
+    }
+    const expected = isSettlement
+      ? forced + estAuto
+      : resolvePoiCount(params.poiCount);
+    return { expected, tier, isSettlement };
+  };
+
   const handleGenerate = async () => {
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
 
+    // Sprint 6 — count check. Only blocks on hard-cap; soft warning shows a
+    // "Generate anyway" button that bypasses by calling _doGenerate directly.
+    const { expected, tier } = computeExpectedPoiCount();
+    if (expected > tier.hard_cap) {
+      setPoiWarning({
+        kind:        'hard',
+        expected, tier,
+        mapTypeLabel: params.mapType,
+        popLabel:     params.population,
+      });
+      return;
+    }
+    if (expected > tier.recommended[1]) {
+      setPoiWarning({
+        kind:        'soft',
+        expected, tier,
+        mapTypeLabel: params.mapType,
+        popLabel:     params.population,
+      });
+      return;
+    }
+    await _doGenerate();
+  };
+
+  const _doGenerate = async () => {
+    setPoiWarning(null);
     console.log('[MapGenerator] ── Starting generation ──');
     console.log('[MapGenerator] Params:', params);
     setStep('generating');
@@ -982,12 +1099,20 @@ export function MapGenerator({
       // Sprint 3 bug-fix: raised from 4000 to 16000 because settlement maps
       // with many features (metropolis can roll 8-12 buildings + their POIs)
       // were truncating the JSON mid-response. Sonnet 4.6's registered
-      // maxOutput is 64000 so 16000 is well within the per-call budget.
-      console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude...');
+      // maxOutput is 64000.
+      // Sprint 6: scale maxTokens with the resolved POI tier. Each POI roughly
+      // costs ~700 output tokens (POI body + suggested_npcs + lore); we budget
+      // 1000 per POI to leave headroom for the wrapping JSON and prompt
+      // overhead. Floor 16000 / ceiling 56000 (well inside Sonnet 4.6's 64k).
+      const popSlugForTokens = normalizePopulation(resolved.population);
+      const tierForTokens    = getPoiCountTier(resolved.mapType, popSlugForTokens);
+      const tokenBudget      = Math.max(16000, Math.min(56000, tierForTokens.hard_cap * 1000 + 6000));
+      console.log('[MapGenerator] Step 2/3 — requesting POIs from Claude (budget=%d tokens, hard_cap=%d)...',
+        tokenBudget, tierForTokens.hard_cap);
       const poiData = await callClaude({
         systemPrompt: CLAUDE_SYSTEM,
         userPrompt:   buildPoisPrompt(resolved, numPois, meta, parentPoiCtx, parentMapCtx, selectedSubcategories, settlementSelection),
-        maxTokens:    16000,
+        maxTokens:    tokenBudget,
       });
       console.log('[MapGenerator] Step 2/3 done — POI count:', poiData?.pois?.length);
 
@@ -1176,14 +1301,18 @@ export function MapGenerator({
           setStep3Skip(true);
         }
       } else if (hasOpenAIKey()) {
-        console.log('[MapGenerator] Step 3/3 — calling DALL-E...');
+        // Sprint 6 — per-type image size. Settlements at small_city+ go widescreen
+        // (1536×1024); wilderness defaults widescreen too. Everything else stays
+        // square (1024×1024). resolveImageSize handles fallback gracefully.
+        const imageSize = resolveImageSize(resolved.mapType, normalizePopulation(resolved.population));
+        console.log('[MapGenerator] Step 3/3 — calling gpt-image-1 at size=%s...', imageSize);
         try {
-          const updated = await generateAndSaveImage(map, dallePrompt);
+          const updated = await generateAndSaveImage(map, dallePrompt, imageSize);
           if (updated) map = updated;
           console.log('[MapGenerator] Step 3/3 done — image_url:', map?.image_url);
           setStep3Done(true);
         } catch (imgErr) {
-          console.warn('[MapGenerator] Step 3/3 — DALL-E failed (non-fatal):', imgErr.message);
+          console.warn('[MapGenerator] Step 3/3 — gpt-image-1 failed (non-fatal):', imgErr.message);
           setStep3Error(imgErr.message);
           setStep3Skip(true);
         }
@@ -1371,6 +1500,75 @@ export function MapGenerator({
       </div>
 
       {showSettings && <ApiKeySettings onClose={() => setShowSettings(false)} />}
+
+      {/* Sprint 6 — POI count warning. Soft: shows "Generate anyway". Hard:
+          shows only "Reduce numbers" — DM must lower the count before retry. */}
+      {poiWarning && (
+        <div className="mgn-backdrop" onClick={() => setPoiWarning(null)} style={{ zIndex: 9999 }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth:     460,
+              margin:       '15vh auto',
+              padding:      20,
+              background:   '#1f1810',
+              border:       `1px solid ${poiWarning.kind === 'hard' ? '#c03030' : '#c8a84b'}`,
+              borderRadius: 8,
+              color:        '#d4c090',
+              fontFamily:   'inherit',
+              boxShadow:    '0 8px 32px rgba(0, 0, 0, 0.55)',
+            }}
+          >
+            <div style={{ fontSize: '1.05rem', color: poiWarning.kind === 'hard' ? '#f08080' : '#f5d97a',
+                          marginBottom: 10, letterSpacing: '0.04em' }}>
+              ⚠ {poiWarning.kind === 'hard' ? 'Too many POIs' : 'High POI count'}
+            </div>
+            <div style={{ fontSize: '0.86rem', lineHeight: 1.5, marginBottom: 14 }}>
+              You've configured roughly <strong>{poiWarning.expected}</strong> POIs on
+              a <em>{poiWarning.mapTypeLabel}</em>{poiWarning.popLabel && poiWarning.popLabel !== 'Random' ? <> (<em>{poiWarning.popLabel}</em>)</> : null}.
+              <div style={{ marginTop: 6 }}>
+                {poiWarning.kind === 'hard' ? (
+                  <>
+                    Hard maximum for this size: <strong>{poiWarning.tier.hard_cap}</strong>.
+                    Generation will likely fail or be truncated — please reduce the count.
+                  </>
+                ) : (
+                  <>
+                    Recommended range for this size: <strong>{poiWarning.tier.recommended[0]}–{poiWarning.tier.recommended[1]}</strong>.
+                    The map may become visually cluttered, and generation may take longer.
+                  </>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setPoiWarning(null)}
+                style={{
+                  padding: '6px 14px', fontSize: '0.84rem', fontFamily: 'inherit',
+                  background: 'rgba(0, 0, 0, 0.4)', color: '#c8a84b',
+                  border: '1px solid rgba(200, 168, 75, 0.4)', borderRadius: 4, cursor: 'pointer',
+                }}
+              >
+                ← Reduce numbers
+              </button>
+              {poiWarning.kind === 'soft' && (
+                <button
+                  type="button"
+                  onClick={() => { setPoiWarning(null); _doGenerate(); }}
+                  style={{
+                    padding: '6px 14px', fontSize: '0.84rem', fontFamily: 'inherit',
+                    background: 'rgba(245, 217, 122, 0.18)', color: '#f5d97a',
+                    border: '1px solid rgba(245, 217, 122, 0.55)', borderRadius: 4, cursor: 'pointer',
+                  }}
+                >
+                  ✦ Generate anyway
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

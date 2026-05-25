@@ -48,15 +48,44 @@ export type MapContext =
   | 'ruins'
   | 'sewer';
 
+/**
+ * One option in a select-field's options_global list. Strings are allowed
+ * for simple cases (e.g. "Random", "Medium"). Sprint 6 introduced the object
+ * form so settlement_role can carry compatible_populations gating.
+ */
+export type FieldOption =
+  | string
+  | {
+      value: string;
+      label: string;
+      /**
+       * Sprint 6 — settlement_role gating. "*" means available for every
+       * population; an array lists the population slugs (hamlet, village,
+       * town, small_city, large_city, metropolis) the role is appropriate
+       * for. UI filters the dropdown and auto-resets incompatible picks.
+       */
+      compatible_populations?: '*' | string[];
+    };
+
 export interface FieldDefinition {
   type:           'select' | 'multi_chip' | 'textarea';
   label:          string;
   source?:        string;
   submap_only?:   boolean;
   max?:           number;
-  options_global?: string[];
+  options_global?: FieldOption[];
   options?:       Array<{ value: string; label: string }>;
   placeholder?:   string;
+}
+
+/**
+ * Sprint 6 — recommended + hard cap POI counts for one (mapType, population)
+ * combination. Tier resolver falls back through:
+ *   1. by_population[popSlug]   2. .default   3. _poi_count_tiers._default
+ */
+export interface PoiCountTier {
+  recommended: [number, number];
+  hard_cap:    number;
 }
 
 export interface MapTypeConfig {
@@ -64,6 +93,14 @@ export interface MapTypeConfig {
   context:         MapContext;
   fields:          string[];
   field_overrides?: Record<string, Partial<FieldDefinition>>;
+  /** Sprint 6 — default image dimensions for this map-type (e.g. "1024x1024"). */
+  default_image_size?: string;
+  /**
+   * Sprint 6 — per-population overrides for settlements. Looked up by the
+   * population slug from normalizePopulation (hamlet, village, town,
+   * small_city, large_city, metropolis). Falls back to default_image_size.
+   */
+  image_sizes_by_population?: Record<string, string>;
 }
 
 // ── Raw access (filtering out $-prefixed metadata + _-prefixed defs) ─────────
@@ -219,4 +256,87 @@ export function mapTypeToLegacyLabel(key: MapTypeKey | string | null | undefined
 /** All field-keys defined globally, useful for stale-param cleanup. */
 export function getAllFieldKeys(): string[] {
   return Object.keys(FIELD_DEFS);
+}
+
+// ── Sprint 6 — Settlement Role × Population gating ───────────────────────────
+//
+// Filter the settlement_role options to those compatible with the given
+// population slug. Roles with compatible_populations === "*" or undefined
+// stay available for every population (Random is the prime example).
+// String-only options (legacy form) pass through unchanged.
+
+export function isRoleCompatibleWithPopulation(opt: FieldOption, popSlug: string): boolean {
+  if (typeof opt === 'string') return true;
+  const cp = opt.compatible_populations;
+  if (cp == null || cp === '*') return true;
+  if (!Array.isArray(cp)) return true;
+  return cp.includes(popSlug);
+}
+
+/**
+ * Pre-filtered list of {value, label} for the settlement_role dropdown, given
+ * the current population. Always includes Random as the first option even if
+ * the schema author forgot it.
+ */
+export function getCompatibleRoleOptions(popSlug: string): Array<{ value: string; label: string }> {
+  const def = FIELD_DEFS.settlement_role;
+  const opts = def?.options_global ?? [];
+  return opts
+    .filter(o => isRoleCompatibleWithPopulation(o, popSlug))
+    .map(o => typeof o === 'string' ? { value: o, label: o } : { value: o.value, label: o.label });
+}
+
+// ── Sprint 6 — Image size resolution ─────────────────────────────────────────
+
+/**
+ * Resolve gpt-image-1 image dimensions for a (mapType, population) pair.
+ * mapType is a legacy label or slug; population is a slug (or label — we
+ * pass the label straight through to normalizePopulation in the caller).
+ * Falls back to '1024x1024' when the schema doesn't specify.
+ */
+export function resolveImageSize(mapType: string | null | undefined, popSlug: string | null | undefined): string {
+  const cfg = getMapTypeConfig(mapType);
+  if (!cfg) return '1024x1024';
+  if (popSlug && cfg.image_sizes_by_population?.[popSlug]) {
+    return cfg.image_sizes_by_population[popSlug];
+  }
+  return cfg.default_image_size ?? '1024x1024';
+}
+
+// ── Sprint 6 — POI-count tiers ───────────────────────────────────────────────
+
+const TIERS = (SCHEMA as unknown as Record<string, unknown>)._poi_count_tiers as
+  | Record<string, unknown>
+  | undefined;
+
+const FALLBACK_TIER: PoiCountTier = { recommended: [6, 10], hard_cap: 15 };
+
+/**
+ * Returns the recommended POI count range + hard cap for the given map-type
+ * and population. Lookup order:
+ *   1. tiers[mapTypeSlug].by_population[popSlug]   (settlement-style)
+ *   2. tiers[mapTypeSlug].default                  (settlement fallback)
+ *   3. tiers[mapTypeSlug]                          (flat shape)
+ *   4. tiers._default                              (global)
+ *   5. hardcoded FALLBACK_TIER                     (safety net)
+ */
+export function getPoiCountTier(
+  mapType:  string | null | undefined,
+  popSlug:  string | null | undefined,
+): PoiCountTier {
+  if (!TIERS) return FALLBACK_TIER;
+  const slug = normalizeMapType(mapType);
+  if (slug) {
+    const entry = TIERS[slug] as Record<string, unknown> | undefined;
+    if (entry) {
+      const byPop = entry.by_population as Record<string, PoiCountTier> | undefined;
+      if (byPop && popSlug && byPop[popSlug]) return byPop[popSlug];
+      if (entry.default) return entry.default as PoiCountTier;
+      if (entry.recommended && entry.hard_cap != null) {
+        return entry as unknown as PoiCountTier;
+      }
+    }
+  }
+  const def = TIERS._default as PoiCountTier | undefined;
+  return def ?? FALLBACK_TIER;
 }
