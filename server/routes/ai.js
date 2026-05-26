@@ -89,6 +89,16 @@ async function runOpenAIPrompt({ model, systemPrompt, userPrompt, maxTokens }) {
 //   model: "claude-opus-4-7" | "claude-sonnet-4-6" | "gpt-5.4"
 //          omitted → claude-sonnet-4-6 (back-compat for NPCGenerator / MapGenerator)
 // Returns: { text: string } — identical shape for both providers.
+//
+// HOTFIX 2026-05-26: Anthropic's non-streaming API rejects max_tokens > 21333
+// (Sonnet 4.6's per-request threshold). Sprint 6's POI-tier scaling
+// (hard_cap × 1000 + 6000) pushes Town+ generations above this, returning
+// 400 "max_tokens exceeds the non-streaming limit". Fix: route every
+// Anthropic request through messages.stream().finalMessage(), which
+// accumulates chunks server-side and resolves to the same Message object
+// the non-streaming path returned. Removes the 21k threshold; uncaps to
+// the model's real maxOutput (64k for Sonnet, 128k for Opus). Client
+// contract is unchanged — still returns { text } JSON.
 router.post('/prompt', auth, async (req, res) => {
   try {
     const { systemPrompt, userPrompt, maxTokens = 1024, model } = req.body ?? {};
@@ -96,7 +106,7 @@ router.post('/prompt', auth, async (req, res) => {
 
     const modelId = (typeof model === 'string' && MODEL_REGISTRY[model]) ? model : DEFAULT_MODEL;
     const entry   = MODEL_REGISTRY[modelId];
-    // Cap requested tokens to the model's real max output (replaces old hard 4096).
+    // Cap requested tokens to the model's real max output (Sonnet 64k, Opus 128k).
     const cappedTokens = Math.min(Math.max(Number(maxTokens) || 1024, 1), entry.maxOutput);
 
     let text;
@@ -113,7 +123,15 @@ router.post('/prompt', auth, async (req, res) => {
       };
       if (systemPrompt) msgOpts.system = systemPrompt;
 
-      const message = await client.messages.create(msgOpts);
+      // Always use streaming for Anthropic — removes the 21333-token
+      // non-streaming threshold and matches what /generate already does
+      // for the opus path below. finalMessage() awaits all chunks and
+      // resolves to the same Message shape messages.create() returns.
+      const start = Date.now();
+      console.log('[ai/prompt] streaming Anthropic model=%s max_tokens=%d', modelId, cappedTokens);
+      const message = await client.messages.stream(msgOpts).finalMessage();
+      console.log('[ai/prompt] stream done in %d ms, stop_reason=%s', Date.now() - start, message.stop_reason);
+
       text = message.content
         .filter(b => b.type === 'text')
         .map(b => b.text)
