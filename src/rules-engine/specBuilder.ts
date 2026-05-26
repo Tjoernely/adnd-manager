@@ -221,6 +221,57 @@ const ARCHETYPE_VISUALS: Partial<Record<string, string>> = {
   ruins:            'collapsed buildings, overgrown streets, crumbling walls',
 };
 
+// ── Sprint 6 bug-fix — Racial architectural override for image prompt ───────
+//
+// When spec.inhabitants names a civilised race, gpt-image-1 must know to
+// render race-appropriate architecture (elven treetop platforms instead of
+// generic medieval timber-frame, dwarven stone halls, halfling burrows etc.).
+// This helper produces a single compact line that we inject BEFORE the
+// per-building list so style framing wins over generic defaults.
+//
+// Imports the JSON profile module directly — keeps specBuilder free of
+// framework imports so it stays node-callable for tests.
+//
+// Returns '' for Random / null / non-civilised inhabitants where lair/decay
+// aesthetics are handled by atmosphere + tag-derived parts instead.
+import racialProfilesRaw from '../rulesets/racialProfiles.json';
+const RACIAL_PROFILES: Record<string, { architectural_style: string }> =
+  ((racialProfilesRaw as unknown as { races?: Record<string, { architectural_style: string }> })?.races) ?? {};
+
+function racialKeyFor(value: string | undefined | null): string | null {
+  if (!value) return null;
+  const s = value.trim();
+  if (!s || s === 'Random') return null;
+  // Mirror the LABEL_TO_KEY logic in racialProfiles.ts. Keep the small set of
+  // common variants inline so this file doesn't pull a TS sibling.
+  const map: Record<string, string> = {
+    'humans': 'humans', 'human': 'humans',
+    'elves': 'elves', 'elf': 'elves',
+    'dwarves': 'dwarves', 'dwarf': 'dwarves',
+    'halflings': 'halflings', 'halfling': 'halflings',
+    'gnomes': 'gnomes', 'gnome': 'gnomes',
+    'half-orcs': 'half_orcs', 'half_orcs': 'half_orcs', 'half-orc': 'half_orcs',
+    'half-elves': 'half_elves', 'half_elves': 'half_elves', 'half-elf': 'half_elves',
+    'mixed races': 'mixed_races', 'mixed_races': 'mixed_races', 'humanoid mix': 'mixed_races',
+    'humanoids': 'humanoids', 'humanoid': 'humanoids',
+    'undead': 'undead',
+    'demons': 'demons', 'demon': 'demons',
+    'fey': 'fey',
+    'beasts': 'beasts', 'beast': 'beasts',
+    'monsters': 'monsters', 'monster': 'monsters',
+    'abandoned': 'abandoned', 'none': 'abandoned',
+  };
+  return map[s.toLowerCase()] ?? s.toLowerCase().replace(/[-\s]+/g, '_');
+}
+
+export function buildRacialArchitectureHint(inhabitants: string | null | undefined): string {
+  const key = racialKeyFor(inhabitants);
+  if (!key) return '';
+  const profile = RACIAL_PROFILES[key];
+  if (!profile?.architectural_style) return '';
+  return `Architectural style for inhabitants (${key.replace(/_/g, ' ')}): ${profile.architectural_style}`;
+}
+
 // ── Sprint 6 — Building-specific architectural hints (settlement maps) ──────
 //
 // When the POI list contains settlement-feature POIs (subType set by Sprint 3
@@ -410,6 +461,13 @@ export function buildImagePrompt(
   if (poiNames.length) {
     parts.push(`The map must show distinct areas for these locations: ${poiNames.slice(0, 8).join(', ')}.`);
   }
+
+  // Sprint 6 bug-fix — racial architectural hint. Emitted whenever a civilised
+  // race is selected (elves, dwarves, halflings, etc.) so gpt-image-1 doesn't
+  // default to generic medieval timber-frame for every map. Placed BEFORE the
+  // building list so the style framing wins over per-building defaults.
+  const racialHint = buildRacialArchitectureHint(spec.inhabitants);
+  if (racialHint) parts.push(racialHint);
 
   if (spec.settlement) {
     const archetypeVisual = ARCHETYPE_VISUALS[spec.settlement.archetype];

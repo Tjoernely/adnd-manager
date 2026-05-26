@@ -1,0 +1,126 @@
+{
+  "$schema": "Compact profiles for every Inhabitants dropdown option. Used by MapGenerator + buildImagePrompt to force Sonnet + gpt-image-1 to honour the chosen race when naming places, picking architecture, and shaping culture. Random / null inhabitants bypass the lookup. Non-civilised entries (Undead, Beasts, Monsters, Demons, Fey, Abandoned) describe lair/aesthetic rather than settlement architecture; settlement-context maps with these inhabitants are unusual but valid (a cursed town, a fey grove etc.).",
+  "$version": 1,
+  "races": {
+    "humans": {
+      "label": "Humans",
+      "architectural_style": "Medieval European — timber-frame and wattle, stone foundations, thatched or slate roofs, market squares with stone wells. Practical and varied; cosmopolitan towns mix styles.",
+      "naming_examples": "Period-appropriate Anglo-Saxon, Frankish or Celtic — Aldric, Edwin, Roselyn, Cedric, Mira, Wystan, Greycliff, Mossford, Brindleshire",
+      "cultural_notes": "Adaptable, faction-prone, short-lived but ambitious; mercantile guilds, knightly orders, and parish temples are common",
+      "material_culture": "Iron and steel arms, woollen cloth, brewed ale, common armours; varied religions",
+      "npc_default_race": "human"
+    },
+    "elves": {
+      "label": "Elves",
+      "architectural_style": "Tall, organic forms integrated with living trees and earth. Treetop platforms, woven branch bridges, flowing curves, silver and jade accents, vine-wrapped pillars, moon-glass lanterns. No nautical, no Anglo-Saxon stonework.",
+      "naming_examples": "Aelindra, Thaelmar, Vaelorin, Nelyndor, Sylvaris, Ithelys, Caelthorn, Mythriel, Aerendril, Faelorin (musical phonetics, soft consonants; avoid blunt single-syllable names)",
+      "cultural_notes": "Long memory, reverence for nature and ancestors, oral lore, ranger / druid prominence, slow ritual rhythms, distrust of haste",
+      "material_culture": "Silverwork, moon-glass, inscribed living wood, bowyer and fletcher crafts, elven wine, woven leaf-thread garments",
+      "npc_default_race": "elf"
+    },
+    "dwarves": {
+      "label": "Dwarves",
+      "architectural_style": "Stone-cut, angular, fortified. Underground halls, runic engravings, vaulted chambers, brass and iron fittings, geothermal forges, mead-halls with carved beams",
+      "naming_examples": "Thorin, Grimna, Durbarak, Khelvar, Brunhildur, Borin Stonehand, Hilda Ironfoot, Korgan, Drathna (clan-name suffixes — '-axe', '-foot', '-stone' — common)",
+      "cultural_notes": "Honor-bound, clan-oriented, craftsmanship-obsessed, long grudges, ale culture, mining heritage, ancestor worship",
+      "material_culture": "Mithril work, geared mechanisms, runic stonework, ale-houses, weapon forges, gem-cut signet rings",
+      "npc_default_race": "dwarf"
+    },
+    "halflings": {
+      "label": "Halflings",
+      "architectural_style": "Low, rounded, earthen. Hill-burrows with round doors, pastoral gardens, communal greens, smallholder farms, no fortifications",
+      "naming_examples": "Pip Underhill, Rosie Bramblefoot, Tobold Greenbottle, Marigold Tealeaf, Wendel Burrows, Otho Goodbarrel (cosy compound surnames)",
+      "cultural_notes": "Hearth-focused, food-obsessed, peaceful, community-minded, suspicious of grand ambition, generous to travellers",
+      "material_culture": "Pies and ales, simple textiles, gardening tools, comfortable furniture, pipe-weed, painted shutters",
+      "npc_default_race": "halfling"
+    },
+    "gnomes": {
+      "label": "Gnomes",
+      "architectural_style": "Whimsical and mechanical. Geared workshops, copper-and-brass details, clockwork accents, ornate weather-vanes, glass-blower kilns, tunnel-and-burrow hybrid dwellings",
+      "naming_examples": "Fizban Cogspring, Brinkwhistle, Toggletop, Wendel Tinkertongue, Pip Sparkmender, Glim Wickwarder",
+      "cultural_notes": "Curious, inventive, prone to elaborate practical jokes, mechanically gifted, illusionist tradition, restless tinkerers",
+      "material_culture": "Clockwork mechanisms, optical instruments, brass fittings, alchemical curios, painted whirligigs",
+      "npc_default_race": "gnome"
+    },
+    "half_orcs": {
+      "label": "Half-Orcs",
+      "architectural_style": "Functional and fortified. Rough stone or heavy timber with reinforced gates, watch-platforms, blood-red or ochre banners, totemic markers at thresholds, war-trophies displayed",
+      "naming_examples": "Grull, Karkash, Drogga, Mor'gak, Brakthul, Ushtaar, Rena Ironjaw, Vorga Bonecutter (hard consonants, guttural)",
+      "cultural_notes": "Warrior-coded but often integrated; clan or warband loyalty, ancestor veneration, strength-respected hierarchies, distrust of intrigue",
+      "material_culture": "Heavy weapons, hide and chain armour, war drums, totem carvings, hearty stews and roast meats",
+      "npc_default_race": "half-orc"
+    },
+    "half_elves": {
+      "label": "Half-Elves",
+      "architectural_style": "Hybrid — elven elegance grafted onto human practicality. Cosmopolitan settlements mixing styles; arched windows and woven roofs alongside stone halls",
+      "naming_examples": "Aelric, Mariel, Caelan, Lirien, Rhys Vaelmar, Sela Thornlight (softer human names with elven phonetics)",
+      "cultural_notes": "Cosmopolitan, bridge-builders, often outsiders to both parent cultures, traders, diplomats, scholars",
+      "material_culture": "Both elven and human crafts present, often trade-focused; cross-cultural cuisine",
+      "npc_default_race": "half-elf"
+    },
+    "mixed_races": {
+      "label": "Mixed Races",
+      "architectural_style": "Cosmopolitan blend reflecting a multi-racial population. No single dominant aesthetic — district styles may vary; markets and shared civic buildings draw from several traditions",
+      "naming_examples": "Mixed naming from multiple cultures — Anglo-Saxon humans alongside elven, dwarven and halfling names side by side",
+      "cultural_notes": "Multi-cultural, often trade hubs or large cities where many races coexist; complex politics, polyglot streets",
+      "material_culture": "All represented; specialty crafts cluster in racial guild quarters",
+      "npc_default_race": null
+    },
+    "humanoids": {
+      "label": "Humanoids (Goblinoids)",
+      "architectural_style": "Crude, scavenged, makeshift. Lean-tos against ruins, hide stretched over bone frames, raider's palisades, captured banners and stolen tapestries used as decoration",
+      "naming_examples": "Skrag, Gruk, Yazak, Brog the Maimed, Vex Tooth-Pull, Mok-Rakh (short, harsh, often single-syllable)",
+      "cultural_notes": "Tribal, raider-oriented, opportunistic; warband hierarchy based on strength, brutal initiation rites",
+      "material_culture": "Salvaged armour, bone fetishes, crude weapons, painted skull totems",
+      "npc_default_race": "goblinoid"
+    },
+    "undead": {
+      "label": "Undead",
+      "architectural_style": "Decayed and necrotic. Once-grand structures now rotting; lichen-stained stone, blackened timbers, bone-strewn courtyards, faded heraldry, ever-present mist",
+      "naming_examples": "Place names allude to loss or death — Mournhold, Pale Hollow, the Stillquarter, Ash-Vale, Lichensward, Greypall",
+      "cultural_notes": "No living inhabitants; routines persist from memory — ghostly market days, processions to long-gone temples, repeated death-throes",
+      "material_culture": "Rusted tools, mouldered ledgers, sealed coffins, candles guttered down to wax-pools, untouched feast tables",
+      "npc_default_race": "undead"
+    },
+    "demons": {
+      "label": "Demons",
+      "architectural_style": "Infernal corruption layered onto whatever stood before. Brass and obsidian, asymmetric arches, brazier-lit altars, burn-scarred stone, blood-grooved channels in floors",
+      "naming_examples": "Infernal-tinged or corrupted forms of older names — the Smouldering Quarter, Ashen Gate, Veshkar's Hollow, Kael-Mor",
+      "cultural_notes": "Hierarchical and predatory; pact-bound cultists, soul-debts, oaths sealed in flame; ordinary inhabitants either fled or corrupted",
+      "material_culture": "Blackened iron, obsidian glassware, brand-marked livestock, contract scrolls in brittle parchment",
+      "npc_default_race": "demonic"
+    },
+    "fey": {
+      "label": "Fey",
+      "architectural_style": "Whimsical and impossible. Toadstool dwellings, twisted-bark cottages, mist-bridges, mirror-pools, hedges grown into archways; geometry that doesn't quite resolve",
+      "naming_examples": "Pun-tinged or riddle-like — the Glassmoth Glade, Thistlewend, Mossbinder's Crossing, the Hush, Three-Lantern Hollow",
+      "cultural_notes": "Capricious, riddle-bound, bargain-fixated, mercurial moods; tradition matters more than truth; trespassers face puzzling tests",
+      "material_culture": "Glamoured leaves passing as gold, dewdrop jewellery, ribbon and feather work, music-bottled-in-glass",
+      "npc_default_race": "fey"
+    },
+    "beasts": {
+      "label": "Beasts",
+      "architectural_style": "No constructed architecture — dens, scratching-posts, nesting hollows, well-worn game trails, prey-piles, claw-marked territory boundaries",
+      "naming_examples": "Place names describe terrain and the resident beast — Bear's Hollow, Greatclaw Ridge, the Roaring Pass, Wolf-tongue Vale",
+      "cultural_notes": "Animal behaviour patterns — pack hierarchies, hunting circuits, seasonal migrations; no language, no economy",
+      "material_culture": "Bone-strewn middens, fur-lined dens, scent-marked perimeters",
+      "npc_default_race": "beast"
+    },
+    "monsters": {
+      "label": "Monsters",
+      "architectural_style": "Lair-style. Co-opted ruins, twisted natural caverns, web-strewn passages or fume-clogged tunnels depending on the dominant monster; trophies of prey scattered throughout",
+      "naming_examples": "Place names warn of what lairs there — the Sundered Hold, Maw of Vergrak, the Wyrm-Roost, Hollowfang Crag",
+      "cultural_notes": "Solitary apex predators or small grouped horrors; territorial, ambush-oriented, no commerce — adventurers come here for slaying, not parley",
+      "material_culture": "Bones of prey, half-digested treasure mounds, scratched glyphs claiming territory",
+      "npc_default_race": "monster"
+    },
+    "abandoned": {
+      "label": "Abandoned",
+      "architectural_style": "Pre-existing architecture frozen at the moment of departure. Doors left ajar, half-finished meals on tables, ivy creeping over windowsills, decay measured in years not centuries",
+      "naming_examples": "Names refer to what the place WAS — Old Greycliff, the Forgotten Vineyards, Ardent's Rest, Last-Light Hamlet",
+      "cultural_notes": "No active inhabitants. Whatever drove the population out (plague, raid, curse) lingers as evidence — graves, broken doors, scrawled warnings — not as active threat",
+      "material_culture": "Whatever was left behind; tools rusting where they fell, larders gone foul, ledgers unfinished mid-line",
+      "npc_default_race": null
+    }
+  }
+}

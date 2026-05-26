@@ -43,6 +43,10 @@ import {
   getPoiCountTier,
 } from '../../rulesets/mapTypeSchema.ts';
 import { autoSelectFeatures, normalizePopulation, normalizeFeaturePresence } from '../../rulesets/settlementFeatures.ts';
+// Bug-fix — racial / inhabitants profiles. Forces Sonnet to honour the chosen
+// race when naming places + shaping culture, instead of silently defaulting
+// to Anglo-Saxon naming + hallucinating unrequested themes (nautical, etc.).
+import { getRaceProfile } from '../../rulesets/racialProfiles.ts';
 import { SettlementCompositionPanel } from './SettlementCompositionPanel.jsx';
 import './MapGenerator.css';
 
@@ -183,13 +187,13 @@ function toBackendType(mapTypeStr) {
 // the app can ship to a wider audience without compliance risk.
 const CLAUDE_SYSTEM = `You are an expert tabletop fantasy worldbuilder. Generate vivid, lore-rich locations suitable for a classic tabletop RPG. Invent original, evocative names, factions, and deities — do not use names from any published commercial RPG setting. Keep responses concise — maximum 2 sentences per description field. For POI arrays, generate maximum 6 POIs. IMPORTANT: Respond with raw JSON only. Do NOT wrap in markdown code fences. Do NOT include \`\`\`json or \`\`\` in your response.`;
 
-// Sprint 1 — generic per-field prompt hints. When a schema-driven field has a
-// non-'Random' value the AI gets a one-liner with the value + a soft hint on
-// what to bias. Works across all map-types so dungeon/cave/etc. also benefit.
-const FIELD_PROMPT_HINTS = [
-  ['settlement_role',    'Settlement role',    'Reflect this in character and economy.'],
+// Bug-fix — soft hints kept for fields Sonnet already respects (population,
+// danger_level, depth, biome, etc.). The fields the AI most often ignored
+// (Inhabitants, Terrain, Atmosphere, Era, Wealth, Settlement Role) get
+// promoted to a MANDATORY block above with explicit "must shape" language
+// + per-race architectural/naming profiles. See buildFieldHintBlock.
+const FIELD_PROMPT_HINTS_SOFT = [
   ['population',         'Population tier',    'Scale buildings, services and POIs accordingly.'],
-  ['wealth_tier',        'Wealth level',       'Reflect in architecture and offerings.'],
   ['room_count',         'Room count',         'Scale the number and variety of areas accordingly.'],
   ['danger_level',       'Danger level',       'Bias monsters, traps and risk accordingly.'],
   ['depth',              'Depth underground',  'Bias darkness, isolation and unfamiliar fauna.'],
@@ -199,15 +203,118 @@ const FIELD_PROMPT_HINTS = [
   ['floor_count',        'Floor count',        'Distribute POIs across the indicated number of levels.'],
   ['condition',          'Condition',          'Reflect in the physical state of structures.'],
 ];
+
+/**
+ * Bug-fix — buildFieldHintBlock now emits two sections:
+ *   1. MANDATORY block (hard requirements) for inhabitants, terrain,
+ *      atmosphere, era, wealth, settlement_role. Each carries explicit
+ *      "must shape" / "do NOT introduce other terrain" phrasing so Sonnet
+ *      can't silently treat them as flavour.
+ *   2. Soft hints for the rest (population, danger, depth, etc.) — Sonnet
+ *      already respects these.
+ *
+ * The Inhabitants entry pulls a full race profile (architectural style,
+ * naming patterns, cultural notes, material culture) from
+ * racialProfiles.json so the AI has concrete patterns to work from.
+ */
 function buildFieldHintBlock(r) {
-  const lines = [];
-  for (const [key, label, hint] of FIELD_PROMPT_HINTS) {
-    const v = r[key];
-    if (v && v !== 'Random' && v !== 'random' && v !== '') {
-      lines.push(`${label}: ${v}. ${hint}`);
+  const mandatory = [];
+  const soft      = [];
+
+  // ─── MANDATORY: Inhabitants (with race profile) ───────────────────────────
+  if (r.inhabitants && r.inhabitants !== 'Random' && r.inhabitants !== 'random') {
+    const profile = getRaceProfile(r.inhabitants);
+    if (profile) {
+      mandatory.push(
+        `INHABITANTS: ${profile.label} — MANDATORY`,
+        `This location is predominantly ${profile.label}. The following profile is the source of truth and must shape every POI, name and visual:`,
+        `  • Architecture: ${profile.architectural_style}`,
+        `  • Naming patterns: ${profile.naming_examples}`,
+        `  • Culture: ${profile.cultural_notes}`,
+        `  • Material culture: ${profile.material_culture}`,
+        `  • NPC defaults: most inhabitants are ${profile.npc_default_race ?? 'a mix of races'}`,
+        '',
+      );
+    } else {
+      mandatory.push(`INHABITANTS: ${r.inhabitants} — MANDATORY. This must shape architecture, naming and culture.`, '');
     }
   }
-  return lines.length ? '\n' + lines.join('\n') + '\n' : '';
+
+  // ─── MANDATORY: Settlement role ───────────────────────────────────────────
+  if (r.settlement_role && r.settlement_role !== 'Random') {
+    mandatory.push(
+      `SETTLEMENT ROLE: ${r.settlement_role} — MANDATORY`,
+      `Economy, defining buildings, and professions must reflect this role.`,
+      '',
+    );
+  }
+
+  // ─── MANDATORY: Terrain ───────────────────────────────────────────────────
+  if (Array.isArray(r.terrain) && r.terrain.length > 0) {
+    mandatory.push(
+      `TERRAIN: ${r.terrain.join(' + ')} — MANDATORY`,
+      `Geography and surroundings must match the listed terrain types ONLY. Do NOT introduce other terrain — no coastal/nautical/maritime elements unless terrain explicitly includes Coastal; no mountains unless listed; no swamp unless listed; etc.`,
+      '',
+    );
+  }
+
+  // ─── MANDATORY: Atmosphere ────────────────────────────────────────────────
+  if (r.atmosphere && r.atmosphere !== 'Random') {
+    mandatory.push(
+      `ATMOSPHERE: ${r.atmosphere} — MANDATORY`,
+      `Mood and tone must consistently reflect this. Do NOT introduce conflicting tones (no haunted/cursed/undead motifs if atmosphere is Sacred/Peaceful, no opulent if humble, etc.).`,
+      '',
+    );
+  }
+
+  // ─── MANDATORY: Era ──────────────────────────────────────────────────────
+  if (r.era && r.era !== 'Random') {
+    mandatory.push(
+      `ERA: ${r.era} — MANDATORY`,
+      `Technology, social structures, and material culture must fit this era. No anachronisms.`,
+      '',
+    );
+  }
+
+  // ─── MANDATORY: Wealth ───────────────────────────────────────────────────
+  if (r.wealth_tier && r.wealth_tier !== 'Random') {
+    mandatory.push(
+      `WEALTH: ${r.wealth_tier} — MANDATORY`,
+      `Architecture, clothing, public spaces, and prosperity level must reflect this. Do not pivot opulent → humble or vice versa.`,
+      '',
+    );
+  }
+
+  // ─── Soft hints (Sonnet already respects these) ───────────────────────────
+  for (const [key, label, hint] of FIELD_PROMPT_HINTS_SOFT) {
+    const v = r[key];
+    if (v && v !== 'Random' && v !== 'random' && v !== '') {
+      soft.push(`${label}: ${v}. ${hint}`);
+    }
+  }
+
+  // ─── Negative-rule footer (always emitted when there are mandatory choices) ─
+  let footer = '';
+  if (mandatory.length > 0) {
+    footer = [
+      '',
+      '═══ DO NOT INTRODUCE UNREQUESTED THEMES ═══',
+      'Honor only the MANDATORY choices above. Specifically:',
+      '- Do NOT invent themes not implied by inhabitants, terrain, atmosphere, era, wealth, or settlement role.',
+      '- Do NOT add coastal / nautical / maritime elements (Anchorage, Keel, Mast, Pier, Harbour, fisherfolk) unless TERRAIN explicitly includes Coastal.',
+      '- Do NOT add haunted / cursed / undead elements unless ATMOSPHERE or INHABITANTS explicitly imply them.',
+      '- Do NOT add opulent or impoverished framing unless WEALTH is explicitly set.',
+      '- Building, landmark, and settlement names MUST follow the naming patterns under INHABITANTS above.',
+      '- Random fields are flexibility, not invitation to invent unrelated content — pick something appropriate to the OTHER specified fields.',
+      '',
+    ].join('\n');
+  }
+
+  const blocks = [];
+  if (mandatory.length > 0) blocks.push(mandatory.join('\n'));
+  if (soft.length     > 0) blocks.push(soft.join('\n'));
+  if (footer)              blocks.push(footer);
+  return blocks.length ? '\n' + blocks.join('\n') + '\n' : '';
 }
 
 const FR_CONTEXT = `Setting: original tabletop fantasy.
@@ -587,6 +694,8 @@ ${fmtAuto(promptSelection.auto_picked_features)}
 EXCLUDED (MUST NOT appear even if the archetype suggests them): ${exc}
 
 DUPLICATES — when a required entry shows "3× inn_tavern" you must create three separate POIs with subType="inn_tavern", each with a unique name, distinct personality, and slightly different niche (e.g. a coaching inn near the gate, a quiet riverside tavern, and a rowdy soldiers' hangout). Do NOT collapse multiple required entries into a single POI.
+
+NAMING — for every settlement-feature POI, use naming patterns that match the inhabitants' culture (see the INHABITANTS section earlier in this prompt for race-appropriate naming examples). An elven inn is NOT "The Saltbough" — it follows elven phonetics; a dwarven smithy follows clan-name patterns; a halfling tavern follows cosy compound surnames. Building names must reflect the residents' culture, not generic Anglo-Saxon defaults.
 
 For every POI that maps to one of the above features set "subType" to the EXACT slug shown. For POIs that don't match any feature, leave "subType" as null.
 
