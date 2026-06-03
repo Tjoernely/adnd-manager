@@ -1,6 +1,27 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dnd-manager-secret';
+// SECURITY: JWT_SECRET MUST be configured in the environment. The previous
+// fallback ('dnd-manager-secret') was a known string that would have let
+// anyone forge tokens if env.JWT_SECRET were ever unset on a live server.
+// In production we abort startup loudly; in dev/test we accept a marked
+// in-memory secret but log a clear warning so it can't go unnoticed.
+const JWT_SECRET = (() => {
+  const fromEnv = process.env.JWT_SECRET;
+  if (fromEnv && fromEnv.length >= 32 && fromEnv !== 'dnd-manager-secret') {
+    return fromEnv;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'JWT_SECRET is missing or too short (need ≥32 chars). ' +
+      'Set it in server/.env before starting the server.'
+    );
+  }
+  // Dev / test fallback: a per-process random secret. Restarts the server
+  // → invalidates all tokens, which is the correct behaviour outside prod.
+  const dev = require('crypto').randomBytes(32).toString('hex');
+  console.warn('[auth] JWT_SECRET unset — using a per-process random secret. Tokens reset on restart.');
+  return dev;
+})();
 
 /** Signs a token for a user row */
 function makeToken(user) {

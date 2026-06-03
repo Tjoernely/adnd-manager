@@ -8,6 +8,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
+const { auth } = require('../middleware/auth');
 
 const CLASS_GROUP_MAP = {
   fighter:     ['warrior', 'general'],
@@ -22,7 +23,7 @@ const CLASS_GROUP_MAP = {
 };
 
 // GET /proficiencies
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { group, class: cls, search } = req.query;
     const conditions = [];
@@ -64,7 +65,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /proficiencies/meta
-router.get('/meta', async (req, res) => {
+router.get('/meta', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT prof_group,
@@ -79,7 +80,7 @@ router.get('/meta', async (req, res) => {
 });
 
 // GET /proficiencies/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const byNum = /^\d+$/.test(id);

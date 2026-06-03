@@ -225,10 +225,12 @@ router.put('/:id/equip', auth, async (req, res) => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function canEdit(characterId, campaignId, userId) {
-  // DM or the character's owner
+  // DM or the character's owner. NOTE: characters table uses player_user_id,
+  // not user_id — the old query silently failed for every owner so only DMs
+  // could edit their players' equipment. Fixed as part of the security pass.
   const dm  = await db.one('SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2', [campaignId, userId]);
   if (dm) return true;
-  const own = await db.one('SELECT 1 FROM characters WHERE id=$1 AND user_id=$2', [characterId, userId]);
+  const own = await db.one('SELECT 1 FROM characters WHERE id=$1 AND player_user_id=$2', [characterId, userId]);
   return !!own;
 }
 function hasAccess(campaignId, userId) {

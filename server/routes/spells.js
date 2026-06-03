@@ -22,11 +22,12 @@
  */
 const express = require('express');
 const db      = require('../db');
+const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
 // ── Meta (/meta must be before /:id) ─────────────────────────────────────────
-router.get('/meta', async (req, res) => {
+router.get('/meta', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT
@@ -53,7 +54,7 @@ router.get('/meta', async (req, res) => {
 });
 
 // ── Random spell (/random must be before /:id) ────────────────────────────────
-router.get('/random', async (req, res) => {
+router.get('/random', auth, async (req, res) => {
   try {
     const { conditions, params } = buildFilters(req.query);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -68,7 +69,7 @@ router.get('/random', async (req, res) => {
 });
 
 // ── Random spell batch ────────────────────────────────────────────────────────
-router.get('/random/batch', async (req, res) => {
+router.get('/random/batch', auth, async (req, res) => {
   try {
     const rawCount = parseInt(req.query.count ?? 5, 10);
     const count = Math.max(1, Math.min(20, Number.isNaN(rawCount) ? 5 : rawCount));
@@ -86,7 +87,7 @@ router.get('/random/batch', async (req, res) => {
 });
 
 // ── Search / list spells ──────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit  ?? 50,  10), 200);
     const offset =           parseInt(req.query.offset ?? 0,  10);
@@ -133,7 +134,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── Single spell ──────────────────────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const spell = await db.one('SELECT * FROM spells WHERE id=$1', [req.params.id]);
     if (!spell) return res.status(404).json({ error: 'Spell not found' });

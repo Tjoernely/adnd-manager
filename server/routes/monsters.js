@@ -59,7 +59,7 @@ const SORT_MAP = {
 };
 
 // ── GET /meta ──────────────────────────────────────────────────────────────
-router.get('/meta', async (req, res) => {
+router.get('/meta', auth, async (req, res) => {
   try {
     const [totalRow, types, sizes] = await Promise.all([
       db.one('SELECT COUNT(*)::int AS total FROM monsters WHERE campaign_id IS NULL'),
@@ -75,7 +75,7 @@ router.get('/meta', async (req, res) => {
 });
 
 // ── GET / ──────────────────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const {
       search     = '',
@@ -174,7 +174,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── GET /:id ───────────────────────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const monster = await db.one(
       `SELECT *, (${AC_EXPR}) AS armor_class, (${THAC0_EXPR}) AS thac0

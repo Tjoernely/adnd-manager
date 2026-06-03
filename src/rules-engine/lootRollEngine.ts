@@ -29,7 +29,11 @@ export async function fetchLootPool(opts: {
   if (opts.tableLetter)        p.set('table_letter',  opts.tableLetter);
   p.set('limit', String(Math.min(opts.limit ?? 300, 500)));
 
-  const res = await fetch(`/api/magical-items/loot-pool?${p}`);
+  // Security pass: /api/magical-items/* now requires auth. Inline the token
+  // read to keep this module's lone fetch self-contained (no apiFetch dep).
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('dnd_token') : null;
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`/api/magical-items/loot-pool?${p}`, { headers });
   if (!res.ok) throw new Error(`Loot pool fetch failed: HTTP ${res.status}`);
   const rows = await res.json() as Array<LootItem & { table_letter?: string }>;
   // Apply XP defaults for items with no listed xp

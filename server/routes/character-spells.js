@@ -112,9 +112,11 @@ router.delete('/:id', auth, async (req, res) => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function canEdit(characterId, campaignId, userId) {
+  // Fixed during the security pass: characters.player_user_id, not user_id.
+  // Prior version always returned false for non-DM owners.
   const dm  = await db.one('SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2', [campaignId, userId]);
   if (dm) return true;
-  const own = await db.one('SELECT 1 FROM characters WHERE id=$1 AND user_id=$2', [characterId, userId]);
+  const own = await db.one('SELECT 1 FROM characters WHERE id=$1 AND player_user_id=$2', [characterId, userId]);
   return !!own;
 }
 function hasAccess(campaignId, userId) {

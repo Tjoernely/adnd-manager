@@ -19,6 +19,7 @@
  */
 const express = require('express');
 const db      = require('../db');
+const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -76,7 +77,7 @@ function parseDiceSides(dice) {
 }
 
 // ── Meta (/meta must be before /:id) ─────────────────────────────────────────
-router.get('/meta', async (req, res) => {
+router.get('/meta', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT
@@ -100,7 +101,7 @@ router.get('/meta', async (req, res) => {
 });
 
 // ── Random item(s) (/random before /:id) ─────────────────────────────────────
-router.get('/random', async (req, res) => {
+router.get('/random', auth, async (req, res) => {
   try {
     const { conditions, params } = buildFilters(req.query);
     const count = Math.max(1, Math.min(20, parseInt(req.query.count ?? 1, 10) || 1));
@@ -116,7 +117,7 @@ router.get('/random', async (req, res) => {
 });
 
 // ── Roll on a specific table ──────────────────────────────────────────────────
-router.get('/roll-table', async (req, res) => {
+router.get('/roll-table', auth, async (req, res) => {
   try {
     const letter = (req.query.table ?? '').toUpperCase();
     if (!TABLE_META[letter]) {
@@ -149,7 +150,7 @@ router.get('/roll-table', async (req, res) => {
 });
 
 // ── Random hoard ─────────────────────────────────────────────────────────────
-router.get('/random-hoard', async (req, res) => {
+router.get('/random-hoard', auth, async (req, res) => {
   try {
     const level   = Math.max(1, Math.min(20, parseInt(req.query.level ?? 5, 10) || 5));
     const type    = req.query.type ?? 'dungeon'; // dungeon | treasure | monster
@@ -217,7 +218,7 @@ router.get('/random-hoard', async (req, res) => {
 //   table=X         — table letter A–T (required)
 //   subtable=1|2|3  — for R/S: 1=generic, 2=bonus(hardcoded), 3=special
 //   limit=N         — max rows (default 500)
-router.get('/table-entries', async (req, res) => {
+router.get('/table-entries', auth, async (req, res) => {
   try {
     const letter   = (req.query.table ?? '').toUpperCase();
     const subtable = req.query.subtable; // '1' | '2' | '3' | undefined
@@ -314,7 +315,7 @@ const TABLE_TO_LOOT_CATEGORY = {
 // Query params: table_letter (single letter), min_xp, max_xp, limit (default 200, max 500)
 // Returns items in LootItem-compatible format.
 // Uses nullable params so omitting min_xp/max_xp returns all items (no mandatory xp filter).
-router.get('/loot-pool', async (req, res) => {
+router.get('/loot-pool', auth, async (req, res) => {
   try {
     const tableLetter = req.query.table_letter
       ? String(req.query.table_letter).trim().toUpperCase()
@@ -347,7 +348,7 @@ router.get('/loot-pool', async (req, res) => {
 });
 
 // ── Search / list items ───────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit  ?? 50,  10), 200);
     const offset =           parseInt(req.query.offset ?? 0,   10);
@@ -401,7 +402,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── Single item ───────────────────────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const item = await db.one(
       `SELECT mi.*,

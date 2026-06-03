@@ -67,7 +67,13 @@ export function useProficiencies() {
   const [profs, setProfs] = useState(null); // null = use static fallback
 
   useEffect(() => {
-    fetch("/api/proficiencies")
+    // Security pass: reference-data endpoints now require an authenticated
+    // user. Pass the JWT or we'd silently 401 and fall back to the static
+    // bundle (loses the live DB's 311 NWPs + sp_cp_cost).
+    const token = localStorage.getItem('dnd_token');
+    fetch("/api/proficiencies", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => {
         setProfs(data.proficiencies.map(normalizeDbProf));

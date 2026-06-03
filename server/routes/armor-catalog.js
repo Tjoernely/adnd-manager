@@ -2,13 +2,16 @@
  * GET /api/armor-catalog
  *   ?item_type=armor   — filter by 'armor' or 'shield'
  * Returns all matching armor/shields ordered by item_type then name.
- * No auth required (reference data).
+ *
+ * Auth required (any logged-in user) — added in the pre-beta security pass.
+ * The dataset isn't secret, but gating it kills anonymous scraping/scanning.
  */
 const express = require('express');
 const db      = require('../db');
+const { auth } = require('../middleware/auth');
 const router  = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { item_type } = req.query;
     const params = [];

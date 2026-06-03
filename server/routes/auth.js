@@ -19,23 +19,37 @@ const router  = express.Router();
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 // ── Register ────────────────────────────────────────────────────────────────
+// SECURITY: `role` is NOT accepted from the request body. Every new account
+// is created as a 'player'. DM rights are granted per-campaign (campaigns
+// table dm_user_id) rather than as a global property — see campaigns.js +
+// the per-route isDM checks. This closes a privilege-escalation path where
+// a self-registering user could set role='dm' and unlock any future
+// requireDM-gated endpoint.
+//
+// Password hashing uses bcrypt cost 12 (was 10). Cost 12 ≈ 250ms on modern
+// CPUs — still fast enough for interactive login and meaningfully stronger
+// against offline cracking if the DB ever leaks.
+const BCRYPT_COST = 12;
+
 router.post('/register', async (req, res) => {
-  const { email, password, username, role = 'player' } = req.body ?? {};
+  const { email, password, username } = req.body ?? {};
   if (!email || !password)
     return res.status(400).json({ error: 'email and password required' });
 
-  const allowedRoles = ['dm', 'player'];
-  if (!allowedRoles.includes(role))
-    return res.status(400).json({ error: `role must be 'dm' or 'player'` });
+  // Minimum-strength gate: rejects accidentally-empty strings and the most
+  // trivially-guessable passwords. The real protection is rate-limiting +
+  // bcrypt cost; this is just hygiene at the edge.
+  if (typeof password !== 'string' || password.length < 8)
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
 
   try {
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, BCRYPT_COST);
     const uname = (username ?? email.split('@')[0]).trim().slice(0, 100);
     const user = await db.one(
       `INSERT INTO users (email, password_hash, username, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, email, username, role`,
-      [email.trim().toLowerCase(), hash, uname, role],
+      [email.trim().toLowerCase(), hash, uname, 'player'],
     );
     res.status(201).json({ token: makeToken(user), user });
   } catch (e) {

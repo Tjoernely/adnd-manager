@@ -8,6 +8,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
+const { auth } = require('../middleware/auth');
 
 const CLASS_FILTER_MAP = {
   fighter:     ['fighter'],
@@ -22,7 +23,7 @@ const CLASS_FILTER_MAP = {
 };
 
 // GET /kits
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { class: cls, race, search } = req.query;
     const conditions = ['1=1'];
@@ -77,7 +78,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /kits/meta
-router.get('/meta', async (req, res) => {
+router.get('/meta', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT kit_class, COUNT(*)::int AS count,
@@ -90,7 +91,7 @@ router.get('/meta', async (req, res) => {
 });
 
 // GET /kits/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const byNum = /^\d+$/.test(id);

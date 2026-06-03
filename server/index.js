@@ -2,7 +2,9 @@ require('dotenv').config();
 
 const express  = require('express');
 const cors     = require('cors');
+const helmet   = require('helmet');
 const path     = require('path');
+const { loginLimiter, registerLimiter, aiLimiter, imageLimiter } = require('./middleware/rate-limit');
 
 const autoMigrate            = require('./auto-migrate');
 const { router: authRouter } = require('./routes/auth');
@@ -35,16 +37,90 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ─────────────────────────────────────────────────────────────────
-// Explicitly allow Authorization header so JWT tokens pass through all routes
+// trust proxy = 1 so req.ip reflects the real client behind nginx, not
+// the loopback address. Required for the rate-limiters to key on the
+// actual offender's IP.
+app.set('trust proxy', 1);
+
+// helmet — sets CSP, HSTS, X-Frame-Options, X-Content-Type-Options, and
+// strips X-Powered-By. CSP is configured below in report-only first so
+// we can roll it out to enforced after a brief observation window.
+//
+// crossOriginEmbedderPolicy is disabled because gpt-image-1 returns
+// inline base64 that we re-upload; COEP would block some flows.
+// crossOriginResourcePolicy is left at the default ('same-origin') —
+// uploaded map images are served from the same origin.
+app.use(helmet({
+  contentSecurityPolicy: {
+    // Defensive defaults — tightened so a future XSS can't exfiltrate via
+    // attacker-controlled scripts. Inline styles are still allowed for the
+    // many style={{...}} JSX usages in the SPA; we'll move those to
+    // CSS modules in a later pass.
+    useDefaults: true,
+    directives: {
+      'default-src':  ["'self'"],
+      'script-src':   ["'self'"],
+      'style-src':    ["'self'", "'unsafe-inline'"],
+      'img-src':      ["'self'", 'data:', 'blob:', 'https:'],
+      'connect-src':  ["'self'"],
+      'font-src':     ["'self'", 'data:'],
+      'object-src':   ["'none'"],
+      'frame-ancestors': ["'none'"],
+      'base-uri':     ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  // HSTS only takes effect over HTTPS — harmless on plain HTTP but the
+  // moment HTTPS lands (TODO: certbot — see CLAUDE_STATUS §1) browsers
+  // will lock onto it for a year.
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: false },
+}));
+
+// CORS — locked allowlist. process.env.CORS_ORIGINS is a comma-separated
+// list of origins; falls back to the common local-dev + bare-IP prod
+// origins so this stays working without explicit configuration. The old
+// `origin: true` reflected the caller's Origin with credentials, which
+// is the standard "any site can make authenticated requests" footgun.
+const DEFAULT_ORIGINS = [
+  'http://localhost:5173',         // Vite dev server
+  'http://127.0.0.1:5173',
+  'http://158.180.63.20',          // production (bare IP, pre-TLS)
+  'https://158.180.63.20',         // production (post-TLS)
+];
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_ORIGINS;
+
 app.use(cors({
-  origin: true,
+  origin: (origin, cb) => {
+    // Same-origin requests + healthchecks + curl-without-Origin have no
+    // Origin header — let them through. Browser-initiated cross-origin
+    // requests always set Origin, so this only opens up tools, not pages.
+    if (!origin) return cb(null, true);
+    if (ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-anthropic-key', 'x-openai-key'],
   credentials: true,
 }));
+console.log(`[cors] allowed origins: ${ORIGINS.join(', ')}`);
+
 // verify captures raw body for webhook HMAC verification
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf.toString(); }, limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// ── Rate-limit gates (mounted BEFORE the route handlers they protect) ───────
+// loginLimiter is path-specific so /me + /invite preview aren't throttled.
+app.use('/api/auth/login',    loginLimiter);
+app.use('/api/auth/register', registerLimiter);
+// /api/ai/* funnels every model call (text + image stages) — single AI
+// limiter is enough; image routes get the extra imageLimiter on top.
+app.use('/api/ai',            aiLimiter);
+// Map image generation surfaces (uploads + DALL-E persistence + sketch jobs).
+app.use('/api/maps/:id/image',           imageLimiter);
+app.use('/api/maps/:id/image/from-url',  imageLimiter);
+app.use('/api/maps/generate-from-sketch', imageLimiter);
 
 // ── API routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',            authRouter);

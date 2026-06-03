@@ -73,6 +73,13 @@ export function useKits() {
 // App class IDs that differ from the API's CLASS_FILTER_MAP keys
 const CLASS_ID_TO_API = { mage: 'wizard', specialist: 'wizard' };
 
+// Security pass: reference-data endpoints now require an authenticated user.
+// Wrap fetch so both hooks below pick up the JWT without duplicating boilerplate.
+function authFetch(url) {
+  const token = localStorage.getItem('dnd_token');
+  return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+}
+
 export function useKitsByClass(kitClass) {
   const [kits,    setKits]    = useState(null);
   const [loading, setLoading] = useState(false);
@@ -82,7 +89,7 @@ export function useKitsByClass(kitClass) {
     setKits(null);   // clear stale data immediately on class change
     setLoading(true);
     const apiClass = CLASS_ID_TO_API[kitClass] ?? kitClass;
-    fetch(`/api/kits?class=${apiClass}`)
+    authFetch(`/api/kits?class=${apiClass}`)
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => {
         setKits(data.kits.map(normalizeDbKit));
@@ -107,7 +114,7 @@ export function useKit(canonicalId) {
   useEffect(() => {
     if (!canonicalId) return;
     setLoading(true);
-    fetch(`/api/kits/${canonicalId}`)
+    authFetch(`/api/kits/${canonicalId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { setKit(data); setLoading(false); })
       .catch(() => setLoading(false));

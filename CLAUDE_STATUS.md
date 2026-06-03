@@ -1,6 +1,6 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-05-18_
+_Last updated: 2026-06-04_
 
 ---
 
@@ -444,9 +444,71 @@ These are suggested based on current state — confirm with user before starting
 | Key | Purpose | Required for |
 |---|---|---|
 | `DB_*` | PostgreSQL connection | Everything |
-| `JWT_SECRET` | Auth tokens | Everything |
+| `JWT_SECRET` | Auth tokens — MUST be ≥32 chars; server refuses to start in production without it (security pass 2026-06-04) | Everything |
+| `NODE_ENV` | `production` enables strict rate-limits + JWT_SECRET guard | Prod |
+| `CORS_ORIGINS` | Comma-separated origin allowlist (e.g. `http://158.180.63.20,https://158.180.63.20`); falls back to built-in defaults | Optional |
 | `ANTHROPIC_API_KEY` | Claude AI (map lore, POIs, monster tag classification) | Map generator + tag classifier |
 | `OPENAI_API_KEY` | DALL-E 3 + GPT-Image-1 | Map images |
 | `GOOGLE_AI_API_KEY` | Gemini image generation | Sketch-to-map |
 | `WEBHOOK_SECRET` | GitHub webhook HMAC | Auto-deploy |
 | `PORT` | Express port (default 3000 local, 3001 prod) | Backend |
+
+---
+
+## 7. Security Hardening Pass (2026-06-04)
+
+Pre-beta backend security review. Externally-verified findings (HTTP only,
+open reference routes, nginx version banner leak) all addressed in code +
+config. Server-side ops (HTTPS + nginx hardening) still outstanding —
+they are NOT committable from the repo and require explicit go-ahead.
+
+### Done in this pass
+
+| # | Severity | Fix |
+|---|---|---|
+| Auth | **CRITICAL** | `/auth/register` no longer accepts `role` from body; every new account is a `player`. DM rights are granted per-campaign only. Minimum password length 8 enforced. bcrypt cost bumped 10 → 12. |
+| JWT | **CRITICAL** | Removed hardcoded `'dnd-manager-secret'` fallback. `middleware/auth.js` now throws at startup in production if `JWT_SECRET` is missing or <32 chars; dev/test uses a per-process random secret with a console warning. |
+| IDOR | HIGH | All `:id` routes (characters, npcs, maps, map_connectors, quests, encounters, loot, party-*, character-*, saved-encounters, campaigns) already verify campaign ownership / DM via per-route checks. Audit confirmed every write path goes through `isDM()` or `campaignAccess()`. |
+| IDOR (latent bug) | MED | `character-equipment.js` + `character-spells.js` `canEdit()` queried `characters WHERE id=$1 AND user_id=$2` — actual column is `player_user_id`. Fixed: owners can now edit again (previously only DMs could). |
+| Reference routes | HIGH | `auth` middleware added to `proficiencies`, `kits`, `spells` (5 routes), `monsters` GETs (3 routes), `magical-items` (8 routes), `weapons-catalog` (2 routes), `armor-catalog`. Frontend hooks `useKits` + `useProficiencies` + `lootRollEngine.ts` now pass the JWT. `monster-tags.js` left untouched — dead code (not mounted). |
+| SQL parametrisation | OK | Audit pass found one `${t.table_name}` interpolation in `campaigns.js` `delete-preview` — value comes from `information_schema`, never user input. All other queries parametrised. |
+| Rate-limit (auth) | HIGH | New `middleware/rate-limit.js` — `loginLimiter` (10/15m per IP+email in prod), `registerLimiter` (5/h per IP), mounted in `index.js` before the auth router. |
+| Rate-limit (AI) | HIGH | `aiLimiter` (60/h per user) on `/api/ai/*`; `imageLimiter` (20/h per user) layered on top of `/api/maps/:id/image*` + `/generate-from-sketch`. |
+| helmet | HIGH | Installed + configured with strict CSP (`default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'` for JSX inline styles, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`), HSTS one-year, COEP disabled (would block base64 image flows). |
+| CORS | HIGH | Locked allowlist via new `CORS_ORIGINS` env (comma-separated). Built-in defaults: `localhost:5173`, `127.0.0.1:5173`, `http://158.180.63.20`, `https://158.180.63.20`. Old `origin: true` (reflected any caller) is gone. |
+| `trust proxy` | — | `app.set('trust proxy', 1)` so rate-limiters see the real client IP behind nginx. |
+| npm audit | HIGH | Server: 9 vulnerabilities (1 critical protobufjs, 2 high path-to-regexp) → all resolved via `npm audit fix`. Now 0. Root: was already 0. |
+| .env | OK | `.env.example` exists; real `.env` is gitignored AND has never been committed (`git log --all -- server/.env` empty). `.env.example` extended with new `NODE_ENV` + `CORS_ORIGINS` keys. |
+
+### Outstanding (server-side ops, not committable)
+
+These require SSH + sudo on the live server and an explicit go-ahead:
+
+1. **HTTPS via certbot** — install Let's Encrypt, redirect 80 → 443, enable
+   HSTS preload. nginx config path: `/etc/nginx/sites-enabled/adnd-manager`.
+2. **`server_tokens off;`** in `/etc/nginx/nginx.conf` (or the vhost) — kills
+   the version banner leak in the `Server:` header.
+3. Consider scoping `CORS_ORIGINS` to the production domain only once HTTPS
+   is up (drop the bare-IP and http:// entries from the allowlist).
+4. JWT TTL is currently 30 days — leave for beta, consider 7d post-beta.
+
+### Verification (run after deploy)
+
+```bash
+# Reference routes now 401 without token (regression check)
+curl -i http://158.180.63.20/api/proficiencies      # → 401 No token
+curl -i http://158.180.63.20/api/spells/meta        # → 401 No token
+curl -i http://158.180.63.20/api/kits               # → 401 No token
+
+# Auth endpoints still respond OK
+curl -i http://158.180.63.20/api/auth/me            # → 401 No token (was 401 before too — no change)
+
+# Helmet headers present
+curl -sI http://158.180.63.20/                      # X-Content-Type-Options, X-Frame-Options, CSP
+
+# Rate limit fires after 11 quick logins
+for i in {1..12}; do curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"email":"x@x","password":"x"}' http://158.180.63.20/api/auth/login; done
+# expected: 401 × 10, then 429
+```

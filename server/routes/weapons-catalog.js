@@ -7,6 +7,8 @@
  */
 const express = require('express');
 const db      = require('../db');
+// Security pass: reference-data lookups now require an authenticated user.
+const { auth } = require('../middleware/auth');
 const router  = express.Router();
 
 // Detect ranged category from weapon name (mirrors client-side logic)
@@ -22,7 +24,7 @@ function detRangedCat(name) {
 }
 
 // ── Ammo sub-route (must be before '/' to avoid shadowing) ──────────────────
-router.get('/ammo', async (req, res) => {
+router.get('/ammo', auth, async (req, res) => {
   try {
     const { ranged_weapon_name } = req.query;
     const params = [];
@@ -43,7 +45,7 @@ router.get('/ammo', async (req, res) => {
 });
 
 // ── All weapons (excludes ammo entries) ─────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { search, type } = req.query;
     const params = [];
