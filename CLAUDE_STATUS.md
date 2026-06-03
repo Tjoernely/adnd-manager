@@ -251,6 +251,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 | 8 | ~~Low~~ Resolved | Quest banners showed invisible light-on-light text | **Fixed `59c432b` — opaque banner backgrounds + explicit dark text.** |
 | 9 | ~~Low~~ Resolved | AI Map Generator modal rendered completely unstyled (overlapping labels, no backdrop) | **Fixed `8a1e574` — `MapGenerator.css` was imported nowhere; added the missing `import`. Verified by user.** |
 | 10 | Low | Cancel during AI quest generation closes the dialog but does not abort the in-flight `fetch` (no `AbortController` wired up) — generation continues in the background | Open — cosmetic, no data harm. Wire an `AbortController` in a future pass. |
+| 11 | ~~High~~ Resolved | **Kits 401 regression** — the security pass (commit `0e7d595`) added `auth` to `/api/kits`, but `useKits.js` has THREE hooks and only `useKitsByClass` + `useKit` got the JWT; the base `useKits()` hook kept a raw `fetch("/api/kits")` with no Authorization header. Logged in, the Kits tab silently fell back to the static bundle (lost the live DB's 137 kits) because the live call 401'd. Other libraries (proficiencies, spells, monsters, magical-items) were unaffected — their callers already sent the token. | **Fixed `d206107` (2026-06-04). All three `useKits` hooks now route through a shared `authFetch`. Browser-verified: `GET /api/kits` → 200 on reload; full session showed 5/5 `/api/*` calls at 200, zero 401s, zero CSP violations.** |
 
 ### Bug #5 — Encounter Builder freeze (RESOLVED 2026-05-15)
 
@@ -480,17 +481,61 @@ they are NOT committable from the repo and require explicit go-ahead.
 | npm audit | HIGH | Server: 9 vulnerabilities (1 critical protobufjs, 2 high path-to-regexp) → all resolved via `npm audit fix`. Now 0. Root: was already 0. |
 | .env | OK | `.env.example` exists; real `.env` is gitignored AND has never been committed (`git log --all -- server/.env` empty). `.env.example` extended with new `NODE_ENV` + `CORS_ORIGINS` keys. |
 
+### Follow-up pass — same day (commits `d206107` + nginx config)
+
+After the passive live-test, two items were addressed:
+
+1. **Kits 401 regression** (see §3 bug #11) — `useKits()` base hook was the
+   one caller still missing the JWT. Fixed; all three kit hooks now share an
+   `authFetch` helper. Browser-verified `/api/kits` → 200.
+
+2. **Security headers moved to nginx (on the HTML document, not /api JSON).**
+   A CSP on JSON responses does nothing for XSS — the browser enforces CSP
+   from the document, which nginx serves directly. helmet's CSP is now
+   DISABLED (`contentSecurityPolicy: false`); the real CSP lives in
+   `/etc/nginx/snippets/adnd-security.conf`, `include`d into the three static
+   location blocks (`= /index.html`, `/assets/`, `/`). helmet still sets
+   HSTS / XFO / nosniff / COOP / CORP and strips X-Powered-By on /api.
+   - **`server_tokens off;`** added to the server block — `Server:` header is
+     now just `nginx` (version banner gone). ✓ verified.
+   - **`connect-src` includes `https://api.openai.com`** — the SPA calls the
+     OpenAI image API directly from the browser (map generation + NPC /
+     character portraits, 4 call sites). A naive `connect-src 'self'` would
+     have broken all image generation; audited before writing the policy.
+   - Added `X-Forwarded-For` / `X-Real-IP` / `X-Forwarded-Proto` to the
+     `/api/` proxy block — the old block forwarded only `Host`, so the
+     rate-limiters couldn't see the real client IP.
+   - Config backed up to `/etc/nginx/adnd-manager.bak-20260604`. Applied via
+     `nginx -t` (pass) + `systemctl reload nginx` (no restart). The full
+     live config now lives ONLY on the server (snippet + sites-enabled),
+     mirrored in this doc for reference.
+   - **Browser verification (Claude-in-Chrome, real session):** app shell +
+     gold theme + all module counts (3781 monsters / 5725 items / 4400
+     spells) + character builder + full kit grid all render; 5/5 `/api/*`
+     calls returned 200; **zero CSP violations** in console.
+
 ### Outstanding (server-side ops, not committable)
 
 These require SSH + sudo on the live server and an explicit go-ahead:
 
 1. **HTTPS via certbot** — install Let's Encrypt, redirect 80 → 443, enable
-   HSTS preload. nginx config path: `/etc/nginx/sites-enabled/adnd-manager`.
-2. **`server_tokens off;`** in `/etc/nginx/nginx.conf` (or the vhost) — kills
-   the version banner leak in the `Server:` header.
-3. Consider scoping `CORS_ORIGINS` to the production domain only once HTTPS
-   is up (drop the bare-IP and http:// entries from the allowlist).
-4. JWT TTL is currently 30 days — leave for beta, consider 7d post-beta.
+   HSTS preload. Needs a domain pointed at the IP first (LE won't issue
+   bare-IP certs). nginx config path: `/etc/nginx/sites-enabled/adnd-manager`.
+   Once HTTPS is up, scope `CORS_ORIGINS` to the https origin only (drop the
+   bare-IP + http:// entries).
+2. ~~**`server_tokens off;`**~~ — **DONE** in the follow-up pass (above).
+3. **Stale nginx backups in `sites-enabled`** — `adnd-manager.bak-20260517`
+   and `.bak-20260519` are still in `sites-enabled/`, so nginx loads them as
+   extra (empty-server-name) server blocks → two harmless "conflicting server
+   name" warnings on `nginx -t`. Move them out of `sites-enabled/` to silence.
+4. **Throwaway verification account** — `sectest-20260604@example.invalid`
+   (user id 5, role player, no campaign) was created to obtain a JWT for the
+   logged-in verification. Harmless; delete it from the `users` table when
+   convenient (no self-delete endpoint exists).
+5. JWT TTL is currently 30 days — leave for beta, consider 7d post-beta.
+6. Latent (non-security) bug noted earlier: `routes/ai.js` `/generate` uses
+   `model: 'claude-opus-4-6'` which isn't in MODEL_REGISTRY — would surface
+   only on `/api/ai/generate` calls.
 
 ### Verification (run after deploy)
 
