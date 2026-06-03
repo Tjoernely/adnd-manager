@@ -1,9 +1,14 @@
-require('dotenv').config();
+// IMPORTANT: explicit path so dotenv finds server/.env even when PM2 is
+// launched from a different cwd. Without this, `require('dotenv').config()`
+// looked in process.cwd() and silently loaded zero vars — which meant
+// NODE_ENV was undefined when middleware/rate-limit.js was required two
+// lines below, and the limiters ran with their dev caps in production.
+const path     = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express  = require('express');
 const cors     = require('cors');
 const helmet   = require('helmet');
-const path     = require('path');
 const { loginLimiter, registerLimiter, aiLimiter, imageLimiter } = require('./middleware/rate-limit');
 
 const autoMigrate            = require('./auto-migrate');
