@@ -44,6 +44,15 @@ export function staticKitsFlat() {
   return [...SP_KITS, ...classArr];
 }
 
+// Security pass: reference-data endpoints (/api/kits) now require an
+// authenticated user. EVERY kits fetch in this module must attach the JWT or
+// it 401s and silently falls back to the static bundle (missing the live
+// DB's 137 kits). Defined at module top so all three hooks share it.
+function authFetch(url) {
+  const token = localStorage.getItem('dnd_token');
+  return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+}
+
 /**
  * Fetch all kits (no class filter) and normalize.
  * Returns { kits: normalizedArray | null } — null means use static fallback.
@@ -53,7 +62,10 @@ export function useKits() {
   const [kits, setKits] = useState(null); // null = use static fallback
 
   useEffect(() => {
-    fetch("/api/kits")
+    // Regression fix (2026-06-04): this hook used a raw fetch() with no
+    // Authorization header, so it 401'd after the security pass even when
+    // logged in. Now routed through authFetch like the other two hooks.
+    authFetch("/api/kits")
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => {
         setKits(data.kits.map(normalizeDbKit));
@@ -72,13 +84,6 @@ export function useKits() {
  */
 // App class IDs that differ from the API's CLASS_FILTER_MAP keys
 const CLASS_ID_TO_API = { mage: 'wizard', specialist: 'wizard' };
-
-// Security pass: reference-data endpoints now require an authenticated user.
-// Wrap fetch so both hooks below pick up the JWT without duplicating boilerplate.
-function authFetch(url) {
-  const token = localStorage.getItem('dnd_token');
-  return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-}
 
 export function useKitsByClass(kitClass) {
   const [kits,    setKits]    = useState(null);

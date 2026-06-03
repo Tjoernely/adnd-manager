@@ -47,37 +47,23 @@ const PORT = process.env.PORT || 3000;
 // actual offender's IP.
 app.set('trust proxy', 1);
 
-// helmet — sets CSP, HSTS, X-Frame-Options, X-Content-Type-Options, and
-// strips X-Powered-By. CSP is configured below in report-only first so
-// we can roll it out to enforced after a brief observation window.
+// helmet — sets HSTS, X-Frame-Options, X-Content-Type-Options, COOP/CORP,
+// and strips X-Powered-By on API responses (defense in depth).
+//
+// CSP is deliberately DISABLED here. A CSP on /api JSON responses does
+// nothing for XSS — the browser enforces CSP from the *document* (the HTML
+// page), which is served directly by nginx, not Express. The real CSP now
+// lives in nginx on the static HTML + assets (see
+// /etc/nginx/snippets/adnd-security.conf, security pass 2026-06-04). Keeping
+// a second, contradictory CSP here would only be misleading.
 //
 // crossOriginEmbedderPolicy is disabled because gpt-image-1 returns
 // inline base64 that we re-upload; COEP would block some flows.
-// crossOriginResourcePolicy is left at the default ('same-origin') —
-// uploaded map images are served from the same origin.
 app.use(helmet({
-  contentSecurityPolicy: {
-    // Defensive defaults — tightened so a future XSS can't exfiltrate via
-    // attacker-controlled scripts. Inline styles are still allowed for the
-    // many style={{...}} JSX usages in the SPA; we'll move those to
-    // CSS modules in a later pass.
-    useDefaults: true,
-    directives: {
-      'default-src':  ["'self'"],
-      'script-src':   ["'self'"],
-      'style-src':    ["'self'", "'unsafe-inline'"],
-      'img-src':      ["'self'", 'data:', 'blob:', 'https:'],
-      'connect-src':  ["'self'"],
-      'font-src':     ["'self'", 'data:'],
-      'object-src':   ["'none'"],
-      'frame-ancestors': ["'none'"],
-      'base-uri':     ["'self'"],
-    },
-  },
+  contentSecurityPolicy: false,   // owned by nginx (on the HTML document)
   crossOriginEmbedderPolicy: false,
   // HSTS only takes effect over HTTPS — harmless on plain HTTP but the
-  // moment HTTPS lands (TODO: certbot — see CLAUDE_STATUS §1) browsers
-  // will lock onto it for a year.
+  // moment HTTPS lands (TODO: certbot) browsers lock onto it for a year.
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: false },
 }));
 
