@@ -524,14 +524,14 @@ These require SSH + sudo on the live server and an explicit go-ahead:
    Once HTTPS is up, scope `CORS_ORIGINS` to the https origin only (drop the
    bare-IP + http:// entries).
 2. ~~**`server_tokens off;`**~~ — **DONE** in the follow-up pass (above).
-3. **Stale nginx backups in `sites-enabled`** — `adnd-manager.bak-20260517`
-   and `.bak-20260519` are still in `sites-enabled/`, so nginx loads them as
-   extra (empty-server-name) server blocks → two harmless "conflicting server
-   name" warnings on `nginx -t`. Move them out of `sites-enabled/` to silence.
-4. **Throwaway verification account** — `sectest-20260604@example.invalid`
-   (user id 5, role player, no campaign) was created to obtain a JWT for the
-   logged-in verification. Harmless; delete it from the `users` table when
-   convenient (no self-delete endpoint exists).
+3. ~~**Stale nginx backups in `sites-enabled`**~~ — **DONE 2026-06-04.** Moved
+   `adnd-manager.bak-20260517/.bak-20260519` (and the new `.bak-20260604`) into
+   `/etc/nginx/site-backups/` (outside the include glob). `nginx -t` is now
+   warning-free; reloaded; site serves 200 with headers intact.
+4. ~~**Throwaway verification account**~~ — **DONE 2026-06-04.** Verified it
+   owned 0 campaigns / characters / memberships, then
+   `DELETE FROM users WHERE email='sectest-20260604@example.invalid'`
+   (DELETE 1, confirmed 0 rows remain).
 5. JWT TTL is currently 30 days — leave for beta, consider 7d post-beta.
 6. Latent (non-security) bug noted earlier: `routes/ai.js` `/generate` uses
    `model: 'claude-opus-4-6'` which isn't in MODEL_REGISTRY — would surface
