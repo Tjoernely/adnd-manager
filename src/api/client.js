@@ -35,6 +35,12 @@ async function apiFetch(path, options = {}) {
       localStorage.removeItem('dnd_user');
       window.dispatchEvent(new Event('auth:expired'));
     }
+    // AI feature-gate (403): tag + friendly-message the server-AI lock so
+    // GenerateButton et al. show "Awaiting approval…" instead of the raw code.
+    if (body?.error === 'ai_not_approved') {
+      err.code = 'ai_not_approved';
+      err.message = 'Awaiting approval for AI features';
+    }
     throw err;
   }
 

@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { api } from '../../api/client.js';
-import { callClaude, hasAnthropicKey, getOpenAIKey } from '../../api/aiClient.js';
+import { callClaude, hasAnthropicKey, getOpenAIKey, isAiApproved, AI_APPROVAL_MESSAGE } from '../../api/aiClient.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import './NPCGenerator.css';
 
@@ -159,6 +159,8 @@ export function NPCGenerator({ campaignId, onClose, onSaved }) {
   const up = (k, v) => setParams(p => ({ ...p, [k]: v }));
 
   const handleGenerate = async () => {
+    // AI feature-gate: NPC text generation uses the shared server key.
+    if (!isAiApproved()) { setError(AI_APPROVAL_MESSAGE); return; }
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
     console.log('[NPCGenerator] Starting generation. params:', params);
     setGenerating(true); setError(''); setResult(null); setSaved(false);
@@ -293,8 +295,10 @@ export function NPCGenerator({ campaignId, onClose, onSaved }) {
 
           {error && <div className="npg-error">{error}</div>}
 
-          <button className="npg-generate-btn" onClick={handleGenerate} disabled={generating}>
-            {generating ? '⏳ Generating NPC…' : '⚡ Generate NPC'}
+          <button className="npg-generate-btn" onClick={handleGenerate}
+            disabled={generating || !isAiApproved()}
+            title={isAiApproved() ? undefined : AI_APPROVAL_MESSAGE}>
+            {!isAiApproved() ? `🔒 ${AI_APPROVAL_MESSAGE}` : generating ? '⏳ Generating NPC…' : '⚡ Generate NPC'}
           </button>
 
           {/* Key status indicator */}

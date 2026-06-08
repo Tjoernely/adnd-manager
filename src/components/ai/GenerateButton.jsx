@@ -12,6 +12,7 @@
  */
 import { useState, useCallback } from 'react';
 import { api } from '../../api/client.js';
+import { isAiApproved, AI_APPROVAL_MESSAGE } from '../../api/aiClient.js';
 import './GenerateButton.css';
 
 // ── Field renderers per type ──────────────────────────────────────────────────
@@ -224,6 +225,11 @@ export function GenerateButton({
   const fields = CONTEXT_FIELDS[type] ?? [];
   const PreviewComp = PREVIEWS[type] ?? (() => <pre>{JSON.stringify(result, null, 2)}</pre>);
 
+  // AI feature-gate: this button hits /api/ai/generate (shared server key).
+  // Disable + relabel when the account isn't approved. Server-side
+  // requireAiApproval is the real enforcement; this is UX.
+  const aiApproved = isAiApproved();
+
   // ── Trigger: open context form (or skip straight to loading if no fields)
   const handleTrigger = useCallback(() => {
     setCtxValues({});
@@ -271,11 +277,11 @@ export function GenerateButton({
         type="button"
         className={`gb-trigger ${className}`}
         onClick={handleTrigger}
-        disabled={disabled || phase === 'loading'}
-        title={`Generate ${TYPE_LABELS[type] ?? type} with AI`}
+        disabled={disabled || phase === 'loading' || !aiApproved}
+        title={aiApproved ? `Generate ${TYPE_LABELS[type] ?? type} with AI` : AI_APPROVAL_MESSAGE}
       >
-        <span className="gb-trigger__icon">✨</span>
-        {label ?? `Generate ${TYPE_LABELS[type] ?? type}`}
+        <span className="gb-trigger__icon">{aiApproved ? '✨' : '🔒'}</span>
+        {aiApproved ? (label ?? `Generate ${TYPE_LABELS[type] ?? type}`) : AI_APPROVAL_MESSAGE}
       </button>
 
       {/* Modal */}

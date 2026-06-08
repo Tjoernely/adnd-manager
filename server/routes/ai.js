@@ -83,6 +83,34 @@ async function runOpenAIPrompt({ model, systemPrompt, userPrompt, maxTokens }) {
   return completion.choices?.[0]?.message?.content ?? '';
 }
 
+// ── AI feature-gate middleware ────────────────────────────────────────────────
+// Investigation (2026-06-04): all the Anthropic routes below run on the SHARED
+// server ANTHROPIC_API_KEY. getClientForRequest() prefers the env key
+// (`process.env.ANTHROPIC_API_KEY || header`) and /generate uses getClient()
+// directly — so a user-supplied x-anthropic-key is NOT honoured in production.
+// Per the gate design, when the routes always use the shared key we block the
+// whole endpoint for unapproved users (no BYOK bypass to honour).
+//
+// ai_approved is read FRESH from the DB on every call (not from the JWT), so an
+// owner approval via SQL takes effect immediately without the user re-logging
+// in. One indexed PK lookup per AI call is negligible beside model latency.
+//
+// NOTE: this gate is applied ONLY to the shared-key Anthropic routes
+// (/prompt, /loot, /generate). It is deliberately NOT applied to the image /
+// portrait paths — those run on the USER's own OpenAI key (direct browser →
+// api.openai.com), and /api/maps/:id/image/from-url just persists an
+// already-generated image, so both stay on plain `auth`.
+async function requireAiApproval(req, res, next) {
+  try {
+    const row = await db.one('SELECT ai_approved FROM users WHERE id=$1', [req.user.id]);
+    if (row && row.ai_approved === true) return next();
+    return res.status(403).json({ error: 'ai_not_approved' });
+  } catch (e) {
+    console.error('[ai/approval]', e.message);
+    return res.status(403).json({ error: 'ai_not_approved' });
+  }
+}
+
 // ── POST /api/ai/prompt ───────────────────────────────────────────────────────
 // Generic text proxy — replaces direct browser calls to api.anthropic.com.
 // Body: { systemPrompt?: string, userPrompt: string, maxTokens?: number, model?: string }
@@ -99,7 +127,7 @@ async function runOpenAIPrompt({ model, systemPrompt, userPrompt, maxTokens }) {
 // the non-streaming path returned. Removes the 21k threshold; uncaps to
 // the model's real maxOutput (64k for Sonnet, 128k for Opus). Client
 // contract is unchanged — still returns { text } JSON.
-router.post('/prompt', auth, async (req, res) => {
+router.post('/prompt', auth, requireAiApproval, async (req, res) => {
   try {
     const { systemPrompt, userPrompt, maxTokens = 1024, model } = req.body ?? {};
     if (!userPrompt) return res.status(400).json({ error: '"userPrompt" is required' });
@@ -150,7 +178,7 @@ router.post('/prompt', auth, async (req, res) => {
 
 // ── POST /api/ai/loot ─────────────────────────────────────────────────────────
 // Returns plain-text lore-friendly loot description (no DM gate, just auth).
-router.post('/loot', auth, async (req, res) => {
+router.post('/loot', auth, requireAiApproval, async (req, res) => {
   try {
     const { monsters = [], terrain = 'dungeon', difficulty = 'Medium', party_level = 5 } = req.body ?? {};
 
@@ -194,7 +222,7 @@ Keep it under 120 words, use bullet points.`,
 });
 
 // ── POST /api/ai/generate ──────────────────────────────────────────────────────
-router.post('/generate', auth, async (req, res) => {
+router.post('/generate', auth, requireAiApproval, async (req, res) => {
   try {
     const { type, context = {}, campaign_id } = req.body ?? {};
 

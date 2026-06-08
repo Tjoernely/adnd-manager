@@ -13,7 +13,7 @@
  */
 import { useState, useEffect } from 'react';
 import { api }             from '../../api/client.js';
-import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey } from '../../api/aiClient.js';
+import { callClaude, hasAnthropicKey, getOpenAIKey, hasOpenAIKey, isAiApproved, AI_APPROVAL_MESSAGE } from '../../api/aiClient.js';
 import { ApiKeySettings }  from '../ui/ApiKeySettings.jsx';
 import { buildMapWorldData, mapTypeToScope } from '../../rules-engine/generationMapper.ts';
 import { buildMapSpec, withImageContract, buildEnrichmentPrompt, applyEnrichment, applyInfluencesToSpec, buildImagePrompt } from '../../rules-engine/specBuilder.ts';
@@ -1117,6 +1117,10 @@ export function MapGenerator({
   };
 
   const handleGenerate = async () => {
+    // AI feature-gate: map metadata + POI + lore generation all hit
+    // /api/ai/prompt (shared server key). Hard-stop if the account isn't
+    // approved — the button is also disabled, this is the safety guard.
+    if (!isAiApproved()) { setError(AI_APPROVAL_MESSAGE); setStep('error'); return; }
     if (!hasAnthropicKey()) { setShowSettings(true); return; }
 
     // Sprint 6 — count check. Only blocks on hard-cap; soft warning shows a
@@ -1546,8 +1550,20 @@ export function MapGenerator({
                 </div>
               )}
 
-              <button className="mgn-generate-btn" onClick={handleGenerate}>
-                {presetImageUrl ? '✦ Confirm & Create Map' : isDrillDown ? '✦ Generate Sub-Map' : '✦ Generate Map'}
+              {/* AI feature-gate: map generation uses the shared server key */}
+              {!isAiApproved() && (
+                <div className="mgn-warn">🔒 {AI_APPROVAL_MESSAGE}.</div>
+              )}
+
+              <button
+                className="mgn-generate-btn"
+                onClick={handleGenerate}
+                disabled={!isAiApproved()}
+                title={isAiApproved() ? undefined : AI_APPROVAL_MESSAGE}
+              >
+                {!isAiApproved()
+                  ? `🔒 ${AI_APPROVAL_MESSAGE}`
+                  : presetImageUrl ? '✦ Confirm & Create Map' : isDrillDown ? '✦ Generate Sub-Map' : '✦ Generate Map'}
               </button>
             </div>
           )}

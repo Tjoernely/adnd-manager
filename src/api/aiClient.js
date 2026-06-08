@@ -13,6 +13,25 @@ export function hasAnthropicKey() { return !!getAnthropicKey(); }
 export function getOpenAIKey()    { return localStorage.getItem('openai_api_key') ?? null; }
 export function hasOpenAIKey()    { return !!getOpenAIKey(); }
 
+// ── AI feature-gate (2026-06-04) ──────────────────────────────────────────────
+// Server-side AI runs on the owner's shared Anthropic key and is locked behind
+// owner approval (enforced server-side in requireAiApproval). This reads the
+// ai_approved flag off the persisted user (written by useAuth on every /me +
+// login). UX only — the server is the real gate. Missing flag → treated as
+// unapproved.
+export function isAiApproved() {
+  try {
+    const u = JSON.parse(localStorage.getItem('dnd_user') || 'null');
+    return !!(u && u.ai_approved);
+  } catch { return false; }
+}
+// Shown on disabled server-AI buttons. English to match the rest of the UI.
+export const AI_APPROVAL_MESSAGE = 'Awaiting approval for AI features';
+// True when an error came back from the server-side AI gate (403).
+export function isAiNotApprovedError(e) {
+  return e?.code === 'ai_not_approved';
+}
+
 /**
  * callClaude — sends systemPrompt + userPrompt to /api/ai/prompt and returns
  * the parsed JSON from the assistant's text response.
@@ -43,10 +62,19 @@ export async function callClaude({ systemPrompt, userPrompt, maxTokens = 4096, m
 
   if (!resp.ok) {
     let errMsg = `AI proxy error ${resp.status}`;
+    let errCode = '';
     try {
       const errBody = await resp.json();
-      errMsg = errBody?.error ?? errBody?.detail ?? errMsg;
+      errCode = errBody?.error ?? '';
+      errMsg  = errBody?.error ?? errBody?.detail ?? errMsg;
     } catch (_) {}
+    // AI feature-gate: surface a friendly, actionable message instead of the
+    // raw "ai_not_approved" code, and tag the error so callers can detect it.
+    if (errCode === 'ai_not_approved') {
+      const e = new Error(AI_APPROVAL_MESSAGE);
+      e.code = 'ai_not_approved';
+      throw e;
+    }
     throw new Error(errMsg);
   }
 

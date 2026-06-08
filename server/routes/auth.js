@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
     const user = await db.one(
       `INSERT INTO users (email, password_hash, username, role)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, email, username, role`,
+       RETURNING id, email, username, role, ai_approved, is_admin`,
       [email.trim().toLowerCase(), hash, uname, 'player'],
     );
     res.status(201).json({ token: makeToken(user), user });
@@ -85,8 +85,12 @@ router.post('/login', async (req, res) => {
 
 // ── Me ──────────────────────────────────────────────────────────────────────
 router.get('/me', auth, async (req, res) => {
+  // ai_approved + is_admin (2026-06-04 AI feature-gate) are surfaced so the
+  // frontend can gate the server-AI buttons. Enforcement is server-side in
+  // requireAiApproval — these flags are UX only. login() already returns both
+  // (it spreads all columns minus password_hash into safeUser).
   const user = await db.one(
-    'SELECT id, email, username, role, created_at FROM users WHERE id = $1',
+    'SELECT id, email, username, role, ai_approved, is_admin, created_at FROM users WHERE id = $1',
     [req.user.id],
   );
   if (!user) return res.status(404).json({ error: 'User not found' });

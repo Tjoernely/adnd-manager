@@ -157,6 +157,25 @@ async function autoMigrate() {
       await db.query(`GRANT ALL ON map_connectors TO ${u};`);
     } catch (_) { /* ignore on managed DBs */ }
 
+    // ── AI feature-gate (2026-06-04) ───────────────────────────────────────
+    // Server-side AI (Anthropic) runs on the owner's shared ANTHROPIC_API_KEY,
+    // so it must be locked behind owner approval. ai_approved gates the AI
+    // routes (enforced in requireAiApproval middleware, read fresh from this
+    // column so SQL approvals take effect without re-login). is_admin is for
+    // a future admin UI — the column exists now but is not wired up yet.
+    // Defaults false → every existing + new account is unapproved until the
+    // owner flips ai_approved=true via SQL.
+    await db.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS ai_approved BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS is_admin    BOOLEAN NOT NULL DEFAULT false;
+    `);
+    // Seed the owner account (idempotent — re-asserts on every boot, harmless).
+    await db.query(`
+      UPDATE users SET ai_approved=true, is_admin=true
+      WHERE email='jesper@olesen.nu';
+    `);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS party_inventory (
         id                       SERIAL PRIMARY KEY,
