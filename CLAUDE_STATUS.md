@@ -95,6 +95,31 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - GPT-Image-1 as alternative sketch renderer (requires `OPENAI_API_KEY`)
 - Claude Haiku 4.5 for monster tag classification (one-shot, all 3781 monsters classified ~$3-4)
 
+**AI Feature-Gate — owner approval (2026-06-04)**
+- The server-side AI routes run on the owner's shared `ANTHROPIC_API_KEY`, so
+  they are **locked behind owner approval**. Everyone can register, log in, and
+  use the free features; only `ai_approved` accounts can call the shared-key AI.
+- Enforced **server-side** in `requireAiApproval` middleware (after `auth`) on
+  `/api/ai/prompt`, `/api/ai/loot`, `/api/ai/generate`. Unapproved → `403
+  { error: "ai_not_approved" }`. The middleware reads `ai_approved` **fresh from
+  the DB** per call, so an SQL approval takes effect immediately — no re-login.
+- **Not gated:** image / portrait generation (runs on the user's OWN OpenAI key,
+  direct browser → api.openai.com) and `/api/maps/:id/image/from-url` (only
+  persists an already-generated image). These stay on plain `auth`.
+- Frontend gating is **UX only** (the server is the real gate): `isAiApproved()`
+  reads the persisted user; Generate NPC / Quest / Encounter / Rumors
+  (`GenerateButton`), Map generation (`MapGenerator`), and NPC text generation
+  (`NPCGenerator`) disable + show "Awaiting approval for AI features" when
+  unapproved. `callClaude` + `apiFetch` map a stray 403 to that friendly message.
+- **Approval is via SQL for now** (no admin UI yet):
+  `UPDATE users SET ai_approved=true WHERE email='…';`
+- `is_admin` column exists (owner seeded true) but is **not wired up** — reserved
+  for a future admin-approval UI.
+- Verified live (2026-06-04): unapproved account → 403 on all three AI routes,
+  200 on free routes; flipping `ai_approved=true` opened the gate on the **same
+  token** (200, no re-login); owner `jesper@olesen.nu` approved, the 3 existing
+  player accounts unapproved.
+
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
 - 9 biome categories with all tile variants (28 unique tiles in `tiles_64/`)
@@ -416,6 +441,28 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 - A `MODEL_REGISTRY` in `server/routes/ai.js` carries each model's provider + real max-output tokens; the requested `maxTokens` is capped to that (replaced the old hard 4096 cap that caused truncation).
 - Omitting `model` → defaults to Sonnet 4.6, so NPCGenerator / MapGenerator (which never pass `model`) keep working unchanged.
 - `OPENAI_API_KEY` missing → `503 "OPENAI_API_KEY not configured on server"`.
+
+### AI feature-gate — schema + enforcement (2026-06-04)
+- **Schema:** `users` gains `ai_approved BOOLEAN NOT NULL DEFAULT false` and
+  `is_admin BOOLEAN NOT NULL DEFAULT false` (auto-migrate, idempotent). Owner
+  `jesper@olesen.nu` seeded `true/true` (re-asserted every boot); all others
+  default `false`.
+- **Why the whole endpoint is blocked (not BYOK-bypassed):** investigation
+  showed `getClientForRequest()` prefers the env key
+  (`process.env.ANTHROPIC_API_KEY || header`) and `/generate` uses `getClient()`
+  directly, so in production the routes ALWAYS use the shared server key — a
+  user-supplied `x-anthropic-key` is not honoured. Therefore unapproved users
+  are blocked outright rather than allowed a (non-functional) own-key path.
+  *If* BYOK-bypass is ever wanted, flip the key priority in
+  `getClientForRequest` to prefer the header, then relax `requireAiApproval` to
+  allow requests carrying a non-empty `x-anthropic-key`.
+- **Enforcement** lives in `requireAiApproval` (in `server/routes/ai.js`),
+  mounted after `auth` on `/prompt`, `/loot`, `/generate`. It SELECTs
+  `ai_approved` by `req.user.id` per request (fresh, no JWT staleness) — an SQL
+  approval is effective immediately. `is_admin` is surfaced but not yet used.
+- **Approve a user:** `UPDATE users SET ai_approved=true WHERE email='…';`
+  (admin UI deferred). The frontend reflects it after the next `/api/auth/me`
+  (page reload); server enforcement is immediate regardless.
 
 ### Shared AD&D theming
 - `src/styles/adnd-theme.css` holds the canonical theme variables (`--adnd-gold`, `--adnd-bg`, `--adnd-surface`, `--adnd-border`, …) plus reusable `.adnd-divider`, `.adnd-card`, `.adnd-module-header`.
