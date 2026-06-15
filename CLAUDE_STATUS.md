@@ -117,8 +117,12 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   for a future admin-approval UI.
 - Verified live (2026-06-04): unapproved account → 403 on all three AI routes,
   200 on free routes; flipping `ai_approved=true` opened the gate on the **same
-  token** (200, no re-login); owner `jesper@olesen.nu` approved, the 3 existing
-  player accounts unapproved.
+  token** (200, no re-login); owner `jesper@olesen.nu` approved.
+- **Approved accounts (2026-06-04):** `jesper@olesen.nu` (+ `is_admin`),
+  `jarlehenssel`, `thogrizzly`, `runeilsted` — the 3 existing real players were
+  approved by SQL after the gate shipped. All future registrations default to
+  unapproved. (Note: `runeilsted`'s username is stored `Runeilsted` — match on
+  email/id, not a lower-cased username, when approving.)
 
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
