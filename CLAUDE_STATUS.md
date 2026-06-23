@@ -504,7 +504,7 @@ These are suggested based on current state — confirm with user before starting
 | `OPENAI_API_KEY` | DALL-E 3 + GPT-Image-1 | Map images |
 | `GOOGLE_AI_API_KEY` | Gemini image generation | Sketch-to-map |
 | `WEBHOOK_SECRET` | GitHub webhook HMAC | Auto-deploy |
-| `APP_URL` | Base URL for invite links (`auth.js`). **Currently UNSET → invites build as `http://localhost:3000/…`. Recommend `https://realmkeep.app`.** | Invites |
+| `APP_URL` | Base URL for invite links (`auth.js`). **Set 2026-06-04: `https://realmkeep.app`** — verified a fresh invite mints `https://realmkeep.app/join/…`. Read at module load, so a change needs a PM2 restart. | Invites |
 | `PORT` | Express port (default 3000 local, 3001 prod) | Backend |
 
 ---
@@ -632,12 +632,13 @@ Oracle security list + OS firewall both allow 443. The app is now served at
   https (`image/png`, 200); **no mixed-content, no console errors**.
 
 ### Follow-ups (still server-side, optional)
-- **`APP_URL` is unset** → invite links (`auth.js`) currently build as
-  `http://localhost:3000/join/…`. Set `APP_URL=https://realmkeep.app` in
-  `server/.env` + restart so invites point at the live domain. (Not changed in
-  this pass — flagged for go-ahead.)
-- HSTS `preload` is off (max-age + includeSubDomains only). Enable preload +
-  submit to the HSTS preload list once you're confident HTTPS stays up.
+- ~~**`APP_URL`**~~ — **DONE 2026-06-04.** Set to `https://realmkeep.app` in
+  `server/.env`, PM2 restarted. Verified via a throwaway DM→campaign→invite
+  that a fresh link mints `https://realmkeep.app/join/<token>` (not localhost);
+  throwaway artifacts deleted afterward.
+- HSTS `preload` is off (max-age + includeSubDomains only) — **left off
+  intentionally for now**. Enable preload + submit to the HSTS preload list
+  once you're confident HTTPS stays up.
 
 ### Verification (run after deploy)
 
