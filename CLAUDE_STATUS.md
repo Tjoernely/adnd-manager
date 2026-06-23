@@ -14,7 +14,8 @@ _Last updated: 2026-06-04_
 | SSH key | `C:/DnD_manager_app/ssh-key-2026-03-11.key` |
 | App root | `/var/www/adnd-manager` |
 | Process manager | PM2, process name: `adnd-backend` |
-| Web server | nginx — port 80, `/api/` → Express :3001, everything else → `server/public/` |
+| Domain | **`realmkeep.app` (+ www) → HTTPS live (2026-06-04)**, Let's Encrypt, auto-renew |
+| Web server | nginx — **443 TLS** (`/api/` → Express :3001, else `server/public/`); **port 80 301-redirects to https**. Cert: `/etc/letsencrypt/live/realmkeep.app/`. |
 | Database | PostgreSQL (managed Oracle DB) |
 
 > **nginx custom config** (`/etc/nginx/sites-enabled/adnd-manager` — lives only
@@ -498,11 +499,12 @@ These are suggested based on current state — confirm with user before starting
 | `DB_*` | PostgreSQL connection | Everything |
 | `JWT_SECRET` | Auth tokens — MUST be ≥32 chars; server refuses to start in production without it (security pass 2026-06-04) | Everything |
 | `NODE_ENV` | `production` enables strict rate-limits + JWT_SECRET guard | Prod |
-| `CORS_ORIGINS` | Comma-separated origin allowlist (e.g. `http://158.180.63.20,https://158.180.63.20`); falls back to built-in defaults | Optional |
-| `ANTHROPIC_API_KEY` | Claude AI (map lore, POIs, monster tag classification) | Map generator + tag classifier |
+| `CORS_ORIGINS` | Comma-separated origin allowlist. **Prod (2026-06-04): `https://realmkeep.app,https://www.realmkeep.app`** (bare-IP dropped after TLS). Falls back to built-in defaults if unset. | Optional |
+| `ANTHROPIC_API_KEY` | Claude AI (map lore, POIs, monster tag classification) — **shared key, gated behind `ai_approved`** | Map generator + tag classifier |
 | `OPENAI_API_KEY` | DALL-E 3 + GPT-Image-1 | Map images |
 | `GOOGLE_AI_API_KEY` | Gemini image generation | Sketch-to-map |
 | `WEBHOOK_SECRET` | GitHub webhook HMAC | Auto-deploy |
+| `APP_URL` | Base URL for invite links (`auth.js`). **Currently UNSET → invites build as `http://localhost:3000/…`. Recommend `https://realmkeep.app`.** | Invites |
 | `PORT` | Express port (default 3000 local, 3001 prod) | Backend |
 
 ---
@@ -569,11 +571,9 @@ After the passive live-test, two items were addressed:
 
 These require SSH + sudo on the live server and an explicit go-ahead:
 
-1. **HTTPS via certbot** — install Let's Encrypt, redirect 80 → 443, enable
-   HSTS preload. Needs a domain pointed at the IP first (LE won't issue
-   bare-IP certs). nginx config path: `/etc/nginx/sites-enabled/adnd-manager`.
-   Once HTTPS is up, scope `CORS_ORIGINS` to the https origin only (drop the
-   bare-IP + http:// entries).
+1. ~~**HTTPS via certbot**~~ — **DONE 2026-06-04. HTTPS is LIVE on
+   `https://realmkeep.app` (+ www).** See the "HTTPS / TLS" section below for
+   the full setup; `CORS_ORIGINS` scoped to the https origins.
 2. ~~**`server_tokens off;`**~~ — **DONE** in the follow-up pass (above).
 3. ~~**Stale nginx backups in `sites-enabled`**~~ — **DONE 2026-06-04.** Moved
    `adnd-manager.bak-20260517/.bak-20260519` (and the new `.bak-20260604`) into
@@ -587,6 +587,57 @@ These require SSH + sudo on the live server and an explicit go-ahead:
 6. Latent (non-security) bug noted earlier: `routes/ai.js` `/generate` uses
    `model: 'claude-opus-4-6'` which isn't in MODEL_REGISTRY — would surface
    only on `/api/ai/generate` calls.
+
+### HTTPS / TLS — LIVE (2026-06-04)
+
+**Domain:** `realmkeep.app` (+ `www.realmkeep.app`) → A record to `158.180.63.20`.
+Oracle security list + OS firewall both allow 443. The app is now served at
+**https://realmkeep.app**.
+
+- **Firewall:** TCP 443 was already ACCEPT-before-REJECT in iptables (line 5);
+  80 at line 6. Persisted with `netfilter-persistent save` → `/etc/iptables/
+  rules.v4`. (Two dead duplicate 443/80 rules sit *after* the REJECT — harmless,
+  left in place.)
+- **nginx:** `server_name realmkeep.app www.realmkeep.app;` added to the vhost.
+  `certbot --nginx --redirect` then converted the main block to `listen 443 ssl`
+  (LE cert + `options-ssl-nginx.conf` + `ssl_dhparam`) and added a second
+  port-80 server block that 301-redirects both hosts to https. The 3
+  security-header `include`s stayed in the 443 block (verified) — CSP/HSTS/XFO/
+  XCTO/Referrer-Policy all present on the HTTPS response; `Server: nginx` only.
+- **Certbot:** v1.21.0 (apt). Cert at `/etc/letsencrypt/live/realmkeep.app/`,
+  expires **2026-09-21**. Auto-renewal via `certbot.timer` (active);
+  `certbot renew --dry-run` passes. LE account registered to jesper@olesen.nu.
+  - *Install gotcha:* `python3-certbot-nginx` pulled an nginx package upgrade
+    that stalled on the `sites-available/default` conffile prompt
+    (non-interactive EOF). Resolved with
+    `apt-get install -f -o Dpkg::Options::=--force-confold` (kept existing
+    configs). Our `sites-enabled/adnd-manager` was untouched.
+- **CORS:** `CORS_ORIGINS=https://realmkeep.app,https://www.realmkeep.app` in
+  `server/.env` (bare-IP origin dropped). Verified: allowed origin gets the
+  `Access-Control-Allow-Origin` echo; the old bare-IP origin is rejected;
+  no-Origin tool requests still pass. PM2 restarted.
+- **Frontend:** already uses relative `/api` + relative asset/image paths — no
+  hardcoded `http://158.180.63.20` anywhere, so it works under https with no
+  rebuild and no mixed content.
+- **Config backups:** `/etc/nginx/site-backups/adnd-manager.bak-20260604-pretls`
+  (before server_name) and `…-precertbot` (before certbot). Live config now only
+  on the server.
+- **Side effect:** `http://158.180.63.20` (bare IP, port 80) now returns 404 —
+  the port-80 block only redirects the two domains. Use the domain. Reaching the
+  app by bare IP over https shows a cert-name mismatch (cert is for the domain).
+- **Verified live (browser, Claude-in-Chrome):** https padlock (trusted cert,
+  no `-k`); `http://` → 301 → `https://` (apex + www); register + login over
+  HTTPS through the real frontend; 5/5 `/api/*` calls 200 over
+  `https://realmkeep.app` (incl. `/api/auth/me`); a 3 MB map PNG served over
+  https (`image/png`, 200); **no mixed-content, no console errors**.
+
+### Follow-ups (still server-side, optional)
+- **`APP_URL` is unset** → invite links (`auth.js`) currently build as
+  `http://localhost:3000/join/…`. Set `APP_URL=https://realmkeep.app` in
+  `server/.env` + restart so invites point at the live domain. (Not changed in
+  this pass — flagged for go-ahead.)
+- HSTS `preload` is off (max-age + includeSubDomains only). Enable preload +
+  submit to the HSTS preload list once you're confident HTTPS stays up.
 
 ### Verification (run after deploy)
 
