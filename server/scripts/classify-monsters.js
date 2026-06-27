@@ -34,10 +34,12 @@ const path = require('path');
 // --- Configuration ---
 const VOCAB_PATH = path.join(__dirname, '..', 'data', 'tag-vocabulary.json');
 const LOG_PATH = path.join(__dirname, '..', 'classify-monsters.log');
-// Sonnet 4.5 picked over Haiku 4.5 — ~3× cost ($5 vs $1.50 for full 3781 set)
+// Sonnet picked over Haiku 4.5 — ~3× cost ($5 vs $1.50 for full 3781 set)
 // in exchange for substantially better semantic AD&D classification, fewer
 // low-confidence verdicts, and better name-vs-description reasoning.
-const ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
+// 2026-06-04: was the dated 'claude-sonnet-4-5-20250929' snapshot (a version
+// behind, not in MODEL_REGISTRY) — aligned to the registry's current Sonnet.
+const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_BATCH_SIZE = 20;
 // Sonnet 4.5 on the default org tier caps at 30 000 input tokens/min and
 // 50 req/min. Each batch of 20 monsters with the 3000-char description slice

@@ -240,9 +240,12 @@ router.post('/generate', auth, requireAiApproval, async (req, res) => {
 
     const client = getClient();
 
-    // Stream and collect full response to avoid timeout
+    // Stream and collect full response to avoid timeout.
+    // model MUST be a valid id — 'claude-opus-4-6' (never existed in
+    // MODEL_REGISTRY) made every /api/ai/generate call 404 at the Anthropic
+    // API. The registry's Opus entry is 'claude-opus-4-7'. (2026-06-04 fix)
     const message = await client.messages.stream({
-      model:      'claude-opus-4-6',
+      model:      'claude-opus-4-7',
       max_tokens: 2048,
       thinking:   { type: 'adaptive' },
       system:     systemPrompt,
