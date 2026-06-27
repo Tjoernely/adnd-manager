@@ -584,9 +584,24 @@ These require SSH + sudo on the live server and an explicit go-ahead:
    `DELETE FROM users WHERE email='sectest-20260604@example.invalid'`
    (DELETE 1, confirmed 0 rows remain).
 5. JWT TTL is currently 30 days — leave for beta, consider 7d post-beta.
-6. Latent (non-security) bug noted earlier: `routes/ai.js` `/generate` uses
-   `model: 'claude-opus-4-6'` which isn't in MODEL_REGISTRY — would surface
-   only on `/api/ai/generate` calls.
+6. ~~Latent bug: `routes/ai.js` `/generate` used `model: 'claude-opus-4-6'`~~ —
+   **FIXED 2026-06-04 (`6f14991`).** It was hardcoded straight to the SDK
+   (bypassing MODEL_REGISTRY), so every `/api/ai/generate` call 404'd at the
+   Anthropic API. Corrected to `claude-opus-4-7` (the registry's Opus id).
+   Also aligned the monster-classify script off the dated
+   `claude-sonnet-4-5-20250929` snapshot → `claude-sonnet-4-6`. Verified live:
+   `/api/ai/prompt` → `{"text":"PONG"}`, `/api/ai/generate` → full NPC, for an
+   approved user. All other chat-model refs already match the registry.
+7. **Stale image model `dall-e-3` (flagged, NOT fixed — separate subsystem).**
+   The codebase's own comment (`MapGenerator.jsx`) says dall-e-3 was removed
+   from OpenAI's API on 2026-05-12; map images already moved to `gpt-image-1`.
+   But the NPC/character **portrait** generators still call `dall-e-3`
+   (`NPCManager.jsx`, `NPCGenerator.jsx`, `PortraitTab.jsx`) as do the server
+   `dalleProvider.js` / `visionProvider.js`. If dall-e-3 is truly gone, portrait
+   generation is broken. Migrating means more than a model-id swap — gpt-image-1
+   returns `b64_json` (not a URL) and rejects `style`/`response_format`/`quality`
+   the way the map flow had to handle. Left for a dedicated follow-up. Uses the
+   USER's own OpenAI key, so it doesn't touch the shared key / approval gate.
 
 ### HTTPS / TLS — LIVE (2026-06-04)
 
