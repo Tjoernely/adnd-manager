@@ -95,41 +95,58 @@ function safeLen(r) {
   return Array.isArray(r) ? r.length : 0;
 }
 
-// ── DM-only: rule-breaker approvals ─────────────────────────────────────────────
-// Lists the campaign's rule-breaking characters with their status; pending ones
-// are highlighted with the rule_violations and an Approve button, approved ones
-// get a Revoke button. Both call PUT /api/characters/:id/approval (DM-enforced
-// server-side). Renders nothing when there are no rule-breaking characters.
-function RuleBreakerApprovals({ campaignId }) {
-  const [chars,  setChars]  = useState(null); // null = loading
-  const [busyId, setBusyId] = useState(null);
-  const [err,    setErr]    = useState(null);
+// ── DM-only: party characters — ownership + rule-breaker approvals ───────────────
+// Lists every character in the campaign with its current owner. The DM can
+// reassign a character to any campaign member (PUT /characters/:id/owner) and,
+// for rule-breaking characters, approve/revoke the house-rule (PUT .../approval).
+// Renders nothing when the campaign has no characters. DM-only (gated by caller).
+function CampaignCharacters({ campaignId, currentUserId }) {
+  const [chars,   setChars]   = useState(null); // null = loading
+  const [members, setMembers] = useState([]);
+  const [busyId,  setBusyId]  = useState(null);
+  const [pickFor, setPickFor] = useState(null); // character id whose member-picker is open
+  const [confirm, setConfirm] = useState(null); // { char, member } awaiting confirmation
+  const [err,     setErr]     = useState(null);
 
   const load = useCallback(() => {
-    api.getPartyView(campaignId)
-      .then(list => setChars(Array.isArray(list) ? list : []))
-      .catch(e => { console.error('[approvals]', e); setErr('Could not load characters'); setChars([]); });
+    setErr(null);
+    Promise.all([
+      api.getPartyView(campaignId),
+      api.getCampaignMembers(campaignId).catch(() => []),
+    ]).then(([cs, ms]) => {
+      setChars(Array.isArray(cs) ? cs : []);
+      setMembers(Array.isArray(ms) ? ms : []);
+    }).catch(e => { console.error('[characters]', e); setErr('Could not load characters'); setChars([]); });
   }, [campaignId]);
   useEffect(() => { load(); }, [load]);
 
   const setApproval = async (id, approved) => {
-    setBusyId(id);
-    setErr(null);
+    setBusyId(id); setErr(null);
     try {
       const updated = await api.approveCharacter(id, approved);
       setChars(prev => (prev ?? []).map(c => (c.id === id ? { ...c, ...updated } : c)));
     } catch (e) {
-      console.error('[approvals]', e);
+      console.error('[characters]', e);
       setErr(e.message || 'Approval failed');
-    } finally {
-      setBusyId(null);
-    }
+    } finally { setBusyId(null); }
   };
 
-  if (chars === null) return null; // stay quiet until loaded
-  const breakers = chars.filter(c => c.rule_breaker || c.status === 'pending' || c.status === 'approved');
-  if (breakers.length === 0) return null;
-  const pendingCount = breakers.filter(c => c.status === 'pending').length;
+  const doAssign = async () => {
+    if (!confirm) return;
+    const { char, member } = confirm;
+    setBusyId(char.id); setErr(null); setConfirm(null); setPickFor(null);
+    try {
+      await api.assignCharacterOwner(char.id, member.id);
+      await load(); // refetch so the owner column reflects the transfer
+    } catch (e) {
+      console.error('[characters]', e);
+      setErr(e.message || 'Assignment failed');
+    } finally { setBusyId(null); }
+  };
+
+  if (chars === null) return null;     // stay quiet until loaded
+  if (chars.length === 0) return null; // nothing to manage
+  const pendingCount = chars.filter(c => c.status === 'pending').length;
 
   return (
     <div style={{
@@ -141,27 +158,28 @@ function RuleBreakerApprovals({ campaignId }) {
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
         fontSize: 12, letterSpacing: 2.5, textTransform: 'uppercase', color: '#c8a8f0', fontWeight: 'bold',
       }}>
-        ⚖ Rule-Breaker Approvals
+        👥 Party Characters
         {pendingCount > 0 && (
           <span style={{
             fontSize: 10, letterSpacing: .5, color: '#ff6b6b', background: 'rgba(200,50,50,.16)',
             border: '1px solid rgba(220,70,70,.5)', borderRadius: 10, padding: '2px 9px',
           }}>
-            {pendingCount} pending
+            {pendingCount} pending approval
           </span>
         )}
       </div>
 
-      {err && (
-        <div style={{ fontSize: 11, color: '#ff8888', marginBottom: 10 }}>{err}</div>
-      )}
+      {err && <div style={{ fontSize: 11, color: '#ff8888', marginBottom: 10 }}>{err}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {breakers.map(c => {
+        {chars.map(c => {
           const violations = Array.isArray(c.character_data?.rule_violations) ? c.character_data.rule_violations : [];
           const pending  = c.status === 'pending';
           const approved = c.status === 'approved';
           const accent   = pending ? '#d65b5b' : approved ? '#82c85a' : '#8a7a55';
+          const owner    = c.owner_username || c.owner_email || `user #${c.player_user_id}`;
+          const assignable = members.filter(m => m.id !== c.player_user_id);
+          const busy     = busyId === c.id;
           return (
             <div key={c.id} style={{
               display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14,
@@ -172,45 +190,119 @@ function RuleBreakerApprovals({ campaignId }) {
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 14, color: '#e8dcc0', fontWeight: 'bold' }}>{c.name}</span>
-                  <span style={{
-                    fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 'bold',
-                    color: accent, border: `1px solid ${accent}`, borderRadius: 9, padding: '1px 8px',
-                  }}>
-                    {pending ? 'Pending' : approved ? 'Approved' : 'Clean'}
-                  </span>
+                  {(pending || approved) && (
+                    <span style={{
+                      fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 'bold',
+                      color: accent, border: `1px solid ${accent}`, borderRadius: 9, padding: '1px 8px',
+                    }}>
+                      {pending ? 'Pending' : 'Approved'}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: '#a99', marginTop: 3, fontStyle: 'italic' }}>
+                  👤 {owner}
                 </div>
                 {violations.length > 0 && (
-                  <ul style={{ margin: '7px 0 0', paddingLeft: 18, color: '#bfa980', fontSize: 11, lineHeight: 1.5 }}>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#bfa980', fontSize: 11, lineHeight: 1.5 }}>
                     {violations.map((v, i) => <li key={i}>{v}</li>)}
                   </ul>
                 )}
               </div>
-              <div style={{ flexShrink: 0 }}>
+
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                 {pending && (
-                  <button onClick={() => setApproval(c.id, true)} disabled={busyId === c.id} style={{
-                    fontSize: 11, fontWeight: 'bold', fontFamily: 'inherit', cursor: busyId === c.id ? 'default' : 'pointer',
+                  <button onClick={() => setApproval(c.id, true)} disabled={busy} style={{
+                    fontSize: 11, fontWeight: 'bold', fontFamily: 'inherit', cursor: busy ? 'default' : 'pointer',
                     padding: '6px 14px', borderRadius: 6, color: '#0f1a0a',
-                    background: 'linear-gradient(135deg,#5a8a2a,#82c85a)', border: 'none',
-                    opacity: busyId === c.id ? .6 : 1,
+                    background: 'linear-gradient(135deg,#5a8a2a,#82c85a)', border: 'none', opacity: busy ? .6 : 1,
                   }}>
-                    {busyId === c.id ? '…' : '✓ Approve'}
+                    {busy ? '…' : '✓ Approve'}
                   </button>
                 )}
                 {approved && (
-                  <button onClick={() => setApproval(c.id, false)} disabled={busyId === c.id} style={{
-                    fontSize: 11, fontWeight: 'bold', fontFamily: 'inherit', cursor: busyId === c.id ? 'default' : 'pointer',
+                  <button onClick={() => setApproval(c.id, false)} disabled={busy} style={{
+                    fontSize: 11, fontWeight: 'bold', fontFamily: 'inherit', cursor: busy ? 'default' : 'pointer',
                     padding: '6px 14px', borderRadius: 6, color: '#e0b070',
-                    background: 'rgba(0,0,0,.35)', border: '1px solid rgba(200,150,80,.5)',
-                    opacity: busyId === c.id ? .6 : 1,
+                    background: 'rgba(0,0,0,.35)', border: '1px solid rgba(200,150,80,.5)', opacity: busy ? .6 : 1,
                   }}>
-                    {busyId === c.id ? '…' : '↺ Revoke'}
+                    {busy ? '…' : '↺ Revoke'}
                   </button>
+                )}
+
+                {/* Reassign owner */}
+                <button onClick={() => setPickFor(pickFor === c.id ? null : c.id)} disabled={busy} style={{
+                  fontSize: 11, fontFamily: 'inherit', cursor: busy ? 'default' : 'pointer',
+                  padding: '6px 12px', borderRadius: 6, color: '#c8a8f0',
+                  background: pickFor === c.id ? 'rgba(160,127,208,.2)' : 'rgba(0,0,0,.35)',
+                  border: '1px solid rgba(160,127,208,.5)', opacity: busy ? .6 : 1,
+                }}>
+                  Assign to player {pickFor === c.id ? '▴' : '▾'}
+                </button>
+
+                {pickFor === c.id && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 4, padding: 6, borderRadius: 6,
+                    background: 'rgba(0,0,0,.5)', border: '1px solid rgba(160,127,208,.35)', minWidth: 150,
+                  }}>
+                    {assignable.length === 0 && (
+                      <div style={{ fontSize: 10, color: '#998', fontStyle: 'italic', padding: '3px 6px' }}>
+                        No other members to assign to
+                      </div>
+                    )}
+                    {assignable.map(m => (
+                      <button key={m.id} onClick={() => setConfirm({ char: c, member: m })} style={{
+                        fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                        padding: '5px 9px', borderRadius: 5, color: '#e8dcc0',
+                        background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)',
+                      }}>
+                        {m.username || m.email}{m.role === 'dm' ? ' · DM' : ''}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Confirmation before transfer */}
+      {confirm && (
+        <div onClick={() => setConfirm(null)} style={{
+          position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            maxWidth: 420, margin: 20, padding: '20px 22px', borderRadius: 12,
+            background: '#1a1228', border: '1px solid rgba(160,127,208,.5)', boxShadow: '0 10px 40px rgba(0,0,0,.8)',
+          }}>
+            <div style={{ fontSize: 15, color: '#c8a8f0', fontWeight: 'bold', marginBottom: 10 }}>Reassign character?</div>
+            <div style={{ fontSize: 13, color: '#d8ccb0', lineHeight: 1.6, marginBottom: 8 }}>
+              Assign <b>{confirm.char.name}</b> to <b>{confirm.member.username || confirm.member.email}</b>?
+              The new owner will be able to edit this character.
+            </div>
+            {confirm.char.player_user_id === currentUserId && (
+              <div style={{
+                fontSize: 12, color: '#ffb37a', lineHeight: 1.5, marginBottom: 14,
+                background: 'rgba(200,120,40,.12)', border: '1px solid rgba(200,120,40,.4)',
+                borderRadius: 6, padding: '8px 11px',
+              }}>
+                ⚠ You currently own this character — you will lose edit access after the transfer.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
+              <button onClick={() => setConfirm(null)} style={{
+                fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', padding: '7px 16px', borderRadius: 6,
+                color: '#bbb', background: 'transparent', border: '1px solid rgba(255,255,255,.2)',
+              }}>Cancel</button>
+              <button onClick={doAssign} style={{
+                fontSize: 12, fontWeight: 'bold', fontFamily: 'inherit', cursor: 'pointer', padding: '7px 18px', borderRadius: 6,
+                color: '#0f1a0a', background: 'linear-gradient(135deg,#8a6ec0,#c8a8f0)', border: 'none',
+              }}>Confirm transfer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -301,7 +393,7 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
         </div>
         <p className="cd-intro">Choose a module to continue your adventure</p>
 
-        {isDM && <RuleBreakerApprovals campaignId={campaign.id} />}
+        {isDM && <CampaignCharacters campaignId={campaign.id} currentUserId={user.id} />}
 
         <div className="cd-grid">
           {MODULES.map(mod => {
