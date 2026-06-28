@@ -26,6 +26,7 @@ const fs      = require('fs');
 const crypto  = require('crypto');
 const db      = require('../db');
 const { auth } = require('../middleware/auth');
+const { requireAiApproval } = require('../middleware/aiApproval');
 const ARCHETYPE_RULES = require('../../src/rulesets/settlementArchetypes.json');
 // mapTags.json is now { tags: [...], poi_influence_rules: {...} }
 const MAP_TAGS_JSON   = require('../../src/rulesets/mapTags.json');
@@ -747,8 +748,13 @@ function buildPromptAdditions(sketchSpec) {
 // ── POST /api/maps/generate-from-sketch ──────────────────────────────────────
 // Starts a background generation job and returns { jobId } immediately.
 // Body: { sketchSpec, renderer?, controlImage, stylePreset?, userPrompt? }
+//
+// COST ROUTE: the gpt-image-1 / Gemini renderers run on the OWNER's shared
+// OPENAI_API_KEY / GOOGLE_AI_API_KEY, so this is gated behind requireAiApproval
+// (after auth) — same gate as the /api/ai/* text routes. imageLimiter (mounted
+// in index.js) still caps rate on top. (2026-06-04 — dall-e-3 cost-route review.)
 
-router.post('/generate-from-sketch', auth, (req, res) => {
+router.post('/generate-from-sketch', auth, requireAiApproval, (req, res) => {
   const {
     sketchSpec,
     renderer:     rendererName = 'auto',

@@ -84,32 +84,13 @@ async function runOpenAIPrompt({ model, systemPrompt, userPrompt, maxTokens }) {
 }
 
 // ── AI feature-gate middleware ────────────────────────────────────────────────
-// Investigation (2026-06-04): all the Anthropic routes below run on the SHARED
-// server ANTHROPIC_API_KEY. getClientForRequest() prefers the env key
-// (`process.env.ANTHROPIC_API_KEY || header`) and /generate uses getClient()
-// directly — so a user-supplied x-anthropic-key is NOT honoured in production.
-// Per the gate design, when the routes always use the shared key we block the
-// whole endpoint for unapproved users (no BYOK bypass to honour).
-//
-// ai_approved is read FRESH from the DB on every call (not from the JWT), so an
-// owner approval via SQL takes effect immediately without the user re-logging
-// in. One indexed PK lookup per AI call is negligible beside model latency.
-//
-// NOTE: this gate is applied ONLY to the shared-key Anthropic routes
-// (/prompt, /loot, /generate). It is deliberately NOT applied to the image /
-// portrait paths — those run on the USER's own OpenAI key (direct browser →
-// api.openai.com), and /api/maps/:id/image/from-url just persists an
-// already-generated image, so both stay on plain `auth`.
-async function requireAiApproval(req, res, next) {
-  try {
-    const row = await db.one('SELECT ai_approved FROM users WHERE id=$1', [req.user.id]);
-    if (row && row.ai_approved === true) return next();
-    return res.status(403).json({ error: 'ai_not_approved' });
-  } catch (e) {
-    console.error('[ai/approval]', e.message);
-    return res.status(403).json({ error: 'ai_not_approved' });
-  }
-}
+// requireAiApproval blocks unapproved users from the shared-key routes below.
+// Extracted to middleware/aiApproval.js (2026-06-04) so the server-side image
+// route (/api/maps/generate-from-sketch, gpt-image-1/Gemini on the shared
+// OpenAI/Google key) can share the exact same gate. See that file for the
+// full rationale (shared key → block whole endpoint; fresh DB read; mount
+// after `auth`).
+const { requireAiApproval } = require('../middleware/aiApproval');
 
 // ── POST /api/ai/prompt ───────────────────────────────────────────────────────
 // Generic text proxy — replaces direct browser calls to api.anthropic.com.
