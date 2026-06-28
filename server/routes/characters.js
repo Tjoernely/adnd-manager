@@ -93,8 +93,11 @@ router.get('/party/:campaignId', auth, async (req, res) => {
     const access = await campaignAccess(campaignId, req.user.id);
     if (!access) return res.status(403).json({ error: 'Not a member of this campaign' });
 
+    // Join the owner so the DM can see who each character belongs to.
     const rows = await db.all(
-      'SELECT * FROM characters WHERE campaign_id=$1 ORDER BY updated_at DESC',
+      `SELECT c.*, u.username AS owner_username, u.email AS owner_email
+       FROM characters c JOIN users u ON u.id = c.player_user_id
+       WHERE c.campaign_id=$1 ORDER BY c.updated_at DESC`,
       [campaignId],
     );
     // DM sees everything; each player sees own full + others filtered
@@ -225,6 +228,44 @@ router.put('/:id/approval', auth, async (req, res) => {
     const updated = await db.one(
       `UPDATE characters SET dm_approved=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
       [approved, req.params.id],
+    );
+    res.json(fmt(updated));
+  } catch (e) { next500(e, res); }
+});
+
+// ── Reassign character ownership (campaign DM or admin) ──────────────────────
+// Body: { player_user_id }. Transfers ownership. Enforced server-side: only the
+// DM of the character's campaign — or a global admin — may reassign; a player
+// (incl. the current owner) gets 403. The target MUST be a participant of the
+// character's campaign (DM or a campaign_member) — never an arbitrary user.
+// Only player_user_id changes: rule_breaker + dm_approved are untouched. The
+// new owner can then edit via PUT /:id (its owner check uses player_user_id);
+// the previous owner can no longer edit.
+router.put('/:id/owner', auth, async (req, res) => {
+  try {
+    // Accept a number or a numeric string (a <select> value arrives as a string).
+    const pid = Number(req.body?.player_user_id);
+    if (!Number.isInteger(pid) || pid <= 0)
+      return res.status(400).json({ error: 'player_user_id (positive integer) required' });
+
+    const row = await db.one('SELECT * FROM characters WHERE id=$1', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (!row.campaign_id)
+      return res.status(400).json({ error: 'Character is not in a campaign; nothing to reassign within' });
+
+    const dm    = !!(await isCampaignDM(row.campaign_id, req.user.id));
+    const admin = await isAdmin(req.user.id);
+    if (!dm && !admin)
+      return res.status(403).json({ error: 'Only the campaign DM or an admin can reassign characters' });
+
+    // Target must belong to the character's campaign (DM or member) — not arbitrary.
+    const targetAccess = await campaignAccess(row.campaign_id, pid);
+    if (!targetAccess)
+      return res.status(400).json({ error: 'Target user is not a member of this campaign' });
+
+    const updated = await db.one(
+      `UPDATE characters SET player_user_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+      [pid, req.params.id],
     );
     res.json(fmt(updated));
   } catch (e) { next500(e, res); }

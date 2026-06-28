@@ -87,6 +87,8 @@ export const api = {
   deleteCharacter:  (id)         => apiFetch(`/characters/${id}`,  { method: 'DELETE' }),
   // Rule-breaker approval — DM (or admin) only; server enforces. approved=bool.
   approveCharacter: (id, approved) => apiFetch(`/characters/${id}/approval`, { method: 'PUT', body: JSON.stringify({ approved }) }),
+  // Reassign ownership — DM (or admin) only; target must be a campaign member.
+  assignCharacterOwner: (id, player_user_id) => apiFetch(`/characters/${id}/owner`, { method: 'PUT', body: JSON.stringify({ player_user_id }) }),
 
   // ── NPCs ──────────────────────────────────────────────────────────
   getNpcs:     (campaignId)  => apiFetch(`/npcs?campaign_id=${campaignId}`),

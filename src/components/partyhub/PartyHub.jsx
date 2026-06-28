@@ -396,6 +396,15 @@ function CharactersTab({
                     <div style={{ fontSize: 10, color: C.textDim, marginTop: 1 }}>
                       {[raceName, clsName, level ? `Lv ${level}` : null].filter(Boolean).join(' · ')}
                     </div>
+                    {/* Owner — DM sees who each character belongs to */}
+                    {isDM && (char.owner_username || char.owner_email) && (
+                      <div style={{
+                        fontSize: 10, color: C.textDim, marginTop: 2, fontStyle: 'italic',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        👤 {char.owner_username || char.owner_email}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {isDM && (
