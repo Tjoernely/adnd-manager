@@ -602,12 +602,17 @@ These require SSH + sudo on the live server and an explicit go-ahead:
      dall-e-3 is truly retired the portraits may fail; that's a functional
      follow-up, not a cost/security one — migrating needs the b64_json/no-`style`
      handling the map flow already does.)
-   - **Server, owner's key, but DEAD CODE → nothing to gate.**
+   - **Server, owner's key, but DEAD CODE → DELETED (2026-06-04, `59c2bdf`).**
      `server/lib/dalleProvider.js` + `visionProvider.js` (dall-e-3 on
-     `process.env.OPENAI_API_KEY`) are imported only by
-     `server/lib/rendererFactory.js`, which **nothing requires**. The live
-     renderer is `server/lib/mapRenderers/rendererFactory.js` (gpt-image-1 /
-     Gemini). Flagged for deletion in a follow-up.
+     `process.env.OPENAI_API_KEY`) were imported only by
+     `server/lib/rendererFactory.js`, which nothing required. The live renderer
+     is `server/lib/mapRenderers/rendererFactory.js` (gpt-image-1 / Gemini),
+     used by `routes/maps.js`. All three deleted after confirming zero importers
+     (no test / JSON / dynamic refs). build ✓ · vitest 32/32 ✓ · server boots
+     clean (no "Cannot find module") · `generate-from-sketch` + maps router
+     still respond (401 without token, not 500).
+     **`server/lib/replicateProvider.js` is now also orphaned** (it was used only
+     by the deleted factory) — next cleanup candidate, left in place for now.
    - **Server, owner's key, LIVE + was UNGATED → FIXED.**
      `POST /api/maps/generate-from-sketch` runs gpt-image-1 / Gemini on the
      shared `OPENAI_API_KEY` / `GOOGLE_AI_API_KEY`. It had `auth` + `imageLimiter`
