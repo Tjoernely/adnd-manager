@@ -592,16 +592,31 @@ These require SSH + sudo on the live server and an explicit go-ahead:
    `claude-sonnet-4-5-20250929` snapshot → `claude-sonnet-4-6`. Verified live:
    `/api/ai/prompt` → `{"text":"PONG"}`, `/api/ai/generate` → full NPC, for an
    approved user. All other chat-model refs already match the registry.
-7. **Stale image model `dall-e-3` (flagged, NOT fixed — separate subsystem).**
-   The codebase's own comment (`MapGenerator.jsx`) says dall-e-3 was removed
-   from OpenAI's API on 2026-05-12; map images already moved to `gpt-image-1`.
-   But the NPC/character **portrait** generators still call `dall-e-3`
-   (`NPCManager.jsx`, `NPCGenerator.jsx`, `PortraitTab.jsx`) as do the server
-   `dalleProvider.js` / `visionProvider.js`. If dall-e-3 is truly gone, portrait
-   generation is broken. Migrating means more than a model-id swap — gpt-image-1
-   returns `b64_json` (not a URL) and rejects `style`/`response_format`/`quality`
-   the way the map flow had to handle. Left for a dedicated follow-up. Uses the
-   USER's own OpenAI key, so it doesn't touch the shared key / approval gate.
+7. **`dall-e-3` cost-route review — CLARIFIED + the real gap FIXED (2026-06-04,
+   `f4f3584`).** Grepped dall-e-3 / dall-e / dalle / images/generations across
+   server + frontend. Three buckets:
+   - **Browser, user's own key (`localStorage.openai_api_key`) → nothing to do.**
+     NPC/character **portraits** (`NPCManager.jsx`, `NPCGenerator.jsx`,
+     `PortraitTab.jsx`, model `dall-e-3`) + map image (`MapGenerator.jsx`,
+     `gpt-image-1`). They cost the USER, not the owner — no gate needed. (If
+     dall-e-3 is truly retired the portraits may fail; that's a functional
+     follow-up, not a cost/security one — migrating needs the b64_json/no-`style`
+     handling the map flow already does.)
+   - **Server, owner's key, but DEAD CODE → nothing to gate.**
+     `server/lib/dalleProvider.js` + `visionProvider.js` (dall-e-3 on
+     `process.env.OPENAI_API_KEY`) are imported only by
+     `server/lib/rendererFactory.js`, which **nothing requires**. The live
+     renderer is `server/lib/mapRenderers/rendererFactory.js` (gpt-image-1 /
+     Gemini). Flagged for deletion in a follow-up.
+   - **Server, owner's key, LIVE + was UNGATED → FIXED.**
+     `POST /api/maps/generate-from-sketch` runs gpt-image-1 / Gemini on the
+     shared `OPENAI_API_KEY` / `GOOGLE_AI_API_KEY`. It had `auth` + `imageLimiter`
+     but **not** the approval gate, so an authenticated-but-unapproved user could
+     spend the owner's image budget. **Added `requireAiApproval` (after `auth`).**
+     `requireAiApproval` was extracted to `middleware/aiApproval.js` (single
+     source; `routes/ai.js` imports it). Verified live: unapproved →
+     403 `ai_not_approved`; approved → passes the gate (400 `sketchSpec required`
+     on an empty body — no image generated); `/api/ai/*` gates still work.
 
 ### HTTPS / TLS — LIVE (2026-06-04)
 
