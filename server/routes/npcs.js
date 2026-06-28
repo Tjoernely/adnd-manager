@@ -17,6 +17,18 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Strip the heavy portrait data URLs from a list row. Since gpt-image-1
+// portraits are stored as ~1.5-3 MB base64 data: URLs (and portraitHistory
+// keeps up to 3), returning the full data JSONB for every NPC made the list
+// endpoint pull many MB per NPC. The list omits portrait + portraitHistory and
+// exposes a `has_portrait` flag; the single-NPC GET still returns the full
+// record (fetched on demand when a card is opened). (2026-06-04)
+function stripPortraitForList(npc) {
+  const data = (npc.data && typeof npc.data === 'object') ? npc.data : {};
+  const { portrait, portraitHistory, ...lean } = data;
+  return { ...npc, data: lean, has_portrait: !!portrait };
+}
+
 // ── List NPCs ─────────────────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
@@ -35,7 +47,7 @@ router.get('/', auth, async (req, res) => {
           'SELECT * FROM npcs WHERE campaign_id=$1 AND is_hidden=false ORDER BY name',
           [campaign_id],
         );
-    res.json(rows);
+    res.json(rows.map(stripPortraitForList));
   } catch (e) { next500(e, res); }
 });
 

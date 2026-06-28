@@ -121,8 +121,26 @@ export function NPCManager({ campaign, user, onBack, onOpenMap }) {
   const [filterPower, setFilterPower] = useState('');
   const [filterAlign, setFilterAlign] = useState('');
   const [selectedNpc, setSelectedNpc] = useState(null);
+  const [openingNpcId,setOpeningNpcId] = useState(null);
   const [showGenerate,setShowGenerate]= useState(false);
   const [showCreate,  setShowCreate]  = useState(false);
+
+  // The list endpoint omits the heavy portrait data URLs (see npcs.js
+  // stripPortraitForList). When a card with a portrait is opened, fetch the
+  // full record so the detail modal has portrait + portraitHistory. NPCs
+  // without a portrait open straight from the lean list row (no extra fetch).
+  const openNpc = useCallback(async (npc) => {
+    if (!npc.has_portrait) { setSelectedNpc(npc); return; }
+    setOpeningNpcId(npc.id);
+    try {
+      const full = await api.getNpc(npc.id);
+      setSelectedNpc(full ?? npc);
+    } catch {
+      setSelectedNpc(npc);   // fall back to the lean row on fetch failure
+    } finally {
+      setOpeningNpcId(null);
+    }
+  }, []);
 
   const loadNpcs = useCallback(() => {
     setLoading(true);
@@ -236,7 +254,8 @@ export function NPCManager({ campaign, user, onBack, onOpenMap }) {
         ) : (
           <div className="nm-grid">
             {filtered.map(npc => (
-              <NPCCard key={npc.id} npc={npc} isDM={isDM} onClick={() => setSelectedNpc(npc)} />
+              <NPCCard key={npc.id} npc={npc} isDM={isDM} onClick={() => openNpc(npc)}
+                loading={openingNpcId === npc.id} />
             ))}
           </div>
         )}
@@ -268,7 +287,7 @@ export function NPCManager({ campaign, user, onBack, onOpenMap }) {
 
 // ── NPC Card ─────────────────────────────────────────────────────────────────
 
-function NPCCard({ npc, isDM, onClick }) {
+function NPCCard({ npc, isDM, onClick, loading }) {
   const d = npc.data ?? {};
   const pl = plInfo(d.powerLevel);
   const stats = d.stats ?? {};
@@ -284,7 +303,13 @@ function NPCCard({ npc, isDM, onClick }) {
       <div className="nm-card-portrait">
         {d.portrait
           ? <img src={d.portrait} alt={npc.name} className="nm-card-portrait-img" />
-          : <div className="nm-card-portrait-placeholder">🎭</div>
+          : (
+            // The list omits portrait data URLs (fetched on open); show a
+            // "has portrait" hint vs the no-portrait placeholder.
+            <div className="nm-card-portrait-placeholder">
+              {loading ? '⏳' : npc.has_portrait ? '🖼' : '🎭'}
+            </div>
+          )
         }
         <span className="nm-card-pl-badge" style={{ '--pl-color': pl.color }}>
           {pl.icon} {pl.label}
@@ -676,7 +701,7 @@ function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle, 
               {isDM && (
                 <>
                   <button className="nm-dm-gen-portrait-btn" onClick={handleGeneratePortrait} disabled={portraitGen}>
-                    {portraitGen ? '⏳ Generating portrait…' : '✦ Generate with DALL·E 3'}
+                    {portraitGen ? '⏳ Generating portrait…' : '✦ Generate Portrait'}
                   </button>
                   {portraitErr && <div className="nm-dm-portrait-err">{portraitErr}</div>}
                   {(draft.portraitHistory??[]).length > 0 && (
