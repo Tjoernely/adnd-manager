@@ -148,7 +148,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   unapproved. (Note: `runeilsted`'s username is stored `Runeilsted` — match on
   email/id, not a lower-cased username, when approving.)
 
-**Character DM-Approval — rule-breaker flow (2026-06-28, backend)**
+**Character DM-Approval — rule-breaker flow (2026-06-28)**
 - House-rule-breaking characters now require DM sign-off. `characters.rule_breaker`
   + `characters.dm_approved` are **columns** (indexed by `idx_characters_ruleflags`
   on `(campaign_id, rule_breaker, dm_approved)`) so status is query-filterable;
@@ -168,13 +168,41 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - Party list (`/party/:campaignId`) now surfaces `status` + `rule_violations` per
   character (kept out of `PARTY_HIDDEN`, so the DM + party can see who's pending).
 - Backfill: existing rows with `character_data.ruleBreaker = true` were flipped to
-  `rule_breaker = true` (idempotent). **Frontend wiring** (status badge + DM
-  approve button) is **Prompt 2** — backend only so far.
-- Verified live (2026-06-28, 3 throwaway accounts, 20/20 checks): player saves
-  rule-breaking char → pending; player (incl. owner) approval → 403; DM
-  approve true/false toggles status; re-save after approval resets to pending;
+  `rule_breaker = true` (idempotent).
+- **Frontend (`bad49df`):**
+  - **Persistence + badge** (`App.jsx`): the loaded character's backend `status`
+    is hydrated into `savedStatus` on load/save; a player badge in the builder
+    shows "⚠ Rule-Breaker — Awaiting DM approval" (red) / "✓ DM-approved
+    (house rules)" (green) / nothing (clean). `effectiveStatus` = clean if
+    `!ruleBreaker`, else `approved` only when the saved sheet is approved AND
+    not dirty, else `pending` — so a pending char stays red across reload and any
+    unsaved edit shows pending immediately. Editing/using is never blocked.
+  - **Dirty-guard** (`App.jsx`): a baseline of the serialized sheet is captured on
+    load/save; `saveCharacter` skips the network write when an existing sheet is
+    unchanged, and the Save button disables when there are no unsaved changes —
+    so opening (or a DM viewing) an approved character never triggers the
+    server-side approval reset. (UI text stays English per project convention.)
+  - **Honor button folded in** (`useCharacter.js`): the DISADV CP-cap "DM
+    Approved — Proceed" box no longer self-approves; proceeding sets
+    `ruleBreaker=true` (→ pending) and uses the standard "Enable Rule-Breaker &
+    Proceed" treatment.
+  - **DM approvals panel** (`CampaignDashboard.jsx`, DM-only): lists the
+    campaign's rule-breaking characters (via `getPartyView`) with status pill +
+    `rule_violations`; pending rows get **Approve**, approved rows **Revoke**,
+    both calling `api.approveCharacter` (`PUT /:id/approval`). Renders nothing
+    when there are no rule-breakers.
+- Verified **backend** live (3 throwaway accounts, 20/20 checks): player saves
+  rule-breaking char → pending; player (incl. owner) approval → 403; DM approve
+  true/false toggles status; re-save after approval resets to pending;
   `dm_approved` in a save body is ignored; admin (non-DM) approval works; party
   list carries status + violations. Throwaways cleaned up (4 real accounts intact).
+- Verified **frontend** live (browser, owner DM on a throwaway campaign): toggle
+  Rule-Breaker → red badge; save → pending persists + Save shows "✓ Saved"
+  disabled; **reload → still red**; DM dashboard panel shows the pending char +
+  violations → Approve → green "Approved" + Revoke; player reload → green badge;
+  **dashboard→builder open/close keeps approval**; a real edit → badge back to
+  red + Save re-enables, save → DM panel back to "1 pending". Throwaway campaign +
+  character deleted afterward (real `test` campaign + 4 users intact).
 
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
