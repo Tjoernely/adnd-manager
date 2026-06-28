@@ -191,7 +191,10 @@ router.get('/:id/members', auth, async (req, res) => {
     if (!(await hasAccess(req.params.id, req.user.id)))
       return res.status(403).json({ error: 'Access denied' });
 
-    const [dm, ...players] = await Promise.all([
+    // NB: destructure as [dm, players] — a rest `...players` here would wrap the
+    // whole player array in another array, so the response became
+    // [dm, [p1,p2,…]] instead of a flat [dm, p1, p2, …]. (Fixed 2026-06-28.)
+    const [dm, players] = await Promise.all([
       db.one(
         `SELECT u.id, u.username, u.email, 'dm' AS role, c.created_at AS joined_at
          FROM campaigns c JOIN users u ON u.id = c.dm_user_id WHERE c.id=$1`,
