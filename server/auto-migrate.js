@@ -84,6 +84,29 @@ async function autoMigrate() {
         ADD COLUMN IF NOT EXISTS dm_notes   TEXT;
     `);
 
+    // ── Character rule-breaker / DM-approval flow (2026-06-04) ──────────────
+    // rule_breaker + dm_approved are COLUMNS (not JSON) so the status can be
+    // filtered/indexed in a query. rule_violations (what was broken) lives in
+    // character_data JSON. Derived status: clean (rule_breaker=false),
+    // pending (true & !dm_approved), approved (both true). Only the campaign DM
+    // or an admin can flip dm_approved (see PUT /api/characters/:id/approval);
+    // any save resets dm_approved=false so edits re-enter pending.
+    await db.query(`
+      ALTER TABLE characters
+        ADD COLUMN IF NOT EXISTS rule_breaker BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS dm_approved  BOOLEAN NOT NULL DEFAULT false;
+    `);
+    // Backfill from the builder's character_data.ruleBreaker for existing rows.
+    // Idempotent: only flips false→true where the JSON still says true.
+    await db.query(`
+      UPDATE characters SET rule_breaker = true
+      WHERE rule_breaker = false AND character_data->>'ruleBreaker' = 'true';
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_characters_ruleflags
+        ON characters (campaign_id, rule_breaker, dm_approved);
+    `);
+
     await db.query(`
       ALTER TABLE quests
         ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'dm_only';

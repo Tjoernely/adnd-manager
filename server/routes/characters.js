@@ -4,18 +4,46 @@
  *   GET    /:id             — get one character (full if owner/DM, filtered if party)
  *   POST   /                — create character
  *   PUT    /:id             — save character (owner or DM)
+ *   PUT    /:id/approval     — approve/reject a rule-breaking character (campaign DM or admin)
  *   DELETE /:id             — delete character (owner or DM)
  *   GET    /party/:campaignId — all characters in campaign (party-filtered for non-owners)
+ *
+ * Rule-breaker / DM-approval (2026-06-04): `rule_breaker` + `dm_approved` are
+ * COLUMNS; `rule_violations` (a short string list of what was broken) lives in
+ * character_data. Derived `status`: clean | pending | approved. Saves persist
+ * rule_breaker + rule_violations and ALWAYS reset dm_approved=false (only the
+ * approval endpoint sets it true; clients can never self-approve).
  *
  * Party-view hides sensitive fields from other players:
  *   disadvPicked, disadvSubChoice, dmAwards, ruleBreaker,
  *   cpPerLevelOverride, dmAwardInput, showDmPanel, socialStatus
+ *   (rule_violations + the top-level status/rule_breaker/dm_approved stay
+ *    visible so the DM and party can see who's pending approval)
  */
 const express = require('express');
 const db      = require('../db');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Resolve the rule-breaker flag + violations from a save payload. Accepts a
+// top-level `rule_breaker` (forward-compat) or falls back to the builder's
+// character_data.ruleBreaker (current client). Violations come from top-level
+// `rule_violations` or character_data.rule_violations — kept to ≤20 short
+// strings. `dm_approved` from the client is ALWAYS ignored (only the approval
+// endpoint sets it — same hardening as the `role` field on register).
+function resolveRuleFlags(body, dataObj) {
+  const rule_breaker = (typeof body?.rule_breaker === 'boolean')
+    ? body.rule_breaker
+    : !!(dataObj && dataObj.ruleBreaker);
+  const rv = Array.isArray(body?.rule_violations) ? body.rule_violations
+           : (Array.isArray(dataObj?.rule_violations) ? dataObj.rule_violations : []);
+  const rule_violations = rv
+    .filter(v => typeof v === 'string' && v.trim() !== '')
+    .map(v => v.trim().slice(0, 200))
+    .slice(0, 20);
+  return { rule_breaker, rule_violations };
+}
 
 // Fields hidden when a player views another player's character
 const PARTY_HIDDEN = new Set([
@@ -118,12 +146,16 @@ router.post('/', auth, async (req, res) => {
   try {
     // Accept either 'character_data' or legacy 'data' key; no default so ?? works correctly
     const { name, campaign_id = null, character_data, data } = req.body ?? {};
-    const charData = character_data ?? data ?? {};
+    const charData = { ...(character_data ?? data ?? {}) };
+    // Rule-breaker flow: persist the flag + violations; new characters are never
+    // pre-approved (dm_approved=false). Client can't self-approve.
+    const { rule_breaker, rule_violations } = resolveRuleFlags(req.body, charData);
+    charData.rule_violations = rule_violations;
     const charName = (name ?? charData.charName ?? 'Adventurer').trim();
     const row = await db.one(
-      `INSERT INTO characters (player_user_id, campaign_id, name, character_data)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [req.user.id, campaign_id, charName, JSON.stringify(charData)],
+      `INSERT INTO characters (player_user_id, campaign_id, name, character_data, rule_breaker, dm_approved)
+       VALUES ($1, $2, $3, $4, $5, false) RETURNING *`,
+      [req.user.id, campaign_id, charName, JSON.stringify(charData), rule_breaker],
     );
     res.status(201).json(fmt(row));
   } catch (e) { next500(e, res); }
@@ -145,18 +177,54 @@ router.put('/:id', auth, async (req, res) => {
     if (!isOwn && !isDM) return res.status(403).json({ error: 'Access denied' });
 
     const { character_data, data, name, campaign_id, visibility, dm_notes } = req.body ?? {};
-    const newData     = character_data ?? data ?? row.character_data;
+    const baseData    = character_data ?? data ?? row.character_data;
+    const newData     = (baseData && typeof baseData === 'object') ? { ...baseData } : {};
+    // Rule-breaker flow: persist the flag + violations from the payload.
+    const { rule_breaker, rule_violations } = resolveRuleFlags(req.body, newData);
+    newData.rule_violations = rule_violations;
     const newName     = (name ?? newData?.charName ?? row.name).trim();
     const newCampaign = campaign_id !== undefined ? campaign_id : row.campaign_id;
     // Only DM can set visibility and dm_notes
     const newVisibility = isDM && visibility !== undefined ? visibility : (row.visibility ?? 'party');
     const newDmNotes    = isDM && dm_notes    !== undefined ? dm_notes    : row.dm_notes;
 
+    // dm_approved is ALWAYS reset to false on save: the client can never
+    // self-approve, and any edit to an already-approved rule-breaking character
+    // re-enters the pending state (the DM must re-approve). Only
+    // PUT /:id/approval sets it true.
     const updated = await db.one(
       `UPDATE characters
-       SET name=$1, campaign_id=$2, character_data=$3, visibility=$4, dm_notes=$5, updated_at=NOW()
-       WHERE id=$6 RETURNING *`,
-      [newName, newCampaign, JSON.stringify(newData), newVisibility, newDmNotes, req.params.id],
+       SET name=$1, campaign_id=$2, character_data=$3, visibility=$4, dm_notes=$5,
+           rule_breaker=$6, dm_approved=false, updated_at=NOW()
+       WHERE id=$7 RETURNING *`,
+      [newName, newCampaign, JSON.stringify(newData), newVisibility, newDmNotes, rule_breaker, req.params.id],
+    );
+    res.json(fmt(updated));
+  } catch (e) { next500(e, res); }
+});
+
+// ── Approve / reject a rule-breaking character (campaign DM or admin) ─────────
+// Body: { approved: boolean }. Enforced server-side: only the DM of the
+// character's campaign — or a global admin (users.is_admin) — may flip
+// dm_approved. The owner / any player gets 403 (a player must never be able to
+// approve their own rule-break). Roles are contextual: DM = campaign.dm_user_id.
+router.put('/:id/approval', auth, async (req, res) => {
+  try {
+    const { approved } = req.body ?? {};
+    if (typeof approved !== 'boolean')
+      return res.status(400).json({ error: 'approved (boolean) required' });
+
+    const row = await db.one('SELECT * FROM characters WHERE id=$1', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+
+    const dm    = row.campaign_id ? !!(await isCampaignDM(row.campaign_id, req.user.id)) : false;
+    const admin = await isAdmin(req.user.id);
+    if (!dm && !admin)
+      return res.status(403).json({ error: 'Only the campaign DM or an admin can approve characters' });
+
+    const updated = await db.one(
+      `UPDATE characters SET dm_approved=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+      [approved, req.params.id],
     );
     res.json(fmt(updated));
   } catch (e) { next500(e, res); }
@@ -196,7 +264,11 @@ function fmt(row) {
   } else {
     parsed = {};                                   // null / undefined → empty object
   }
-  return { ...rest, character_data: parsed };
+  // Derived approval status from the rule_breaker / dm_approved columns
+  // (present on rest). clean → no rule break; pending → break, not approved;
+  // approved → break + DM-approved.
+  const status = !rest.rule_breaker ? 'clean' : (rest.dm_approved ? 'approved' : 'pending');
+  return { ...rest, character_data: parsed, status };
 }
 async function campaignAccess(campaignId, userId) {
   const row = await db.one(
@@ -208,6 +280,15 @@ async function campaignAccess(campaignId, userId) {
   if (!row) return null;
   if (!row.is_dm && !row.is_member) return null;
   return { isDM: row.is_dm, isMember: row.is_member };
+}
+// Roles are contextual: the DM is the owner of the specific campaign.
+function isCampaignDM(campaignId, userId) {
+  return db.one('SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2', [campaignId, userId]);
+}
+// Global admin override (users.is_admin) — read fresh from the DB, not the JWT.
+async function isAdmin(userId) {
+  const row = await db.one('SELECT is_admin FROM users WHERE id=$1', [userId]);
+  return !!(row && row.is_admin);
 }
 function next500(e, res) {
   console.error('[characters]', e.message);
