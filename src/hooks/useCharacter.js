@@ -885,11 +885,12 @@ export function useCharacter() {
     const newContrib = (targetLevel === "severe" && dv.cpSevere != null) ? dv.cpSevere : dv.cp;
     const projectedPool = disadvPool - currentContrib + newContrib;
     if (projectedPool > DISADV_MAX_CP) {
+      // Honor system folded into the rule-breaker flow: the player can no longer
+      // self-approve. Proceeding flags the character as a Rule-Breaker (→ pending
+      // DM approval); the DM signs off via the approvals panel, not this button.
       setConfirmBox({
-        msg: `Taking "${dv.name}" (${targetLevel}) would give you ${projectedPool} CP from disadvantages, exceeding the ${DISADV_MAX_CP} CP maximum from S&P rules.\n\n⚠️ DM Approval Required: The maximum character points from disadvantages is ${DISADV_MAX_CP} (S&P rules). Exceeding this limit requires explicit DM approval for your campaign.`,
-        label: "DM Approved — Proceed",
-        color: "#a070c8",
-        onConfirm: () => { setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel })); },
+        msg: `Taking "${dv.name}" (${targetLevel}) would give you ${projectedPool} CP from disadvantages, exceeding the ${DISADV_MAX_CP} CP maximum from S&P rules.\n\nProceeding marks this character as a Rule-Breaker — pending your DM's approval. It does not self-approve the house rule.`,
+        onConfirm: () => { setRuleBreaker(true); setDisadvPicked(p => ({ ...p, [dv.id]: targetLevel })); },
       });
       return;
     }

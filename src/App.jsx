@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useCharacter } from "./hooks/useCharacter.js";
 import { useAuth }      from "./hooks/useAuth.js";
 import { TABS, C, numInputStyle, statColor } from "./data/constants.js";
@@ -46,6 +46,14 @@ export default function App() {
   });   // null = unsaved new char
   const [characters,  setCharacters]  = useState([]);     // list in this campaign
   const [saveStatus,  setSaveStatus]  = useState('idle'); // 'idle'|'saving'|'saved'|'error'
+  // Rule-breaker / DM-approval: the backend-derived status of the loaded char
+  // ('clean'|'pending'|'approved'), hydrated on load and refreshed after save.
+  const [savedStatus, setSavedStatus] = useState('clean');
+  // Dirty-state: a save only fires on REAL edits, so merely opening (and a DM
+  // viewing) an approved sheet never triggers the server-side approval reset.
+  const [isDirty,     setIsDirty]     = useState(false);
+  const baselineRef    = useRef(null); // JSON of the last loaded/saved serialized state
+  const needBaselineRef = useRef(true); // re-baseline (not mark dirty) on the next settle
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [showPrint,    setShowPrint]    = useState(false);
   const [showMaps,     setShowMaps]     = useState(false);
@@ -122,6 +130,21 @@ export default function App() {
   const char = useCharacter();
   const { serializeCharacter, loadCharacterState } = char;
 
+  // ── Dirty tracking ───────────────────────────────────────────────
+  // serializeCharacter's identity changes whenever any character field changes,
+  // so this fires on every real edit. After a load/save we set needBaselineRef
+  // so the next settle re-captures the baseline (clean) instead of flagging dirty.
+  useEffect(() => {
+    const cur = JSON.stringify(serializeCharacter());
+    if (needBaselineRef.current) {
+      baselineRef.current = cur;
+      needBaselineRef.current = false;
+      setIsDirty(false);
+    } else {
+      setIsDirty(cur !== baselineRef.current);
+    }
+  }, [serializeCharacter]);
+
   // Load character list when entering a campaign; auto-load last active character
   useEffect(() => {
     if (!activeCampaign) return;
@@ -131,8 +154,13 @@ export default function App() {
         // If we have a stored char id from a previous session, auto-load it
         if (dbCharId) {
           const stored = list.find(c => c.id === dbCharId);
-          if (stored) loadCharacterState(stored.character_data);
-          else setDbCharId(null); // stale id, clear it
+          if (stored) {
+            needBaselineRef.current = true;            // a load, not an edit
+            loadCharacterState(stored.character_data);
+            setSavedStatus(stored.status ?? 'clean');  // keeps a pending char red after reload
+          } else {
+            setDbCharId(null); // stale id, clear it
+          }
         }
       })
       .catch(console.error);
@@ -141,22 +169,49 @@ export default function App() {
   // Save character to DB (create or update)
   const saveCharacter = useCallback(async () => {
     if (!activeCampaign) return;
+    const character_data = serializeCharacter();
+    const snapshot = JSON.stringify(character_data);
+    // Dirty-guard: an existing character with no real changes is NOT re-saved.
+    // Because the backend resets dm_approved on every save, this is what keeps a
+    // DM (or the player) from clearing an approval just by opening the sheet.
+    if (dbCharId && baselineRef.current !== null && snapshot === baselineRef.current) {
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 1200);
+      return;
+    }
+    // Rule-breaker payload: the flag + a human-readable list of what was broken
+    // (the live validation warnings) so the DM sees *why* in the approvals panel.
+    const rule_breaker = !!char.ruleBreaker;
+    const rule_violations = rule_breaker
+      ? (() => {
+          const v = (char.validationWarnings ?? [])
+            .map(w => w.detail).filter(Boolean).slice(0, 20);
+          return v.length ? v : ['Rule-Breaker mode enabled (manual override)'];
+        })()
+      : [];
     setSaveStatus('saving');
     try {
-      const character_data = serializeCharacter();
       const name = char.charName;
       if (dbCharId) {
-        const updated = await api.saveCharacter(dbCharId, { name, character_data });
+        const updated = await api.saveCharacter(dbCharId, { name, character_data, rule_breaker, rule_violations });
         setCharacters(prev => prev.map(c => c.id === dbCharId ? updated : c));
+        setSavedStatus(updated.status ?? 'clean');
       } else {
         const created = await api.createCharacter({
           campaign_id: activeCampaign.id,
           name,
           character_data,
+          rule_breaker,
+          rule_violations,
         });
         setDbCharId(created.id);
         setCharacters(prev => [created, ...prev]);
+        setSavedStatus(created.status ?? 'clean');
       }
+      // Re-baseline to the just-saved state → clean (until the next real edit).
+      baselineRef.current = snapshot;
+      needBaselineRef.current = false;
+      setIsDirty(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (e) {
@@ -168,15 +223,19 @@ export default function App() {
 
   // Load a character from the DB list
   const loadCharacter = useCallback((dbChar) => {
+    needBaselineRef.current = true;                 // a load, not an edit
     loadCharacterState(dbChar.character_data);
     setDbCharId(dbChar.id);
+    setSavedStatus(dbChar.status ?? 'clean');
     setShowCharMenu(false);
   }, [loadCharacterState]);
 
   // Start a brand-new character (without saving current)
   const newCharacter = useCallback(() => {
+    needBaselineRef.current = true;
     loadCharacterState(null); // resets to defaults
     setDbCharId(null);
+    setSavedStatus('clean');
     setShowCharMenu(false);
   }, [loadCharacterState]);
 
@@ -186,8 +245,10 @@ export default function App() {
     try {
       await api.deleteCharacter(dbCharId);
       setCharacters(prev => prev.filter(c => c.id !== dbCharId));
+      needBaselineRef.current = true;
       loadCharacterState(null);
       setDbCharId(null);
+      setSavedStatus('clean');
       setShowCharMenu(false);
     } catch (e) {
       console.error('Delete error:', e);
@@ -364,6 +425,13 @@ export default function App() {
     validationWarnings,
   } = char;
 
+  // Player-facing rule-breaker status. Pending the moment the flag is on (or on
+  // any unsaved edit, since the next save resets approval); approved only when
+  // the saved sheet is DM-approved AND unchanged; otherwise clean (no badge).
+  const effectiveStatus =
+    !ruleBreaker ? 'clean'
+    : (savedStatus === 'approved' && !isDirty ? 'approved' : 'pending');
+
   return (
     <div id="app-screen" className="adnd-wm-wizard" style={{ minHeight:"100vh", background:C.bg, color:C.text,
       fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif" }}>
@@ -465,7 +533,7 @@ export default function App() {
                         setShowCharMenu(false);
                         setConfirmBox({
                           msg:`Reset "${charName}" to a blank character?\n\nAll unsaved changes will be lost.`,
-                          onConfirm: () => { loadCharacterState(null); setDbCharId(null); },
+                          onConfirm: () => { needBaselineRef.current = true; loadCharacterState(null); setDbCharId(null); setSavedStatus('clean'); },
                           label:"Reset", color:"#c07030",
                         });
                       }} style={{
@@ -528,22 +596,32 @@ export default function App() {
                   onMouseLeave={e=>{ e.target.style.background="rgba(0,0,0,.35)";   e.target.style.color=C.textDim; }}>
                   🖨 Print
                 </button>
-                {/* Save button */}
-                <button onClick={saveCharacter}
-                  disabled={saveStatus==="saving"}
-                  style={{
-                    fontSize:11, padding:"4px 14px", borderRadius:5, cursor:saveStatus==="saving"?"not-allowed":"pointer",
-                    border:"none", fontFamily:"inherit", fontWeight:"bold",
-                    background: saveStatus==="saved"  ? "rgba(60,180,60,.25)"  :
-                                saveStatus==="error"   ? "rgba(200,50,50,.25)"  :
-                                saveStatus==="saving"  ? "rgba(212,160,53,.1)"  :
-                                                         `linear-gradient(135deg,#7a5a10,${C.gold})`,
-                    color: saveStatus==="saved"  ? "#80e080" :
-                           saveStatus==="error"  ? C.red :
-                           saveStatus==="saving" ? C.textDim : "#1a0f00",
-                  }}>
-                  {saveStatus==="saving" ? "Saving…" : saveStatus==="saved" ? "✓ Saved" : saveStatus==="error" ? "✗ Error" : dbCharId ? "💾 Save" : "💾 Save New"}
-                </button>
+                {/* Save button — disabled when an existing char has no unsaved
+                    changes, so opening a sheet can't trigger an approval reset */}
+                {(() => {
+                  const noChanges = !!dbCharId && !isDirty;
+                  const showSaved = saveStatus==="saved" || (noChanges && saveStatus==="idle");
+                  const inert     = saveStatus==="saving" || noChanges;
+                  return (
+                    <button onClick={saveCharacter}
+                      disabled={inert}
+                      title={noChanges ? "No unsaved changes" : undefined}
+                      style={{
+                        fontSize:11, padding:"4px 14px", borderRadius:5, cursor:inert?"default":"pointer",
+                        border:"none", fontFamily:"inherit", fontWeight:"bold",
+                        background: showSaved             ? "rgba(60,180,60,.25)"  :
+                                    saveStatus==="error"  ? "rgba(200,50,50,.25)"  :
+                                    saveStatus==="saving" ? "rgba(212,160,53,.1)"  :
+                                                            `linear-gradient(135deg,#7a5a10,${C.gold})`,
+                        color: showSaved             ? "#80e080" :
+                               saveStatus==="error"  ? C.red :
+                               saveStatus==="saving" ? C.textDim : "#1a0f00",
+                        opacity: noChanges && saveStatus==="idle" ? .8 : 1,
+                      }}>
+                      {saveStatus==="saving" ? "Saving…" : showSaved ? "✓ Saved" : saveStatus==="error" ? "✗ Error" : dbCharId ? "💾 Save" : "💾 Save New"}
+                    </button>
+                  );
+                })()}
                 {dbCharId && (
                   <span style={{ fontSize:9, color:C.textDim }}>
                     #{dbCharId}
@@ -592,6 +670,21 @@ export default function App() {
             <span style={{ fontSize:11, color:C.textDim }}>Rule-Breaker</span>
             <Toggle on={ruleBreaker} onToggle={()=>setRuleBreaker(r=>!r)} />
             {ruleBreaker && <span style={{ fontSize:10, color:C.red, fontStyle:"italic" }}>Active — rules suspended</span>}
+            {/* DM-approval badge — player can edit & use the character in any state */}
+            {effectiveStatus === 'pending' && (
+              <span style={{ fontSize:10, fontWeight:"bold", color:"#ff6b6b",
+                background:"rgba(200,50,50,.14)", border:"1px solid rgba(220,70,70,.5)",
+                borderRadius:4, padding:"2px 9px", letterSpacing:.2 }}>
+                ⚠ Rule-Breaker — Awaiting DM approval
+              </span>
+            )}
+            {effectiveStatus === 'approved' && (
+              <span style={{ fontSize:10, fontWeight:"bold", color:"#9bd86a",
+                background:"rgba(110,180,70,.15)", border:"1px solid rgba(130,200,90,.5)",
+                borderRadius:4, padding:"2px 9px", letterSpacing:.2 }}>
+                ✓ DM-approved (house rules)
+              </span>
+            )}
             {/* Kit violation warnings in header */}
             {!ruleBreaker && activeKitObj && !kitAllReqsMet && (
               <span style={{ fontSize:10, color:C.red,

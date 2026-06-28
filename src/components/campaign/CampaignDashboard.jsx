@@ -10,7 +10,7 @@
  *   onBack     fn()    — returns to campaign selector
  *   onLogout   fn()    — signs out the user
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import './CampaignDashboard.css';
@@ -93,6 +93,126 @@ const MODULES = [
 
 function safeLen(r) {
   return Array.isArray(r) ? r.length : 0;
+}
+
+// ── DM-only: rule-breaker approvals ─────────────────────────────────────────────
+// Lists the campaign's rule-breaking characters with their status; pending ones
+// are highlighted with the rule_violations and an Approve button, approved ones
+// get a Revoke button. Both call PUT /api/characters/:id/approval (DM-enforced
+// server-side). Renders nothing when there are no rule-breaking characters.
+function RuleBreakerApprovals({ campaignId }) {
+  const [chars,  setChars]  = useState(null); // null = loading
+  const [busyId, setBusyId] = useState(null);
+  const [err,    setErr]    = useState(null);
+
+  const load = useCallback(() => {
+    api.getPartyView(campaignId)
+      .then(list => setChars(Array.isArray(list) ? list : []))
+      .catch(e => { console.error('[approvals]', e); setErr('Could not load characters'); setChars([]); });
+  }, [campaignId]);
+  useEffect(() => { load(); }, [load]);
+
+  const setApproval = async (id, approved) => {
+    setBusyId(id);
+    setErr(null);
+    try {
+      const updated = await api.approveCharacter(id, approved);
+      setChars(prev => (prev ?? []).map(c => (c.id === id ? { ...c, ...updated } : c)));
+    } catch (e) {
+      console.error('[approvals]', e);
+      setErr(e.message || 'Approval failed');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (chars === null) return null; // stay quiet until loaded
+  const breakers = chars.filter(c => c.rule_breaker || c.status === 'pending' || c.status === 'approved');
+  if (breakers.length === 0) return null;
+  const pendingCount = breakers.filter(c => c.status === 'pending').length;
+
+  return (
+    <div style={{
+      maxWidth: 1180, margin: '0 auto 22px', padding: '16px 20px',
+      background: 'rgba(60,35,90,.30)', border: '1px solid rgba(160,127,208,.42)',
+      borderRadius: 12, boxShadow: '0 6px 24px rgba(0,0,0,.4)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+        fontSize: 12, letterSpacing: 2.5, textTransform: 'uppercase', color: '#c8a8f0', fontWeight: 'bold',
+      }}>
+        ⚖ Rule-Breaker Approvals
+        {pendingCount > 0 && (
+          <span style={{
+            fontSize: 10, letterSpacing: .5, color: '#ff6b6b', background: 'rgba(200,50,50,.16)',
+            border: '1px solid rgba(220,70,70,.5)', borderRadius: 10, padding: '2px 9px',
+          }}>
+            {pendingCount} pending
+          </span>
+        )}
+      </div>
+
+      {err && (
+        <div style={{ fontSize: 11, color: '#ff8888', marginBottom: 10 }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {breakers.map(c => {
+          const violations = Array.isArray(c.character_data?.rule_violations) ? c.character_data.rule_violations : [];
+          const pending  = c.status === 'pending';
+          const approved = c.status === 'approved';
+          const accent   = pending ? '#d65b5b' : approved ? '#82c85a' : '#8a7a55';
+          return (
+            <div key={c.id} style={{
+              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14,
+              padding: '10px 14px', borderRadius: 8,
+              background: pending ? 'rgba(200,50,50,.10)' : 'rgba(0,0,0,.28)',
+              border: `1px solid ${pending ? 'rgba(220,70,70,.45)' : 'rgba(255,255,255,.10)'}`,
+            }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, color: '#e8dcc0', fontWeight: 'bold' }}>{c.name}</span>
+                  <span style={{
+                    fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 'bold',
+                    color: accent, border: `1px solid ${accent}`, borderRadius: 9, padding: '1px 8px',
+                  }}>
+                    {pending ? 'Pending' : approved ? 'Approved' : 'Clean'}
+                  </span>
+                </div>
+                {violations.length > 0 && (
+                  <ul style={{ margin: '7px 0 0', paddingLeft: 18, color: '#bfa980', fontSize: 11, lineHeight: 1.5 }}>
+                    {violations.map((v, i) => <li key={i}>{v}</li>)}
+                  </ul>
+                )}
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {pending && (
+                  <button onClick={() => setApproval(c.id, true)} disabled={busyId === c.id} style={{
+                    fontSize: 11, fontWeight: 'bold', fontFamily: 'inherit', cursor: busyId === c.id ? 'default' : 'pointer',
+                    padding: '6px 14px', borderRadius: 6, color: '#0f1a0a',
+                    background: 'linear-gradient(135deg,#5a8a2a,#82c85a)', border: 'none',
+                    opacity: busyId === c.id ? .6 : 1,
+                  }}>
+                    {busyId === c.id ? '…' : '✓ Approve'}
+                  </button>
+                )}
+                {approved && (
+                  <button onClick={() => setApproval(c.id, false)} disabled={busyId === c.id} style={{
+                    fontSize: 11, fontWeight: 'bold', fontFamily: 'inherit', cursor: busyId === c.id ? 'default' : 'pointer',
+                    padding: '6px 14px', borderRadius: 6, color: '#e0b070',
+                    background: 'rgba(0,0,0,.35)', border: '1px solid rgba(200,150,80,.5)',
+                    opacity: busyId === c.id ? .6 : 1,
+                  }}>
+                    {busyId === c.id ? '…' : '↺ Revoke'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -180,6 +300,8 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
           <span className="cd-divider-line" />
         </div>
         <p className="cd-intro">Choose a module to continue your adventure</p>
+
+        {isDM && <RuleBreakerApprovals campaignId={campaign.id} />}
 
         <div className="cd-grid">
           {MODULES.map(mod => {

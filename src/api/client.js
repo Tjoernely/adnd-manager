@@ -85,6 +85,8 @@ export const api = {
   createCharacter:  (data)       => apiFetch('/characters',       { method: 'POST',   body: JSON.stringify(data) }),
   saveCharacter:    (id, data)   => apiFetch(`/characters/${id}`,  { method: 'PUT',   body: JSON.stringify(data) }),
   deleteCharacter:  (id)         => apiFetch(`/characters/${id}`,  { method: 'DELETE' }),
+  // Rule-breaker approval — DM (or admin) only; server enforces. approved=bool.
+  approveCharacter: (id, approved) => apiFetch(`/characters/${id}/approval`, { method: 'PUT', body: JSON.stringify({ approved }) }),
 
   // ── NPCs ──────────────────────────────────────────────────────────
   getNpcs:     (campaignId)  => apiFetch(`/npcs?campaign_id=${campaignId}`),
