@@ -1,6 +1,6 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-06-04_
+_Last updated: 2026-06-28_
 
 ---
 
@@ -136,8 +136,9 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   unapproved. `callClaude` + `apiFetch` map a stray 403 to that friendly message.
 - **Approval is via SQL for now** (no admin UI yet):
   `UPDATE users SET ai_approved=true WHERE email='…';`
-- `is_admin` column exists (owner seeded true) but is **not wired up** — reserved
-  for a future admin-approval UI.
+- `is_admin` column (owner seeded true) is now used as a **global admin override
+  on character DM-approval** (`PUT /api/characters/:id/approval`); there is still
+  no admin *UI*, and it is **not** wired to this AI gate.
 - Verified live (2026-06-04): unapproved account → 403 on all three AI routes,
   200 on free routes; flipping `ai_approved=true` opened the gate on the **same
   token** (200, no re-login); owner `jesper@olesen.nu` approved.
@@ -146,6 +147,34 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   approved by SQL after the gate shipped. All future registrations default to
   unapproved. (Note: `runeilsted`'s username is stored `Runeilsted` — match on
   email/id, not a lower-cased username, when approving.)
+
+**Character DM-Approval — rule-breaker flow (2026-06-28, backend)**
+- House-rule-breaking characters now require DM sign-off. `characters.rule_breaker`
+  + `characters.dm_approved` are **columns** (indexed by `idx_characters_ruleflags`
+  on `(campaign_id, rule_breaker, dm_approved)`) so status is query-filterable;
+  `rule_violations` (a short string list of what was broken, ≤20 items) lives in
+  `character_data`. Derived **status** — `clean` (no break) / `pending` (break,
+  not approved) / `approved` (break + DM-approved) — is added to every character
+  response by `fmt()`.
+- **Save logic** (`POST` / `PUT /api/characters`) persists `rule_breaker` +
+  `rule_violations` from the payload (top-level `rule_breaker`, else fallback to
+  the builder's `character_data.ruleBreaker`). Every save **forces
+  `dm_approved=false`** — clients can never self-approve, and any edit to an
+  approved rule-breaking character re-enters `pending` (DM must re-approve).
+- **Approval endpoint** `PUT /api/characters/:id/approval { approved: bool }` —
+  only the **campaign DM** (`campaign.dm_user_id`) or a **global admin**
+  (`users.is_admin`, read fresh from the DB) may flip `dm_approved`. The owner /
+  any player gets **403**. Roles are contextual (DM = owner of that campaign).
+- Party list (`/party/:campaignId`) now surfaces `status` + `rule_violations` per
+  character (kept out of `PARTY_HIDDEN`, so the DM + party can see who's pending).
+- Backfill: existing rows with `character_data.ruleBreaker = true` were flipped to
+  `rule_breaker = true` (idempotent). **Frontend wiring** (status badge + DM
+  approve button) is **Prompt 2** — backend only so far.
+- Verified live (2026-06-28, 3 throwaway accounts, 20/20 checks): player saves
+  rule-breaking char → pending; player (incl. owner) approval → 403; DM
+  approve true/false toggles status; re-save after approval resets to pending;
+  `dm_approved` in a save body is ignored; admin (non-DM) approval works; party
+  list carries status + violations. Throwaways cleaned up (4 real accounts intact).
 
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
@@ -486,10 +515,37 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 - **Enforcement** lives in `requireAiApproval` (in `server/routes/ai.js`),
   mounted after `auth` on `/prompt`, `/loot`, `/generate`. It SELECTs
   `ai_approved` by `req.user.id` per request (fresh, no JWT staleness) — an SQL
-  approval is effective immediately. `is_admin` is surfaced but not yet used.
+  approval is effective immediately. `is_admin` is surfaced here but only *used*
+  by character DM-approval (below), not by this AI gate.
 - **Approve a user:** `UPDATE users SET ai_approved=true WHERE email='…';`
   (admin UI deferred). The frontend reflects it after the next `/api/auth/me`
   (page reload); server enforcement is immediate regardless.
+
+### Character DM-approval — rule-breaker flow (2026-06-28)
+- **Columns, not JSON, for the flags.** `rule_breaker` + `dm_approved` are real
+  `BOOLEAN` columns (idempotent auto-migrate) so the derived status can be
+  filtered/indexed in SQL (`idx_characters_ruleflags`). `rule_violations` stays in
+  `character_data` JSON — it's display-only narrative ("what was broken"), never
+  queried. Status (`clean`/`pending`/`approved`) is *derived* in `fmt()`, not
+  stored, so it can never drift from the two flags.
+- **Server is the only thing that can approve.** Same hardening as the `role`
+  field on register: the client may send `rule_breaker` + `rule_violations`, but
+  any `dm_approved` in a save body is ignored. `POST`/`PUT /api/characters` always
+  write `dm_approved=false`; the *only* path to `true` is
+  `PUT /:id/approval`, guarded by `isCampaignDM(campaign_id, user) || isAdmin(user)`.
+  A player — even the character's owner — gets 403.
+- **Roles are contextual.** DM-ness is per-campaign (`campaign.dm_user_id`), looked
+  up against the character's own `campaign_id`; `is_admin` is the global override,
+  read fresh from `users` (never trusted from the JWT). A character with no
+  campaign can only be approved by an admin.
+- **Any edit re-enters pending.** Because saves force `dm_approved=false`, editing
+  an approved rule-breaking character invalidates the approval automatically — the
+  DM re-approves the *current* sheet, not a stale one. Clean characters
+  (`rule_breaker=false`) report `clean` regardless of the (unused) `dm_approved`.
+- **Compat:** `rule_breaker` is read from a top-level field if present, else from
+  the legacy `character_data.ruleBreaker` the builder already writes — so the gate
+  works before the Prompt-2 frontend lands. A boot-time backfill flips existing
+  `ruleBreaker=true` rows to the new column.
 
 ### Shared AD&D theming
 - `src/styles/adnd-theme.css` holds the canonical theme variables (`--adnd-gold`, `--adnd-bg`, `--adnd-surface`, `--adnd-border`, …) plus reusable `.adnd-divider`, `.adnd-card`, `.adnd-module-header`.
