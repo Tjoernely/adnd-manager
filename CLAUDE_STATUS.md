@@ -96,6 +96,20 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - GPT-Image-1 as alternative sketch renderer (requires `OPENAI_API_KEY`)
 - Claude Haiku 4.5 for monster tag classification (one-shot, all 3781 monsters classified ~$3-4)
 
+**Portrait generation — gpt-image-1 (2026-06-04)**
+- NPC + character portraits (`NPCManager.jsx`, `NPCGenerator.jsx`,
+  `PortraitTab.jsx`) generate **browser-side on the user's own OpenAI key**
+  (`localStorage.openai_api_key`) — not the owner's key, so no approval gate.
+- Migrated dall-e-3 → **gpt-image-1** (`b214a69`) after OpenAI removed dall-e-3
+  on 2026-05-12 (portraits had been failing). Shared helper
+  `generateOpenAIImage(prompt, {size, apiKey})` in `src/api/aiClient.js`:
+  `/v1/images/generations`, `model: 'gpt-image-1'`, no `style`/`response_format`/
+  `quality`; returns a `data:image/png;base64,…` URL from the b64 response
+  (permanent, unlike the old ~1h-expiry dall-e-3 URLs). End-to-end verified
+  (HTTP 200, ~2.1 MB image). Data URLs are large (~1.5-3 MB): NPC
+  `portraitHistory` capped at 3; PortraitTab localStorage history capped at 3
+  with a quota-resilient writer.
+
 **AI Feature-Gate — owner approval (2026-06-04)**
 - The server-side AI routes run on the owner's shared `ANTHROPIC_API_KEY`, so
   they are **locked behind owner approval**. Everyone can register, log in, and
@@ -595,13 +609,13 @@ These require SSH + sudo on the live server and an explicit go-ahead:
 7. **`dall-e-3` cost-route review — CLARIFIED + the real gap FIXED (2026-06-04,
    `f4f3584`).** Grepped dall-e-3 / dall-e / dalle / images/generations across
    server + frontend. Three buckets:
-   - **Browser, user's own key (`localStorage.openai_api_key`) → nothing to do.**
-     NPC/character **portraits** (`NPCManager.jsx`, `NPCGenerator.jsx`,
-     `PortraitTab.jsx`, model `dall-e-3`) + map image (`MapGenerator.jsx`,
-     `gpt-image-1`). They cost the USER, not the owner — no gate needed. (If
-     dall-e-3 is truly retired the portraits may fail; that's a functional
-     follow-up, not a cost/security one — migrating needs the b64_json/no-`style`
-     handling the map flow already does.)
+   - **Browser, user's own key (`localStorage.openai_api_key`) → no gate (costs
+     the user, not the owner).** Map image (`MapGenerator.jsx`) was already
+     `gpt-image-1`. The NPC/character **portraits** (`NPCManager.jsx`,
+     `NPCGenerator.jsx`, `PortraitTab.jsx`) still used `dall-e-3` — which OpenAI
+     removed 2026-05-12, so portrait generation was **broken**. **MIGRATED to
+     gpt-image-1 (2026-06-04, `b214a69`)** — see the "Portrait generation" entry
+     in §2 Fully working.
    - **Server, owner's key, but DEAD CODE → DELETED (2026-06-04, `59c2bdf`).**
      `server/lib/dalleProvider.js` + `visionProvider.js` (dall-e-3 on
      `process.env.OPENAI_API_KEY`) were imported only by
