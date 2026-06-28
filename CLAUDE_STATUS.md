@@ -109,6 +109,14 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   (HTTP 200, ~2.1 MB image). Data URLs are large (~1.5-3 MB): NPC
   `portraitHistory` capped at 3; PortraitTab localStorage history capped at 3
   with a quota-resilient writer.
+- **NPC list omits portraits (perf, `a9a629b`).** `GET /api/npcs` (list) used to
+  `SELECT *` + return the full `data` JSONB, so opening the NPC module pulled
+  ~8 MB **per NPC**. `stripPortraitForList()` now drops `data.portrait` +
+  `data.portraitHistory` from list rows and adds a `has_portrait` flag; the
+  single-NPC `GET /:id` is unchanged. `NPCManager` fetches the full record
+  (`api.getNpc`) only when opening a card that `has_portrait`; cards show
+  🖼 / ⏳ / 🎭. Verified: list omits portrait + history (keeps other fields +
+  `has_portrait`), single GET includes them.
 
 **AI Feature-Gate — owner approval (2026-06-04)**
 - The server-side AI routes run on the owner's shared `ANTHROPIC_API_KEY`, so
@@ -625,8 +633,10 @@ These require SSH + sudo on the live server and an explicit go-ahead:
      (no test / JSON / dynamic refs). build ✓ · vitest 32/32 ✓ · server boots
      clean (no "Cannot find module") · `generate-from-sketch` + maps router
      still respond (401 without token, not 500).
-     **`server/lib/replicateProvider.js` is now also orphaned** (it was used only
-     by the deleted factory) — next cleanup candidate, left in place for now.
+     **`server/lib/replicateProvider.js`** was orphaned by that deletion (used
+     only by the deleted factory) — **also DELETED 2026-06-04 (`a9a629b`)** after
+     grep confirmed zero importers; build ✓ · vitest 32/32 ✓ · clean boot.
+     `server/lib/` is now just `access.js`, `magicItemParser/`, `mapRenderers/`.
    - **Server, owner's key, LIVE + was UNGATED → FIXED.**
      `POST /api/maps/generate-from-sketch` runs gpt-image-1 / Gemini on the
      shared `OPENAI_API_KEY` / `GOOGLE_AI_API_KEY`. It had `auth` + `imageLimiter`
