@@ -1,9 +1,10 @@
-// PortraitTab.jsx — AI Portrait Generator using DALL-E 3
+// PortraitTab.jsx — AI Portrait Generator using gpt-image-1
 import { useState, useEffect, useCallback } from "react";
 import { C, numInputStyle } from "../../data/constants.js";
 import { ChHead } from "../ui/index.js";
 import { WEAPON_GROUPS_49 } from "../../data/weapons.js";
 import { getRankTable, getSocialRank } from "../../data/socialStatus.js";
+import { generateOpenAIImage } from "../../api/aiClient.js";
 
 // ── Prompt Builder ────────────────────────────────────────────────────────────
 function buildPortraitPrompt({
@@ -253,7 +254,10 @@ function classifyError(err, status) {
 }
 
 // ── localStorage history helpers ──────────────────────────────────────────────
-const MAX_HISTORY = 5;
+// gpt-image-1 portraits are stored as ~1.5-3 MB data: URLs (the old dall-e-3
+// URLs were tiny), so a 5-deep history could blow the ~5 MB localStorage quota.
+// Cap at 3 and degrade gracefully on QuotaExceededError.
+const MAX_HISTORY = 3;
 
 function historyKey(dbCharId, charName) {
   return `portrait_history_${dbCharId ?? ("name_" + (charName ?? "unnamed"))}`;
@@ -263,7 +267,14 @@ function loadHistory(key) {
   catch { return []; }
 }
 function saveHistory(key, entries) {
-  localStorage.setItem(key, JSON.stringify(entries.slice(0, MAX_HISTORY)));
+  // Drop the oldest kept entries until it fits the quota (entries are
+  // newest-first). If even one won't fit, clear the key rather than throw.
+  let list = entries.slice(0, MAX_HISTORY);
+  while (list.length > 0) {
+    try { localStorage.setItem(key, JSON.stringify(list)); return; }
+    catch { list = list.slice(0, list.length - 1); }
+  }
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
 }
 
 // ── Small input style reused below ────────────────────────────────────────────
@@ -343,37 +354,14 @@ export function PortraitTab(props) {
       selectedKit, selectedRace,
     });
 
-    console.log("[PortraitTab] DALL-E 3 prompt:\n", prompt);
+    console.log("[PortraitTab] gpt-image-1 prompt:\n", prompt);
 
     setGenerating(true);
     setGenError(null);
 
     try {
-      const res = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model: "dall-e-3",
-          prompt,
-          n: 1,
-          size: "1024x1024",
-          quality: "standard",
-          style: "vivid",
-        }),
-      });
-
-      if (!res.ok) {
-        let errMsg = null;
-        try { const j = await res.json(); errMsg = j?.error?.message ?? null; } catch {}
-        throw { status: res.status, message: errMsg };
-      }
-
-      const data = await res.json();
-      const url  = data?.data?.[0]?.url;
-      if (!url) throw { status: 200, message: "No image URL in response" };
+      // gpt-image-1 (dall-e-3 removed 2026-05-12). Returns a permanent data: URL.
+      const url = await generateOpenAIImage(prompt, { apiKey: key });
 
       // Update current portrait
       setPortraitUrl(url);

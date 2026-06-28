@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { api } from '../../api/client.js';
-import { callClaude, hasAnthropicKey, getOpenAIKey, isAiApproved, AI_APPROVAL_MESSAGE } from '../../api/aiClient.js';
+import { callClaude, hasAnthropicKey, getOpenAIKey, isAiApproved, AI_APPROVAL_MESSAGE, generateOpenAIImage } from '../../api/aiClient.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import './NPCGenerator.css';
 
@@ -362,27 +362,18 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
     if (!key) { setPortraitErr('No OpenAI key. Add it in ⚙ Settings.'); return; }
     setPortraitGen(true); setPortraitErr('');
     try {
-      console.log('[NPCGenerator] Requesting DALL-E portrait...');
+      console.log('[NPCGenerator] Requesting gpt-image-1 portrait...');
       const subject = result.appearance || `${resolved.gender} ${resolved.race} ${resolved.charClass}`;
       const prompt = [
-        'Forgotten Realms fantasy art style portrait, head and shoulders, dramatic oil painting.',
+        'Classic fantasy art portrait, head and shoulders, dramatic oil painting.',
         `${subject}.`,
         `${resolved.powerLevel} power level. ${ALIGNMENTS.label[resolved.alignment] ?? resolved.alignment}.`,
         'No text, no watermarks. Moody lighting, intricate medieval detail.',
       ].join(' ').substring(0, 800);
-      const resp = await fetch('https://api.openai.com/v1/images/generations', {
-        method:'POST',
-        headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},
-        body:JSON.stringify({model:'dall-e-3',prompt,n:1,size:'1024x1024',quality:'standard'}),
-      });
-      if (!resp.ok) {
-        const e = await resp.json().catch(() => ({}));
-        console.error('[NPCGenerator] DALL-E portrait error:', e);
-        throw new Error(e?.error?.message || `OpenAI ${resp.status}`);
-      }
-      const portraitData = await resp.json();
-      console.log('[NPCGenerator] DALL-E portrait received.');
-      onPortraitDone(portraitData.data[0].url);
+      // gpt-image-1 (dall-e-3 removed 2026-05-12). Returns a data: URL.
+      const portraitUrl = await generateOpenAIImage(prompt, { apiKey: key });
+      console.log('[NPCGenerator] gpt-image-1 portrait received.');
+      onPortraitDone(portraitUrl);
     } catch(e) {
       console.error('[NPCGenerator] Portrait failed:', e.message);
       setPortraitErr(e.message);

@@ -9,9 +9,37 @@
 export function getAnthropicKey() { return localStorage.getItem('anthropic_api_key') ?? null; }
 export function hasAnthropicKey() { return !!getAnthropicKey(); }
 
-// OpenAI key (for DALL-E image generation) — still stored client-side
+// OpenAI key (for gpt-image-1 image generation) — still stored client-side
 export function getOpenAIKey()    { return localStorage.getItem('openai_api_key') ?? null; }
 export function hasOpenAIKey()    { return !!getOpenAIKey(); }
+
+// ── Browser-side image generation (gpt-image-1, user's own OpenAI key) ────────
+// dall-e-3 was REMOVED from OpenAI's API on 2026-05-12, so the old portrait/map
+// calls fail. gpt-image-1 uses the SAME /v1/images/generations endpoint but a
+// different shape: no `style`, no `response_format`, no `quality:'standard'|'hd'`
+// (it's high/medium/low/auto), and it ALWAYS returns base64 (`b64_json`), never
+// a URL. This mirrors MapGenerator.jsx's working call. Returns a `data:` URL so
+// callers can use it directly as an <img src> or a stored portrait value
+// (also strictly better than the old dall-e-3 URLs, which expired after ~1h).
+const OPENAI_IMAGE_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024']);
+export async function generateOpenAIImage(prompt, { size = '1024x1024', apiKey } = {}) {
+  const key = apiKey ?? getOpenAIKey();
+  if (!key) throw new Error('No OpenAI API key. Add it in ⚙ Settings.');
+  const safeSize = OPENAI_IMAGE_SIZES.has(size) ? size : '1024x1024';
+  const resp = await fetch('https://api.openai.com/v1/images/generations', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body:    JSON.stringify({ model: 'gpt-image-1', prompt, n: 1, size: safeSize }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const msg = data?.error?.message ?? `OpenAI ${resp.status}`;
+    throw Object.assign(new Error(msg), { code: data?.error?.code ?? data?.error?.type ?? '' });
+  }
+  const b64 = data?.data?.[0]?.b64_json;
+  if (!b64) throw new Error('gpt-image-1 returned no image data.');
+  return `data:image/png;base64,${b64}`;
+}
 
 // ── AI feature-gate (2026-06-04) ──────────────────────────────────────────────
 // Server-side AI runs on the owner's shared Anthropic key and is locked behind

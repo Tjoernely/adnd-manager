@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client.js';
+import { generateOpenAIImage } from '../../api/aiClient.js';
 import { NPCGenerator } from './NPCGenerator.jsx';
 import './NPCManager.css';
 
@@ -103,16 +104,9 @@ async function generatePortrait(npcData, npcName) {
     'Moody dramatic lighting, intricate medieval detail, rich dark palette.',
   ].filter(Boolean).join(' ');
 
-  const resp = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model:'dall-e-3', prompt, n:1, size:'1024x1024', quality:'standard' }),
-  });
-  if (!resp.ok) {
-    const err = await resp.json().catch(()=>({}));
-    throw new Error(err?.error?.message ?? `OpenAI ${resp.status}`);
-  }
-  return (await resp.json()).data[0].url;
+  // gpt-image-1 (dall-e-3 was removed from the API 2026-05-12). Returns a
+  // permanent data: URL, browser-side, on the user's own key.
+  return await generateOpenAIImage(prompt, { apiKey });
 }
 
 // ── NPCManager (root) ─────────────────────────────────────────────────────────
@@ -421,7 +415,10 @@ function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle, 
     setPortraitGen(true); setPortraitErr('');
     try {
       const url = await generatePortrait(draft, draftName);
-      const history = [url, ...(draft.portraitHistory??[])].slice(0,5);
+      // gpt-image-1 portraits are ~1.5-3 MB data URLs (vs the old tiny dall-e-3
+      // URLs), and portraitHistory rides along in the NPC's JSONB row that the
+      // NPC list endpoint returns — keep only 3 to bound payload size.
+      const history = [url, ...(draft.portraitHistory??[])].slice(0,3);
       setDraft(prev => ({ ...prev, portrait: url, portraitHistory: history }));
     } catch(e) { setPortraitErr(e.message); }
     setPortraitGen(false);
