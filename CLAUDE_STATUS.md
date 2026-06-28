@@ -215,17 +215,37 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 - **Only `player_user_id` changes** — `rule_breaker` + `dm_approved` are untouched
   (orthogonal to the rule-breaker flow). The new owner can then edit via `PUT /:id`
   (its owner check is by `player_user_id`); the previous owner can no longer edit.
-- **Party view** (`/party/:campaignId`) now joins the owner (`owner_username` +
-  `owner_email`); **PartyHub** shows `👤 <owner>` under each character for the DM.
-  `api.assignCharacterOwner(id, player_user_id)` is wired in the client for a
-  future assignment UI (no reassign control in the UI yet).
-- Verified live (3 throwaway accounts + a non-member + an admin, 17/17): DM
-  assigns A→C; new owner C can edit, former owner A → 403; a player (incl. the
-  owner) reassign → 403; target non-member / nonexistent / non-integer → 400;
+- **Party view** (`/party/:campaignId`) joins the owner (`owner_username` +
+  `owner_email`); **PartyHub** shows `👤 <owner>` per character for the DM.
+- **DM assignment UI (`3fddfaa`):** the dashboard's DM-only panel
+  (`CampaignDashboard.jsx`, renamed Rule-Breaker Approvals → **Party Characters**)
+  now lists EVERY campaign character with its owner (`👤`), an **Assign to player**
+  picker (campaign members via `getCampaignMembers`, current owner excluded), and
+  a confirm modal before transfer (warns when the DM is the current owner). It
+  keeps the rule-breaker Approve/Revoke inline. Gated by `isDM` — players never
+  see it. `api.assignCharacterOwner(id, player_user_id)` calls the endpoint, then
+  the panel refetches.
+- **Members-endpoint bug fixed (`f3b5df2`):** `GET /campaigns/:id/members`
+  destructured `const [dm, ...players]`, which nested the player array — it
+  returned `[dm, [p1,p2,…]]` instead of a flat `[dm, p1, p2, …]`. Surfaced by the
+  assignment picker (a blank member entry). Changed to `const [dm, players]`.
+  (Only consumer was this new panel.)
+- **Edit-access nuance:** "previous owner can no longer edit" holds for a *player*
+  former owner (`PUT /:id` → 403). A *DM* former owner keeps raw API edit (the
+  `isDM` branch of `PUT /:id`), but has no UI path to a character they don't own
+  (the builder lists only own characters), so the confirm modal's "you'll lose
+  edit access" note is practically accurate from the DM's UI.
+- Verified **backend** live (3 throwaway accounts + a non-member + an admin,
+  17/17): DM assigns A→C; new owner C can edit, former owner A → 403; a player
+  (incl. the owner) reassign → 403; non-member / nonexistent / non-integer → 400;
   admin (non-DM) reassign works; **approving then reassigning leaves status
-  `approved`** (rule_breaker/dm_approved untouched); party list carries
-  owner_username. FK-safe cleanup (4 real accounts intact); PartyHub `👤` owner
-  line confirmed in-browser.
+  `approved`**; party list carries owner_username.
+- Verified **frontend** live (DM=owner on a throwaway campaign + a throwaway
+  member): DM builds a character, opens Party Characters, Assign to player →
+  member picker → confirm (with the lose-edit-access warning) → **owner line
+  flips `👤 jesper` → `👤 <member>`**; viewing the same dashboard as the player
+  (token-swapped test account) shows **no Party Characters panel / no Assign
+  button**. FK-safe cleanup (4 real accounts intact).
 
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
