@@ -204,6 +204,29 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   red + Save re-enables, save → DM panel back to "1 pending". Throwaway campaign +
   character deleted afterward (real `test` campaign + 4 users intact).
 
+**Character ownership reassignment — DM-assignment (2026-06-28)**
+- DMs can transfer a character to a different player. `PUT /api/characters/:id/owner
+  { player_user_id }` sets `player_user_id`. **Server-enforced:** only the campaign
+  DM (`campaign.dm_user_id`) or a global admin (`users.is_admin`) may call; a
+  player — including the current owner — gets **403**. The target **must be a
+  participant of the character's campaign** (the DM or a `campaign_members` row,
+  checked via `campaignAccess`), else **400** — never an arbitrary user. Accepts a
+  number or a numeric string (a `<select>` value).
+- **Only `player_user_id` changes** — `rule_breaker` + `dm_approved` are untouched
+  (orthogonal to the rule-breaker flow). The new owner can then edit via `PUT /:id`
+  (its owner check is by `player_user_id`); the previous owner can no longer edit.
+- **Party view** (`/party/:campaignId`) now joins the owner (`owner_username` +
+  `owner_email`); **PartyHub** shows `👤 <owner>` under each character for the DM.
+  `api.assignCharacterOwner(id, player_user_id)` is wired in the client for a
+  future assignment UI (no reassign control in the UI yet).
+- Verified live (3 throwaway accounts + a non-member + an admin, 17/17): DM
+  assigns A→C; new owner C can edit, former owner A → 403; a player (incl. the
+  owner) reassign → 403; target non-member / nonexistent / non-integer → 400;
+  admin (non-DM) reassign works; **approving then reassigning leaves status
+  `approved`** (rule_breaker/dm_approved untouched); party list carries
+  owner_username. FK-safe cleanup (4 real accounts intact); PartyHub `👤` owner
+  line confirmed in-browser.
+
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
 - 9 biome categories with all tile variants (28 unique tiles in `tiles_64/`)
@@ -574,6 +597,24 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
   the legacy `character_data.ruleBreaker` the builder already writes — so the gate
   works before the Prompt-2 frontend lands. A boot-time backfill flips existing
   `ruleBreaker=true` rows to the new column.
+
+### Character ownership reassignment (2026-06-28)
+- **Reuses the contextual-role guard.** `PUT /api/characters/:id/owner` uses the
+  same shape as approval — `isCampaignDM(campaign_id, user) || isAdmin(user)` — and
+  never special-cases the owner: a player (even the current owner) can't reassign.
+- **Target validated against campaign participation, not a free-form id.** The
+  target must pass `campaignAccess(campaign_id, target)` (campaign DM or a
+  `campaign_members` row), so a DM can only hand a character to someone actually in
+  the campaign — never an arbitrary user. Reuses the existing helper rather than a
+  new membership query.
+- **Orthogonal to the rule-breaker flow.** The `/owner` UPDATE touches only
+  `player_user_id`; it deliberately does NOT reset `dm_approved` (unlike a normal
+  save) because transferring custody is not an edit of the sheet. Edit rights
+  "follow" automatically — `PUT /:id`'s owner check reads `player_user_id`, so the
+  new owner gains edit access and the previous owner loses it with no extra code.
+- **Owner surfaced for the DM.** `/party/:campaignId` joins `users` for
+  `owner_username` + `owner_email`; PartyHub renders `👤 <owner>` per character
+  (DM-only). `api.assignCharacterOwner` exists for a later assignment UI.
 
 ### Shared AD&D theming
 - `src/styles/adnd-theme.css` holds the canonical theme variables (`--adnd-gold`, `--adnd-bg`, `--adnd-surface`, `--adnd-border`, …) plus reusable `.adnd-divider`, `.adnd-card`, `.adnd-module-header`.
