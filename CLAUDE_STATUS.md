@@ -655,6 +655,26 @@ Oracle security list + OS firewall both allow 443. The app is now served at
   intentionally for now**. Enable preload + submit to the HSTS preload list
   once you're confident HTTPS stays up.
 
+### Cross-user isolation (IDOR) — empirically verified (2026-06-04)
+
+Static audit (above, "Done in this pass") was confirmed with a live two-account
+behavioural test on `https://realmkeep.app`. Two throwaway accounts A + B; B
+built a full set (campaign, character, npc, map, party-knowledge, party-
+inventory, party-equipment, character-equipment, character-spell, quest, loot,
+encounter, saved-encounter). Then A — with A's own valid token — hit every
+`:id` route against B's ids: GET / PUT / DELETE, plus `npcs/:id/reveal|hide`,
+`party-equipment/:id/assign`, `character-equipment/:id/equip`,
+`characters/party/:campaignId`, `saved-encounters/:id/creatures`.
+
+**Result: 0 leaks (40 attempts).** Every cross-user call returned **403**
+(`campaigns/:id` GET returns **404** by design — the `WHERE` excludes
+non-members; still no data exposed). Positive control: B reads all of B's own
+resources → 200, proving the 403s are real ownership enforcement, not absent
+resources. Both throwaways deleted FK-safe (characters → campaigns → users,
+scoped to the two accounts); the 4 real accounts untouched. No code changes
+needed — server-side `isDM()` / `campaignAccess()` / `canEdit()` checks hold on
+every write path.
+
 ### Verification (run after deploy)
 
 ```bash
