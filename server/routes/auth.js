@@ -14,6 +14,7 @@ const bcrypt  = require('bcryptjs');
 const crypto  = require('crypto');
 const db      = require('../db');
 const { auth, makeToken } = require('../middleware/auth');
+const { notifyNewSignup } = require('../lib/notify');
 
 const router  = express.Router();
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
@@ -51,6 +52,10 @@ router.post('/register', async (req, res) => {
        RETURNING id, email, username, role, ai_approved, is_admin`,
       [email.trim().toLowerCase(), hash, uname, 'player'],
     );
+    // Fire-and-forget owner notification (no-op unless DISCORD_WEBHOOK_URL is
+    // set). Never awaited and never throws — a notification failure must not
+    // affect the registration result.
+    notifyNewSignup(user).catch(() => {});
     res.status(201).json({ token: makeToken(user), user });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Email already in use' });
@@ -78,6 +83,11 @@ router.post('/login', async (req, res) => {
   ]).catch(() => false);
   console.log('[login] bcrypt.compare done', new Date().toISOString(), 'ok:', ok);
   if (!ok)  return res.status(401).json({ error: 'Invalid email or password' });
+
+  // Suspended accounts are rejected at login (checked after the password so we
+  // don't reveal suspension to wrong-password attempts). The auth middleware
+  // also rejects mid-session, so a suspend takes effect immediately.
+  if (user.suspended === true) return res.status(403).json({ error: 'account_suspended' });
 
   const { password_hash: _ph, ...safeUser } = user;
   res.json({ token: makeToken(user), user: safeUser });

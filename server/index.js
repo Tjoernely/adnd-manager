@@ -37,6 +37,7 @@ const armorCatalogRouter     = require('./routes/armor-catalog');
 const webhookRouter          = require('./routes/webhook');
 const proficienciesRouter    = require('./routes/proficiencies');
 const kitsRouter             = require('./routes/kits');
+const adminRouter            = require('./routes/admin');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -139,6 +140,7 @@ app.use('/api/armor-catalog',        armorCatalogRouter);
 app.use('/api/webhook',              webhookRouter);
 app.use('/api/proficiencies',        proficienciesRouter);
 app.use('/api/kits',                 kitsRouter);
+app.use('/api/admin',                adminRouter);
 
 // ── Serve React frontend (production build) ────────────────────────────────────
 const PUBLIC = path.join(__dirname, 'public');

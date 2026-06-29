@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db  = require('../db');
 
 // SECURITY: JWT_SECRET MUST be configured in the environment. The previous
 // fallback ('dnd-manager-secret') was a known string that would have let
@@ -32,16 +33,33 @@ function makeToken(user) {
   );
 }
 
-/** Verify JWT; attach decoded payload to req.user */
-function auth(req, res, next) {
+/**
+ * Verify JWT; attach decoded payload to req.user. Then a FRESH per-request
+ * suspension check (one PK lookup) so an admin suspending an account takes
+ * effect immediately — mid-session, not just at next login. Rejects a
+ * suspended account with 403 { error: 'account_suspended' }.
+ */
+async function auth(req, res, next) {
   const header = req.headers.authorization;
   if (!header) return res.status(401).json({ error: 'No token' });
+  let decoded;
   try {
-    req.user = jwt.verify(header.split(' ')[1], JWT_SECRET);
-    next();
+    decoded = jwt.verify(header.split(' ')[1], JWT_SECRET);
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(401).json({ error: 'Invalid or expired token' });
   }
+  req.user = decoded;
+  try {
+    const row = await db.one('SELECT suspended FROM users WHERE id=$1', [decoded.id]);
+    if (!row) return res.status(401).json({ error: 'account_not_found' });
+    if (row.suspended === true) return res.status(403).json({ error: 'account_suspended' });
+  } catch (e) {
+    // Fail OPEN on a DB hiccup: never turn a transient DB error into a global
+    // auth outage. The actual route below will fail anyway if the DB is down,
+    // and a suspended user can do nothing useful in that window. Logged.
+    console.error('[auth/suspended-check]', e.message);
+  }
+  next();
 }
 
 /** Only allow users whose global role is 'dm' or 'admin' */

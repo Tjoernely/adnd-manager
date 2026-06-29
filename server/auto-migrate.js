@@ -180,18 +180,19 @@ async function autoMigrate() {
       await db.query(`GRANT ALL ON map_connectors TO ${u};`);
     } catch (_) { /* ignore on managed DBs */ }
 
-    // ── AI feature-gate (2026-06-04) ───────────────────────────────────────
+    // ── AI feature-gate + admin (2026-06-04 / suspended 2026-06-28) ────────
     // Server-side AI (Anthropic) runs on the owner's shared ANTHROPIC_API_KEY,
     // so it must be locked behind owner approval. ai_approved gates the AI
     // routes (enforced in requireAiApproval middleware, read fresh from this
-    // column so SQL approvals take effect without re-login). is_admin is for
-    // a future admin UI — the column exists now but is not wired up yet.
-    // Defaults false → every existing + new account is unapproved until the
-    // owner flips ai_approved=true via SQL.
+    // column so SQL approvals take effect without re-login). is_admin gates the
+    // admin API (requireAdmin middleware + /api/admin routes). suspended blocks
+    // a user immediately — checked fresh in the auth middleware and at login
+    // (error code account_suspended), not just at next login. All default false.
     await db.query(`
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS ai_approved BOOLEAN NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS is_admin    BOOLEAN NOT NULL DEFAULT false;
+        ADD COLUMN IF NOT EXISTS is_admin    BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS suspended   BOOLEAN NOT NULL DEFAULT false;
     `);
     // Seed the owner account (idempotent — re-asserts on every boot, harmless).
     await db.query(`
