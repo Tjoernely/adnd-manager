@@ -248,7 +248,7 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   (token-swapped test account) shows **no Party Characters panel / no Assign
   button**. FK-safe cleanup (4 real accounts intact).
 
-**Admin API + account suspension (2026-06-28, backend)**
+**Admin API + UI + account suspension (2026-06-28)**
 - Minimal admin backend behind `auth` + **`requireAdmin`** (`is_admin` read FRESH
   from the DB per request — granting/revoking admin via SQL is immediate;
   non-admin → 403 `admin_required`; fails closed). Routes under **`/api/admin`**:
@@ -271,13 +271,30 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   fire-and-forget on register, sends a Discord webhook ONLY if
   `DISCORD_WEBHOOK_URL` is set (it isn't yet), else a silent no-op; a webhook
   failure never breaks registration. Documented optional in `.env.example` (§6).
-- **No admin UI yet** — this is the backend; the admin panel is the next prompt.
-- Verified live (3 throwaway accounts, 20/20): non-admin → 403 on all 3 routes;
-  admin lists (no password_hash) / approves / suspends; suspended user → 403
-  `account_suspended` at login AND mid-session (`/me`), reversible on unsuspend;
-  admin can't suspend self / revoke own approval (403); no de-admin route (404);
-  fresh `is_admin` confirmed (admin token predated the SQL flip). Throwaways
-  cleaned up (4 real accounts intact; jesper still the sole admin).
+- **Admin UI (`7fee73e`):** `AdminScreen` overlay
+  (`src/components/admin/AdminScreen.jsx`), opened from a **⚙ Admin** entry in the
+  CampaignSelector + CampaignDashboard headers shown **only when `user.is_admin`**
+  (the overlay also guards defensively; the server enforces regardless). A
+  highlighted **"Awaiting Approval"** panel up top is the primary who's-waiting
+  view (lists `!ai_approved && !suspended`), above a full user table (username,
+  email, created, status badges Approved/Pending/Suspended + Admin chip). Per-row
+  **Approve/Revoke** + **Suspend/Reactivate**, reconciled from the server
+  response. **Self-guards:** Suspend + Revoke are disabled on your own row.
+- **`account_suspended` handling:** `apiFetch` catches a 403 `account_suspended`
+  mid-session, clears creds, and reuses the **`auth:expired`** mechanic with
+  `detail.reason='suspended'`; `useAuth` then logs the user out cleanly and shows
+  "Your account has been suspended." on the login screen (not a generic error).
+- Verified **backend** live (3 throwaway accounts, 20/20): non-admin → 403 on all
+  3 routes; admin lists (no password_hash) / approves / suspends; suspended user
+  → 403 `account_suspended` at login AND mid-session (`/me`), reversible on
+  unsuspend; admin can't suspend self / revoke own approval (403); no de-admin
+  route (404); fresh `is_admin` confirmed (admin token predated the SQL flip).
+- Verified **frontend** live (admin jesper, 1 throwaway): the table shows all 4
+  real accounts + the throwaway with status; Approve/Revoke + Suspend/Reactivate
+  cycle works; jesper's own Suspend/Revoke are disabled; a token-swapped
+  non-admin sees **no ⚙ Admin entry**; the throwaway suspended mid-session is
+  **logged cleanly out with the suspended message**. Throwaway deleted (4 real
+  accounts intact; jesper still the sole admin).
 
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
