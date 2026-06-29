@@ -296,6 +296,33 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   **logged cleanly out with the suspended message**. Throwaway deleted (4 real
   accounts intact; jesper still the sole admin).
 
+**Players & Invites + working join links (2026-06-28)**
+- **DM-only "Players & Invites" panel** (`CampaignDashboard.jsx`, `PlayersInvites`):
+  invite a player by email (`createInvite`) → shows the join link
+  (`https://realmkeep.app/join/<token>`) with a **Copy** button; a members list
+  with a **Remove** action (`kickMember`, hidden on the DM + on yourself); and a
+  pending-invites list (`getCampaignInvites`), each with a copyable link. Gated by
+  `isDM` — a non-DM (incl. a regular member) never sees it.
+- **Working join links (`JoinScreen` + App `/join/<token>` gate):** the link was
+  previously **dead** (no frontend handler / no `acceptInvite` usage). Now it
+  previews the invite (`previewInvite`, no auth), shows login/register if logged
+  out, then accepts (`acceptInvite`) and drops the user straight into the campaign
+  (URL cleaned via `history.replaceState`). nginx already SPA-falls-back
+  (`try_files … /index.html`), so no nginx change was needed.
+- **Server-side admin override added:** `POST /api/auth/invite`,
+  `DELETE /api/campaigns/:id/members/:userId`, and `GET /:id/invites` now allow the
+  campaign **DM or a global admin** (new `dmOrAdmin` helper in campaigns.js +
+  `isAdmin` in auth.js) — previously DM-only. Non-DM/non-admin still 403.
+- Verified live end-to-end (DM jesper + 1 throwaway): DM creates an invite via the
+  panel → join link; throwaway opens the link → preview → **Join → becomes a
+  member** (role player); the throwaway (non-DM) sees **no panel**; the DM's
+  **Remove** kicks the member (members back to DM-only). Throwaway campaign +
+  invite + user cleaned up FK-safe (4 real accounts intact).
+- **Bug caught in browser (`b074d4a`):** `CampaignDashboard.jsx` referenced `C.*`
+  (theme colors) without importing `C` → white-screen crash once the panel
+  rendered. Vite/tsc don't flag an undefined identifier in `.jsx`; fixed by adding
+  the import. (Lesson: browser-verify panels, not just the build.)
+
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
 - 9 biome categories with all tile variants (28 unique tiles in `tiles_64/`)
