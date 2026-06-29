@@ -1,6 +1,6 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-06-30_
 
 ---
 
@@ -30,6 +30,26 @@ _Last updated: 2026-06-28_
 >   `POST /api/maps/:id/image`. Matches the route's multer limit (20M).
 > - Backups of pre-change configs: `…/adnd-manager.bak-20260517`,
 >   `…/adnd-manager.bak-20260519`.
+
+### Database backups (2026-06-30)
+- **Daily `pg_dump`** via `scripts/backup-db.sh` (version-controlled in the repo)
+  → ubuntu cron **`0 3 * * *`** on the instance (cron daemon active). It reads
+  `DB_*` from `server/.env` (password passed via the `PGPASSWORD` env var —
+  never hardcoded, never in argv), writes a gzipped timestamped plain-SQL dump to
+  **`/var/backups/realmkeep/`**, and keeps the **7 most recent** (older pruned).
+  Cron log: `/var/backups/realmkeep/backup.log`.
+- The backup dir is **outside the repo AND the nginx web root** (`server/public`),
+  so dumps are never web-served and never committed to git. Dir mode `700`,
+  files `600`, owned by `ubuntu`.
+- **Verified (2026-06-30):** a manual dump (~7.8 MB) restored cleanly into a temp
+  DB (`realmkeep_restore_test`) — every row count matched prod (users 4,
+  characters 5, campaigns 4, invites 1, quests 1, npcs 32; 33 public tables) —
+  then the temp DB was dropped (prod `adnddb` untouched). Rotation tested
+  separately (8 dummies → run → 7 kept, 2 oldest pruned). An untested backup
+  isn't a backup; this one restores.
+- ⚠ **Dumps live ONLY on the instance.** A copy **off the instance** (Oracle
+  Object Storage, or a periodic `scp`/rsync download) is the next step for real
+  disaster recovery — losing the instance currently loses the backups with it.
 
 ### Deploy flows
 
