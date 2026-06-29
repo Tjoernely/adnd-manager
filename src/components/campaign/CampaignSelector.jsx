@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { C } from '../../data/constants.js';
 import { api } from '../../api/client.js';
+import { AdminScreen } from '../admin/AdminScreen.jsx';
 
 /**
  * Full-screen campaign picker.
@@ -25,6 +26,9 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
 
   // Unassigned (orphan) characters — campaign_id IS NULL
   const [unassigned, setUnassigned] = useState([]);
+
+  // Admin overlay (entry hidden for non-admins; server enforces regardless)
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const loadCampaigns = useCallback(async () => {
     setLoading(true); setError(null);
@@ -153,6 +157,15 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 11, color: C.textDim }}>{user.email}</span>
+          {user.is_admin && (
+            <button onClick={() => setShowAdmin(true)} style={{
+              background: 'rgba(160,127,208,.15)', border: '1px solid rgba(160,127,208,.5)',
+              borderRadius: 5, padding: '5px 14px', cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 11, color: '#c8a8f0',
+            }}>
+              ⚙ Admin
+            </button>
+          )}
           <button onClick={onLogout} style={{
             background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`,
             borderRadius: 5, padding: '5px 14px', cursor: 'pointer',
@@ -362,6 +375,11 @@ export function CampaignSelector({ user, onSelect, onLogout }) {
           onConfirm={confirmDelete}
           onCancel={() => { setDeletePreview(null); setDeleteChars(false); }}
         />
+      )}
+
+      {/* ── Admin overlay (is_admin only) ────────────────────────────────── */}
+      {showAdmin && user.is_admin && (
+        <AdminScreen user={user} onClose={() => setShowAdmin(false)} />
       )}
     </div>
   );

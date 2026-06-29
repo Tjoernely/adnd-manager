@@ -35,6 +35,16 @@ async function apiFetch(path, options = {}) {
       localStorage.removeItem('dnd_user');
       window.dispatchEvent(new Event('auth:expired'));
     }
+    // Account suspended mid-session (403 account_suspended): clear creds and
+    // reuse the auth:expired mechanic with a reason so useAuth logs the user out
+    // cleanly and shows "Your account has been suspended" (not a generic error).
+    if (res.status === 403 && body?.error === 'account_suspended') {
+      localStorage.removeItem('dnd_token');
+      localStorage.removeItem('dnd_user');
+      window.dispatchEvent(new CustomEvent('auth:expired', { detail: { reason: 'suspended' } }));
+      err.code = 'account_suspended';
+      err.message = 'Your account has been suspended';
+    }
     // AI feature-gate (403): tag + friendly-message the server-AI lock so
     // GenerateButton et al. show "Awaiting approval…" instead of the raw code.
     if (body?.error === 'ai_not_approved') {
@@ -54,6 +64,11 @@ export const api = {
   register: (email, password, username, role) =>
     apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, username, role }) }),
   me: () => apiFetch('/auth/me'),
+
+  // ── Admin (is_admin only; server enforces requireAdmin) ───────────
+  getAdminUsers:   ()              => apiFetch('/admin/users'),
+  setUserApproval: (id, approved)  => apiFetch(`/admin/users/${id}/approval`, { method: 'PUT', body: JSON.stringify({ approved }) }),
+  setUserSuspend:  (id, suspended) => apiFetch(`/admin/users/${id}/suspend`,  { method: 'PUT', body: JSON.stringify({ suspended }) }),
 
   // Invite flow
   createInvite:  (campaign_id, email)  =>

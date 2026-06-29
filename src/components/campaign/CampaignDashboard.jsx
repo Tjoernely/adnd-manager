@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
+import { AdminScreen } from '../admin/AdminScreen.jsx';
 import './CampaignDashboard.css';
 
 // ── Module definitions ─────────────────────────────────────────────────────────
@@ -312,6 +313,7 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
   const [counts,      setCounts]      = useState({});
   const [comingSoon,  setComingSoon]  = useState(null); // label of unimplemented module
   const [showApiKeys, setShowApiKeys] = useState(false);
+  const [showAdmin,   setShowAdmin]   = useState(false);
   const isDM = campaign.dm_user_id === user.id;
 
   // Load counts for all modules
@@ -377,6 +379,12 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
 
         <div className="cd-header-right">
           <span className="cd-user-chip">{user.email}</span>
+          {user.is_admin && (
+            <button className="cd-settings-btn" onClick={() => setShowAdmin(true)} title="User administration"
+              style={{ borderColor: 'rgba(160,127,208,.5)', color: '#c8a8f0' }}>
+              ⚙ Admin
+            </button>
+          )}
           <button className="cd-settings-btn" onClick={() => setShowApiKeys(true)} title="API Key Settings">
             ⚙ Settings
           </button>
@@ -428,6 +436,11 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
 
       {/* ── API Key Settings ── */}
       {showApiKeys && <ApiKeySettings onClose={() => setShowApiKeys(false)} />}
+
+      {/* ── Admin overlay (is_admin only) ── */}
+      {showAdmin && user.is_admin && (
+        <AdminScreen user={user} onClose={() => setShowAdmin(false)} />
+      )}
 
       {/* ── "Coming soon" overlay ── */}
       {comingSoon && (

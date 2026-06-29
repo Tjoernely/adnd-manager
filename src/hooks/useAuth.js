@@ -38,11 +38,15 @@ export function useAuth() {
       .finally(() => setLoading(false));
   }, []);
 
-  // ── Listen for 401s fired by apiFetch mid-session ─────────────────
+  // ── Listen for 401s / suspensions fired by apiFetch mid-session ───
   useEffect(() => {
-    const handleExpired = () => {
+    const handleExpired = (e) => {
       setUser(null);
-      setError('Session expired — please log in again.');
+      // apiFetch tags a mid-session suspension with detail.reason='suspended';
+      // a plain 401 has no detail and falls back to the expired message.
+      setError(e?.detail?.reason === 'suspended'
+        ? 'Your account has been suspended.'
+        : 'Session expired — please log in again.');
     };
     window.addEventListener('auth:expired', handleExpired);
     return () => window.removeEventListener('auth:expired', handleExpired);
