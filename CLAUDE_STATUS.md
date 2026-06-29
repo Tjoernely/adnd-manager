@@ -136,9 +136,10 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   unapproved. `callClaude` + `apiFetch` map a stray 403 to that friendly message.
 - **Approval is via SQL for now** (no admin UI yet):
   `UPDATE users SET ai_approved=true WHERE email='…';`
-- `is_admin` column (owner seeded true) is now used as a **global admin override
-  on character DM-approval** (`PUT /api/characters/:id/approval`); there is still
-  no admin *UI*, and it is **not** wired to this AI gate.
+- `is_admin` column (owner seeded true) backs the **global admin override** on
+  character DM-approval/reassignment AND the **admin API** (`requireAdmin` +
+  `/api/admin`, 2026-06-28); it is **not** wired to this AI gate. Admin *UI* still
+  pending (backend only).
 - Verified live (2026-06-04): unapproved account → 403 on all three AI routes,
   200 on free routes; flipping `ai_approved=true` opened the gate on the **same
   token** (200, no re-login); owner `jesper@olesen.nu` approved.
@@ -246,6 +247,37 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   flips `👤 jesper` → `👤 <member>`**; viewing the same dashboard as the player
   (token-swapped test account) shows **no Party Characters panel / no Assign
   button**. FK-safe cleanup (4 real accounts intact).
+
+**Admin API + account suspension (2026-06-28, backend)**
+- Minimal admin backend behind `auth` + **`requireAdmin`** (`is_admin` read FRESH
+  from the DB per request — granting/revoking admin via SQL is immediate;
+  non-admin → 403 `admin_required`; fails closed). Routes under **`/api/admin`**:
+  - `GET /users` — id, username, email, created_at, ai_approved, is_admin,
+    suspended. **Never** password_hash or other secrets.
+  - `PUT /users/:id/approval { approved }` — set `ai_approved`.
+  - `PUT /users/:id/suspend { suspended }` — set `suspended`.
+- **Migration:** `users.suspended BOOLEAN NOT NULL DEFAULT false` (idempotent).
+- **Immediate suspension:** rejected at **login** AND in the **auth middleware**
+  (fresh per-request `SELECT suspended`, one PK lookup) — error code
+  `account_suspended` — so a suspend bites mid-session, not just at next login.
+  (Auth fails OPEN on a DB error so a transient blip can't lock everyone out.)
+- **Self-protection (anti-lockout):** an admin can't suspend themselves
+  (`cannot_suspend_self`), can't revoke their own `ai_approved`
+  (`cannot_revoke_own_approval`), and can't suspend the last active admin
+  (`cannot_suspend_last_admin`, defense-in-depth). There is **no is_admin
+  mutation endpoint**, so admin rights change only via direct DB — which keeps
+  "can't de-admin yourself" inherently true and the admin set stable.
+- **Signup notification (dormant):** `server/lib/notify.js` `notifyNewSignup` —
+  fire-and-forget on register, sends a Discord webhook ONLY if
+  `DISCORD_WEBHOOK_URL` is set (it isn't yet), else a silent no-op; a webhook
+  failure never breaks registration. Documented optional in `.env.example` (§6).
+- **No admin UI yet** — this is the backend; the admin panel is the next prompt.
+- Verified live (3 throwaway accounts, 20/20): non-admin → 403 on all 3 routes;
+  admin lists (no password_hash) / approves / suspends; suspended user → 403
+  `account_suspended` at login AND mid-session (`/me`), reversible on unsuspend;
+  admin can't suspend self / revoke own approval (403); no de-admin route (404);
+  fresh `is_admin` confirmed (admin token predated the SQL flip). Throwaways
+  cleaned up (4 real accounts intact; jesper still the sole admin).
 
 **Terrain Sketch Editor**
 - 32×32 grid tile painter
@@ -586,8 +618,9 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 - **Enforcement** lives in `requireAiApproval` (in `server/routes/ai.js`),
   mounted after `auth` on `/prompt`, `/loot`, `/generate`. It SELECTs
   `ai_approved` by `req.user.id` per request (fresh, no JWT staleness) — an SQL
-  approval is effective immediately. `is_admin` is surfaced here but only *used*
-  by character DM-approval (below), not by this AI gate.
+  approval is effective immediately. `is_admin` is surfaced here but *used* by
+  character DM-approval/reassignment and the admin API (`requireAdmin`), not by
+  this AI gate.
 - **Approve a user:** `UPDATE users SET ai_approved=true WHERE email='…';`
   (admin UI deferred). The frontend reflects it after the next `/api/auth/me`
   (page reload); server enforcement is immediate regardless.
@@ -636,6 +669,27 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
   `owner_username` + `owner_email`; PartyHub renders `👤 <owner>` per character
   (DM-only). `api.assignCharacterOwner` exists for a later assignment UI.
 
+### Admin API + suspension (2026-06-28)
+- **Same fresh-read gate pattern as `requireAiApproval`.** `requireAdmin` reads
+  `is_admin` from the DB per request (not the JWT), so SQL grants/revokes are
+  immediate. The admin gate **fails closed** (403 on DB error); the auth
+  suspension check **fails open** — a transient DB error must not lock every user
+  out (the route fails anyway if the DB is truly down, and a suspended user can do
+  nothing useful in that window).
+- **Suspension enforced in two places** so it's immediate: at login (after the
+  password check, so account state isn't leaked to wrong-password probes) and in
+  the `auth` middleware (one extra PK lookup per authenticated request). Both
+  return `account_suspended`. That per-request lookup is the price of "works
+  mid-session, not just next login" — fine at this app's scale.
+- **Anti-lockout is structural, not just guarded.** Self-suspend and self-revoke
+  of `ai_approved` are blocked, and the last active admin can't be suspended.
+  Crucially there is **no is_admin-mutation endpoint** at all, so the admin set
+  changes only via direct DB — no API path can strand the system with zero admins.
+- **Notification is fire-and-forget + opt-in.** `notifyNewSignup` is dormant until
+  `DISCORD_WEBHOOK_URL` is set; it swallows every error and is never awaited, so a
+  webhook outage can't fail or slow registration. Swappable for email later
+  without touching the register route.
+
 ### Shared AD&D theming
 - `src/styles/adnd-theme.css` holds the canonical theme variables (`--adnd-gold`, `--adnd-bg`, `--adnd-surface`, `--adnd-border`, …) plus reusable `.adnd-divider`, `.adnd-card`, `.adnd-module-header`.
 - `src/components/ui/AdndModuleHeader.tsx` — reusable edition banner + centered gold title + ornate divider. Currently used by the Quests module; retrofitting the other modules is a pending follow-up.
@@ -672,6 +726,7 @@ These are suggested based on current state — confirm with user before starting
 | `GOOGLE_AI_API_KEY` | Gemini image generation | Sketch-to-map |
 | `WEBHOOK_SECRET` | GitHub webhook HMAC | Auto-deploy |
 | `APP_URL` | Base URL for invite links (`auth.js`). **Set 2026-06-04: `https://realmkeep.app`** — verified a fresh invite mints `https://realmkeep.app/join/…`. Read at module load, so a change needs a PM2 restart. | Invites |
+| `DISCORD_WEBHOOK_URL` | **Optional (2026-06-28, unset for now).** If set, a fire-and-forget Discord webhook fires on each registration: `New RealmKeep signup: {username} ({email}) — pending approval`. Unset → silent no-op; a webhook failure never affects registration (`server/lib/notify.js`). Could be swapped for email later. | Signup alerts |
 | `PORT` | Express port (default 3000 local, 3001 prod) | Backend |
 
 ---
