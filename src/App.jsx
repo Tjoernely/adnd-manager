@@ -7,6 +7,7 @@ import { api } from "./api/client.js";
 
 import { LoginScreen }      from "./components/auth/LoginScreen.jsx";
 import { CampaignSelector } from "./components/campaign/CampaignSelector.jsx";
+import { JoinScreen }       from "./components/campaign/JoinScreen.jsx";
 import { Toggle, QL, Chip, Overlay, Modal, CloseBtn } from "./components/ui/index.js";
 
 import { ScoresTab }  from "./components/tabs/ScoresTab.jsx";
@@ -38,6 +39,12 @@ export default function App() {
   // ── Campaign selection ──────────────────────────────────────────
   const [activeCampaign, setActiveCampaign] = useState(() => {
     try { const v = sessionStorage.getItem('adnd_campaign'); return v ? JSON.parse(v) : null; } catch { return null; }
+  });
+
+  // ── Invite deep-link (/join/<token>) ────────────────────────────
+  const [joinToken, setJoinToken] = useState(() => {
+    const m = (window.location.pathname || '').match(/^\/join\/([A-Za-z0-9_-]+)/);
+    return m ? m[1] : null;
   });
 
   // ── Character persistence state ─────────────────────────────────
@@ -254,6 +261,26 @@ export default function App() {
       console.error('Delete error:', e);
     }
   }, [dbCharId, loadCharacterState]);
+
+  // ── Invite join gate (/join/<token>) — takes precedence over auth ──
+  if (joinToken) {
+    const clearJoin = () => { setJoinToken(null); try { window.history.replaceState({}, '', '/'); } catch {} };
+    return (
+      <JoinScreen
+        token={joinToken}
+        user={user}
+        onLogin={login}
+        onRegister={register}
+        authLoading={authLoading}
+        authError={authError}
+        onAccepted={(camp) => {
+          clearJoin();
+          if (camp) { setActiveCampaign(camp); setDbCharId(null); setScreen('dashboard'); }
+        }}
+        onCancel={clearJoin}
+      />
+    );
+  }
 
   // ── Auth gate ───────────────────────────────────────────────────
   if (!user) {

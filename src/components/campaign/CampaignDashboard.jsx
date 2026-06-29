@@ -308,6 +308,158 @@ function CampaignCharacters({ campaignId, currentUserId }) {
   );
 }
 
+// ── DM-only: players & invites ───────────────────────────────────────────────
+// Invite a player by email (creates a join link to copy + share), list current
+// members with a remove action (not the DM), and list pending invites. The
+// server enforces DM/admin on create-invite + remove-member + list-invites.
+function PlayersInvites({ campaignId, currentUserId }) {
+  const [members,  setMembers]  = useState(null); // null = loading
+  const [invites,  setInvites]  = useState([]);
+  const [email,    setEmail]    = useState('');
+  const [busy,     setBusy]     = useState(false);
+  const [err,      setErr]      = useState(null);
+  const [lastLink, setLastLink] = useState(null);
+  const [copied,   setCopied]   = useState(null);
+
+  const load = useCallback(() => {
+    setErr(null);
+    Promise.all([
+      api.getCampaignMembers(campaignId),
+      api.getCampaignInvites(campaignId).catch(() => []),
+    ]).then(([m, inv]) => {
+      setMembers(Array.isArray(m) ? m : []);
+      setInvites(Array.isArray(inv) ? inv : []);
+    }).catch(e => { console.error('[invites]', e); setErr('Could not load players'); setMembers([]); });
+  }, [campaignId]);
+  useEffect(() => { load(); }, [load]);
+
+  const linkFor = (token) => `${window.location.origin}/join/${token}`;
+
+  const sendInvite = async () => {
+    const e = email.trim();
+    if (!e || busy) return;
+    setBusy(true); setErr(null); setLastLink(null);
+    try {
+      const res = await api.createInvite(campaignId, e); // { token, url, ... }
+      setLastLink(res?.url || (res?.token ? linkFor(res.token) : null));
+      setEmail('');
+      load();
+    } catch (e2) { setErr(e2.message || 'Could not create invite'); }
+    finally { setBusy(false); }
+  };
+
+  const removeMember = async (userId) => {
+    setBusy(true); setErr(null);
+    try {
+      await api.kickMember(campaignId, userId);
+      setMembers(prev => (prev ?? []).filter(m => m.id !== userId));
+    } catch (e) { setErr(e.message || 'Could not remove member'); }
+    finally { setBusy(false); }
+  };
+
+  const copy = async (link) => {
+    try { await navigator.clipboard.writeText(link); setCopied(link); setTimeout(() => setCopied(null), 1500); }
+    catch { /* clipboard blocked — the link is selectable in the field */ }
+  };
+
+  if (members === null) return null; // quiet until loaded
+
+  return (
+    <div style={{
+      maxWidth: 1180, margin: '0 auto 22px', padding: '16px 20px',
+      background: 'rgba(40,55,90,.28)', border: '1px solid rgba(120,150,210,.42)',
+      borderRadius: 12, boxShadow: '0 6px 24px rgba(0,0,0,.4)',
+    }}>
+      <div style={{ fontSize: 12, letterSpacing: 2.5, textTransform: 'uppercase', fontWeight: 'bold', color: '#9fc0f0', marginBottom: 12 }}>
+        👥 Players &amp; Invites
+      </div>
+      {err && <div style={{ fontSize: 11, color: '#ff8888', marginBottom: 10 }}>{err}</div>}
+
+      {/* Invite by email */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <input
+          type="email" value={email} placeholder="player@example.com"
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') sendInvite(); }}
+          style={{
+            flex: 1, minWidth: 220, background: 'rgba(0,0,0,.4)', border: `1px solid ${C.border}`,
+            borderRadius: 6, padding: '8px 11px', color: C.text, fontFamily: 'inherit', fontSize: 13, outline: 'none',
+          }} />
+        <button onClick={sendInvite} disabled={busy || !email.trim()} style={{
+          fontSize: 12, fontWeight: 'bold', fontFamily: 'inherit', padding: '8px 16px', borderRadius: 6,
+          color: '#0a0f1a', background: 'linear-gradient(135deg,#3a6ab0,#7fb0f0)', border: 'none',
+          cursor: (busy || !email.trim()) ? 'default' : 'pointer', opacity: (busy || !email.trim()) ? 0.5 : 1,
+        }}>✉ Send Invite</button>
+      </div>
+
+      {/* Freshly created link */}
+      {lastLink && (
+        <div style={{
+          display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, padding: '9px 12px',
+          background: 'rgba(0,0,0,.35)', border: '1px solid rgba(120,150,210,.4)', borderRadius: 7,
+        }}>
+          <span style={{ fontSize: 11, color: C.textDim, whiteSpace: 'nowrap' }}>Share:</span>
+          <input readOnly value={lastLink} onFocus={e => e.target.select()} style={{
+            flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: '#9fc0f0',
+            fontFamily: 'inherit', fontSize: 12, outline: 'none',
+          }} />
+          <button onClick={() => copy(lastLink)} style={copyBtn}>{copied === lastLink ? '✓ Copied' : 'Copy'}</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+        {/* Members */}
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={subHead}>Members ({members.length})</div>
+          {members.map(m => {
+            const isDM   = m.role === 'dm';
+            const isSelf = m.id === currentUserId;
+            return (
+              <div key={m.id} style={rowStyle}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontSize: 13, color: C.text, fontWeight: 'bold' }}>{m.username || m.email}</span>
+                  <span style={{
+                    fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', marginLeft: 8,
+                    color: isDM ? '#c8a8f0' : C.textDim, border: `1px solid ${isDM ? 'rgba(160,127,208,.6)' : C.border}`,
+                    borderRadius: 8, padding: '1px 7px',
+                  }}>{m.role}</span>
+                </div>
+                {!isDM && !isSelf && (
+                  <button onClick={() => removeMember(m.id)} disabled={busy} style={removeBtn(busy)}>Remove</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pending invites */}
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={subHead}>Pending invites ({invites.length})</div>
+          {invites.length === 0 ? (
+            <div style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic', padding: '6px 2px' }}>None outstanding.</div>
+          ) : invites.map(inv => (
+            <div key={inv.id} style={{ ...rowStyle, alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+                <span style={{ fontSize: 12, color: C.text }}>{inv.email || 'anyone with the link'}</span>
+                <button onClick={() => copy(linkFor(inv.token))} style={copyBtn}>
+                  {copied === linkFor(inv.token) ? '✓ Copied' : 'Copy link'}
+                </button>
+              </div>
+              <span style={{ fontSize: 10, color: C.textDim }}>
+                expires {inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+const subHead   = { fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: '#9fc0f0', marginBottom: 8 };
+const rowStyle  = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 11px', marginBottom: 6, borderRadius: 7, background: 'rgba(0,0,0,.28)', border: '1px solid rgba(255,255,255,.08)' };
+const copyBtn   = { fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', padding: '4px 11px', borderRadius: 5, color: '#9fc0f0', background: 'rgba(0,0,0,.35)', border: '1px solid rgba(120,150,210,.5)', whiteSpace: 'nowrap' };
+const removeBtn = (d) => ({ fontSize: 11, fontFamily: 'inherit', cursor: d ? 'default' : 'pointer', padding: '4px 11px', borderRadius: 5, color: '#ff8a8a', background: 'rgba(200,50,50,.12)', border: '1px solid rgba(220,70,70,.5)', opacity: d ? 0.5 : 1 });
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBack, onLogout }) {
   const [counts,      setCounts]      = useState({});
@@ -402,6 +554,8 @@ export function CampaignDashboard({ campaign, user, onNavigate, onOpenMaps, onBa
         <p className="cd-intro">Choose a module to continue your adventure</p>
 
         {isDM && <CampaignCharacters campaignId={campaign.id} currentUserId={user.id} />}
+
+        {isDM && <PlayersInvites campaignId={campaign.id} currentUserId={user.id} />}
 
         <div className="cd-grid">
           {MODULES.map(mod => {

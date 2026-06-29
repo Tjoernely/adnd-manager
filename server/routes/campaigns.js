@@ -214,8 +214,8 @@ router.get('/:id/members', auth, async (req, res) => {
 // ── Remove member (DM only) ──────────────────────────────────────────────────
 router.delete('/:id/members/:userId', auth, async (req, res) => {
   try {
-    if (!(await dmOnly(req.params.id, req.user.id)))
-      return res.status(403).json({ error: 'Not DM of this campaign' });
+    if (!(await dmOrAdmin(req.params.id, req.user.id)))
+      return res.status(403).json({ error: 'Only the campaign DM or an admin can remove members' });
     await db.query(
       'DELETE FROM campaign_members WHERE campaign_id=$1 AND user_id=$2',
       [req.params.id, req.params.userId],
@@ -224,11 +224,11 @@ router.delete('/:id/members/:userId', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
-// ── List active invites (DM only) ────────────────────────────────────────────
+// ── List active invites (DM or admin) ────────────────────────────────────────
 router.get('/:id/invites', auth, async (req, res) => {
   try {
-    if (!(await dmOnly(req.params.id, req.user.id)))
-      return res.status(403).json({ error: 'Not DM of this campaign' });
+    if (!(await dmOrAdmin(req.params.id, req.user.id)))
+      return res.status(403).json({ error: 'Only the campaign DM or an admin can view invites' });
     const invites = await db.all(
       `SELECT id, token, email, expires_at, used_at, created_at FROM invites
        WHERE campaign_id=$1 AND used_at IS NULL AND expires_at > NOW()
@@ -245,6 +245,17 @@ function dmOnly(id, userId) {
     'SELECT * FROM campaigns WHERE id=$1 AND dm_user_id=$2',
     [id, userId],
   );
+}
+// DM of the campaign OR a global admin. Roles are contextual (DM per-campaign),
+// is_admin is the global override — read fresh from the DB.
+async function dmOrAdmin(id, userId) {
+  const row = await db.one(
+    `SELECT (c.dm_user_id=$2) AS is_dm, u.is_admin
+     FROM campaigns c JOIN users u ON u.id=$2
+     WHERE c.id=$1`,
+    [id, userId],
+  );
+  return !!(row && (row.is_dm || row.is_admin));
 }
 function hasAccess(id, userId) {
   return db.one(

@@ -113,12 +113,15 @@ router.post('/invite', auth, async (req, res) => {
   const { campaign_id, email } = req.body ?? {};
   if (!campaign_id) return res.status(400).json({ error: 'campaign_id required' });
 
-  // Only the DM of the campaign may create invites
+  // Only the DM of the campaign — or a global admin — may create invites.
   const campaign = await db.one(
-    'SELECT id, name FROM campaigns WHERE id = $1 AND dm_user_id = $2',
-    [campaign_id, req.user.id],
+    'SELECT id, name, dm_user_id FROM campaigns WHERE id = $1',
+    [campaign_id],
   );
-  if (!campaign) return res.status(403).json({ error: 'Not DM of this campaign' });
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  const isDM = campaign.dm_user_id === req.user.id;
+  if (!isDM && !(await isAdmin(req.user.id)))
+    return res.status(403).json({ error: 'Only the campaign DM or an admin can create invites' });
 
   const token     = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -198,5 +201,11 @@ router.post('/invite/:token/accept', auth, async (req, res) => {
   );
   res.json({ message: `Joined campaign: ${campaign.name}`, campaign });
 });
+
+// Global admin override (users.is_admin), read fresh from the DB.
+async function isAdmin(userId) {
+  const row = await db.one('SELECT is_admin FROM users WHERE id=$1', [userId]);
+  return !!(row && row.is_admin);
+}
 
 module.exports = { router, auth }; // keep named export for backward compat
