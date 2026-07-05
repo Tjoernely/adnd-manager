@@ -1,6 +1,6 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-05_
 
 ---
 
@@ -47,6 +47,13 @@ _Last updated: 2026-06-30_
   then the temp DB was dropped (prod `adnddb` untouched). Rotation tested
   separately (8 dummies → run → 7 kept, 2 oldest pruned). An untested backup
   isn't a backup; this one restores.
+- **Re-verified (2026-07-05):** cron entry present + cron daemon active; the
+  nightly 03:00 run had fired every day since setup (7 dumps on disk). A fresh
+  manual dump was restored into a temp DB (`realmkeep_restore_test_20260705`,
+  created via `sudo -u postgres` — the app DB user has no CREATEDB) and **all 33
+  public tables row-count-matched prod exactly** (incl. spells 4400, magical_items
+  5725, monsters 3781); temp DB dropped afterward, prod untouched. Rotation
+  observed live: the manual run pruned the oldest dump, keeping exactly 7.
 - ⚠ **Dumps live ONLY on the instance.** A copy **off the instance** (Oracle
   Object Storage, or a periodic `scp`/rsync download) is the next step for real
   disaster recovery — losing the instance currently loses the backups with it.
@@ -768,12 +775,17 @@ These are suggested based on current state — confirm with user before starting
 1. **Retrofit `AdndModuleHeader` + AD&D theming to the remaining modules** — NPCs, Monsters, Spells, Magical Items, Party Hub, Characters. Component exists and is proven on Quests; rollout needs in-browser visual iteration.
 2. **Maps module theming pass** — `MapGenerator.css` predates the gold theme; the Maps overlay looks a step behind the rest.
 3. **Quest Stage 4** — "Generate in chunks" (split very long generations across multiple AI calls); the button placeholder is already in the dialog, disabled.
-4. **Webhook reliability** — investigate intermittent auto-deploy non-delivery (see §1 webhook note).
-5. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
-6. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
-7. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
-8. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
-9. **Production readiness** (before opening the app to other DMs) — multi-user auth review, SQL-injection sweep, rate limiting on AI endpoints, a per-user daily AI cost cap, and React error boundaries so one crashing card cannot blank a whole module.
+4. **Off-instance backup copy** — DB dumps live ONLY on the instance
+   (`/var/backups/realmkeep/`, see §1); losing the instance loses the backups
+   with it. Push a copy off the box (Oracle Object Storage via a lifecycle-
+   managed bucket, or a periodic `scp`/rsync pull to another machine) for real
+   disaster recovery.
+5. **Webhook reliability** — investigate intermittent auto-deploy non-delivery (see §1 webhook note).
+6. **Weapon proficiencies in DB** — import from `src/data/` to PostgreSQL, update `/api/proficiencies`
+7. **Seamless tile transitions** — edge tiles for biome boundaries (coast→plains, forest→plains, etc.)
+8. **stat limits validation in ScoresTab** — use `statLimits` from `races.js` to warn/block invalid scores
+9. **Consider v8 encounter features** — theme presets, saved filter presets per campaign
+10. **Production readiness** (before opening the app to other DMs) — multi-user auth review, SQL-injection sweep, rate limiting on AI endpoints, a per-user daily AI cost cap, and React error boundaries so one crashing card cannot blank a whole module.
 
 ---
 
