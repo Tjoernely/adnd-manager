@@ -118,24 +118,50 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
 
 **AI Integration**
 - Claude (Anthropic) for map metadata, POIs, lore generation
-- DALL-E 3 for map images (optional, requires OpenAI key)
+- Gemini (`gemini-3.1-flash-image`) for character/NPC portraits — server-side
+  on the shared `GOOGLE_AI_API_KEY` (2026-07-05, see Portrait entry below)
 - Gemini Image for sketch-to-map rendering (requires `GOOGLE_AI_API_KEY`)
-- GPT-Image-1 as alternative sketch renderer (requires `OPENAI_API_KEY`)
+- GPT-Image-1 for map images + alternative sketch renderer (requires OpenAI key)
 - Claude Haiku 4.5 for monster tag classification (one-shot, all 3781 monsters classified ~$3-4)
 
-**Portrait generation — gpt-image-1 (2026-06-04)**
+**Portrait generation — server-side Gemini (2026-07-05, `d6f34cc`)**
 - NPC + character portraits (`NPCManager.jsx`, `NPCGenerator.jsx`,
-  `PortraitTab.jsx`) generate **browser-side on the user's own OpenAI key**
-  (`localStorage.openai_api_key`) — not the owner's key, so no approval gate.
-- Migrated dall-e-3 → **gpt-image-1** (`b214a69`) after OpenAI removed dall-e-3
-  on 2026-05-12 (portraits had been failing). Shared helper
-  `generateOpenAIImage(prompt, {size, apiKey})` in `src/api/aiClient.js`:
-  `/v1/images/generations`, `model: 'gpt-image-1'`, no `style`/`response_format`/
-  `quality`; returns a `data:image/png;base64,…` URL from the b64 response
-  (permanent, unlike the old ~1h-expiry dall-e-3 URLs). End-to-end verified
-  (HTTP 200, ~2.1 MB image). Data URLs are large (~1.5-3 MB): NPC
-  `portraitHistory` capped at 3; PortraitTab localStorage history capped at 3
-  with a quota-resilient writer.
+  `PortraitTab.jsx`) now generate **server-side** via
+  **`POST /api/ai/character-image`** on the shared **`GOOGLE_AI_API_KEY`**,
+  model **`gemini-3.1-flash-image`** ("Nano Banana 2" — verified current best
+  against ai.google.dev docs + dry-run on the server before wiring). Replaces
+  the browser-side gpt-image-1 flow on the user's own OpenAI key (history:
+  dall-e-3 → `b214a69` gpt-image-1 after OpenAI removed dall-e-3 2026-05-12).
+  PortraitTab's OpenAI-key Settings UI is gone; users need no key at all.
+- **Gate + cost control:** `auth` + `requireAiApproval` (shared-key cost route,
+  like generate-from-sketch) + hourly `imageLimiter` + a **per-user daily image
+  cap** (`IMAGE_DAILY_CAP`, default 20; `ai_image_usage (user_id, day)` counter,
+  reset by day rollover, counted only on success). Exceeded → **403
+  `image_cap_reached`** (friendly message client-side; PortraitTab shows
+  "n/cap images used today").
+- **Prompt is built server-side** (`server/lib/characterImagePrompt.js`,
+  shared `buildCharacterImagePrompt`): whitelisted descriptive fields ONLY
+  (race, subrace, class, kit, gender, level, weapon/armor/shield/gear,
+  age/hair/eyes/features/appearance/notes — ability scores, CPs, HP, THAC0 and
+  internal flags are dropped). Always **full figure**, environment derived from
+  **class (scene) + race (flavor)** — e.g. dwarf fighter → castle rampart in a
+  dwarven mountain-hall; elf mage → arcane study woven into an ancient elven
+  forest. Values length-capped server-side (prompt-injection bound).
+- **Both data shapes:** `{ character_id }` (saved characters — whitelisted
+  fields read from `character_data`; **owner or campaign DM only**, others 403)
+  and/or inline `{ fields }` (unsaved NPCs / live sheet); inline wins.
+- Returns `{ image: dataURL, prompt, used, cap }` — Gemini returns **JPEG
+  ~1-1.3 MB** (conveniently smaller than gpt-image-1's ~2 MB PNGs). Clients
+  store it in the existing portrait/portraitHistory structures unchanged
+  (NPC list-stripping + 3-deep history caps already in place).
+- Verified live 2026-07-05 (2 throwaway accounts, all passed): unapproved →
+  403 `ai_not_approved`; approved → 200 in ~9 s; dwarf-fighter vs elf-wizard
+  prompts give distinctly different, relevant full-figure scenes; record path
+  extracts race/class/hair from a saved character (scores excluded); cross-user
+  `character_id` → 403; counter at cap → 403 `image_cap_reached` and the
+  blocked call does NOT increment; empty body → 400; portrait+history persist
+  on an NPC (single GET returns them, list strips + `has_portrait`). Cleanup
+  FK-safe (4 real accounts intact).
 - **NPC list omits portraits (perf, `a9a629b`).** `GET /api/npcs` (list) used to
   `SELECT *` + return the full `data` JSONB, so opening the NPC module pulled
   ~8 MB **per NPC**. `stripPortraitForList()` now drops `data.portrait` +
@@ -153,9 +179,11 @@ ssh -i C:/DnD_manager_app/ssh-key-2026-03-11.key ubuntu@158.180.63.20 \
   `/api/ai/prompt`, `/api/ai/loot`, `/api/ai/generate`. Unapproved → `403
   { error: "ai_not_approved" }`. The middleware reads `ai_approved` **fresh from
   the DB** per call, so an SQL approval takes effect immediately — no re-login.
-- **Not gated:** image / portrait generation (runs on the user's OWN OpenAI key,
-  direct browser → api.openai.com) and `/api/maps/:id/image/from-url` (only
-  persists an already-generated image). These stay on plain `auth`.
+- **Not gated:** map image generation in MapGenerator (runs on the user's OWN
+  OpenAI key, direct browser → api.openai.com) and `/api/maps/:id/image/from-url`
+  (only persists an already-generated image). These stay on plain `auth`.
+  (Portraits WERE in this bucket until 2026-07-05 — now server-side Gemini on
+  the shared key, gated + daily-capped; see the Portrait entry.)
 - Frontend gating is **UX only** (the server is the real gate): `isAiApproved()`
   reads the persisted user; Generate NPC / Quest / Encounter / Rumors
   (`GenerateButton`), Map generation (`MapGenerator`), and NPC text generation
@@ -665,6 +693,40 @@ The v7 author (chat-Claude) had even written a justifying comment claiming "useE
 - `npcResolution.ts` writes NPC `personality` as a **trait array** — the NPC module reads it with `.map()`. Quest-AI suggestions may arrive as a string and are split into an array (see bug #6).
 - Vocabulary in `src/rulesets/quests/*.json` (scopes, types, tones, environments, challenges, antagonists, complication + moral-dilemma presets) — slugs are stable English keys; labels/descriptions are user-facing English.
 
+### Server-side character/NPC portraits (2026-07-05)
+- **Why server-side:** browser-side generation on the user's own OpenAI key
+  meant every player needed a paid key. Moving to the shared `GOOGLE_AI_API_KEY`
+  (already on the server for maps) removes that — at the cost of the owner
+  paying, hence gate + cap.
+- **Model:** `gemini-3.1-flash-image` ("Nano Banana 2") — verified as Google's
+  current recommended image model in the official docs BEFORE wiring, then
+  dry-run on the server with the installed `@google/genai` 1.49:
+  `ai.models.generateContent` + `config.responseModalities: ['TEXT','IMAGE']`
+  (same call shape as `GeminiImageRenderer` for maps) works unchanged with the
+  new model. Returns JPEG (~1-1.3 MB) — respect the actual `mimeType` when
+  building the data URL, don't assume PNG.
+- **Daily cap is a counter, not metering:** `ai_image_usage (user_id, day,
+  count)` PK'd on (user_id, day) — the DATE key IS the reset; no cron, no
+  token accounting. Checked BEFORE generation (403 `image_cap_reached`),
+  incremented only AFTER success (failures don't burn the cap). Cap check
+  failure fails CLOSED (503) — an unreadable counter must not mean free images.
+  Global default 20, `IMAGE_DAILY_CAP` env overrides.
+- **Prompt building is server-authoritative** (`lib/characterImagePrompt.js`):
+  clients send fields, never prompts. Whitelist + length caps server-side;
+  class→scene / race→flavor tables derive a full-figure environment. The old
+  client-side prompt builder (sub-ability-score descriptors, social-status
+  visuals) was deleted — scores don't describe appearance, and the user
+  explicitly wants scores/CPs/HP/THAC0/flags excluded.
+- **Two input shapes, one whitelist:** `character_id` (server reads
+  `character_data`, maps `selectedRace`/`selectedClass`/`charGender`/… — weapon
+  IDs are NOT resolvable server-side, the catalog lives in `src/data/`) and
+  inline `fields` (client resolves weapon names etc.). Inline overrides record
+  (the live sheet can be newer than the last save). Record path enforces
+  owner-or-campaign-DM.
+- **Return-the-prompt:** the response includes the server-built prompt —
+  PortraitTab shows it as the "Prompt" preview (the old live client-side
+  preview is impossible now, and echoing it back is more honest anyway).
+
 ### Multi-provider AI endpoint
 - `POST /api/ai/prompt` accepts an optional `model` param: `claude-opus-4-7` / `claude-sonnet-4-6` (default) / `gpt-5.4` / `gpt-5.5`.
 - `claude-*` → Anthropic SDK; `gpt-*` → OpenAI SDK (chat completions). Both normalized to `{ text }`.
@@ -798,8 +860,9 @@ These are suggested based on current state — confirm with user before starting
 | `NODE_ENV` | `production` enables strict rate-limits + JWT_SECRET guard | Prod |
 | `CORS_ORIGINS` | Comma-separated origin allowlist. **Prod (2026-06-04): `https://realmkeep.app,https://www.realmkeep.app`** (bare-IP dropped after TLS). Falls back to built-in defaults if unset. | Optional |
 | `ANTHROPIC_API_KEY` | Claude AI (map lore, POIs, monster tag classification) — **shared key, gated behind `ai_approved`** | Map generator + tag classifier |
-| `OPENAI_API_KEY` | DALL-E 3 + GPT-Image-1 | Map images |
-| `GOOGLE_AI_API_KEY` | Gemini image generation | Sketch-to-map |
+| `OPENAI_API_KEY` | GPT-Image-1 (server-side sketch renderer alternative) | Map images |
+| `GOOGLE_AI_API_KEY` | Gemini image generation — **shared key, gated behind `ai_approved`**: sketch-to-map AND character/NPC portraits (`/api/ai/character-image`, 2026-07-05) | Sketch-to-map + portraits |
+| `IMAGE_DAILY_CAP` | Per-user daily cap on `/api/ai/character-image` generations. Unset → **default 20**. Counter in `ai_image_usage`, resets at day rollover; exceeded → 403 `image_cap_reached`. | Optional |
 | `WEBHOOK_SECRET` | GitHub webhook HMAC | Auto-deploy |
 | `APP_URL` | Base URL for invite links (`auth.js`). **Set 2026-06-04: `https://realmkeep.app`** — verified a fresh invite mints `https://realmkeep.app/join/…`. Read at module load, so a change needs a PM2 restart. | Invites |
 | `DISCORD_WEBHOOK_URL` | **Optional (2026-06-28, unset for now).** If set, a fire-and-forget Discord webhook fires on each registration: `New RealmKeep signup: {username} ({email}) — pending approval`. Unset → silent no-op; a webhook failure never affects registration (`server/lib/notify.js`). Could be swapped for email later. | Signup alerts |

@@ -9,11 +9,13 @@
  *     gpt-image-1 / Gemini renderers run on the shared OPENAI_API_KEY /
  *     GOOGLE_AI_API_KEY. (2026-06-04: added here after the dall-e-3 cost-route
  *     review found this route was rate-limited but not approval-gated.)
+ *   - Character/NPC portraits (/api/ai/character-image) — Gemini on the
+ *     shared GOOGLE_AI_API_KEY (2026-07-05; moved off the browser-side
+ *     user-key OpenAI flow). Also has a per-user daily image cap on top.
  *
- * NOT applied to the BROWSER image/portrait paths (NPC/character portraits,
- * map gpt-image-1 in MapGenerator) — those call api.openai.com directly with
- * the USER's own key, so they cost the user, not the owner. Nor to
- * /api/maps/:id/image or /image/from-url, which only persist an
+ * NOT applied to the map gpt-image-1 call in MapGenerator — that still runs
+ * browser-side on the USER's own key, so it costs the user, not the owner.
+ * Nor to /api/maps/:id/image or /image/from-url, which only persist an
  * already-generated image (no model call).
  *
  * ai_approved is read FRESH from the DB on every call (not from the JWT), so an
