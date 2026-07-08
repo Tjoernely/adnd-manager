@@ -13,8 +13,10 @@ const _AnthropicPkg = require('@anthropic-ai/sdk');
 const Anthropic     = _AnthropicPkg.default ?? _AnthropicPkg;
 const _OpenAIPkg    = require('openai');
 const OpenAI        = _OpenAIPkg.default ?? _OpenAIPkg;
+const { GoogleGenAI } = require('@google/genai');
 const db            = require('../db');
 const { auth }      = require('../middleware/auth');
+const { buildCharacterImagePrompt, whitelistFields, fieldsFromCharacterData } = require('../lib/characterImagePrompt');
 
 const router = express.Router();
 
@@ -252,6 +254,135 @@ router.post('/generate', auth, requireAiApproval, async (req, res) => {
       return res.status(503).json({ error: 'AI generation is not configured on this server' });
     }
     res.status(500).json({ error: 'AI generation failed', detail: e.message });
+  }
+});
+
+// ── POST /api/ai/character-image ──────────────────────────────────────────────
+// Server-side character/NPC portrait generation on the shared GOOGLE_AI_API_KEY
+// (replaces the browser-side gpt-image-1 flow that ran on the user's own
+// OpenAI key). Shared-key cost route → auth + requireAiApproval, exactly like
+// /api/maps/generate-from-sketch, PLUS a per-user daily image cap.
+//
+// Body: {
+//   character_id?: number,   // saved character — whitelisted fields read from the record
+//   fields?: { race, subrace, charClass, kit, gender, level, weapon, armor,
+//              shield, gear[], age, hairColor, eyeColor, distinctiveFeatures,
+//              appearance, appearanceNotes },   // unsaved NPCs / fresh sheet state
+// }
+// Inline fields override record-derived ones (the sheet in the browser can be
+// newer than the last save). Everything is whitelisted server-side — see
+// lib/characterImagePrompt.js.
+//
+// Returns: { image: "data:image/...;base64,...", prompt, used, cap }
+// The client stores the data URL in the existing portrait/portraitHistory
+// structure (NPC list-stripping already handles the payload weight).
+
+// Current best Gemini image model — "Nano Banana 2". Verified against
+// ai.google.dev/gemini-api/docs/image-generation (2026-07-05) and dry-run on
+// the server with @google/genai 1.49: generateContent + responseModalities
+// works; the model returns image/jpeg (~1 MB, conveniently smaller than
+// gpt-image-1's ~2 MB PNGs for the history structures).
+const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
+
+async function generateGeminiImage(prompt) {
+  if (!process.env.GOOGLE_AI_API_KEY) {
+    throw new Error('GOOGLE_AI_API_KEY not configured on server');
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY });
+  const result = await ai.models.generateContent({
+    model: GEMINI_IMAGE_MODEL,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: { responseModalities: ['TEXT', 'IMAGE'] },
+  });
+  const parts = result.candidates?.[0]?.content?.parts ?? [];
+  const img = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+  if (!img) throw new Error('Gemini returned no image part in response');
+  return `data:${img.inlineData.mimeType};base64,${img.inlineData.data}`;
+}
+
+// Per-user daily image cap. Deliberately minimal: one (user_id, day) counter
+// row (ai_image_usage, auto-migrate), reset by virtue of the DATE key — no
+// token metering. Cap is a global default, overridable via IMAGE_DAILY_CAP.
+const DEFAULT_IMAGE_DAILY_CAP = 20;
+function imageDailyCap() {
+  const n = parseInt(process.env.IMAGE_DAILY_CAP, 10);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_IMAGE_DAILY_CAP;
+}
+
+async function enforceImageCap(req, res, next) {
+  try {
+    const cap = imageDailyCap();
+    const row = await db.one(
+      'SELECT count FROM ai_image_usage WHERE user_id=$1 AND day=CURRENT_DATE',
+      [req.user.id],
+    );
+    const used = row ? Number(row.count) : 0;
+    if (used >= cap) {
+      return res.status(403).json({ error: 'image_cap_reached', used, cap });
+    }
+    req.imageCap = { used, cap };
+    return next();
+  } catch (e) {
+    // Fail CLOSED — an unreadable counter must not become free images.
+    console.error('[ai/character-image] cap check failed:', e.message);
+    return res.status(503).json({ error: 'image_cap_unavailable' });
+  }
+}
+
+// Counted only on success — a failed generation doesn't burn the user's cap.
+async function recordImageUse(userId) {
+  await db.query(
+    `INSERT INTO ai_image_usage (user_id, day, count) VALUES ($1, CURRENT_DATE, 1)
+     ON CONFLICT (user_id, day) DO UPDATE SET count = ai_image_usage.count + 1`,
+    [userId],
+  );
+}
+
+router.post('/character-image', auth, requireAiApproval, enforceImageCap, async (req, res) => {
+  try {
+    const { character_id, fields } = req.body ?? {};
+
+    // Record-derived fields (saved characters) — owner or campaign DM only.
+    let recordFields = {};
+    if (character_id !== undefined && character_id !== null) {
+      const charId = parseInt(character_id, 10);
+      if (!Number.isFinite(charId)) {
+        return res.status(400).json({ error: 'character_id must be a number' });
+      }
+      const row = await db.one(
+        'SELECT player_user_id, campaign_id, character_data FROM characters WHERE id=$1',
+        [charId],
+      );
+      if (!row) return res.status(404).json({ error: 'Character not found' });
+      const isOwn = row.player_user_id === req.user.id;
+      const isDM  = row.campaign_id
+        ? !!(await db.one('SELECT 1 FROM campaigns WHERE id=$1 AND dm_user_id=$2', [row.campaign_id, req.user.id]))
+        : false;
+      if (!isOwn && !isDM) return res.status(403).json({ error: 'Access denied' });
+      recordFields = fieldsFromCharacterData(row.character_data);
+    }
+
+    // Inline fields (unsaved NPCs / live sheet) override the record's.
+    const merged = { ...recordFields, ...whitelistFields(fields) };
+    if (Object.keys(merged).length === 0) {
+      return res.status(400).json({ error: 'No usable character fields — send "fields" or a valid "character_id"' });
+    }
+
+    const prompt = buildCharacterImagePrompt(merged);
+    console.log('[ai/character-image] user=%d model=%s prompt=%d chars', req.user.id, GEMINI_IMAGE_MODEL, prompt.length);
+
+    const start = Date.now();
+    const image = await generateGeminiImage(prompt);
+    console.log('[ai/character-image] done in %d ms (%d KB)', Date.now() - start, Math.round(image.length / 1024));
+
+    await recordImageUse(req.user.id);
+    res.json({ image, prompt, used: req.imageCap.used + 1, cap: req.imageCap.cap });
+  } catch (e) {
+    console.error('[ai/character-image]', e.message);
+    if (e.message?.includes('GOOGLE_AI_API_KEY')) {
+      return res.status(503).json({ error: 'GOOGLE_AI_API_KEY not configured on server' });
+    }
+    res.status(500).json({ error: 'Image generation failed', detail: e.message });
   }
 });
 

@@ -113,6 +113,9 @@ app.use('/api/ai',            aiLimiter);
 app.use('/api/maps/:id/image',           imageLimiter);
 app.use('/api/maps/:id/image/from-url',  imageLimiter);
 app.use('/api/maps/generate-from-sketch', imageLimiter);
+// Server-side character/NPC portraits (Gemini on the shared key) — same
+// hourly imageLimiter layer; the per-user DAILY cap lives in the route.
+app.use('/api/ai/character-image',        imageLimiter);
 
 // ── API routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',            authRouter);

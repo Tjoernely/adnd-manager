@@ -730,6 +730,14 @@ async function autoMigrate() {
     await db.query(`CREATE INDEX IF NOT EXISTS idx_kpl_kit       ON kit_proficiency_links (kit_id)`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_kpl_prof      ON kit_proficiency_links (prof_id)`);
 
+    // Per-user daily AI-image counter (POST /api/ai/character-image cap).
+    // One row per (user, day); the DATE key IS the daily reset.
+    await db.query(`CREATE TABLE IF NOT EXISTS ai_image_usage (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day     DATE    NOT NULL DEFAULT CURRENT_DATE,
+      count   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, day))`);
+
     console.log('[auto-migrate] done');
   } catch (e) {
     console.error('[auto-migrate] error:', e.message);

@@ -9,7 +9,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client.js';
-import { generateOpenAIImage } from '../../api/aiClient.js';
+import { generateCharacterImage, isAiApproved, AI_APPROVAL_MESSAGE } from '../../api/aiClient.js';
 import { NPCGenerator } from './NPCGenerator.jsx';
 import './NPCManager.css';
 
@@ -91,22 +91,23 @@ function alignLabel(id) { return ALIGNMENTS.find(a=>a.id===id)?.label ?? (id || 
 
 // ── Portrait Generation ───────────────────────────────────────────────────────
 
-async function generatePortrait(npcData, npcName) {
-  const apiKey = localStorage.getItem('openai_api_key');
-  if (!apiKey) throw new Error('No OpenAI API key found. Add key "openai_api_key" to localStorage.');
-  const { race, charClass, gender, alignment, powerLevel, stats } = npcData;
-  const pl = plInfo(powerLevel);
-  const prompt = [
-    'AD&D 2nd Edition dark-fantasy portrait, head and shoulders, dramatic oil painting style, no text, no watermarks.',
-    `Subject: ${gender||'Unknown'} ${race||'Human'} ${charClass||'adventurer'}, ${pl.label} tier.`,
-    `Name: ${npcName}. Alignment: ${alignLabel(alignment)}.`,
-    (stats?.cha >= 16) ? 'Charismatic and striking appearance.' : (stats?.cha <= 7 ? 'Unsettling, off-putting look.' : ''),
-    'Moody dramatic lighting, intricate medieval detail, rich dark palette.',
-  ].filter(Boolean).join(' ');
-
-  // gpt-image-1 (dall-e-3 was removed from the API 2026-05-12). Returns a
-  // permanent data: URL, browser-side, on the user's own key.
-  return await generateOpenAIImage(prompt, { apiKey });
+async function generatePortrait(npcData) {
+  if (!isAiApproved()) throw new Error(AI_APPROVAL_MESSAGE);
+  const { race, charClass, gender, level, appearance, equipment } = npcData;
+  // Server-side Gemini on the shared key (2026-07-05). Fields are whitelisted
+  // server-side; the prompt (full figure, class+race environment) is built
+  // there too. Returns a permanent data: URL.
+  const { image } = await generateCharacterImage({
+    fields: {
+      ...(race      ? { race }      : {}),
+      ...(charClass ? { charClass } : {}),
+      ...(gender    ? { gender }    : {}),
+      ...(level     ? { level }     : {}),
+      ...(appearance ? { appearance } : {}),
+      ...(Array.isArray(equipment) && equipment.length ? { gear: equipment.slice(0, 3) } : {}),
+    },
+  });
+  return image;
 }
 
 // ── NPCManager (root) ─────────────────────────────────────────────────────────
@@ -439,10 +440,10 @@ function NPCDetailModal({ npc, isDM, onClose, onSave, onDelete, onRevealToggle, 
   const handleGeneratePortrait = async () => {
     setPortraitGen(true); setPortraitErr('');
     try {
-      const url = await generatePortrait(draft, draftName);
-      // gpt-image-1 portraits are ~1.5-3 MB data URLs (vs the old tiny dall-e-3
-      // URLs), and portraitHistory rides along in the NPC's JSONB row that the
-      // NPC list endpoint returns — keep only 3 to bound payload size.
+      const url = await generatePortrait(draft);
+      // Portrait data URLs are ~1-3 MB, and portraitHistory rides along in the
+      // NPC's JSONB row that the single-NPC endpoint returns — keep only 3 to
+      // bound payload size (the list endpoint strips portraits entirely).
       const history = [url, ...(draft.portraitHistory??[])].slice(0,3);
       setDraft(prev => ({ ...prev, portrait: url, portraitHistory: history }));
     } catch(e) { setPortraitErr(e.message); }

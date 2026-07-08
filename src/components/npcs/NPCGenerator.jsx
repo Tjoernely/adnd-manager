@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { api } from '../../api/client.js';
-import { callClaude, hasAnthropicKey, getOpenAIKey, isAiApproved, AI_APPROVAL_MESSAGE, generateOpenAIImage } from '../../api/aiClient.js';
+import { callClaude, hasAnthropicKey, isAiApproved, AI_APPROVAL_MESSAGE, generateCharacterImage } from '../../api/aiClient.js';
 import { ApiKeySettings } from '../ui/ApiKeySettings.jsx';
 import './NPCGenerator.css';
 
@@ -358,22 +358,24 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
   const traitCol = t => TRAIT_COL[t.toLowerCase()] ?? '#7a6840';
 
   const handlePortrait = async () => {
-    const key = getOpenAIKey();
-    if (!key) { setPortraitErr('No OpenAI key. Add it in ⚙ Settings.'); return; }
+    if (!isAiApproved()) { setPortraitErr(AI_APPROVAL_MESSAGE); return; }
     setPortraitGen(true); setPortraitErr('');
     try {
-      console.log('[NPCGenerator] Requesting gpt-image-1 portrait...');
-      const subject = result.appearance || `${resolved.gender} ${resolved.race} ${resolved.charClass}`;
-      const prompt = [
-        'Classic fantasy art portrait, head and shoulders, dramatic oil painting.',
-        `${subject}.`,
-        `${resolved.powerLevel} power level. ${ALIGNMENTS.label[resolved.alignment] ?? resolved.alignment}.`,
-        'No text, no watermarks. Moody lighting, intricate medieval detail.',
-      ].join(' ').substring(0, 800);
-      // gpt-image-1 (dall-e-3 removed 2026-05-12). Returns a data: URL.
-      const portraitUrl = await generateOpenAIImage(prompt, { apiKey: key });
-      console.log('[NPCGenerator] gpt-image-1 portrait received.');
-      onPortraitDone(portraitUrl);
+      // Server-side Gemini on the shared key (2026-07-05) — the NPC isn't
+      // saved yet, so all whitelisted fields go inline. The server builds a
+      // full-figure prompt with a class+race-derived environment.
+      const { image } = await generateCharacterImage({
+        fields: {
+          race:      resolved.race,
+          charClass: resolved.charClass,
+          gender:    resolved.gender,
+          level:     resolved.level,
+          ...(result.appearance ? { appearance: result.appearance } : {}),
+          ...(Array.isArray(result.equipment) && result.equipment.length
+            ? { gear: result.equipment.slice(0, 3) } : {}),
+        },
+      });
+      onPortraitDone(image);
     } catch(e) {
       console.error('[NPCGenerator] Portrait failed:', e.message);
       setPortraitErr(e.message);
@@ -395,7 +397,7 @@ function NPCCard({ result, resolved, regenSec, onRegen, onRerollStats, onPortrai
             : <div className="npg-portrait-ph">🎭</div>
           }
           <button className="npg-portrait-btn" onClick={handlePortrait} disabled={portraitGen}>
-            {portraitGen ? '⏳ Generating…' : '🖼 DALL·E Portrait'}
+            {portraitGen ? '⏳ Generating…' : '🖼 AI Portrait'}
           </button>
           {portraitErr && <div className="npg-portrait-err">{portraitErr}</div>}
         </div>

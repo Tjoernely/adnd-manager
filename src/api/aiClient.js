@@ -13,32 +13,46 @@ export function hasAnthropicKey() { return !!getAnthropicKey(); }
 export function getOpenAIKey()    { return localStorage.getItem('openai_api_key') ?? null; }
 export function hasOpenAIKey()    { return !!getOpenAIKey(); }
 
-// ── Browser-side image generation (gpt-image-1, user's own OpenAI key) ────────
-// dall-e-3 was REMOVED from OpenAI's API on 2026-05-12, so the old portrait/map
-// calls fail. gpt-image-1 uses the SAME /v1/images/generations endpoint but a
-// different shape: no `style`, no `response_format`, no `quality:'standard'|'hd'`
-// (it's high/medium/low/auto), and it ALWAYS returns base64 (`b64_json`), never
-// a URL. This mirrors MapGenerator.jsx's working call. Returns a `data:` URL so
-// callers can use it directly as an <img src> or a stored portrait value
-// (also strictly better than the old dall-e-3 URLs, which expired after ~1h).
-const OPENAI_IMAGE_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024']);
-export async function generateOpenAIImage(prompt, { size = '1024x1024', apiKey } = {}) {
-  const key = apiKey ?? getOpenAIKey();
-  if (!key) throw new Error('No OpenAI API key. Add it in ⚙ Settings.');
-  const safeSize = OPENAI_IMAGE_SIZES.has(size) ? size : '1024x1024';
-  const resp = await fetch('https://api.openai.com/v1/images/generations', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body:    JSON.stringify({ model: 'gpt-image-1', prompt, n: 1, size: safeSize }),
+// ── Server-side character/NPC portrait generation (Gemini, shared key) ────────
+// Portraits moved OFF the browser-side OpenAI flow (2026-07-05): the server
+// generates them with gemini-3.1-flash-image on the owner's GOOGLE_AI_API_KEY
+// via POST /api/ai/character-image. No user API key needed — but the route is
+// approval-gated (ai_approved) and enforces a per-user daily image cap.
+//
+// Pass a saved character's id (server reads whitelisted fields from the
+// record), inline `fields` (unsaved NPCs / live sheet state), or both — inline
+// fields win. The server builds the prompt (full-figure, class+race-derived
+// environment) and returns { image: dataURL, prompt, used, cap }.
+export const IMAGE_CAP_MESSAGE = 'Daily image limit reached — resets at midnight (UTC).';
+export function isImageCapError(e) { return e?.code === 'image_cap_reached'; }
+
+export async function generateCharacterImage({ characterId, fields } = {}) {
+  const token = localStorage.getItem('dnd_token');
+  const resp = await fetch('/api/ai/character-image', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      ...(characterId != null ? { character_id: characterId } : {}),
+      ...(fields ? { fields } : {}),
+    }),
   });
+
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    const msg = data?.error?.message ?? `OpenAI ${resp.status}`;
-    throw Object.assign(new Error(msg), { code: data?.error?.code ?? data?.error?.type ?? '' });
+    const errCode = data?.error ?? '';
+    if (errCode === 'ai_not_approved') {
+      throw Object.assign(new Error(AI_APPROVAL_MESSAGE), { code: 'ai_not_approved' });
+    }
+    if (errCode === 'image_cap_reached') {
+      throw Object.assign(new Error(IMAGE_CAP_MESSAGE), { code: 'image_cap_reached', used: data.used, cap: data.cap });
+    }
+    throw Object.assign(new Error(data?.detail ?? data?.error ?? `Image generation failed (${resp.status})`), { code: errCode });
   }
-  const b64 = data?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('gpt-image-1 returned no image data.');
-  return `data:image/png;base64,${b64}`;
+  if (!data?.image) throw new Error('Server returned no image.');
+  return data;   // { image, prompt, used, cap }
 }
 
 // ── AI feature-gate (2026-06-04) ──────────────────────────────────────────────
