@@ -148,6 +148,30 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M2.5 hotfix 2 (2026-07-15) — black marks in the lake.** Diagnosed with
+run-logging BEFORE fixing (`[bridge] type, run at start%-end%, length px` +
+`[gorge] type, N/M points over water`). Logs on a repro sketch showed BOTH
+suspected causes are real: (b) `[gorge] chasm 10/24 points over water (not
+clipped)` — the chasm's near-black fill drew straight across the lake (the
+primary "sorte mærker"); (a) degenerate 4-8px water runs at road ends near
+shores (`road_dirt run at 88%-90% length px: 8`, `road_cobble ... 4px`) —
+stub planks/railings without a meaningful deck. Fixes:
+- Canyons/chasms now render through an offscreen layer clipped
+  (destination-in) by the same soft land mask as rivers — gorges stop at the
+  water's edge.
+- Minimum water-run length 12px: shorter runs render NOTHING (road stops at
+  the shore) — logged as `run Npx < 12px — skipped`.
+- IMPORTANT interplay found in the logs: legitimate river crossings measured
+  only ~8px (river mask-punch was 10px), so a naive <12px rule would have
+  deleted real river fords/bridges. The river punch is now 14px wide →
+  perpendicular river crossings measure ≥12px and survive; verified in logs
+  (road_path river ford: 8px → 12px).
+- Wooden bridges draw on an offscreen layer clipped to the deck band, so
+  planks/railings can never protrude; the bridge composites as one piece.
+- Verified: lake interior clean (chasm terminates at both shores), all
+  bridges/fords intact, 32/32 vitest. The `[bridge]`/`[gorge]` logs are left
+  in as cheap diagnostics.
+
 **M2.5 hotfixes (2026-07-15)** — two bugs from the M2.5 user test:
 - **BUG 1 (connectors unusable) — TWO real causes found & fixed:**
   1. `.tse-root` had `max-height: 90vh` but no `height`, so it grew to its

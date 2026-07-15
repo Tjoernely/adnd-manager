@@ -350,27 +350,47 @@ function offsetOpen(pts: Pt[], normals: Pt[], d: number): Pt[] {
   return pts.map((p, i) => ({ x: p.x + normals[i].x * d, y: p.y + normals[i].y * d }));
 }
 
-/** road_dirt crossing: wooden bridge — deck, cross planks, railings. */
+/**
+ * road_dirt crossing: wooden bridge — deck, cross planks, railings.
+ * The whole bridge is drawn on an offscreen layer and clipped
+ * (destination-in) to the deck band, so planks/railings can never stick
+ * out past the deck; the finished bridge composites as one piece.
+ */
 function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
   if (pts.length < 2) return;
-  strokeOpenPoly(ctx, pts, 8, BRIDGE_WOOD);                    // deck
+  const size = ctx.canvas.width;
+  const layer = document.createElement('canvas');
+  layer.width = size; layer.height = size;
+  const bctx = layer.getContext('2d')!;
+
+  strokeOpenPoly(bctx, pts, 8, BRIDGE_WOOD);                   // deck
   const planks = resamplePath(pts, 5);                         // cross planks ~5px
   const pns = openNormals(planks);
-  ctx.save();
-  ctx.strokeStyle = BRIDGE_PLANK;
-  ctx.lineWidth   = 1.5;
-  ctx.lineCap     = 'round';
-  ctx.beginPath();
+  bctx.save();
+  bctx.strokeStyle = BRIDGE_PLANK;
+  bctx.lineWidth   = 1.5;
+  bctx.lineCap     = 'round';
+  bctx.beginPath();
   for (let i = 0; i < planks.length; i++) {
     const p = planks[i], n = pns[i];
-    ctx.moveTo(p.x - n.x * 4, p.y - n.y * 4);
-    ctx.lineTo(p.x + n.x * 4, p.y + n.y * 4);
+    bctx.moveTo(p.x - n.x * 4, p.y - n.y * 4);
+    bctx.lineTo(p.x + n.x * 4, p.y + n.y * 4);
   }
-  ctx.stroke();
-  ctx.restore();
+  bctx.stroke();
+  bctx.restore();
   const ns = openNormals(pts);                                 // railings ±4px
-  strokeOpenPoly(ctx, offsetOpen(pts, ns, +4), 1.2, BRIDGE_RAIL);
-  strokeOpenPoly(ctx, offsetOpen(pts, ns, -4), 1.2, BRIDGE_RAIL);
+  strokeOpenPoly(bctx, offsetOpen(pts, ns, +4), 1.2, BRIDGE_RAIL);
+  strokeOpenPoly(bctx, offsetOpen(pts, ns, -4), 1.2, BRIDGE_RAIL);
+
+  // Clip everything to the deck band
+  const mask = document.createElement('canvas');
+  mask.width = size; mask.height = size;
+  const mctx = mask.getContext('2d')!;
+  strokeOpenPoly(mctx, pts, 8, '#fff');
+  bctx.globalCompositeOperation = 'destination-in';
+  bctx.drawImage(mask, 0, 0);
+
+  ctx.drawImage(layer, 0, 0);
 }
 
 /** road_cobble crossing: stone bridge — outlined grey deck + light midline. */
@@ -889,9 +909,23 @@ export async function renderProceduralMap(
     ctx.drawImage(riverLayer, 0, 0);
   }
 
-  for (const o of prepared) {
-    if (o.type === 'canyon')     drawGorge(ctx, o.pts, 3, CANYON_DARK, 0.4);
-    else if (o.type === 'chasm') drawGorge(ctx, o.pts, 5, CHASM_DARK, 0.75);
+  // Canyons/chasms are clipped by the same soft land mask as the rivers —
+  // gorges must not continue out into lakes/sea (they drew near-black marks
+  // straight across the lake before this).
+  const gorges = prepared.filter(o => o.type === 'canyon' || o.type === 'chasm');
+  if (gorges.length > 0) {
+    const [gorgeLayer, glctx] = offscreen();
+    for (const o of gorges) {
+      const wet = o.pts.filter(p => fieldAtPx(p.x, p.y) < ISO).length;
+      if (wet > 0)
+        console.log('[gorge]', o.type, `${wet}/${o.pts.length} points over water — clipped by land mask`);
+      if (o.type === 'canyon') drawGorge(glctx, o.pts, 3, CANYON_DARK, 0.4);
+      else                     drawGorge(glctx, o.pts, 5, CHASM_DARK, 0.75);
+    }
+    glctx.globalCompositeOperation = 'destination-in';
+    glctx.drawImage(maskSoft, 0, 0);
+    glctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(gorgeLayer, 0, 0);
   }
 
   // ── STEP 3c: sand band — filled ring polygon (offset curves ±sandHalf) ────
@@ -968,7 +1002,10 @@ export async function renderProceduralMap(
     const [, roadMaskCtx] = offscreen();
     roadMaskCtx.drawImage(maskSoft, 0, 0);
     roadMaskCtx.globalCompositeOperation = 'destination-out';
-    for (const o of rivers) strokeOpenPoly(roadMaskCtx, o.pts, 10, '#fff');
+    // Punch width 14 (river is 9px wide visually): a perpendicular crossing
+    // then measures ≥12px, so legitimate river fords/bridges survive the
+    // minimum-run rule below while shoreline slivers (4-8px) get skipped.
+    for (const o of rivers) strokeOpenPoly(roadMaskCtx, o.pts, 14, '#fff');
     roadMaskCtx.globalCompositeOperation = 'source-over';
     const maskData = roadMaskCtx.getImageData(0, 0, OUT, OUT).data;
     landMaskAt = (x, y) => {
@@ -1003,6 +1040,18 @@ export async function renderProceduralMap(
     const crng = mulberry32((baseSeed + o.idx * 7919 + 101) >>> 0);
     for (const run of runs) {
       if (!run.water) continue;
+      const runLength = (run.i1 - run.i0) * 4;
+      const startPct = Math.round((run.i0 / (samples.length - 1)) * 100);
+      const endPct   = Math.round((run.i1 / (samples.length - 1)) * 100);
+      console.log('[bridge]', o.type, 'run at', `${startPct}%`, '-', `${endPct}%`, 'length px:', runLength);
+      // Minimum run length: shoreline grazes produce 4-8px water runs whose
+      // degenerate bridge fragments (planks/railings without a meaningful
+      // deck) read as dark marks at the water's edge. Render NOTHING — the
+      // road simply stops at the shore.
+      if (runLength < 12) {
+        console.log('[bridge]', o.type, `run ${runLength}px < 12px — skipped (no bridge/ford)`);
+        continue;
+      }
       const sub = samples.slice(run.i0, run.i1 + 1);
       if (kind === 'road_path') {
         drawFord(ctx, sub, crng);                       // no abutment, no line
