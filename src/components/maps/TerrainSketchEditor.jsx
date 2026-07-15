@@ -79,9 +79,12 @@ const TILE_PALETTE = [
 ];
 
 // Overlay brushes (not tile images — drawn as lines/paths)
+// Legacy 'road' overlays in saved sketches are treated as 'road_dirt'.
 const CONNECTOR_BRUSHES = [
-  { type: 'river', label: '🌊 River', color: '#2196f3' },
-  { type: 'road',  label: '🛤 Road',  color: '#8d6e63' },
+  { type: 'river',       label: '🌊 River',       color: '#2196f3' },
+  { type: 'road_path',   label: '🥾 Path',        color: '#9a8a6a' },
+  { type: 'road_dirt',   label: '🛤 Dirt Road',   color: '#8d6e63' },
+  { type: 'road_cobble', label: '🧱 Cobblestone', color: '#8f8f8a' },
 ];
 
 const OVERLAY_DIVIDERS = ['canyon', 'chasm'];
@@ -129,12 +132,15 @@ function coastRotDeg(cx, cy, cellsMap) {
 }
 
 const OVERLAY_STYLE = {
-  river:  { color: '#2196f3', width: 3 },
-  road:   { color: '#8d6e63', width: 2, dash: '6,3' },
-  canyon: { color: '#5d4037', width: 4 },
-  chasm:  { color: '#111111', width: 5 },
-  wall:   { color: '#808080', width: 2 },
-  border: { color: '#c05050', width: 2, dash: '4,2' },
+  river:       { color: '#2196f3', width: 3 },
+  road:        { color: '#8d6e63', width: 2,   dash: '6,3' }, // legacy = dirt road
+  road_path:   { color: '#9a8a6a', width: 1.5, dash: '5,4' },
+  road_dirt:   { color: '#8d6e63', width: 2,   dash: '6,3' },
+  road_cobble: { color: '#8f8f8a', width: 2.5 },
+  canyon:      { color: '#5d4037', width: 4 },
+  chasm:       { color: '#111111', width: 5 },
+  wall:        { color: '#808080', width: 2 },
+  border:      { color: '#c05050', width: 2, dash: '4,2' },
 };
 // Keep OVERLAY_COLORS for live-path preview (uses active overlay type)
 const OVERLAY_COLORS = Object.fromEntries(

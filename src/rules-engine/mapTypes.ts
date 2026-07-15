@@ -234,7 +234,10 @@ export type ReliefType =
 
 export type OverlayType =
   | 'river'
-  | 'road'
+  | 'road'          // legacy — treated as 'road_dirt' (no data migration)
+  | 'road_path'
+  | 'road_dirt'
+  | 'road_cobble'
   | 'wall'
   | 'border'
   | 'canyon'

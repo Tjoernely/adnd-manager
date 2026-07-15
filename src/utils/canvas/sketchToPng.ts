@@ -25,21 +25,27 @@ const BIOME_COLOR: Record<BiomeType | 'null', string> = {
 };
 
 const OVERLAY_COLOR: Record<OverlayType, string> = {
-  river:  '#0000ff',
-  road:   '#8d6e63',
-  wall:   '#607d8b',
-  border: '#333333',
-  canyon: '#5d4037',
-  chasm:  '#000000',
+  river:       '#0000ff',
+  road:        '#8d6e63',
+  road_path:   '#9a8a6a',
+  road_dirt:   '#8d6e63',
+  road_cobble: '#9a9a94',
+  wall:        '#607d8b',
+  border:      '#333333',
+  canyon:      '#5d4037',
+  chasm:       '#000000',
 };
 
 const OVERLAY_WIDTH: Record<OverlayType, number> = {
-  river:  8,
-  road:   5,
-  wall:   5,
-  border: 4,
-  canyon: 10,
-  chasm:  12,
+  river:       8,
+  road:        5,
+  road_path:   3,
+  road_dirt:   5,
+  road_cobble: 5,
+  wall:        5,
+  border:      4,
+  canyon:      10,
+  chasm:       12,
 };
 
 const MODIFIER_COLOR: Record<ModifierType | string, string> = {
@@ -610,8 +616,11 @@ const PREVIEW_BIOME_COLOR: Record<string, string> = {
 };
 
 const PREVIEW_OVERLAY: Record<string, { color: string; width: number; dash?: number[] }> = {
-  river:  { color: '#2196f3', width: 5 },
-  road:   { color: '#c0a060', width: 4, dash: [12, 6] },
+  river:       { color: '#2196f3', width: 5 },
+  road:        { color: '#c0a060', width: 4, dash: [12, 6] },
+  road_path:   { color: '#9a8a6a', width: 2, dash: [6, 5] },
+  road_dirt:   { color: '#c0a060', width: 4, dash: [12, 6] },
+  road_cobble: { color: '#9a9a94', width: 5 },
   canyon: { color: '#5d4037', width: 7 },
   chasm:  { color: '#111111', width: 9 },
   wall:   { color: '#808080', width: 4 },

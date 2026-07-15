@@ -189,8 +189,12 @@ function buildConnectorPaths(spec) {
 
     if (ov.type === 'river') {
       lines.push(`- River: originates in the ${startZone}, flows ${dir} through the ${midZone}, reaches the ${endZone}. Draw as a gently winding natural river.`);
-    } else if (ov.type === 'road') {
-      lines.push(`- Road: runs from the ${startZone} ${dir} to the ${endZone} through the ${midZone}. Draw as a gently curving dirt trail.`);
+    } else if (ov.type === 'road' || ov.type === 'road_path' || ov.type === 'road_dirt' || ov.type === 'road_cobble') {
+      // 'road' is the legacy value (= dirt road); road_* are the M2.5 subtypes
+      const roadLabel = ov.type === 'road_cobble' ? 'cobblestone road'
+                      : ov.type === 'road_path'   ? 'narrow footpath'
+                      : 'dirt trail';
+      lines.push(`- Road: runs from the ${startZone} ${dir} to the ${endZone} through the ${midZone}. Draw as a gently curving ${roadLabel}.`);
     } else if (ov.type === 'canyon') {
       lines.push(`- Canyon: cuts from the ${startZone} ${dir} to the ${endZone}. Draw as a natural rocky ravine.`);
     } else if (ov.type === 'chasm') {
@@ -346,7 +350,7 @@ function buildMustKeepFacts(spec) {
     facts.push(`Volcanic zone is small (${volCells.length} cells) — render as a SINGLE volcano, not multiple`);
 
   // Road/canyon/chasm water constraint
-  if (facts.length < 8 && overlays.some(o => o.type === 'road' || o.type === 'canyon' || o.type === 'chasm'))
+  if (facts.length < 8 && overlays.some(o => o.type?.startsWith('road') || o.type === 'canyon' || o.type === 'chasm'))
     facts.push('Roads, canyons, and chasms are land features — they NEVER enter water or the sea');
 
   if (!facts.length) return null;

@@ -82,6 +82,21 @@ const ROAD_CORE    = '#8a6a4a';
 const CANYON_DARK  = '#3a2a1a';
 const CHASM_DARK   = '#0a0a0a';
 
+// M2.5 road subtypes + water crossings.
+// Legacy 'road' renders as 'road_dirt' (no data migration).
+const PATH_COLOR    = '#9a8a6a';
+const COBBLE_UNDER  = '#55544c';
+const COBBLE_CORE   = '#8f8f8a';
+const BRIDGE_WOOD   = '#7a5a3a';
+const BRIDGE_PLANK  = '#4a3520';
+const BRIDGE_RAIL   = '#3a2a18';
+const BRIDGE_STONE  = '#9a9a94';
+const BRIDGE_STONE_MID = '#b0b0aa';
+const FORD_STONE    = '#8a8578';
+const FORD_EDGE     = '#55503f';
+
+const ROAD_KINDS = new Set(['road', 'road_path', 'road_dirt', 'road_cobble']);
+
 // ── Seeded PRNG ──────────────────────────────────────────────────────────────
 
 function mulberry32(seed: number): () => number {
@@ -261,6 +276,43 @@ function strokeOpenPoly(
   ctx.restore();
 }
 
+/** Resample an open polyline to (roughly) evenly spaced points, `step` px apart. */
+function resamplePath(pts: Pt[], step: number): Pt[] {
+  if (pts.length < 2) return pts.slice();
+  const out: Pt[] = [pts[0]];
+  let carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    let a = pts[i - 1];
+    const b = pts[i];
+    let seg = Math.hypot(b.x - a.x, b.y - a.y);
+    while (carry + seg >= step) {
+      const t = (step - carry) / seg;
+      const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      out.push(p);
+      seg -= step - carry;
+      carry = 0;
+      a = p;
+    }
+    carry += seg;
+  }
+  const last = pts[pts.length - 1];
+  const tail = out[out.length - 1];
+  if (Math.hypot(last.x - tail.x, last.y - tail.y) > 0.5) out.push(last);
+  return out;
+}
+
+/** Extend an open polyline by `ext` px past both endpoints (bridge abutments). */
+function extendRun(pts: Pt[], ext: number): Pt[] {
+  if (pts.length < 2 || ext <= 0) return pts;
+  const [a0, a1] = [pts[0], pts[1]];
+  let dx = a0.x - a1.x, dy = a0.y - a1.y, l = Math.hypot(dx, dy) || 1;
+  const head = { x: a0.x + (dx / l) * ext, y: a0.y + (dy / l) * ext };
+  const [b1, b0] = [pts[pts.length - 2], pts[pts.length - 1]];
+  dx = b0.x - b1.x; dy = b0.y - b1.y; l = Math.hypot(dx, dy) || 1;
+  const tail = { x: b0.x + (dx / l) * ext, y: b0.y + (dy / l) * ext };
+  return [head, ...pts, tail];
+}
+
 /** Canyon/chasm: two parallel edge lines ±offset with a dark fill between. */
 function drawGorge(
   ctx: CanvasRenderingContext2D,
@@ -285,6 +337,83 @@ function drawGorge(
   ctx.restore();
   strokeOpenPoly(ctx, a, 3, color);
   strokeOpenPoly(ctx, b, 3, color);
+}
+
+// ── M2.5 water crossings ─────────────────────────────────────────────────────
+
+function offsetOpen(pts: Pt[], normals: Pt[], d: number): Pt[] {
+  return pts.map((p, i) => ({ x: p.x + normals[i].x * d, y: p.y + normals[i].y * d }));
+}
+
+/** road_dirt crossing: wooden bridge — deck, cross planks, railings. */
+function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
+  if (pts.length < 2) return;
+  strokeOpenPoly(ctx, pts, 8, BRIDGE_WOOD);                    // deck
+  const planks = resamplePath(pts, 5);                         // cross planks ~5px
+  const pns = openNormals(planks);
+  ctx.save();
+  ctx.strokeStyle = BRIDGE_PLANK;
+  ctx.lineWidth   = 1.5;
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < planks.length; i++) {
+    const p = planks[i], n = pns[i];
+    ctx.moveTo(p.x - n.x * 4, p.y - n.y * 4);
+    ctx.lineTo(p.x + n.x * 4, p.y + n.y * 4);
+  }
+  ctx.stroke();
+  ctx.restore();
+  const ns = openNormals(pts);                                 // railings ±4px
+  strokeOpenPoly(ctx, offsetOpen(pts, ns, +4), 1.2, BRIDGE_RAIL);
+  strokeOpenPoly(ctx, offsetOpen(pts, ns, -4), 1.2, BRIDGE_RAIL);
+}
+
+/** road_cobble crossing: stone bridge — outlined grey deck + light midline. */
+function drawStoneBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
+  if (pts.length < 2) return;
+  strokeOpenPoly(ctx, pts, 14, COBBLE_UNDER);       // 2px dark outline around…
+  strokeOpenPoly(ctx, pts, 10, BRIDGE_STONE);       // …the 10px grey deck
+  strokeOpenPoly(ctx, pts, 2, BRIDGE_STONE_MID);    // lighter midline
+}
+
+/** road_path crossing: ford — stepping stones, no path line over the water. */
+function drawFord(ctx: CanvasRenderingContext2D, pts: Pt[], rng: () => number): void {
+  if (pts.length < 1) return;
+  const stones = resamplePath(pts, 7);
+  const ns = openNormals(stones);
+  ctx.save();
+  ctx.lineWidth = 0.8;
+  for (let i = 0; i < stones.length; i++) {
+    const n = ns[i];
+    const t = { x: -n.y, y: n.x }; // tangent
+    const p = {
+      x: stones[i].x + n.x * (rng() - 0.5) * 3 + t.x * (rng() - 0.5) * 2,
+      y: stones[i].y + n.y * (rng() - 0.5) * 3 + t.y * (rng() - 0.5) * 2,
+    };
+    const rx = 2.0 * (0.85 + rng() * 0.35);  // ~3×4px ellipses
+    const ry = 1.5 * (0.85 + rng() * 0.35);
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, rx, ry, Math.atan2(t.y, t.x), 0, Math.PI * 2);
+    ctx.fillStyle = FORD_STONE;
+    ctx.fill();
+    ctx.strokeStyle = FORD_EDGE;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Land-portion road rendering per road kind ('road' legacy = dirt). */
+function drawRoadLand(ctx: CanvasRenderingContext2D, pts: Pt[], kind: string): void {
+  if (pts.length < 2) return;
+  if (kind === 'road_path') {
+    strokeOpenPoly(ctx, pts, 2, PATH_COLOR, 1, [6, 5]);
+  } else if (kind === 'road_cobble') {
+    strokeOpenPoly(ctx, pts, 6, COBBLE_UNDER);
+    strokeOpenPoly(ctx, pts, 4, COBBLE_CORE);        // solid — paved road
+  } else { // road_dirt (+ legacy 'road')
+    strokeOpenPoly(ctx, pts, 5, ROAD_UNDER, 0.5);
+    strokeOpenPoly(ctx, pts, 3, ROAD_CORE, 1, [10, 6]);
+  }
 }
 
 // ── Land field + marching squares ────────────────────────────────────────────
@@ -613,6 +742,17 @@ export async function renderProceduralMap(
   const landPath = new Path2D();
   for (const c of contours) addPolyToPath(landPath, c.pts);
 
+  // M2.5: soft land mask (white=land, 5px gaussian edge) — clips the rivers
+  // (they fade out ~10px into ANY water: ocean, coastal, lakes) and drives
+  // land/water classification of road samples for bridges & fords.
+  const [maskHard, maskHardCtx] = offscreen();
+  maskHardCtx.fillStyle = '#fff';
+  maskHardCtx.fill(landPath, 'evenodd');
+  const [maskSoft, maskSoftCtx] = offscreen();
+  maskSoftCtx.filter = 'blur(5px)';
+  maskSoftCtx.drawImage(maskHard, 0, 0);
+  maskSoftCtx.filter = 'none';
+
   // ── STEP 3a: teal coast glow (under the land fill) ────────────────────────
   // Per contour: lakes glow narrower than the ocean (COAST_STYLE).
   ctx.save();
@@ -678,19 +818,29 @@ export async function renderProceduralMap(
     let pts = o.points.map(p => ({ x: (p.x + 0.5) * CELL, y: (p.y + 0.5) * CELL }));
     pts = chaikinOpen(pts, 3);
     pts = jitterOpen(pts, openNormals(pts), orng);
-    return { type: o.type as string, pts };
+    return { type: o.type as string, pts, idx };
   });
 
-  for (const o of prepared) {
-    if (o.type === 'river') {
-      strokeOpenPoly(ctx, o.pts, 9, RIVER_UNDER, 0.9);
-      strokeOpenPoly(ctx, o.pts, 5, RIVER_CORE);
-      strokeOpenPoly(ctx, o.pts, 2, RIVER_LIGHT, 0.6);
-    } else if (o.type === 'canyon') {
-      drawGorge(ctx, o.pts, 3, CANYON_DARK, 0.4);
-    } else if (o.type === 'chasm') {
-      drawGorge(ctx, o.pts, 5, CHASM_DARK, 0.75);
+  // Rivers render on an offscreen layer masked by the soft land mask
+  // (destination-in) — they fade out over ~10px wherever they meet water
+  // instead of drawing on top of ocean/coastal/lakes.
+  const rivers = prepared.filter(o => o.type === 'river');
+  if (rivers.length > 0) {
+    const [riverLayer, rlctx] = offscreen();
+    for (const o of rivers) {
+      strokeOpenPoly(rlctx, o.pts, 9, RIVER_UNDER, 0.9);
+      strokeOpenPoly(rlctx, o.pts, 5, RIVER_CORE);
+      strokeOpenPoly(rlctx, o.pts, 2, RIVER_LIGHT, 0.6);
     }
+    rlctx.globalCompositeOperation = 'destination-in';
+    rlctx.drawImage(maskSoft, 0, 0);
+    rlctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(riverLayer, 0, 0);
+  }
+
+  for (const o of prepared) {
+    if (o.type === 'canyon')     drawGorge(ctx, o.pts, 3, CANYON_DARK, 0.4);
+    else if (o.type === 'chasm') drawGorge(ctx, o.pts, 5, CHASM_DARK, 0.75);
   }
 
   // ── STEP 3c: sand band — filled ring polygon (offset curves ±sandHalf) ────
@@ -755,11 +905,62 @@ export async function renderProceduralMap(
   }
   ctx.restore();
 
-  // ── M2: roads — drawn LAST, on top of all terrain (incl. the sand band) ──
+  // ── M2/M2.5: roads — drawn LAST, on top of all terrain (incl. the sand
+  // band and rivers). The path is sampled every ~4px against the land mask
+  // WITH the river ribbons punched out (a road over a river is a water
+  // crossing too); contiguous water runs become crossings rendered per kind:
+  // road_path → ford (stepping stones), road_dirt → wooden bridge,
+  // road_cobble → stone bridge. Land runs get the normal road style.
+  const anyRoads = prepared.some(o => ROAD_KINDS.has(o.type));
+  let landMaskAt: (x: number, y: number) => boolean = () => true;
+  if (anyRoads) {
+    const [, roadMaskCtx] = offscreen();
+    roadMaskCtx.drawImage(maskSoft, 0, 0);
+    roadMaskCtx.globalCompositeOperation = 'destination-out';
+    for (const o of rivers) strokeOpenPoly(roadMaskCtx, o.pts, 10, '#fff');
+    roadMaskCtx.globalCompositeOperation = 'source-over';
+    const maskData = roadMaskCtx.getImageData(0, 0, OUT, OUT).data;
+    landMaskAt = (x, y) => {
+      const xi = Math.min(OUT - 1, Math.max(0, Math.round(x)));
+      const yi = Math.min(OUT - 1, Math.max(0, Math.round(y)));
+      return maskData[(yi * OUT + xi) * 4 + 3] > 127;
+    };
+  }
+
   for (const o of prepared) {
-    if (o.type !== 'road') continue;
-    strokeOpenPoly(ctx, o.pts, 5, ROAD_UNDER, 0.5);            // worn edge
-    strokeOpenPoly(ctx, o.pts, 3, ROAD_CORE, 1, [10, 6]);      // dashed core
+    if (!ROAD_KINDS.has(o.type)) continue;
+    const kind = o.type === 'road' ? 'road_dirt' : o.type; // legacy compat
+
+    const samples = resamplePath(o.pts, 4);
+    const isLand  = samples.map(p => landMaskAt(p.x, p.y));
+
+    // Contiguous runs of equal land/water classification
+    type RoadRun = { water: boolean; i0: number; i1: number };
+    const runs: RoadRun[] = [];
+    for (let i = 0; i < samples.length; i++) {
+      const water = !isLand[i];
+      const last = runs[runs.length - 1];
+      if (last && last.water === water) last.i1 = i;
+      else runs.push({ water, i0: i, i1: i });
+    }
+
+    for (const run of runs) {
+      if (run.water) continue;
+      drawRoadLand(ctx, samples.slice(run.i0, run.i1 + 1), kind);
+    }
+
+    const crng = mulberry32((baseSeed + o.idx * 7919 + 101) >>> 0);
+    for (const run of runs) {
+      if (!run.water) continue;
+      const sub = samples.slice(run.i0, run.i1 + 1);
+      if (kind === 'road_path') {
+        drawFord(ctx, sub, crng);                       // no abutment, no line
+      } else if (kind === 'road_cobble') {
+        drawStoneBridge(ctx, extendRun(sub, 5));        // 5px abutment
+      } else {
+        drawWoodBridge(ctx, extendRun(sub, 4));         // 4px abutment
+      }
+    }
   }
 
   return canvas.toDataURL('image/png');

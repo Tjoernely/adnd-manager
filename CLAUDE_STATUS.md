@@ -115,6 +115,39 @@ render procedurally; only M4 (relief stamps) remains:
   road dashes on top, gorges read as cuts.
 - **M4 (relief stamps) awaits user test of M2.**
 
+**M2.5 SHIPPED (2026-07-15)** — river/water clipping + road subtypes with
+bridges & fords:
+- **River clipping (DEL 1):** rivers render on an offscreen layer that is
+  masked (`destination-in`) by a soft land mask — the landPath polygons filled
+  white + 5px gaussian blur. Rivers fade out over ~10px wherever they meet
+  ocean, coastal OR lake water; the mouth still slides under the sand band.
+- **Road subtypes (DEL 2):** `OverlayType` += `road_path` / `road_dirt` /
+  `road_cobble`; legacy `'road'` = `road_dirt` everywhere (validator,
+  renderers, editor, server promptBuilder — no data migration). Editor
+  CONNECTORS: 🌊 River / 🥾 Path / 🛤 Dirt Road / 🧱 Cobblestone.
+  `sketchToPng` overlay color/width tables + preview styles extended;
+  promptBuilder describes the subtypes (footpath / dirt trail / cobblestone).
+- **Land styles (DEL 3):** path = 2px `#9a8a6a` dash [6,5] no underlay;
+  dirt = unchanged M2 style; cobble = 6px `#55544c` underlay + 4px solid
+  `#8f8f8a` core.
+- **Bridges & fords (DEL 4):** road paths are resampled every ~4px and
+  classified against the land mask **with the river ribbons (10px) punched
+  out** — a deliberate extension of the spec's mask sampling: the mask alone
+  doesn't know rivers, and the required test ("each road kind crosses a river
+  AND a lake arm") clearly intends road×river crossings to render as
+  bridges/fords too. Contiguous water runs render per kind: path → stepping
+  stones (~7px apart, seeded jitter, no path line over water); dirt → wooden
+  bridge (8px deck, cross planks every ~5px, ±4px railings, 4px abutments);
+  cobble → stone bridge (10px grey deck in 2px dark outline, light midline,
+  round caps, 5px abutments). Crossings draw in the late road phase, on top
+  of sand band + rivers. Crossing decoration uses its own seeded PRNG
+  (`baseSeed + idx*7919 + 101`) — coast/river jitter unchanged.
+- Verified locally (harness: river→ocean, river→lake, all three road kinds
+  each crossing a river on land AND the lake arm): 630 ms, deterministic;
+  zoomed crops confirmed ford stones on both river and lake, plank bridge,
+  outlined stone bridge, and rivers invisible in all water.
+- **M4 (relief stamps) is the only remaining milestone.**
+
 ---
 
 ## 1. Server Setup

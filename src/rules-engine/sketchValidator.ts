@@ -18,7 +18,8 @@ const VALID_BIOMES    = new Set(['plains','forest','swamp','desert','tundra','vo
 // Include legacy values (rolling, cliffs, valley, plateau) for backwards compat with saved sketches
 // mountains added as new canonical value; mountainous kept for backwards compat
 const VALID_RELIEFS   = new Set(['flat','hills','mountains','mountainous','rolling','cliffs','valley','plateau']);
-const VALID_OVERLAYS  = new Set(['river','road','wall','border','canyon','chasm']);
+// 'road' kept for backwards compat — renderers treat it as 'road_dirt'
+const VALID_OVERLAYS  = new Set(['river','road','road_path','road_dirt','road_cobble','wall','border','canyon','chasm']);
 const VALID_MODIFIERS = new Set(['cursed','sacred','magical','blighted','fertile','ancient_ruins','enchanted','corrupted','divine']);
 const VALID_SCOPES    = new Set(['world','region','local']);
 const VALID_FREEDOM   = new Set(['strict','balanced','creative']);
