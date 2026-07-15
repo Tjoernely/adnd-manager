@@ -6,7 +6,7 @@
  *   onGenerate    fn(spec, imageUrl)   — called after successful image generation
  *   onCancel      fn()
  */
-import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
 import { renderSketchForAI, getTileKey } from '../../utils/canvas/sketchToPng.ts';
 import { renderProceduralMap }           from '../../utils/canvas/proceduralMapRenderer.ts';
@@ -79,12 +79,15 @@ const TILE_PALETTE = [
 ];
 
 // Overlay brushes (not tile images — drawn as lines/paths)
-// Legacy 'road' overlays in saved sketches are treated as 'road_dirt'.
+// Legacy 'road' overlays in saved sketches are treated as 'road_dirt';
+// legacy 'river' is the unchanged medium size.
 const CONNECTOR_BRUSHES = [
-  { type: 'river',       label: '🌊 River',       color: '#2196f3' },
-  { type: 'road_path',   label: '🥾 Path',        color: '#9a8a6a' },
-  { type: 'road_dirt',   label: '🛤 Dirt Road',   color: '#8d6e63' },
-  { type: 'road_cobble', label: '🧱 Cobblestone', color: '#8f8f8a' },
+  { type: 'river_stream', label: '💧 Stream',      color: '#64b5f6' },
+  { type: 'river',        label: '🌊 River',       color: '#2196f3' },
+  { type: 'river_major',  label: '🌊 Major River', color: '#1565c0' },
+  { type: 'road_path',    label: '🥾 Path',        color: '#9a8a6a' },
+  { type: 'road_dirt',    label: '🛤 Dirt Road',   color: '#8d6e63' },
+  { type: 'road_cobble',  label: '🧱 Cobblestone', color: '#8f8f8a' },
 ];
 
 const OVERLAY_DIVIDERS = ['canyon', 'chasm'];
@@ -132,7 +135,9 @@ function coastRotDeg(cx, cy, cellsMap) {
 }
 
 const OVERLAY_STYLE = {
-  river:       { color: '#2196f3', width: 3 },
+  river:        { color: '#2196f3', width: 3 },
+  river_stream: { color: '#64b5f6', width: 2 },
+  river_major:  { color: '#1565c0', width: 4.5 },
   road:        { color: '#8d6e63', width: 2,   dash: '6,3' }, // legacy = dirt road
   road_path:   { color: '#9a8a6a', width: 1.5, dash: '5,4' },
   road_dirt:   { color: '#8d6e63', width: 2,   dash: '6,3' },
@@ -306,11 +311,66 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   }, [tool, activeTile, overlay, brushSize, zoom]);
 
   function handlePointerDown(e) {
+    if (e.button === 2) return;   // right button → handleContextMenu (delete)
     e.preventDefault();
     painting.current = true;
     livePathRef.current = [];
     setLiveOverlayPath([]);
     paintAt(e);
+  }
+
+  // ── M2.6 DEL 1: right-click deletes (type-scoped) ──────────────────────────
+  // Connector/divider tool active → delete the nearest overlay of EXACTLY the
+  // active type within 12 screen px (min point-to-path distance), with a
+  // short red flash first. Biome brush or erase active → erase cells under
+  // the cursor (current brush size) without switching tool.
+  const [flashOverlay, setFlashOverlay] = useState(null);
+  const flashTimer = useRef(null);
+  useEffect(() => () => window.clearTimeout(flashTimer.current), []);
+
+  function distToSegment(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+
+  function handleContextMenu(e) {
+    e.preventDefault();                                // never the browser menu
+    if (tool === 'erase' || tool === null) {
+      const [cx, cy] = svgCoords(e);
+      setCells(prev => {
+        const next = { ...prev };
+        getCellsInBrush(cx, cy, brushSize).forEach(([x, y]) => delete next[cellKey(x, y)]);
+        return next;
+      });
+      return;
+    }
+    if (tool !== 'overlay' || flashOverlay) return;    // one delete at a time
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    // Click position in unzoomed display px (same space as CELL_PX)
+    const px = (e.clientX - rect.left) / zoom;
+    const py = (e.clientY - rect.top) / zoom;
+    const threshold = 12 / zoom;                       // 12 screen px
+    let best = null, bestD = Infinity;
+    for (const ov of overlays) {
+      if (ov.type !== overlay) continue;               // EXACT active type only
+      const pts = (ov.points ?? []).map(p => ({ x: p.x * CELL_PX + CELL_PX / 2, y: p.y * CELL_PX + CELL_PX / 2 }));
+      for (let k = 0; k < pts.length; k++) {
+        const d = k < pts.length - 1
+          ? distToSegment({ x: px, y: py }, pts[k], pts[k + 1])
+          : Math.hypot(px - pts[k].x, py - pts[k].y);
+        if (d < bestD) { bestD = d; best = ov; }
+      }
+    }
+    if (best && bestD <= threshold) {
+      setFlashOverlay(best);                           // red flash…
+      flashTimer.current = window.setTimeout(() => {   // …then delete
+        setOverlays(prev => prev.filter(o => o !== best));
+        setFlashOverlay(null);
+      }, 220);
+    }
   }
 
   function handlePointerMove(e) { paintAt(e); }
@@ -652,7 +712,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}>
+            onPointerLeave={handlePointerUp}
+            onContextMenu={handleContextMenu}>
 
             {/* Grid background */}
             <rect width={totalPx} height={totalPx} fill="#1a1a1a" />
@@ -681,19 +742,24 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
               );
             })}
 
-            {/* Committed overlays — per-type style */}
+            {/* Committed overlays — per-type style (red flash while deleting) */}
             {overlays.map((ov, i) => {
               if (!ov.points?.length || ov.points.length < 2) return null;
               const pts = ov.points.map(p => `${p.x*CELL_PX+CELL_PX/2},${p.y*CELL_PX+CELL_PX/2}`).join(' ');
               const s = OVERLAY_STYLE[ov.type] ?? { color: '#888', width: 2 };
+              const flashing = ov === flashOverlay;
               return (
                 <g key={i}>
+                  {flashing && (
+                    <polyline points={pts} stroke="#ff3030" strokeWidth={s.width + 4} fill="none"
+                      opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />
+                  )}
                   {/* chasm: outer thick line for double-line effect */}
                   {ov.type === 'chasm' && (
                     <polyline points={pts} stroke="#555" strokeWidth={9} fill="none" opacity={0.6} strokeLinecap="round" strokeLinejoin="round" />
                   )}
                   <polyline points={pts}
-                    stroke={s.color} strokeWidth={s.width} fill="none" opacity={0.95}
+                    stroke={flashing ? '#ff6060' : s.color} strokeWidth={s.width} fill="none" opacity={0.95}
                     strokeLinecap="round" strokeLinejoin="round"
                     strokeDasharray={s.dash ?? undefined} />
                 </g>

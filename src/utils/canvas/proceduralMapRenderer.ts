@@ -21,9 +21,13 @@ import type { SketchSpec } from '../../rules-engine/mapTypes';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const OUT  = 1024;
+const OUT  = 2048;          // M2.6: 2048×2048 output (64px per cell)
 const GRID = 32;
-const CELL = OUT / GRID; // 32px per cell
+const CELL = OUT / GRID;
+// Global scale factor — every pixel constant below (band widths, jitter
+// amplitudes, blur radii, stroke widths, bridge measurements, dilations)
+// is defined relative to the original 1024px design and multiplied by S.
+const S = OUT / 1024;
 
 const ISO = 0.5;
 
@@ -72,16 +76,26 @@ const FOAM        = '#f8fafa';
 const GLOW        = '#3aa8a8';
 
 // Per-water-type coast band styles (M3 rest: lakes get narrower bands).
-// glow: [alpha, strokeWidth] passes. Widths in px at 1024.
+// glow: [alpha, strokeWidth] passes. Widths designed at 1024, scaled by S.
 const COAST_STYLE = {
-  ocean: { glow: [[0.5, 46], [0.4, 30]], glowBlur: 18, sandHalf: 8, foamWidth: 3, foamOffset: 11 },
-  lake:  { glow: [[0.5, 16], [0.4, 10]], glowBlur: 8,  sandHalf: 4, foamWidth: 2, foamOffset: 7  },
+  ocean: { glow: [[0.5, 46 * S], [0.4, 30 * S]], glowBlur: 18 * S, sandHalf: 8 * S, foamWidth: 3 * S, foamOffset: 11 * S },
+  lake:  { glow: [[0.5, 16 * S], [0.4, 10 * S]], glowBlur: 8 * S,  sandHalf: 4 * S, foamWidth: 2 * S, foamOffset: 7 * S  },
 } as const;
 
 // Overlay (river/road/canyon/chasm) palette — M2
 const RIVER_UNDER  = '#1a5a8a';
 const RIVER_CORE   = '#4a9aca';
 const RIVER_LIGHT  = '#7ec8e8';
+
+// M2.6: three river sizes. 'river' unchanged (medium) for backwards compat.
+// widths: underlay / core / highlight; punch: ribbon width punched out of
+// the road mask so crossings measure ≥ the minimum-run rule.
+const RIVER_STYLE: Record<string, { under: number; core: number; light: number; punch: number }> = {
+  river_stream: { under: 5 * S,  core: 3 * S, light: 1 * S, punch: 10 * S },
+  river:        { under: 9 * S,  core: 5 * S, light: 2 * S, punch: 14 * S },
+  river_major:  { under: 15 * S, core: 9 * S, light: 3 * S, punch: 20 * S },
+};
+const RIVER_TYPES = new Set(Object.keys(RIVER_STYLE));
 const ROAD_UNDER   = '#6a5238';
 const ROAD_CORE    = '#8a6a4a';
 const CANYON_DARK  = '#3a2a1a';
@@ -160,7 +174,7 @@ function offsetClosed(pts: Pt[], normals: Pt[], d: number): Pt[] {
 function chaikinClosed(pts: Pt[], iterations: number): Pt[] {
   let p = pts;
   for (let k = 0; k < iterations; k++) {
-    if (p.length > 6000) break; // safety cap
+    if (p.length > 6000 * S) break; // safety cap
     const out: Pt[] = [];
     for (let i = 0; i < p.length; i++) {
       const a = p[i], b = p[(i + 1) % p.length];
@@ -178,17 +192,17 @@ function chaikinClosed(pts: Pt[], iterations: number): Pt[] {
  */
 function jitterClosed(pts: Pt[], normals: Pt[], rng: () => number): Pt[] {
   const { s, total } = polyArcLengths(pts);
-  if (total < 60) return pts;
-  const f1 = Math.max(1, Math.round(total / 260));
-  const f2 = Math.max(2, Math.round(total / 100));
-  const f3 = Math.max(3, Math.round(total / 42));
+  if (total < 60 * S) return pts;
+  const f1 = Math.max(1, Math.round(total / (260 * S)));
+  const f2 = Math.max(2, Math.round(total / (100 * S)));
+  const f3 = Math.max(3, Math.round(total / (42 * S)));
   const p1 = rng() * Math.PI * 2, p2 = rng() * Math.PI * 2, p3 = rng() * Math.PI * 2;
   const TAU = Math.PI * 2;
   return pts.map((p, i) => {
     const u = s[i] / total;
-    const d = 2.1 * Math.sin(TAU * f1 * u + p1)
-            + 1.2 * Math.sin(TAU * f2 * u + p2)
-            + 0.7 * Math.sin(TAU * f3 * u + p3);
+    const d = (2.1 * Math.sin(TAU * f1 * u + p1)
+             + 1.2 * Math.sin(TAU * f2 * u + p2)
+             + 0.7 * Math.sin(TAU * f3 * u + p3)) * S;
     return { x: p.x + normals[i].x * d, y: p.y + normals[i].y * d };
   });
 }
@@ -244,16 +258,16 @@ function jitterOpen(pts: Pt[], normals: Pt[], rng: () => number): Pt[] {
     s[i] = L;
     if (i < n - 1) L += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
   }
-  if (L < 24) return pts;
-  const f1 = L / 180, f2 = L / 70, f3 = L / 30;
+  if (L < 24 * S) return pts;
+  const f1 = L / (180 * S), f2 = L / (70 * S), f3 = L / (30 * S);
   const p1 = rng() * Math.PI * 2, p2 = rng() * Math.PI * 2, p3 = rng() * Math.PI * 2;
   const TAU = Math.PI * 2;
   return pts.map((p, i) => {
     const u = s[i] / L;
-    const taper = Math.min(1, s[i] / 20, (L - s[i]) / 20);
+    const taper = Math.min(1, s[i] / (20 * S), (L - s[i]) / (20 * S));
     const d = (1.4 * Math.sin(TAU * f1 * u + p1)
              + 0.8 * Math.sin(TAU * f2 * u + p2)
-             + 0.5 * Math.sin(TAU * f3 * u + p3)) * taper;
+             + 0.5 * Math.sin(TAU * f3 * u + p3)) * taper * S;
     return { x: p.x + normals[i].x * d, y: p.y + normals[i].y * d };
   });
 }
@@ -340,8 +354,8 @@ function drawGorge(
   ctx.closePath();
   ctx.fill();
   ctx.restore();
-  strokeOpenPoly(ctx, a, 3, color);
-  strokeOpenPoly(ctx, b, 3, color);
+  strokeOpenPoly(ctx, a, 3 * S, color);
+  strokeOpenPoly(ctx, b, 3 * S, color);
 }
 
 // ── M2.5 water crossings ─────────────────────────────────────────────────────
@@ -363,34 +377,34 @@ function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[], withRailings =
   layer.width = size; layer.height = size;
   const bctx = layer.getContext('2d')!;
 
-  strokeOpenPoly(bctx, pts, 8, BRIDGE_WOOD);                   // deck
-  const planks = resamplePath(pts, 5);                         // cross planks ~5px
+  strokeOpenPoly(bctx, pts, 8 * S, BRIDGE_WOOD);               // deck
+  const planks = resamplePath(pts, 5 * S);                     // cross planks
   const pns = openNormals(planks);
   bctx.save();
   bctx.strokeStyle = BRIDGE_PLANK;
-  bctx.lineWidth   = 1.5;
+  bctx.lineWidth   = 1.5 * S;
   bctx.lineCap     = 'round';
   bctx.beginPath();
   for (let i = 0; i < planks.length; i++) {
     const p = planks[i], n = pns[i];
-    bctx.moveTo(p.x - n.x * 4, p.y - n.y * 4);
-    bctx.lineTo(p.x + n.x * 4, p.y + n.y * 4);
+    bctx.moveTo(p.x - n.x * 4 * S, p.y - n.y * 4 * S);
+    bctx.lineTo(p.x + n.x * 4 * S, p.y + n.y * 4 * S);
   }
   bctx.stroke();
   bctx.restore();
   // Railings only on longer bridges — on short crossings the two extra dark
   // edge lines are what turned the bridge into a dark blob.
   if (withRailings) {
-    const ns = openNormals(pts);                               // railings ±4px
-    strokeOpenPoly(bctx, offsetOpen(pts, ns, +4), 1.2, BRIDGE_RAIL);
-    strokeOpenPoly(bctx, offsetOpen(pts, ns, -4), 1.2, BRIDGE_RAIL);
+    const ns = openNormals(pts);                               // railings
+    strokeOpenPoly(bctx, offsetOpen(pts, ns, +4 * S), 1.2 * S, BRIDGE_RAIL);
+    strokeOpenPoly(bctx, offsetOpen(pts, ns, -4 * S), 1.2 * S, BRIDGE_RAIL);
   }
 
   // Clip everything to the deck band
   const mask = document.createElement('canvas');
   mask.width = size; mask.height = size;
   const mctx = mask.getContext('2d')!;
-  strokeOpenPoly(mctx, pts, 8, '#fff');
+  strokeOpenPoly(mctx, pts, 8 * S, '#fff');
   bctx.globalCompositeOperation = 'destination-in';
   bctx.drawImage(mask, 0, 0);
 
@@ -400,27 +414,27 @@ function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[], withRailings =
 /** road_cobble crossing: stone bridge — outlined grey deck + light midline. */
 function drawStoneBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
   if (pts.length < 2) return;
-  strokeOpenPoly(ctx, pts, 14, COBBLE_UNDER);       // 2px dark outline around…
-  strokeOpenPoly(ctx, pts, 10, BRIDGE_STONE);       // …the 10px grey deck
-  strokeOpenPoly(ctx, pts, 2, BRIDGE_STONE_MID);    // lighter midline
+  strokeOpenPoly(ctx, pts, 14 * S, COBBLE_UNDER);    // dark outline around…
+  strokeOpenPoly(ctx, pts, 10 * S, BRIDGE_STONE);    // …the grey deck
+  strokeOpenPoly(ctx, pts, 2 * S, BRIDGE_STONE_MID); // lighter midline
 }
 
 /** road_path crossing: ford — stepping stones, no path line over the water. */
 function drawFord(ctx: CanvasRenderingContext2D, pts: Pt[], rng: () => number): void {
   if (pts.length < 1) return;
-  const stones = resamplePath(pts, 7);
+  const stones = resamplePath(pts, 7 * S);
   const ns = openNormals(stones);
   ctx.save();
-  ctx.lineWidth = 0.8;
+  ctx.lineWidth = 0.8 * S;
   for (let i = 0; i < stones.length; i++) {
     const n = ns[i];
     const t = { x: -n.y, y: n.x }; // tangent
     const p = {
-      x: stones[i].x + n.x * (rng() - 0.5) * 3 + t.x * (rng() - 0.5) * 2,
-      y: stones[i].y + n.y * (rng() - 0.5) * 3 + t.y * (rng() - 0.5) * 2,
+      x: stones[i].x + n.x * (rng() - 0.5) * 3 * S + t.x * (rng() - 0.5) * 2 * S,
+      y: stones[i].y + n.y * (rng() - 0.5) * 3 * S + t.y * (rng() - 0.5) * 2 * S,
     };
-    const rx = 2.0 * (0.85 + rng() * 0.35);  // ~3×4px ellipses
-    const ry = 1.5 * (0.85 + rng() * 0.35);
+    const rx = 2.0 * S * (0.85 + rng() * 0.35);  // ~3×4px ellipses (at 1024)
+    const ry = 1.5 * S * (0.85 + rng() * 0.35);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, rx, ry, Math.atan2(t.y, t.x), 0, Math.PI * 2);
     ctx.fillStyle = FORD_STONE;
@@ -435,13 +449,13 @@ function drawFord(ctx: CanvasRenderingContext2D, pts: Pt[], rng: () => number): 
 function drawRoadLand(ctx: CanvasRenderingContext2D, pts: Pt[], kind: string): void {
   if (pts.length < 2) return;
   if (kind === 'road_path') {
-    strokeOpenPoly(ctx, pts, 2, PATH_COLOR, 1, [6, 5]);
+    strokeOpenPoly(ctx, pts, 2 * S, PATH_COLOR, 1, [6 * S, 5 * S]);
   } else if (kind === 'road_cobble') {
-    strokeOpenPoly(ctx, pts, 6, COBBLE_UNDER);
-    strokeOpenPoly(ctx, pts, 4, COBBLE_CORE);        // solid — paved road
+    strokeOpenPoly(ctx, pts, 6 * S, COBBLE_UNDER);
+    strokeOpenPoly(ctx, pts, 4 * S, COBBLE_CORE);      // solid — paved road
   } else { // road_dirt (+ legacy 'road')
-    strokeOpenPoly(ctx, pts, 5, ROAD_UNDER, 0.5);
-    strokeOpenPoly(ctx, pts, 3, ROAD_CORE, 1, [10, 6]);
+    strokeOpenPoly(ctx, pts, 5 * S, ROAD_UNDER, 0.5);
+    strokeOpenPoly(ctx, pts, 3 * S, ROAD_CORE, 1, [10 * S, 6 * S]);
   }
 }
 
@@ -579,6 +593,7 @@ export async function renderProceduralMap(
   spec: SketchSpec,
   mapId: number | string | null | undefined,
 ): Promise<string> {
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : 0);
   const rng = mulberry32(seedFromMapId(mapId));
 
   const canvas  = document.createElement('canvas');
@@ -664,7 +679,7 @@ export async function renderProceduralMap(
     ctx.fillStyle = lakeFill;
     ctx.fill(rects);
     ctx.strokeStyle = lakeFill;
-    ctx.lineWidth = 40;                 // ±20px dilation
+    ctx.lineWidth = 40 * S;             // ±20px dilation (at 1024)
     ctx.lineJoin = 'round';
     ctx.stroke(rects);
   }
@@ -677,7 +692,7 @@ export async function renderProceduralMap(
     hctx.fillStyle = '#fff';
     hctx.fill(biomeRectPath('coastal'));
     const [soft, sctx] = offscreen();
-    sctx.filter = `blur(${COASTAL_BLUR_PX}px)`;
+    sctx.filter = `blur(${COASTAL_BLUR_PX * S}px)`;
     sctx.drawImage(hard, 0, 0);
     sctx.filter = 'none';
     const [tint, tctx] = offscreen();
@@ -705,7 +720,7 @@ export async function renderProceduralMap(
       const px = c.x * CELL, py = c.y * CELL;
       const nDark = 8 + Math.floor(reefRng() * 5);      // 8-12 dark spots
       for (let i = 0; i < nDark; i++) {
-        const r = 1 + reefRng() * 1;                    // 2-4px diameter
+        const r = (1 + reefRng() * 1) * S;              // 2-4px diameter at 1024
         dctx.beginPath();
         dctx.arc(px + reefRng() * CELL, py + reefRng() * CELL, r, 0, Math.PI * 2);
         dctx.fillStyle = REEF_DARK;
@@ -715,7 +730,7 @@ export async function renderProceduralMap(
       const nFoam = 2 + Math.floor(reefRng() * 3);      // a few foam specks
       for (let i = 0; i < nFoam; i++) {
         dctx.beginPath();
-        dctx.arc(px + reefRng() * CELL, py + reefRng() * CELL, 0.5 + reefRng() * 0.5, 0, Math.PI * 2);
+        dctx.arc(px + reefRng() * CELL, py + reefRng() * CELL, (0.5 + reefRng() * 0.5) * S, 0, Math.PI * 2);
         dctx.fillStyle = REEF_FOAM;
         dctx.globalAlpha = 0.8;
         dctx.fill();
@@ -728,7 +743,7 @@ export async function renderProceduralMap(
     for (const c of reefCells) reefPath.rect(c.x * CELL, c.y * CELL, CELL, CELL);
     rhctx.fill(reefPath);
     const [reefSoft, rsctx] = offscreen();
-    rsctx.filter = 'blur(6px)';
+    rsctx.filter = `blur(${6 * S}px)`;
     rsctx.drawImage(reefHard, 0, 0);
     rsctx.filter = 'none';
     dctx.globalCompositeOperation = 'destination-in';
@@ -796,7 +811,7 @@ export async function renderProceduralMap(
     normals = polyNormals(pts);
 
     const { total } = polyArcLengths(pts);
-    if (total < 30) continue;
+    if (total < 30 * S) continue;
 
     // Which side of the contour is land? Sample the field on both sides.
     let landward = 0;
@@ -804,8 +819,8 @@ export async function renderProceduralMap(
     for (let k = 0; k < samples; k++) {
       const i = Math.floor((k / samples) * pts.length);
       const p = pts[i], n = normals[i];
-      landward += fieldAtPx(p.x + n.x * 5, p.y + n.y * 5)
-                - fieldAtPx(p.x - n.x * 5, p.y - n.y * 5);
+      landward += fieldAtPx(p.x + n.x * 5 * S, p.y + n.y * 5 * S)
+                - fieldAtPx(p.x - n.x * 5 * S, p.y - n.y * 5 * S);
     }
     const landSign = landward >= 0 ? 1 : -1;
 
@@ -815,7 +830,7 @@ export async function renderProceduralMap(
     for (let k = 0; k < samples; k++) {
       const i = Math.floor((k / samples) * pts.length);
       const p = pts[i], n = normals[i];
-      const b = biomePxAt(p.x - n.x * landSign * 6, p.y - n.y * landSign * 6);
+      const b = biomePxAt(p.x - n.x * landSign * 6 * S, p.y - n.y * landSign * 6 * S);
       if (b === 'lake') lakeVotes++;
       else if (b === 'ocean' || b === 'coastal' || b === null) seaVotes++;
     }
@@ -835,7 +850,7 @@ export async function renderProceduralMap(
   maskHardCtx.fillStyle = '#fff';
   maskHardCtx.fill(landPath, 'evenodd');
   const [maskSoft, maskSoftCtx] = offscreen();
-  maskSoftCtx.filter = 'blur(5px)';
+  maskSoftCtx.filter = `blur(${5 * S}px)`;
   maskSoftCtx.drawImage(maskHard, 0, 0);
   maskSoftCtx.filter = 'none';
 
@@ -878,10 +893,10 @@ export async function renderProceduralMap(
       hctx.fillStyle = '#fff';
       hctx.fill(rects);
       hctx.strokeStyle = '#fff';
-      hctx.lineWidth = 20;            // ±10px → ~10px outward dilation
+      hctx.lineWidth = 20 * S;        // ±10px → ~10px outward dilation (at 1024)
       hctx.stroke(rects);
       const [soft, sctx] = offscreen();
-      sctx.filter = 'blur(7px)';
+      sctx.filter = `blur(${7 * S}px)`;
       sctx.drawImage(hard, 0, 0);
       sctx.filter = 'none';
       const [pat, pctx] = offscreen();
@@ -907,22 +922,8 @@ export async function renderProceduralMap(
     return { type: o.type as string, pts, idx };
   });
 
-  // Rivers render on an offscreen layer masked by the soft land mask
-  // (destination-in) — they fade out over ~10px wherever they meet water
-  // instead of drawing on top of ocean/coastal/lakes.
-  const rivers = prepared.filter(o => o.type === 'river');
-  if (rivers.length > 0) {
-    const [riverLayer, rlctx] = offscreen();
-    for (const o of rivers) {
-      strokeOpenPoly(rlctx, o.pts, 9, RIVER_UNDER, 0.9);
-      strokeOpenPoly(rlctx, o.pts, 5, RIVER_CORE);
-      strokeOpenPoly(rlctx, o.pts, 2, RIVER_LIGHT, 0.6);
-    }
-    rlctx.globalCompositeOperation = 'destination-in';
-    rlctx.drawImage(maskSoft, 0, 0);
-    rlctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(riverLayer, 0, 0);
-  }
+  // Rivers are drawn AFTER the sand band (M2.6 DEL 3) — see below.
+  const rivers = prepared.filter(o => RIVER_TYPES.has(o.type));
 
   // Canyons/chasms are clipped by the same soft land mask as the rivers —
   // gorges must not continue out into lakes/sea (they drew near-black marks
@@ -934,8 +935,8 @@ export async function renderProceduralMap(
       const wet = o.pts.filter(p => fieldAtPx(p.x, p.y) < ISO).length;
       if (wet > 0)
         console.log('[gorge]', o.type, `${wet}/${o.pts.length} points over water — clipped by land mask`);
-      if (o.type === 'canyon') drawGorge(glctx, o.pts, 3, CANYON_DARK, 0.4);
-      else                     drawGorge(glctx, o.pts, 5, CHASM_DARK, 0.75);
+      if (o.type === 'canyon') drawGorge(glctx, o.pts, 3 * S, CANYON_DARK, 0.4);
+      else                     drawGorge(glctx, o.pts, 5 * S, CHASM_DARK, 0.75);
     }
     glctx.globalCompositeOperation = 'destination-in';
     glctx.drawImage(maskSoft, 0, 0);
@@ -969,6 +970,37 @@ export async function renderProceduralMap(
     ctx.restore();
   }
 
+  // ── M2.6 DEL 3: rivers — drawn AFTER the sand band so mouths cut visibly
+  // through the beach. Clipped (destination-in) by a DILATED land mask:
+  // land + ~14px (the sand band's full width + a bit of shallow water),
+  // with a 6px-blurred edge so the river fades out in the shallows instead
+  // of stopping hard.
+  if (rivers.length > 0) {
+    const [riverMask, rmctx] = offscreen();
+    rmctx.fillStyle = '#fff';
+    rmctx.fill(landPath, 'evenodd');
+    rmctx.strokeStyle = '#fff';
+    rmctx.lineWidth = 28 * S;               // ±14px → 14px outward dilation
+    rmctx.lineJoin = 'round';
+    rmctx.stroke(landPath);
+    const [riverMaskSoft, rmsctx] = offscreen();
+    rmsctx.filter = `blur(${6 * S}px)`;
+    rmsctx.drawImage(riverMask, 0, 0);
+    rmsctx.filter = 'none';
+
+    const [riverLayer, rlctx] = offscreen();
+    for (const o of rivers) {
+      const st = RIVER_STYLE[o.type] ?? RIVER_STYLE.river;
+      strokeOpenPoly(rlctx, o.pts, st.under, RIVER_UNDER, 0.9);
+      strokeOpenPoly(rlctx, o.pts, st.core, RIVER_CORE);
+      strokeOpenPoly(rlctx, o.pts, st.light, RIVER_LIGHT, 0.6);
+    }
+    rlctx.globalCompositeOperation = 'destination-in';
+    rlctx.drawImage(riverMaskSoft, 0, 0);
+    rlctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(riverLayer, 0, 0);
+  }
+
   // ── STEP 3d: foam — broken strokes along the seaward side ─────────────────
   ctx.save();
   // Clip to the water side: full-canvas rect + land contours with evenodd
@@ -981,7 +1013,7 @@ export async function renderProceduralMap(
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
   ctx.shadowColor = FOAM;
-  ctx.shadowBlur  = 3;
+  ctx.shadowBlur  = 3 * S;
   ctx.globalAlpha = 0.8;
 
   for (const c of contours) {
@@ -1017,10 +1049,11 @@ export async function renderProceduralMap(
     const [, roadMaskCtx] = offscreen();
     roadMaskCtx.drawImage(maskSoft, 0, 0);
     roadMaskCtx.globalCompositeOperation = 'destination-out';
-    // Punch width 14 (river is 9px wide visually): a perpendicular crossing
-    // then measures ≥12px, so legitimate river fords/bridges survive the
-    // minimum-run rule below while shoreline slivers (4-8px) get skipped.
-    for (const o of rivers) strokeOpenPoly(roadMaskCtx, o.pts, 14, '#fff');
+    // Punch width per river size (wider than the visual river): a
+    // perpendicular crossing then measures ≥ the minimum-run rule, so
+    // legitimate river fords/bridges survive while shoreline slivers skip.
+    for (const o of rivers)
+      strokeOpenPoly(roadMaskCtx, o.pts, (RIVER_STYLE[o.type] ?? RIVER_STYLE.river).punch, '#fff');
     roadMaskCtx.globalCompositeOperation = 'source-over';
     const maskData = roadMaskCtx.getImageData(0, 0, OUT, OUT).data;
     landMaskAt = (x, y) => {
@@ -1034,7 +1067,8 @@ export async function renderProceduralMap(
     if (!ROAD_KINDS.has(o.type)) continue;
     const kind = o.type === 'road' ? 'road_dirt' : o.type; // legacy compat
 
-    const samples = resamplePath(o.pts, 4);
+    const ROAD_STEP = 4 * S;
+    const samples = resamplePath(o.pts, ROAD_STEP);
     const isLand  = samples.map(p => landMaskAt(p.x, p.y));
 
     // Contiguous runs of equal land/water classification
@@ -1055,16 +1089,16 @@ export async function renderProceduralMap(
     const crng = mulberry32((baseSeed + o.idx * 7919 + 101) >>> 0);
     for (const run of runs) {
       if (!run.water) continue;
-      const runLength = (run.i1 - run.i0) * 4;
+      const runLength = (run.i1 - run.i0) * ROAD_STEP;
       const startPct = Math.round((run.i0 / (samples.length - 1)) * 100);
       const endPct   = Math.round((run.i1 / (samples.length - 1)) * 100);
       console.log('[bridge]', o.type, 'run at', `${startPct}%`, '-', `${endPct}%`, 'length px:', runLength);
-      // Minimum run length: shoreline grazes produce 4-8px water runs whose
+      // Minimum run length: shoreline grazes produce tiny water runs whose
       // degenerate bridge fragments (planks/railings without a meaningful
       // deck) read as dark marks at the water's edge. Render NOTHING — the
       // road simply stops at the shore.
-      if (runLength < 12) {
-        console.log('[bridge]', o.type, `run ${runLength}px < 12px — skipped (no bridge/ford)`);
+      if (runLength < 12 * S) {
+        console.log('[bridge]', o.type, `run ${runLength}px < ${12 * S}px — skipped (no bridge/ford)`);
         continue;
       }
       const sub = samples.slice(run.i0, run.i1 + 1);
@@ -1077,13 +1111,17 @@ export async function renderProceduralMap(
       if (kind === 'road_path') {
         drawFord(ctx, sub, crng);                       // no abutment, no line
       } else if (kind === 'road_cobble') {
-        drawStoneBridge(ctx, extendRun(sub, 5));        // 5px abutment
+        drawStoneBridge(ctx, extendRun(sub, 5 * S));    // 5px abutment
       } else {
-        // Short crossings (< 24px) skip the railings for readability
-        drawWoodBridge(ctx, extendRun(sub, 4), runLength >= 24);
+        // Short crossings (< 24px at 1024) skip the railings for readability
+        drawWoodBridge(ctx, extendRun(sub, 4 * S), runLength >= 24 * S);
       }
     }
   }
 
-  return canvas.toDataURL('image/png');
+  const dataUrl = canvas.toDataURL('image/png');
+  const mb = Math.round(((dataUrl.length * 3) / 4 / 1024 / 1024) * 10) / 10;
+  const ms = typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+  console.log(`[render] ${OUT}×${OUT} PNG ≈ ${mb} MB in ${ms} ms`);
+  return dataUrl;
 }

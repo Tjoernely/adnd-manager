@@ -148,6 +148,39 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M2.6 SHIPPED (2026-07-15)** — overlay deletion, river sizes, river mouths,
+2048px output:
+- **DEL 1 — right-click deletes (type-scoped):** `onContextMenu` on the
+  editor canvas (browser menu suppressed; right-button pointerdown no longer
+  starts painting). Connector/divider tool active → nearest overlay of
+  EXACTLY the active type within 12 screen px (min point-to-segment distance
+  to the path) gets a short red flash, then deletes; other types untouched.
+  Biome brush → right-click erases cells under the cursor (current brush
+  size) without switching tool; erase tool → same as left-click. Moving
+  overlays is deliberately NOT supported (delete + redraw). Verified in the
+  editor harness: all 7 overlay types draw→flash→delete; a river survives
+  right-click while Dirt Road is active; paint-mode right-click erases.
+  (Bug caught during verification: `useEffect` wasn't imported in
+  TerrainSketchEditor.jsx → instant mount crash. Fixed.)
+- **DEL 2 — three river sizes:** `river_stream` / `river` (unchanged,
+  legacy-compatible) / `river_major`. Editor: 💧 Stream / 🌊 River /
+  🌊 Major River. Renderer widths (underlay/core/highlight, at 1024-scale):
+  5/3/1, 9/5/2, 15/9/3; road-mask punch 10/14/20. Validator, sketchToPng
+  color+width tables, preview styles and promptBuilder (small narrow stream /
+  wide major river) all extended.
+- **DEL 3 — river mouths through the beach:** rivers now draw AFTER the sand
+  band and clip against a DILATED land mask (land + 14px = full sand band +
+  a bit of shallows, edge blurred 6px) — the mouth shows river-blue all the
+  way through the beach and fades in the shallow water. Verified on map 60
+  with a test river into the ocean, plus through the lake's band.
+- **DEL 4 — 2048×2048 output** (64px/cell): single global `S = OUT/1024`
+  factor scales EVERY px constant (band widths, jitter amplitude+wavelength,
+  blur radii, strokes, bridge measurements, dilations, road sampling step and
+  run thresholds). 128px tiles pattern at natural size (2 tiles/cell).
+  Measured on map 60: **PNG ≈ 4.7 MB in ~630 ms** (logged per render as
+  `[render] 2048×2048 PNG ≈ X MB in Y ms`) — comfortably under the 20 MB
+  upload limit; nginx/express limits unaffected.
+
 **M2.5 hotfix 3 (2026-07-15) — black marks STILL in the lake (map 60).**
 The repro sketch had missed the real cause. Diagnosed against map 60's ACTUAL
 sketch fetched from the prod DB (rendered locally with [bridge]/[gorge] +

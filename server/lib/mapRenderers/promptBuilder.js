@@ -187,8 +187,11 @@ function buildConnectorPaths(spec) {
     const dirY = end.y > start.y ? 'south' : end.y < start.y ? 'north' : '';
     const dir  = [dirY, dirX].filter(Boolean).join('-') || 'across the region';
 
-    if (ov.type === 'river') {
-      lines.push(`- River: originates in the ${startZone}, flows ${dir} through the ${midZone}, reaches the ${endZone}. Draw as a gently winding natural river.`);
+    if (ov.type === 'river' || ov.type === 'river_stream' || ov.type === 'river_major') {
+      const riverLabel = ov.type === 'river_stream' ? 'small narrow stream'
+                       : ov.type === 'river_major'  ? 'wide major river'
+                       : 'gently winding natural river';
+      lines.push(`- River: originates in the ${startZone}, flows ${dir} through the ${midZone}, reaches the ${endZone}. Draw as a ${riverLabel}.`);
     } else if (ov.type === 'road' || ov.type === 'road_path' || ov.type === 'road_dirt' || ov.type === 'road_cobble') {
       // 'road' is the legacy value (= dirt road); road_* are the M2.5 subtypes
       const roadLabel = ov.type === 'road_cobble' ? 'cobblestone road'

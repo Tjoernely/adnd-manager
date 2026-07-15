@@ -26,6 +26,8 @@ const BIOME_COLOR: Record<BiomeType | 'null', string> = {
 
 const OVERLAY_COLOR: Record<OverlayType, string> = {
   river:       '#0000ff',
+  river_stream: '#4060ff',
+  river_major: '#0000cc',
   road:        '#8d6e63',
   road_path:   '#9a8a6a',
   road_dirt:   '#8d6e63',
@@ -38,6 +40,8 @@ const OVERLAY_COLOR: Record<OverlayType, string> = {
 
 const OVERLAY_WIDTH: Record<OverlayType, number> = {
   river:       8,
+  river_stream: 4,
+  river_major: 13,
   road:        5,
   road_path:   3,
   road_dirt:   5,
@@ -616,7 +620,9 @@ const PREVIEW_BIOME_COLOR: Record<string, string> = {
 };
 
 const PREVIEW_OVERLAY: Record<string, { color: string; width: number; dash?: number[] }> = {
-  river:       { color: '#2196f3', width: 5 },
+  river:        { color: '#2196f3', width: 5 },
+  river_stream: { color: '#64b5f6', width: 3 },
+  river_major:  { color: '#1565c0', width: 8 },
   road:        { color: '#c0a060', width: 4, dash: [12, 6] },
   road_path:   { color: '#9a8a6a', width: 2, dash: [6, 5] },
   road_dirt:   { color: '#c0a060', width: 4, dash: [12, 6] },

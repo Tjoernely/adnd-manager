@@ -233,7 +233,9 @@ export type ReliefType =
   | 'plateau';
 
 export type OverlayType =
-  | 'river'
+  | 'river'         // medium river (unchanged — backwards compat)
+  | 'river_stream'
+  | 'river_major'
   | 'road'          // legacy — treated as 'road_dirt' (no data migration)
   | 'road_path'
   | 'road_dirt'
