@@ -148,6 +148,28 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M2.5 hotfix 3 (2026-07-15) — black marks STILL in the lake (map 60).**
+The repro sketch had missed the real cause. Diagnosed against map 60's ACTUAL
+sketch fetched from the prod DB (rendered locally with [bridge]/[gorge] +
+per-crossing bbox logs; sketch kept untracked as `dev-map60-sketch.json` +
+harness `dev-map60-test.html`). Findings, reported to the user before fixing:
+1. **The marks IN the lake were NOT bridges/gorges** — no draw op touched the
+   lake's pixel area. They were cell-shaped notches of the dark OCEAN
+   background showing through: the smoothed lake hole bulges up to ~half a
+   cell past the blocky lake-cell rects at staircase corners, and the lake
+   pattern was only filled in the rects. (The earlier repro lake was a fat
+   rectangle — gap hidden under the sand band.) FIX: lake prefill dilated
+   ±20px (pattern-stroke lineWidth 40 around the rect path); overdraw onto
+   land is covered by the later clipped land fill. Verified against map 60:
+   lake interior uniformly blue.
+2. Two LEGIT wooden bridges where the road crosses river2 at the lake's west
+   shore (12/20px runs) — correct behaviour, but they read as dark blobs.
+   POLISH (user-approved): lighter woodwork (deck `#8a6642`, planks
+   `#5a4028`, railings `#4a3620`) and runs < 24px draw deck+planks but DROP
+   the railings. Stone bridge unchanged.
+3. The road STARTS in the ocean at cell (22,21) → a legit 104px sea bridge
+   (0-5% run). Sketch data — user moves the road themselves; no code change.
+
 **Map pan white-screen fix (2026-07-15).** Dragging (click & pull) the zoomed
 map view "quite often" blanked the whole app until a browser refresh. Root
 cause (reproduced deterministically in a standalone harness,

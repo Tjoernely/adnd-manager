@@ -92,9 +92,9 @@ const CHASM_DARK   = '#0a0a0a';
 const PATH_COLOR    = '#9a8a6a';
 const COBBLE_UNDER  = '#55544c';
 const COBBLE_CORE   = '#8f8f8a';
-const BRIDGE_WOOD   = '#7a5a3a';
-const BRIDGE_PLANK  = '#4a3520';
-const BRIDGE_RAIL   = '#3a2a18';
+const BRIDGE_WOOD   = '#8a6642';
+const BRIDGE_PLANK  = '#5a4028';
+const BRIDGE_RAIL   = '#4a3620';
 const BRIDGE_STONE  = '#9a9a94';
 const BRIDGE_STONE_MID = '#b0b0aa';
 const FORD_STONE    = '#8a8578';
@@ -356,7 +356,7 @@ function offsetOpen(pts: Pt[], normals: Pt[], d: number): Pt[] {
  * (destination-in) to the deck band, so planks/railings can never stick
  * out past the deck; the finished bridge composites as one piece.
  */
-function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
+function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[], withRailings = true): void {
   if (pts.length < 2) return;
   const size = ctx.canvas.width;
   const layer = document.createElement('canvas');
@@ -378,9 +378,13 @@ function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
   }
   bctx.stroke();
   bctx.restore();
-  const ns = openNormals(pts);                                 // railings ±4px
-  strokeOpenPoly(bctx, offsetOpen(pts, ns, +4), 1.2, BRIDGE_RAIL);
-  strokeOpenPoly(bctx, offsetOpen(pts, ns, -4), 1.2, BRIDGE_RAIL);
+  // Railings only on longer bridges — on short crossings the two extra dark
+  // edge lines are what turned the bridge into a dark blob.
+  if (withRailings) {
+    const ns = openNormals(pts);                               // railings ±4px
+    strokeOpenPoly(bctx, offsetOpen(pts, ns, +4), 1.2, BRIDGE_RAIL);
+    strokeOpenPoly(bctx, offsetOpen(pts, ns, -4), 1.2, BRIDGE_RAIL);
+  }
 
   // Clip everything to the deck band
   const mask = document.createElement('canvas');
@@ -648,10 +652,21 @@ export async function renderProceduralMap(
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, OUT, OUT);
 
-  // Lake cells: pre-fill with lake pattern (visible through land-contour holes)
+  // Lake cells: pre-fill with lake pattern (visible through land-contour
+  // holes). Dilated ~20px past the cell rects: the SMOOTHED lake hole bulges
+  // beyond the blocky rects at staircase corners, and the gap otherwise
+  // exposes the dark ocean background as cell-shaped dark notches in the
+  // lake (map 60 bug). Overdraw onto land is harmless — the land fill is
+  // drawn later and clipped to the contour.
   if (hasLake) {
-    ctx.fillStyle = patternOf(ctx, 'inland_lake', LAKE_FALLBACK);
-    ctx.fill(biomeRectPath('lake'));
+    const lakeFill = patternOf(ctx, 'inland_lake', LAKE_FALLBACK);
+    const rects = biomeRectPath('lake');
+    ctx.fillStyle = lakeFill;
+    ctx.fill(rects);
+    ctx.strokeStyle = lakeFill;
+    ctx.lineWidth = 40;                 // ±20px dilation
+    ctx.lineJoin = 'round';
+    ctx.stroke(rects);
   }
 
   // ── Coastal (shallow) water: lighter teal, soft-blended toward ocean ──────
@@ -1053,12 +1068,19 @@ export async function renderProceduralMap(
         continue;
       }
       const sub = samples.slice(run.i0, run.i1 + 1);
+      {
+        const xs = sub.map(p => p.x), ys = sub.map(p => p.y);
+        console.log('[bridge]', o.type, 'DRAW crossing, bbox px',
+          Math.round(Math.min(...xs)), Math.round(Math.min(...ys)), '→',
+          Math.round(Math.max(...xs)), Math.round(Math.max(...ys)));
+      }
       if (kind === 'road_path') {
         drawFord(ctx, sub, crng);                       // no abutment, no line
       } else if (kind === 'road_cobble') {
         drawStoneBridge(ctx, extendRun(sub, 5));        // 5px abutment
       } else {
-        drawWoodBridge(ctx, extendRun(sub, 4));         // 4px abutment
+        // Short crossings (< 24px) skip the railings for readability
+        drawWoodBridge(ctx, extendRun(sub, 4), runLength >= 24);
       }
     }
   }
