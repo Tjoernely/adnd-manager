@@ -148,6 +148,23 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**Map pan white-screen fix (2026-07-15).** Dragging (click & pull) the zoomed
+map view "quite often" blanked the whole app until a browser refresh. Root
+cause (reproduced deterministically in a standalone harness,
+`dev-mapcanvas-test.html`, untracked — `MapCanvas` is now a named export for
+it): `handleContainerPointerMove` dereferenced `panStart.current` INSIDE the
+`setView` updater. `pointermove` is a continuous event whose state update
+React 18/19 may defer past the discrete `pointerup`; on a fast
+drag-and-release the deferred updater then read `null.panX` and threw in the
+RENDER phase → React unmounts the entire tree (the app has no error
+boundaries yet — §5 item 10) → white screen. Harness proof: a synchronous
+pointerdown/move/up burst crashed the component with
+`Cannot read properties of null (reading 'panX')`; after the fix (pan values
+computed OUTSIDE the updater, plain numbers passed in) 200 racing bursts
+leave it mounted with zero errors. Pan behaviour itself is unchanged.
+Reminder: app-wide React error boundaries (Next Priorities #10) would turn
+any future such crash into a recoverable module error instead of a blank app.
+
 **M2.5 hotfix 2 (2026-07-15) — black marks in the lake.** Diagnosed with
 run-logging BEFORE fixing (`[bridge] type, run at start%-end%, length px` +
 `[gorge] type, N/M points over water`). Logs on a repro sketch showed BOTH

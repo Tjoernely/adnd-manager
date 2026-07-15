@@ -1640,7 +1640,8 @@ function saveViewState(mapId, view) {
   try { sessionStorage.setItem(`map_view_${mapId}`, JSON.stringify(view)); } catch {}
 }
 
-function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onPoiSelect, onPoiDragEnd, onMapClick,
+// Exported for the standalone dev harness (dev-mapcanvas-test.html)
+export function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onPoiSelect, onPoiDragEnd, onMapClick,
                      // Sprint 5
                      connectors = [], currentFloorNumber = 0, onConnectorClick }) {
   const containerRef = useRef(null);
@@ -1702,11 +1703,19 @@ function MapCanvas({ map, pois, selectedPoiId, isDM, playerView, addPoiMode, onP
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const handleContainerPointerMove = (e) => {
-    if (!panStart.current) return;
-    const dx = e.clientX - panStart.current.mx;
-    const dy = e.clientY - panStart.current.my;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panStart.current.moved = true;
-    setView(prev => ({ ...prev, panX: panStart.current.panX + dx, panY: panStart.current.panY + dy }));
+    const start = panStart.current;
+    if (!start) return;
+    const dx = e.clientX - start.mx;
+    const dy = e.clientY - start.my;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) start.moved = true;
+    // Compute the new pan OUTSIDE the updater. pointermove is a continuous
+    // event whose state update React may defer past the discrete pointerup —
+    // dereferencing panStart.current inside the updater then reads null and
+    // throws in the render phase, unmounting the whole app (white screen on
+    // fast drag-and-release).
+    const panX = start.panX + dx;
+    const panY = start.panY + dy;
+    setView(prev => ({ ...prev, panX, panY }));
   };
   const handleContainerPointerUp = () => {
     panStart.current = null;
