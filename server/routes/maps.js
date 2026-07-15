@@ -457,15 +457,31 @@ router.post('/', auth, async (req, res) => {
   } catch (e) { next500(e, res); }
 });
 
-// ── Upload / replace map image (DM only, multipart) ───────────────────────────
+// ── Upload / replace map image (DM only) ─────────────────────────────────────
+// Accepts EITHER multipart form-data (field "image") OR a JSON body
+// { imageDataUrl: "data:image/png;base64,..." } — the latter is used by the
+// client-side procedural renderer (renders in the browser, persists here).
 router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
   try {
     const map = await db.one('SELECT * FROM maps WHERE id=$1', [req.params.id]);
     if (!map) return res.status(404).json({ error: 'Not found' });
     if (!(await isDM(map.campaign_id, req.user.id)))
       return res.status(403).json({ error: 'DM only' });
-    if (!req.file)
-      return res.status(400).json({ error: 'No image file uploaded' });
+
+    let filename = req.file?.filename ?? null;
+
+    if (!filename) {
+      // JSON dataURL path (procedural renderer)
+      const dataUrl = typeof req.body?.imageDataUrl === 'string' ? req.body.imageDataUrl : null;
+      const m = dataUrl?.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return res.status(400).json({ error: 'No image file uploaded' });
+      const buffer = Buffer.from(m[2], 'base64');
+      if (buffer.length === 0 || buffer.length > 20 * 1024 * 1024)
+        return res.status(400).json({ error: 'Image must be non-empty and at most 20 MB' });
+      const ext = m[1] === 'jpeg' ? '.jpg' : `.${m[1]}`;
+      filename = `map-proc-${crypto.randomUUID()}${ext}`;
+      fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+    }
 
     // Delete old local image if present
     if (map.image_url?.startsWith('/uploads/maps/')) {
@@ -473,7 +489,7 @@ router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
       fs.unlink(oldPath, () => {});
     }
 
-    const image_url = `/uploads/maps/${req.file.filename}`;
+    const image_url = `/uploads/maps/${filename}`;
     const updated = await db.one(
       `UPDATE maps SET image_url=$1, updated_at=NOW() WHERE id=$2
        RETURNING id, campaign_id, name, type, image_url, data,

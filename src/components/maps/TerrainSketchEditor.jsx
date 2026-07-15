@@ -9,6 +9,7 @@
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { validateSketchSpec }           from '../../rules-engine/sketchValidator.ts';
 import { renderSketchForAI, getTileKey } from '../../utils/canvas/sketchToPng.ts';
+import { renderProceduralMap }           from '../../utils/canvas/proceduralMapRenderer.ts';
 import { api }                          from '../../api/client.js';
 import mapStylePresets                  from '../../rulesets/mapStylePresets.json';
 import './TerrainSketchEditor.css';
@@ -233,7 +234,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [aiFreedom, setAiFreedom]   = useState(initialSpec?.ai_freedom ?? 'balanced');
   const [loreMode, setLoreMode]     = useState(initialSpec?.lore_mode ?? false);
   const [userPrompt, setUserPrompt] = useState(initialSpec?.user_prompt ?? '');
-  const [renderer, setRenderer]     = useState('gemini');
+  const [renderer, setRenderer]     = useState('procedural');
   const [mapStyle, setMapStyle]     = useState('schley');
   const [errors, setErrors]         = useState([]);
   const [generating, setGenerating] = useState(false);
@@ -408,6 +409,37 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     try {
+      // ── Procedural renderer: deterministic, client-side, no AI, no polling ──
+      if (renderer === 'procedural') {
+        setGenStatus('Rendering map…');
+        // Yield a frame so the status is painted before the (fast) render
+        await new Promise(r => setTimeout(r, 0));
+        const dataUrl = await renderProceduralMap(spec, mapId);
+
+        if (mapId) {
+          setGenStatus('Saving image…');
+          const token = localStorage.getItem('dnd_token') ?? '';
+          const resp = await fetch(`/api/maps/${mapId}/image`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body:    JSON.stringify({ imageDataUrl: dataUrl }),
+          });
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: resp.statusText }));
+            throw new Error(err.error ?? 'Failed to save rendered image');
+          }
+          const saved = await resp.json();
+          setGenStatus('Done (procedural)');
+          onGenerate(spec, saved.image_url);
+        } else {
+          // No map record yet (shouldn't happen in the Draw flow) — hand the
+          // dataURL to the parent so nothing is lost.
+          setGenStatus('Done (procedural)');
+          onGenerate(spec, dataUrl);
+        }
+        return;
+      }
+
       setGenStatus('Capturing sketch…');
       const controlImage = await renderSketchForAI(spec);
 
@@ -733,6 +765,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
             <label className="tse-label">Renderer
               <select value={renderer} onChange={e => setRenderer(e.target.value)} disabled={generating}>
+                <option value="procedural">🖌 Procedural (instant, no AI)</option>
                 <option value="auto">🤖 Auto</option>
                 <option value="gpt-image-1">🖼 GPT-Image-1 (OpenAI)</option>
                 <option value="gemini">🟦 Gemini Image (Google)</option>

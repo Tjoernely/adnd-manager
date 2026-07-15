@@ -11,6 +11,13 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // Tile PNGs live only in server/public/tiles/ on the production box
+      // (tiles_64/ locally is a gitignored working dir). Proxy so the sketch
+      // editor + procedural renderer work in local dev.
+      '/tiles': {
+        target: 'https://realmkeep.app',
+        changeOrigin: true,
+      },
     },
   },
   build: {

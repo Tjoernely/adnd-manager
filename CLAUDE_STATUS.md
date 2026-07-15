@@ -25,6 +25,29 @@ renderer in the dropdown only.
 - Milestones: **M1** interiors+coast (steps 1–3) → user test → **M2**
   rivers/roads → **M3** lakes+blending → **M4** relief stamps.
 
+**M1 SHIPPED (2026-07-15)** — `proceduralMapRenderer.ts` implements: biome
+interiors as one-pass `createPattern` fills (texture continues across cells);
+marching squares over a 33×33 corner field (padded ring so border-touching
+land closes; lone-cell boost so 1-cell islands survive as small isles);
+Chaikin ×4 + 3-frequency seeded sine jitter along normals; layered coast
+(2-pass teal glow w46/w30 + shadowBlur → land fill clipped to contour with a
+sand underlay covering jitter slivers → sand band as a FILLED offset-ring
+polygon ±8px, evenodd, lighter landward edge → broken foam strokes at −11px,
+6–14-pt pieces @75%, clipped to the water side of the contour). Lakes get the
+full coast treatment in M1 (M3 narrows the bands). Renderer dropdown in
+`TerrainSketchEditor` now defaults to **"🖌 Procedural (instant, no AI)"**;
+the procedural path renders client-side and persists via
+`POST /api/maps/:id/image { imageDataUrl }` (endpoint extended to accept a
+JSON dataURL body alongside the existing multipart form — same DM check, same
+20 MB cap, file saved as `map-proc-<uuid>.png`). No job queue, no polling.
+Verified locally (vite dev + browser harness `dev-procedural-test.html`,
+untracked): 489 ms render, byte-identical output on re-render (deterministic),
+different seed → different jitter; visual check passed (continuous patterns,
+smooth coast, glow/sand/foam, lake shore, small islands intact).
+Note: the save endpoint sits behind the existing `imageLimiter` (20/h/user).
+A `/tiles` dev-proxy → realmkeep.app was added to `vite.config.ts` (tiles only
+exist in `server/public/tiles/` on the prod box; `tiles_64/` is gitignored).
+
 ---
 
 ## 1. Server Setup
