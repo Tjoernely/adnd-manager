@@ -24,13 +24,18 @@ const CELL = OUT / GRID; // 32px per cell
 
 const ISO = 0.5;
 
-const WATER_BIOMES = new Set(['ocean', 'lake']);
+// M1.5 BUG 2: coastal counts as WATER — the coastline (with sand band) lands
+// on the land↔coastal border, and coastal↔ocean gets NO beach (soft blend).
+const WATER_BIOMES = new Set(['ocean', 'lake', 'coastal']);
 
 // Biome → repeating pattern tile (served from /tiles/, same source as the editor)
+// swamp_flat_v2: seamless-fixed version (roll+blend + high-pass lightness
+// flatten) shipped in the repo under public/tiles/ — the original swamp_flat
+// on the server tiles into a visible patchwork (M1.5 BUG 3).
 const BIOME_PATTERN_TILE: Record<string, string> = {
   plains:   'plains_flat',
   forest:   'forest_flat',
-  swamp:    'swamp_flat',
+  swamp:    'swamp_flat_v2',
   desert:   'desert_flat',
   tundra:   'tundra_flat',
   volcanic: 'volcanic_flat',
@@ -45,6 +50,12 @@ const BIOME_FALLBACK: Record<string, string> = {
 
 const OCEAN_FALLBACK = '#1a3e7e';
 const LAKE_FALLBACK  = '#1a5ea2';
+
+// Coastal (shallow) water: lighter teal overlay on the ocean texture,
+// soft-blended (blurred mask) since coastal↔ocean is water↔water.
+const COASTAL_TINT       = '#4a9aa8';
+const COASTAL_TINT_ALPHA = 0.55;
+const COASTAL_BLUR_PX    = 12;
 
 // Coast palette
 const SAND        = '#e2c78d';
@@ -308,12 +319,13 @@ export async function renderProceduralMap(
 
   // Load the pattern tiles we actually need
   const landBiomes = new Set<string>();
-  let hasLake = false;
+  let hasLake = false, hasCoastal = false;
   for (let k = 0; k < GRID * GRID; k++) {
     const b = biomeAt[k];
     if (!b) continue;
     if (b === 'lake') hasLake = true;
-    else if (!WATER_BIOMES.has(b) && b !== 'coastal') landBiomes.add(b);
+    else if (b === 'coastal') hasCoastal = true;
+    else if (!WATER_BIOMES.has(b)) landBiomes.add(b);
   }
   const tileKeys = new Set<string>(['ocean_deep']);
   if (hasLake) tileKeys.add('inland_lake');
@@ -322,10 +334,20 @@ export async function renderProceduralMap(
   const tiles: Record<string, HTMLImageElement | null> = {};
   await Promise.all([...tileKeys].map(async k => { tiles[k] = await loadImage(`/tiles/${k}.png`); }));
 
-  const patternOf = (tileKey: string, fallback: string): CanvasPattern | string => {
+  const offscreen = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+    const c = document.createElement('canvas');
+    c.width = OUT; c.height = OUT;
+    return [c, c.getContext('2d')!];
+  };
+
+  const patternOf = (
+    target: CanvasRenderingContext2D,
+    tileKey: string,
+    fallback: string,
+  ): CanvasPattern | string => {
     const img = tiles[tileKey];
     if (img && img.naturalWidth > 0) {
-      const p = ctx.createPattern(img, 'repeat');
+      const p = target.createPattern(img, 'repeat');
       if (p) return p; // anchored at canvas origin → texture continues across cells
     }
     return fallback;
@@ -341,7 +363,7 @@ export async function renderProceduralMap(
   };
 
   // ── STEP 1a: water background (whole canvas) ──────────────────────────────
-  ctx.fillStyle = patternOf('ocean_deep', OCEAN_FALLBACK);
+  ctx.fillStyle = patternOf(ctx, 'ocean_deep', OCEAN_FALLBACK);
   ctx.fillRect(0, 0, OUT, OUT);
   // Subtle depth vignette to break up visible tiling
   const vg = ctx.createRadialGradient(OUT / 2, OUT / 2, OUT * 0.25, OUT / 2, OUT / 2, OUT * 0.72);
@@ -352,8 +374,30 @@ export async function renderProceduralMap(
 
   // Lake cells: pre-fill with lake pattern (visible through land-contour holes)
   if (hasLake) {
-    ctx.fillStyle = patternOf('inland_lake', LAKE_FALLBACK);
+    ctx.fillStyle = patternOf(ctx, 'inland_lake', LAKE_FALLBACK);
     ctx.fill(biomeRectPath('lake'));
+  }
+
+  // ── Coastal (shallow) water: lighter teal, soft-blended toward ocean ──────
+  // coastal↔ocean is water↔water — no beach, just a 12px blurred transition.
+  // The land side of the blur gets painted over by the land fill + sand band.
+  if (hasCoastal) {
+    const [hard, hctx] = offscreen();
+    hctx.fillStyle = '#fff';
+    hctx.fill(biomeRectPath('coastal'));
+    const [soft, sctx] = offscreen();
+    sctx.filter = `blur(${COASTAL_BLUR_PX}px)`;
+    sctx.drawImage(hard, 0, 0);
+    sctx.filter = 'none';
+    const [tint, tctx] = offscreen();
+    tctx.fillStyle = COASTAL_TINT;
+    tctx.fillRect(0, 0, OUT, OUT);
+    tctx.globalCompositeOperation = 'destination-in';
+    tctx.drawImage(soft, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = COASTAL_TINT_ALPHA;
+    ctx.drawImage(tint, 0, 0);
+    ctx.restore();
   }
 
   const anyLand = land.some(v => v === 1);
@@ -375,7 +419,28 @@ export async function renderProceduralMap(
          + field(i0, j0 + 1) * (1 - tx) * ty  + field(i0 + 1, j0 + 1) * tx * ty;
   };
 
-  for (const raw of rawContours) {
+  // M1.5 BUG 1: land running off the map edge must NOT get a coast band.
+  // The padded field closes every contour with segments along the canvas
+  // border; clamp-equivalent fix: push those artificial border points far
+  // off-canvas (48px) so glow/sand/foam along them render outside the image
+  // while the contour stays CLOSED (the land clip still covers to the edge).
+  // Coast therefore only appears at real land/water borders inside the map.
+  const EDGE_EPS = 1e-4;
+  const pushBorderOut = (raw: Pt[]): Pt[] => {
+    const pushed = raw.map(p => ({
+      x: p.x <= EDGE_EPS ? -1.5 : p.x >= GRID - EDGE_EPS ? GRID + 1.5 : p.x,
+      y: p.y <= EDGE_EPS ? -1.5 : p.y >= GRID - EDGE_EPS ? GRID + 1.5 : p.y,
+    }));
+    // drop consecutive duplicates the push may have created
+    return pushed.filter((p, i, a) => {
+      const q = a[(i - 1 + a.length) % a.length];
+      return Math.abs(p.x - q.x) > 1e-6 || Math.abs(p.y - q.y) > 1e-6;
+    });
+  };
+
+  for (const rawContour of rawContours) {
+    const raw = pushBorderOut(rawContour);
+    if (raw.length < 3) continue;
     // corner coords → px
     let pts = raw.map(p => ({ x: p.x * CELL, y: p.y * CELL }));
     pts = chaikinClosed(pts, 4);
@@ -417,16 +482,40 @@ export async function renderProceduralMap(
   }
   ctx.restore();
 
-  // ── STEP 1b/3b: land fill — biome interiors clipped to the smooth contour ─
+  // ── STEP 1b/3b + M3: land fill — biome interiors with soft blended borders,
+  // clipped to the smooth contour.
+  // M3 blending: per land biome, build a mask of its cells dilated ~10px and
+  // gaussian-blurred 7px, then draw its pattern through that mask. Composited
+  // source-over in a fixed order, adjacent biomes crossfade over ~15px instead
+  // of cell-staircase edges. Relief is NOT part of the mask — biome only.
   ctx.save();
   ctx.clip(landPath, 'evenodd');
-  // Sand underlay: covers coastal-biome cells AND any sliver where the jittered
-  // contour bulges past the blocky cell rects.
+  // Sand underlay: covers any sliver where the jittered contour bulges past
+  // the blocky cell rects (the blurred biome masks also fade out at the coast).
   ctx.fillStyle = SAND;
   ctx.fillRect(0, 0, OUT, OUT);
-  for (const biome of landBiomes) {
-    ctx.fillStyle = patternOf(BIOME_PATTERN_TILE[biome], BIOME_FALLBACK[biome] ?? '#888');
-    ctx.fill(biomeRectPath(biome));
+  if (landBiomes.size > 0) {
+    const [layer, lctx] = offscreen();
+    for (const biome of [...landBiomes].sort()) {
+      const rects = biomeRectPath(biome);
+      const [hard, hctx] = offscreen();
+      hctx.fillStyle = '#fff';
+      hctx.fill(rects);
+      hctx.strokeStyle = '#fff';
+      hctx.lineWidth = 20;            // ±10px → ~10px outward dilation
+      hctx.stroke(rects);
+      const [soft, sctx] = offscreen();
+      sctx.filter = 'blur(7px)';
+      sctx.drawImage(hard, 0, 0);
+      sctx.filter = 'none';
+      const [pat, pctx] = offscreen();
+      pctx.fillStyle = patternOf(pctx, BIOME_PATTERN_TILE[biome], BIOME_FALLBACK[biome] ?? '#888');
+      pctx.fillRect(0, 0, OUT, OUT);
+      pctx.globalCompositeOperation = 'destination-in';
+      pctx.drawImage(soft, 0, 0);
+      lctx.drawImage(pat, 0, 0);
+    }
+    ctx.drawImage(layer, 0, 0);
   }
   ctx.restore();
 

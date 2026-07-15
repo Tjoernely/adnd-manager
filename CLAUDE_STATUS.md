@@ -48,6 +48,48 @@ Note: the save endpoint sits behind the existing `imageLimiter` (20/h/user).
 A `/tiles` dev-proxy → realmkeep.app was added to `vite.config.ts` (tiles only
 exist in `server/public/tiles/` on the prod box; `tiles_64/` is gitignored).
 
+**M1.5 + M3 SHIPPED (2026-07-15)** — three bugs from the first production test,
+plus biome blending pulled FORWARD (order swapped: M3 before M2 after test):
+- **BUG 1 (sand frame around the whole map):** the water-padded corner field
+  closed every border-touching landmass with contour segments ON the canvas
+  edge → full-perimeter coast band. Fix (clamp-equivalent): artificial border
+  points are pushed 48px off-canvas, so the contour stays CLOSED (land clip
+  still reaches the edge — an all-land map still fills) while glow/sand/foam
+  along the border render outside the image. Coast now only appears at real
+  land/water borders inside the map. (Literal clamp-padding was rejected: it
+  produces OPEN contours at the map edge, which breaks the evenodd land clip
+  and needs fragile boundary-walk re-closure.)
+- **BUG 2 (coastal = flat tan blocks):** `coastal` now counts as WATER in the
+  marching-squares classification, so the coastline + sand band land exactly
+  on the land↔coastal border. Coastal cells render as lighter shallow water:
+  `#4a9aa8` tint @0.55 through a 12px-blurred mask over the ocean pattern —
+  coastal↔ocean gets a soft water↔water blend, NO beach.
+- **BUG 3 (swamp patchwork):** diagnosis — only ONE tile is used as pattern
+  (correct), and `swamp_flat.png` wraps without hard seams, BUT has strong
+  internal light/dark variance → visible patchwork when tiled 8×8. (Earlier
+  "seam lines" in 2×2 tests were GDI+ DrawImage artifacts; native-res pixel
+  tiling shows no seams.) Fixed tile = roll-half + center-weighted cross-seam
+  blend + 0.8 wrap-around high-pass lightness flatten. Ships as
+  **`public/tiles/swamp_flat_v2.png`** (repo-tracked; the build copies it to
+  `server/public/tiles/`, so it deploys via plain git — a direct scp of
+  `swamp_flat.png` onto the prod box was avoided: new filename = no collision
+  with the server's untracked tiles dir). `tiles_128/swamp_flat.png` (local
+  working dir) also updated. The renderer maps swamp → `swamp_flat_v2`;
+  the editor's palette chip still shows the old tile (cosmetic).
+- **M3 (biome blending, moved before M2):** per land biome, mask = cell rects
+  dilated ~10px (20px stroke) + 7px gaussian blur; the biome's pattern is
+  drawn through the mask (`destination-in`) and composited source-over in
+  deterministic (sorted) order onto the land layer → ~15px organic crossfades
+  instead of cell staircases. Relief is NOT in the mask (biome only, per spec);
+  water biomes aren't blended (coastal handled by BUG 2's water blend).
+- `vite.config.ts` `/tiles` proxy got a `bypass`: tiles present in `public/`
+  are served locally in dev; the rest still proxy to prod.
+- Verified locally (harness): 607 ms, byte-identical re-render, seed varies
+  output; visual pass confirmed all four fixes in one render (land off-edge
+  without frame, teal coastal band with beach only on the land side, even
+  swamp, soft biome borders; lake + 1-cell + 2×2 islands intact).
+- **M2 (rivers/roads) awaits user test of M1.5+M3.**
+
 ---
 
 ## 1. Server Setup
