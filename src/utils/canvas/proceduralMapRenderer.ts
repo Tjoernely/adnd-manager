@@ -96,6 +96,12 @@ const RIVER_STYLE: Record<string, { under: number; core: number; light: number; 
   river_major:  { under: 15 * S, core: 9 * S, light: 3 * S, punch: 20 * S },
 };
 const RIVER_TYPES = new Set(Object.keys(RIVER_STYLE));
+
+// M2.7 FIX 2: z-order — the LARGEST connector draws last (on top) when they
+// overlap. Stable sort (ties keep sketch order) so determinism holds; the
+// per-overlay jitter seed uses the ORIGINAL index and is unaffected.
+const RIVER_Z: Record<string, number> = { river_stream: 0, river: 1, river_major: 2 };
+const ROAD_Z:  Record<string, number> = { road_path: 0, road: 1, road_dirt: 1, road_cobble: 2 };
 const ROAD_UNDER   = '#6a5238';
 const ROAD_CORE    = '#8a6a4a';
 const CANYON_DARK  = '#3a2a1a';
@@ -923,7 +929,10 @@ export async function renderProceduralMap(
   });
 
   // Rivers are drawn AFTER the sand band (M2.6 DEL 3) — see below.
-  const rivers = prepared.filter(o => RIVER_TYPES.has(o.type));
+  // Sorted smallest→largest so the biggest river draws on top (M2.7 FIX 2).
+  const rivers = prepared
+    .filter(o => RIVER_TYPES.has(o.type))
+    .sort((a, b) => (RIVER_Z[a.type] ?? 1) - (RIVER_Z[b.type] ?? 1));
 
   // Canyons/chasms are clipped by the same soft land mask as the rivers —
   // gorges must not continue out into lakes/sea (they drew near-black marks
@@ -1063,8 +1072,12 @@ export async function renderProceduralMap(
     };
   }
 
-  for (const o of prepared) {
-    if (!ROAD_KINDS.has(o.type)) continue;
+  // Sorted smallest→largest so the biggest road draws on top when roads
+  // overlap (M2.7 FIX 2); bridges/fords follow their road's draw order.
+  const roads = prepared
+    .filter(o => ROAD_KINDS.has(o.type))
+    .sort((a, b) => (ROAD_Z[a.type] ?? 1) - (ROAD_Z[b.type] ?? 1));
+  for (const o of roads) {
     const kind = o.type === 'road' ? 'road_dirt' : o.type; // legacy compat
 
     const ROAD_STEP = 4 * S;

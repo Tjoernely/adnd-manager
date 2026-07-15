@@ -148,6 +148,32 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M2.7 SHIPPED (2026-07-15)** — three fixes from the M2.6 user test:
+- **FIX 1 — right-click = overlay deletion with confirmation:** right-click
+  now ONLY targets connectors/dividers, never terrain cells (paint another
+  biome over cells instead). Regardless of active tool: nearest overlay of
+  ANY type within 12 SCREEN px (point-to-segment distance) gets a persistent
+  red highlight + a small confirm dialog at the cursor ("Delete Dirt Road?" /
+  Delete / Cancel). Cancel, Escape or clicking outside keeps the overlay.
+  Legacy types resolve via `normalizeOverlayType()` ('road' → Dirt Road,
+  'river' → River) for both display and styling. Verified: legacy road +
+  river found/named/deleted, cancel + escape flows, detection at 3× zoom.
+- **FIX 2 — z-order:** largest connector on top. Rivers draw
+  stream→river→major, roads path→dirt→cobble (stable sort; jitter seeds use
+  ORIGINAL sketch indices so determinism holds; bridges follow their road's
+  order). Verified: a stream crossing map 60's major river disappears under
+  it at the intersection.
+- **FIX 3 — editor zoom/pan + full-window layout:** plain wheel zoom
+  (native non-passive listener, ×1.1/notch, 0.5×–4×, cursor-anchored via
+  scroll fix-up in a zoom-keyed effect), +/− buttons share the same state
+  (viewport-centre anchored); pan via middle-drag or space+left-drag.
+  `.mm-sketch-shell` is now 98vw×96vh (canvas flex-grows between the
+  fixed-width palette/settings panels, which keep their own scroll).
+  Coordinate mapping is zoom+pan-correct everywhere because svgCoords &
+  right-click detection derive from the svg's live boundingClientRect.
+  Verified at 314% zoom: painting hits the exact expected cell, right-click
+  finds and deletes an overlay, middle-drag pans the scroller.
+
 **M2.6 SHIPPED (2026-07-15)** — overlay deletion, river sizes, river mouths,
 2048px output:
 - **DEL 1 — right-click deletes (type-scoped):** `onContextMenu` on the

@@ -92,6 +92,24 @@ const CONNECTOR_BRUSHES = [
 
 const OVERLAY_DIVIDERS = ['canyon', 'chasm'];
 
+// M2.7: legacy overlay types map to their modern equivalent for display
+// and matching ('road' = Dirt Road, 'river' = medium River).
+export function normalizeOverlayType(t) {
+  return t === 'road' ? 'road_dirt' : t;
+}
+const OVERLAY_DISPLAY_NAME = {
+  river_stream: 'Stream',
+  river:        'River',
+  river_major:  'Major River',
+  road_path:    'Path',
+  road_dirt:    'Dirt Road',
+  road_cobble:  'Cobblestone Road',
+  canyon:       'Canyon',
+  chasm:        'Chasm',
+  wall:         'Wall',
+  border:       'Border',
+};
+
 // Random rotation — only for linear/directional tiles where any angle looks natural
 const ROTATE_TILE_KEYS = new Set([
   'river_stream', 'river_main',
@@ -235,8 +253,68 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     });
   }
 
-  // Zoom state for canvas
+  // Zoom state for canvas (M2.7: 0.5×–4×, cursor-anchored wheel zoom)
   const [zoom, setZoom]               = useState(1);
+  const scrollRef                     = useRef(null);   // .tse-canvas-scroll
+  const zoomAnchor                    = useRef(null);   // pending scroll fix-up
+  const panDrag                       = useRef(null);   // middle/space+left drag
+  const spaceDown                     = useRef(false);
+
+  const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
+
+  // Zoom by a factor, keeping the point under (clientX, clientY) stationary.
+  // Omitting the client point anchors at the viewport centre (+/− buttons).
+  const zoomBy = useCallback((factor, clientX, clientY) => {
+    const el = scrollRef.current;
+    setZoom(prev => {
+      const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(prev * factor * 1000) / 1000));
+      if (next === prev || !el) return prev === next ? prev : next;
+      const rect = el.getBoundingClientRect();
+      const mx = clientX != null ? clientX - rect.left : el.clientWidth / 2;
+      const my = clientY != null ? clientY - rect.top  : el.clientHeight / 2;
+      zoomAnchor.current = { mx, my, sl: el.scrollLeft, st: el.scrollTop, prevZoom: prev };
+      return next;
+    });
+  }, []);
+
+  // After the zoomed content resizes, restore the anchor point under the cursor.
+  useEffect(() => {
+    const a = zoomAnchor.current;
+    const el = scrollRef.current;
+    if (!a || !el) return;
+    zoomAnchor.current = null;
+    const scale = zoom / a.prevZoom;
+    el.scrollLeft = (a.sl + a.mx) * scale - a.mx;
+    el.scrollTop  = (a.st + a.my) * scale - a.my;
+  }, [zoom]);
+
+  // Plain mouse wheel zooms (native non-passive listener so preventDefault
+  // actually stops the scroll), ×1.1 per notch, anchored at the cursor.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [zoomBy]);
+
+  // Space held = pan with left-drag (ignored while typing in a field)
+  useEffect(() => {
+    const down = (e) => {
+      if (e.code !== 'Space') return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      spaceDown.current = true;
+      e.preventDefault();                 // don't scroll the page
+    };
+    const up = (e) => { if (e.code === 'Space') spaceDown.current = false; };
+    document.addEventListener('keydown', down);
+    document.addEventListener('keyup', up);
+    return () => { document.removeEventListener('keydown', down); document.removeEventListener('keyup', up); };
+  }, []);
 
   // Settings
   const [scope, setScope]           = useState(initialSpec?.scope ?? 'region');
@@ -312,6 +390,17 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
   function handlePointerDown(e) {
     if (e.button === 2) return;   // right button → handleContextMenu (delete)
+    // M2.7: pan with middle-button drag OR space + left-drag
+    if (e.button === 1 || (e.button === 0 && spaceDown.current)) {
+      e.preventDefault();
+      const el = scrollRef.current;
+      if (el) {
+        panDrag.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      }
+      return;
+    }
+    if (e.button !== 0) return;
     e.preventDefault();
     painting.current = true;
     livePathRef.current = [];
@@ -319,14 +408,25 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     paintAt(e);
   }
 
-  // ── M2.6 DEL 1: right-click deletes (type-scoped) ──────────────────────────
-  // Connector/divider tool active → delete the nearest overlay of EXACTLY the
-  // active type within 12 screen px (min point-to-path distance), with a
-  // short red flash first. Biome brush or erase active → erase cells under
-  // the cursor (current brush size) without switching tool.
-  const [flashOverlay, setFlashOverlay] = useState(null);
-  const flashTimer = useRef(null);
-  useEffect(() => () => window.clearTimeout(flashTimer.current), []);
+  // ── M2.7 FIX 1: right-click = overlay deletion with confirmation ───────────
+  // ONLY connectors/dividers — never terrain cells (paint another biome over
+  // them instead). Regardless of the active tool: nearest overlay of ANY type
+  // within 12 SCREEN px (min point-to-segment distance) gets a persistent red
+  // highlight + a small confirm dialog at the cursor. Legacy types ('road',
+  // 'river') are matched and named via normalizeOverlayType.
+  const [deleteTarget, setDeleteTarget] = useState(null); // { overlay, cx, cy }
+
+  useEffect(() => {
+    if (!deleteTarget) return;
+    const onKey  = (e) => { if (e.key === 'Escape') setDeleteTarget(null); };
+    const onDown = (e) => { if (!e.target.closest?.('.tse-del-pop')) setDeleteTarget(null); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
+    };
+  }, [deleteTarget]);
 
   function distToSegment(p, a, b) {
     const dx = b.x - a.x, dy = b.y - a.y;
@@ -337,25 +437,16 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
   function handleContextMenu(e) {
     e.preventDefault();                                // never the browser menu
-    if (tool === 'erase' || tool === null) {
-      const [cx, cy] = svgCoords(e);
-      setCells(prev => {
-        const next = { ...prev };
-        getCellsInBrush(cx, cy, brushSize).forEach(([x, y]) => delete next[cellKey(x, y)]);
-        return next;
-      });
-      return;
-    }
-    if (tool !== 'overlay' || flashOverlay) return;    // one delete at a time
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
-    // Click position in unzoomed display px (same space as CELL_PX)
+    // Click position in unzoomed display px (same space as CELL_PX);
+    // getBoundingClientRect already reflects zoom (CSS transform) AND pan
+    // (scroll), so this mapping is correct at any zoom level.
     const px = (e.clientX - rect.left) / zoom;
     const py = (e.clientY - rect.top) / zoom;
-    const threshold = 12 / zoom;                       // 12 screen px
+    const threshold = 12 / zoom;                       // 12 SCREEN px
     let best = null, bestD = Infinity;
-    for (const ov of overlays) {
-      if (ov.type !== overlay) continue;               // EXACT active type only
+    for (const ov of overlays) {                       // ALL overlay types
       const pts = (ov.points ?? []).map(p => ({ x: p.x * CELL_PX + CELL_PX / 2, y: p.y * CELL_PX + CELL_PX / 2 }));
       for (let k = 0; k < pts.length; k++) {
         const d = k < pts.length - 1
@@ -365,17 +456,33 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
       }
     }
     if (best && bestD <= threshold) {
-      setFlashOverlay(best);                           // red flash…
-      flashTimer.current = window.setTimeout(() => {   // …then delete
-        setOverlays(prev => prev.filter(o => o !== best));
-        setFlashOverlay(null);
-      }, 220);
+      setDeleteTarget({ overlay: best, cx: e.clientX, cy: e.clientY });
+    } else {
+      setDeleteTarget(null);
     }
   }
 
-  function handlePointerMove(e) { paintAt(e); }
+  function confirmDelete() {
+    const target = deleteTarget?.overlay;
+    if (target) setOverlays(prev => prev.filter(o => o !== target));
+    setDeleteTarget(null);
+  }
+
+  function handlePointerMove(e) {
+    const pan = panDrag.current;
+    if (pan) {
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollLeft = pan.sl - (e.clientX - pan.x);
+        el.scrollTop  = pan.st - (e.clientY - pan.y);
+      }
+      return;
+    }
+    paintAt(e);
+  }
 
   function handlePointerUp() {
+    panDrag.current = null;
     painting.current = false;
     if (tool === 'overlay') {
       const path = livePathRef.current; // ref, not state — see declaration
@@ -690,21 +797,13 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
         {/* ── Canvas ── */}
         <div className="tse-canvas-wrap">
           <div className="tse-zoom-bar">
-            <button className="tse-zoom-btn" title="Zoom in" onClick={() => setZoom(z => Math.min(6, Math.round(z * 1.25 * 100) / 100))}>+</button>
+            <button className="tse-zoom-btn" title="Zoom in" onClick={() => zoomBy(1.25)}>+</button>
             <span className="tse-zoom-label">{Math.round(zoom * 100)}%</span>
-            <button className="tse-zoom-btn" title="Zoom out" onClick={() => setZoom(z => Math.max(1, Math.round(z / 1.25 * 100) / 100))}>−</button>
+            <button className="tse-zoom-btn" title="Zoom out" onClick={() => zoomBy(1 / 1.25)}>−</button>
             <button className="tse-zoom-btn tse-zoom-reset" title="Reset zoom" onClick={() => setZoom(1)}>1:1</button>
-            <span className="tse-zoom-hint">Ctrl+scroll to zoom</span>
+            <span className="tse-zoom-hint">Scroll to zoom · middle-drag / space+drag to pan · right-click deletes rivers &amp; roads</span>
           </div>
-          <div className="tse-canvas-scroll"
-            onWheel={e => {
-              if (!e.ctrlKey && !e.metaKey) return; // plain wheel → native scroll (both axes)
-              e.preventDefault();
-              setZoom(z => {
-                const next = e.deltaY < 0 ? z * 1.2 : z / 1.2;
-                return Math.max(1, Math.min(6, Math.round(next * 100) / 100));
-              });
-            }}>
+          <div className="tse-canvas-scroll" ref={scrollRef}>
           <div style={{ width: totalPx * zoom, height: totalPx * zoom, position: 'relative', flexShrink: 0 }}>
           <svg ref={svgRef} width={totalPx} height={totalPx}
             className="tse-canvas"
@@ -713,7 +812,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            onContextMenu={handleContextMenu}>
+            onContextMenu={handleContextMenu}
+            onMouseDown={e => { if (e.button === 1) e.preventDefault(); }}>
 
             {/* Grid background */}
             <rect width={totalPx} height={totalPx} fill="#1a1a1a" />
@@ -742,12 +842,13 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
               );
             })}
 
-            {/* Committed overlays — per-type style (red flash while deleting) */}
+            {/* Committed overlays — per-type style (red highlight while a
+                delete confirmation is pending for that overlay) */}
             {overlays.map((ov, i) => {
               if (!ov.points?.length || ov.points.length < 2) return null;
               const pts = ov.points.map(p => `${p.x*CELL_PX+CELL_PX/2},${p.y*CELL_PX+CELL_PX/2}`).join(' ');
-              const s = OVERLAY_STYLE[ov.type] ?? { color: '#888', width: 2 };
-              const flashing = ov === flashOverlay;
+              const s = OVERLAY_STYLE[normalizeOverlayType(ov.type)] ?? OVERLAY_STYLE[ov.type] ?? { color: '#888', width: 2 };
+              const flashing = ov === deleteTarget?.overlay;
               return (
                 <g key={i}>
                   {flashing && (
@@ -781,6 +882,19 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
             {cellArr.length} cells painted · {overlays.length} overlays
             {overlays.length > 0 && <button className="tse-clear-link" onClick={clearOverlays}>clear overlays</button>}
           </div>
+
+          {/* M2.7 — delete-overlay confirmation at the cursor */}
+          {deleteTarget && (
+            <div className="tse-del-pop" style={{ left: deleteTarget.cx + 4, top: deleteTarget.cy + 4 }}>
+              <div className="tse-del-pop-title">
+                Delete {OVERLAY_DISPLAY_NAME[normalizeOverlayType(deleteTarget.overlay.type)] ?? deleteTarget.overlay.type}?
+              </div>
+              <div className="tse-del-pop-btns">
+                <button className="tse-del-pop-del" onClick={confirmDelete}>Delete</button>
+                <button className="tse-del-pop-cancel" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Settings sidebar ── */}

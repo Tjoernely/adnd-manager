@@ -2157,8 +2157,10 @@
   justify-content: center;
 }
 .mm-sketch-shell {
-  width: min(96vw, 1040px);
-  height: min(90vh, 680px);
+  /* M2.7: use the whole window — the canvas area flex-grows between the
+     fixed-width toolbox and settings panels (each with their own scroll). */
+  width: 98vw;
+  height: 96vh;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 8px 48px rgba(0,0,0,0.8);
