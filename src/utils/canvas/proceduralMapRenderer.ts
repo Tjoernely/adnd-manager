@@ -9,9 +9,12 @@
  * always renders the exact same map.
  *
  * Milestones:
- *   M1 (this file): biome interiors (continuous patterns) + marching-squares
- *      water/land contour + layered painted coast (glow / land / sand / foam).
- *   M2: rivers + roads.  M3: lake shores + biome blending.  M4: relief stamps.
+ *   M1: biome interiors (continuous patterns) + marching-squares water/land
+ *       contour + layered painted coast (glow / land / sand / foam).
+ *   M1.5: border clamp, coastal-as-water, seamless swamp tile.
+ *   M3 (pulled before M2): biome-to-biome blending + narrow lake shores.
+ *   M2 (this pass): rivers, roads, canyons, chasms from spec.overlays.
+ *   M4: relief stamps (pending).
  */
 
 import type { SketchSpec } from '../../rules-engine/mapTypes';
@@ -63,9 +66,21 @@ const SAND_INNER  = '#eed69e';
 const FOAM        = '#f8fafa';
 const GLOW        = '#3aa8a8';
 
-// Sand band half-width (px at 1024) and foam offset
-const SAND_HALF   = 8;
-const FOAM_OFFSET = 11;
+// Per-water-type coast band styles (M3 rest: lakes get narrower bands).
+// glow: [alpha, strokeWidth] passes. Widths in px at 1024.
+const COAST_STYLE = {
+  ocean: { glow: [[0.5, 46], [0.4, 30]], glowBlur: 18, sandHalf: 8, foamWidth: 3, foamOffset: 11 },
+  lake:  { glow: [[0.5, 16], [0.4, 10]], glowBlur: 8,  sandHalf: 4, foamWidth: 2, foamOffset: 7  },
+} as const;
+
+// Overlay (river/road/canyon/chasm) palette — M2
+const RIVER_UNDER  = '#1a5a8a';
+const RIVER_CORE   = '#4a9aca';
+const RIVER_LIGHT  = '#7ec8e8';
+const ROAD_UNDER   = '#6a5238';
+const ROAD_CORE    = '#8a6a4a';
+const CANYON_DARK  = '#3a2a1a';
+const CHASM_DARK   = '#0a0a0a';
 
 // ── Seeded PRNG ──────────────────────────────────────────────────────────────
 
@@ -163,6 +178,113 @@ function addPolyToPath(path: Path2D, pts: Pt[]): void {
   path.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) path.lineTo(pts[i].x, pts[i].y);
   path.closePath();
+}
+
+// ── Open-polyline helpers (overlays: rivers / roads / canyons / chasms) ─────
+
+function chaikinOpen(pts: Pt[], iterations: number): Pt[] {
+  let p = pts;
+  for (let k = 0; k < iterations; k++) {
+    if (p.length < 3 || p.length > 6000) break;
+    const out: Pt[] = [p[0]];
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1];
+      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
+      out.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    out.push(p[p.length - 1]);
+    p = out;
+  }
+  return p;
+}
+
+/** Unit normals along an open polyline (one-sided at the endpoints). */
+function openNormals(pts: Pt[]): Pt[] {
+  const n = pts.length;
+  const out = new Array<Pt>(n);
+  for (let i = 0; i < n; i++) {
+    const p = pts[Math.max(0, i - 1)];
+    const q = pts[Math.min(n - 1, i + 1)];
+    const tx = q.x - p.x, ty = q.y - p.y;
+    const len = Math.hypot(tx, ty) || 1;
+    out[i] = { x: ty / len, y: -tx / len };
+  }
+  return out;
+}
+
+/**
+ * Light layered-sine jitter for open overlay paths (~2-3px), tapered to zero
+ * at the endpoints so mouths/junctions stay where the user drew them.
+ */
+function jitterOpen(pts: Pt[], normals: Pt[], rng: () => number): Pt[] {
+  const n = pts.length;
+  const s = new Array<number>(n);
+  let L = 0;
+  for (let i = 0; i < n; i++) {
+    s[i] = L;
+    if (i < n - 1) L += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+  }
+  if (L < 24) return pts;
+  const f1 = L / 180, f2 = L / 70, f3 = L / 30;
+  const p1 = rng() * Math.PI * 2, p2 = rng() * Math.PI * 2, p3 = rng() * Math.PI * 2;
+  const TAU = Math.PI * 2;
+  return pts.map((p, i) => {
+    const u = s[i] / L;
+    const taper = Math.min(1, s[i] / 20, (L - s[i]) / 20);
+    const d = (1.4 * Math.sin(TAU * f1 * u + p1)
+             + 0.8 * Math.sin(TAU * f2 * u + p2)
+             + 0.5 * Math.sin(TAU * f3 * u + p3)) * taper;
+    return { x: p.x + normals[i].x * d, y: p.y + normals[i].y * d };
+  });
+}
+
+function strokeOpenPoly(
+  ctx: CanvasRenderingContext2D,
+  pts: Pt[],
+  width: number,
+  color: string,
+  alpha = 1,
+  dash: number[] | null = null,
+): void {
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap  = 'round';
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = width;
+  if (dash) ctx.setLineDash(dash);
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Canyon/chasm: two parallel edge lines ±offset with a dark fill between. */
+function drawGorge(
+  ctx: CanvasRenderingContext2D,
+  pts: Pt[],
+  offset: number,
+  color: string,
+  fillAlpha: number,
+): void {
+  if (pts.length < 2) return;
+  const ns = openNormals(pts);
+  const a = pts.map((p, i) => ({ x: p.x + ns[i].x * offset, y: p.y + ns[i].y * offset }));
+  const b = pts.map((p, i) => ({ x: p.x - ns[i].x * offset, y: p.y - ns[i].y * offset }));
+  ctx.save();
+  ctx.globalAlpha = fillAlpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(a[0].x, a[0].y);
+  for (let i = 1; i < a.length; i++) ctx.lineTo(a[i].x, a[i].y);
+  for (let i = b.length - 1; i >= 0; i--) ctx.lineTo(b[i].x, b[i].y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  strokeOpenPoly(ctx, a, 3, color);
+  strokeOpenPoly(ctx, b, 3, color);
 }
 
 // ── Land field + marching squares ────────────────────────────────────────────
@@ -407,8 +529,18 @@ export async function renderProceduralMap(
   const field = buildCornerField(land);
   const rawContours = marchingSquares(field);
 
-  type Contour = { pts: Pt[]; normals: Pt[]; landSign: number; length: number };
+  type Contour = {
+    pts: Pt[]; normals: Pt[]; landSign: number; length: number;
+    style: (typeof COAST_STYLE)['ocean' | 'lake'];
+  };
   const contours: Contour[] = [];
+
+  // Which biome cell sits at a pixel position (null = unpainted / off-grid)
+  const biomePxAt = (x: number, y: number): string | null => {
+    const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+    if (cx < 0 || cx >= GRID || cy < 0 || cy >= GRID) return null;
+    return biomeAt[cy * GRID + cx];
+  };
 
   // Bilinear sample of the corner field at pixel coords (for landward detection)
   const fieldAtPx = (x: number, y: number): number => {
@@ -461,7 +593,20 @@ export async function renderProceduralMap(
                 - fieldAtPx(p.x - n.x * 5, p.y - n.y * 5);
     }
     const landSign = landward >= 0 ? 1 : -1;
-    contours.push({ pts, normals, landSign, length: total });
+
+    // Lake or ocean shore? Sample the biome on the WATER side of the contour —
+    // lake-enclosing contours get the narrow band style (M3 rest).
+    let lakeVotes = 0, seaVotes = 0;
+    for (let k = 0; k < samples; k++) {
+      const i = Math.floor((k / samples) * pts.length);
+      const p = pts[i], n = normals[i];
+      const b = biomePxAt(p.x - n.x * landSign * 6, p.y - n.y * landSign * 6);
+      if (b === 'lake') lakeVotes++;
+      else if (b === 'ocean' || b === 'coastal' || b === null) seaVotes++;
+    }
+    const style = lakeVotes > seaVotes ? COAST_STYLE.lake : COAST_STYLE.ocean;
+
+    contours.push({ pts, normals, landSign, length: total, style });
   }
 
   // Combined land path (evenodd: outer shells fill, lake holes cut out)
@@ -469,16 +614,21 @@ export async function renderProceduralMap(
   for (const c of contours) addPolyToPath(landPath, c.pts);
 
   // ── STEP 3a: teal coast glow (under the land fill) ────────────────────────
+  // Per contour: lakes glow narrower than the ocean (COAST_STYLE).
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.lineCap  = 'round';
-  for (const pass of [{ alpha: 0.5, width: 46 }, { alpha: 0.4, width: 30 }]) {
-    ctx.globalAlpha = pass.alpha;
-    ctx.strokeStyle = GLOW;
-    ctx.lineWidth   = pass.width;
-    ctx.shadowColor = GLOW;
-    ctx.shadowBlur  = 18;
-    ctx.stroke(landPath);
+  for (const c of contours) {
+    const path = new Path2D();
+    addPolyToPath(path, c.pts);
+    for (const [alpha, width] of c.style.glow) {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = GLOW;
+      ctx.lineWidth   = width;
+      ctx.shadowColor = GLOW;
+      ctx.shadowBlur  = c.style.glowBlur;
+      ctx.stroke(path);
+    }
   }
   ctx.restore();
 
@@ -519,12 +669,38 @@ export async function renderProceduralMap(
   }
   ctx.restore();
 
-  // ── STEP 3c: sand band — filled ring polygon (offset curves ±8px) ─────────
+  // ── M2: rivers, canyons, chasms — AFTER biome fill/blending, BEFORE the
+  // sand band, so a river mouth runs naturally UNDER the beach into the sea.
+  const overlays = (spec.overlays ?? []).filter(o => o.points && o.points.length >= 2);
+  const baseSeed = seedFromMapId(mapId);
+  const prepared = overlays.map((o, idx) => {
+    const orng = mulberry32((baseSeed + idx) >>> 0); // seed per overlay
+    let pts = o.points.map(p => ({ x: (p.x + 0.5) * CELL, y: (p.y + 0.5) * CELL }));
+    pts = chaikinOpen(pts, 3);
+    pts = jitterOpen(pts, openNormals(pts), orng);
+    return { type: o.type as string, pts };
+  });
+
+  for (const o of prepared) {
+    if (o.type === 'river') {
+      strokeOpenPoly(ctx, o.pts, 9, RIVER_UNDER, 0.9);
+      strokeOpenPoly(ctx, o.pts, 5, RIVER_CORE);
+      strokeOpenPoly(ctx, o.pts, 2, RIVER_LIGHT, 0.6);
+    } else if (o.type === 'canyon') {
+      drawGorge(ctx, o.pts, 3, CANYON_DARK, 0.4);
+    } else if (o.type === 'chasm') {
+      drawGorge(ctx, o.pts, 5, CHASM_DARK, 0.75);
+    }
+  }
+
+  // ── STEP 3c: sand band — filled ring polygon (offset curves ±sandHalf) ────
   // NOT a wide polyline: offset-ring fill avoids visible joint breaks.
+  // Lakes get the narrow band (±4px), the ocean the wide one (±8px).
   for (const c of contours) {
+    const half = c.style.sandHalf;
     const landN = c.normals.map(n => ({ x: n.x * c.landSign, y: n.y * c.landSign }));
-    const outer = offsetClosed(c.pts, landN, +SAND_HALF); // landward edge
-    const inner = offsetClosed(c.pts, landN, -SAND_HALF); // seaward edge
+    const outer = offsetClosed(c.pts, landN, +half); // landward edge
+    const inner = offsetClosed(c.pts, landN, -half); // seaward edge
 
     const ring = new Path2D();
     addPolyToPath(ring, outer);
@@ -535,7 +711,7 @@ export async function renderProceduralMap(
     // Lighter inner (landward) edge of the band
     const hi = new Path2D();
     addPolyToPath(hi, outer);
-    addPolyToPath(hi, offsetClosed(c.pts, landN, SAND_HALF * 0.25));
+    addPolyToPath(hi, offsetClosed(c.pts, landN, half * 0.25));
     ctx.save();
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = SAND_INNER;
@@ -552,7 +728,6 @@ export async function renderProceduralMap(
   ctx.clip(waterClip, 'evenodd');
 
   ctx.strokeStyle = FOAM;
-  ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
   ctx.shadowColor = FOAM;
@@ -560,8 +735,9 @@ export async function renderProceduralMap(
   ctx.globalAlpha = 0.8;
 
   for (const c of contours) {
+    ctx.lineWidth = c.style.foamWidth;
     const seaN = c.normals.map(n => ({ x: -n.x * c.landSign, y: -n.y * c.landSign }));
-    const foamPts = offsetClosed(c.pts, seaN, FOAM_OFFSET);
+    const foamPts = offsetClosed(c.pts, seaN, c.style.foamOffset);
     const n = foamPts.length;
     let i = 0;
     while (i < n - 2) {
@@ -578,6 +754,13 @@ export async function renderProceduralMap(
     }
   }
   ctx.restore();
+
+  // ── M2: roads — drawn LAST, on top of all terrain (incl. the sand band) ──
+  for (const o of prepared) {
+    if (o.type !== 'road') continue;
+    strokeOpenPoly(ctx, o.pts, 5, ROAD_UNDER, 0.5);            // worn edge
+    strokeOpenPoly(ctx, o.pts, 3, ROAD_CORE, 1, [10, 6]);      // dashed core
+  }
 
   return canvas.toDataURL('image/png');
 }

@@ -90,6 +90,31 @@ plus biome blending pulled FORWARD (order swapped: M3 before M2 after test):
   swamp, soft biome borders; lake + 1-cell + 2×2 islands intact).
 - **M2 (rivers/roads) awaits user test of M1.5+M3.**
 
+**M2 + lake shores SHIPPED (2026-07-15)** — overlays from `spec.overlays` now
+render procedurally; only M4 (relief stamps) remains:
+- **Path prep (all overlay types):** grid points → cell-center px, Chaikin ×3,
+  light layered-sine jitter (~2-3px) tapered to zero at the endpoints (mouths
+  and junctions stay where drawn). Jitter is seeded **per overlay**
+  (`mapSeed + overlay-index`) and consumes an independent PRNG, so the coast's
+  own jitter/foam are byte-identical to M1.5 for the same sketch.
+- **River** (3 layers, round joins/caps): underlay w9 `#1a5a8a` @0.9, core w5
+  `#4a9aca`, highlight w2 `#7ec8e8` @0.6. Drawn AFTER biome fill/blending,
+  BEFORE the sand band → the mouth runs under the beach into the sea.
+- **Road:** worn edge w5 `#6a5238` @0.5 + dashed core w3 `#8a6a4a`
+  `setLineDash([10,6])`. Drawn LAST — on top of all terrain incl. the beach.
+- **Canyon / chasm:** two parallel edge lines offset along the normal
+  (±3px / ±5px, w3) with a dark fill between (`#3a2a1a` @0.4 / `#0a0a0a`
+  @0.75). Drawn with the rivers (under the coast bands).
+- **Lake shores (M3 rest):** contours are classified by sampling the biome on
+  the water side (majority vote lake vs ocean/coastal) → `COAST_STYLE`:
+  lakes get glow 16/10 (blur 8), sand band ±4px, foam w2 offset 7; the ocean
+  keeps 46/30 (blur 18), ±8px, w3 offset 11.
+- Verified locally (harness with river→ocean, river→lake, road crossing the
+  river, canyon, chasm): 545 ms, byte-identical re-render, seed varies; visual
+  pass — river mouth disappears under the beach, lake band visibly narrower,
+  road dashes on top, gorges read as cuts.
+- **M4 (relief stamps) awaits user test of M2.**
+
 ---
 
 ## 1. Server Setup
