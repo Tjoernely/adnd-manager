@@ -148,6 +148,21 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4 sprites SHIPPED (2026-07-15)** — the 5 relief-stamp sprites for M4 are
+generated and deployed: `public/tiles/sprites/{mountain_large,mountain_small,
+hill,volcano,volcano_dormant}.png`, 512×512 transparent-background PNGs
+(repo-tracked; the build copies them to `server/public/tiles/sprites/`, served
+at `/tiles/sprites/`). Generated with **gpt-image-1** (`background:
+"transparent"` — the only project image model with true alpha; Gemini outputs
+JPEG), high quality, 1024→512 bicubic downscale. Alpha verified
+(32bppArgb, transparent corners) and style-checked composited over
+`plains_flat` — painterly top-down, matches the tile set. Regeneration tool:
+`scripts/generate-relief-sprites.mjs` (reads `OPENAI_API_KEY` from env or
+`server/.env`; ~$0.85 for all 5). NOTE: a local `server/.env` now exists with
+the OpenAI key (sourced from the owner's `app info.xlsx`; gitignored, never
+printed). **M4 renderer work (stamping these onto relief cells) is now
+unblocked — the remaining milestone.**
+
 **M2.7 SHIPPED (2026-07-15)** — three fixes from the M2.6 user test:
 - **FIX 1 — right-click = overlay deletion with confirmation:** right-click
   now ONLY targets connectors/dividers, never terrain cells (paint another
