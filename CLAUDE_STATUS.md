@@ -1,6 +1,29 @@
 # AD&D Manager — Project Status
 
-_Last updated: 2026-07-05_
+_Last updated: 2026-07-15_
+
+---
+
+## ⚡ Direction change (2026-07-15): procedural map renderer is the new DEFAULT
+
+**AI-based map generation (Gemini / GPT-Image) is paused as the default path.**
+New direction: a **procedural map renderer** — deterministic, 100% client-side,
+no AI anywhere in the render pipeline. Gemini stays available as an **optional**
+renderer in the dropdown only.
+
+- New file: `src/utils/canvas/proceduralMapRenderer.ts` — SketchSpec in,
+  1024×1024 PNG dataURL out (`canvas.toDataURL`), no server calls during render.
+- Determinism: seeded PRNG (mulberry32) with the map id as seed — same sketch
+  always renders the same map.
+- Pipeline (7 steps): biome interiors as continuous `createPattern` fills →
+  marching-squares water/land contour (Chaikin + seeded jitter) → layered coast
+  (teal glow / land fill / filled sand ring polygon / broken foam strokes) →
+  lake shores → biome-to-biome blending → rivers/roads → relief stamps.
+- Generate flow: client render → `POST /api/maps/:id/image { imageDataUrl }`
+  (extended endpoint, reuses existing persist logic) → `image_url` updated.
+  No job queue, no polling.
+- Milestones: **M1** interiors+coast (steps 1–3) → user test → **M2**
+  rivers/roads → **M3** lakes+blending → **M4** relief stamps.
 
 ---
 
