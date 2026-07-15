@@ -9,6 +9,11 @@
   border-radius: 8px;
   overflow: hidden;
   font-family: 'Crimson Text', Georgia, serif;
+  /* Fill the host (mm-sketch-shell is 680px, overflow:hidden). Without an
+     explicit height the root grew to its ~1800px content height and the
+     shell CLIPPED it — no palette scrollbar, Connectors/Dividers
+     unreachable (M2.5 bug 1a). */
+  height: 100%;
   max-height: 90vh;
 }
 

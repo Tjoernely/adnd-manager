@@ -60,6 +60,11 @@ const COASTAL_TINT       = '#4a9aa8';
 const COASTAL_TINT_ALPHA = 0.55;
 const COASTAL_BLUR_PX    = 12;
 
+// Reef details on coastal cells with variant='reef' (M2.5 bugfix: the reef
+// tile used to collapse into plain shallow water).
+const REEF_DARK  = '#2a6a6a';
+const REEF_FOAM  = '#d8f0f0';
+
 // Coast palette
 const SAND        = '#e2c78d';
 const SAND_INNER  = '#eed69e';
@@ -649,6 +654,52 @@ export async function renderProceduralMap(
     ctx.globalAlpha = COASTAL_TINT_ALPHA;
     ctx.drawImage(tint, 0, 0);
     ctx.restore();
+  }
+
+  // ── Reef details: coastal cells with variant='reef' (legacy: tileKey
+  // 'reef') get scattered dark submerged-rock dots + a few foam specks,
+  // clipped to the reef area through a 6px-blurred mask (organic edge).
+  const reefCells = cells.filter(c =>
+    ((c as { variant?: string }).variant === 'reef' ||
+     (c as { tileKey?: string }).tileKey === 'reef') &&
+    c.x >= 0 && c.x < GRID && c.y >= 0 && c.y < GRID);
+  if (reefCells.length > 0) {
+    const reefRng = mulberry32((seedFromMapId(mapId) ^ 0x5eef) >>> 0);
+    const [dots, dctx] = offscreen();
+    for (const c of reefCells) {
+      const px = c.x * CELL, py = c.y * CELL;
+      const nDark = 8 + Math.floor(reefRng() * 5);      // 8-12 dark spots
+      for (let i = 0; i < nDark; i++) {
+        const r = 1 + reefRng() * 1;                    // 2-4px diameter
+        dctx.beginPath();
+        dctx.arc(px + reefRng() * CELL, py + reefRng() * CELL, r, 0, Math.PI * 2);
+        dctx.fillStyle = REEF_DARK;
+        dctx.globalAlpha = 0.65 + reefRng() * 0.25;
+        dctx.fill();
+      }
+      const nFoam = 2 + Math.floor(reefRng() * 3);      // a few foam specks
+      for (let i = 0; i < nFoam; i++) {
+        dctx.beginPath();
+        dctx.arc(px + reefRng() * CELL, py + reefRng() * CELL, 0.5 + reefRng() * 0.5, 0, Math.PI * 2);
+        dctx.fillStyle = REEF_FOAM;
+        dctx.globalAlpha = 0.8;
+        dctx.fill();
+      }
+    }
+    dctx.globalAlpha = 1;
+    const [reefHard, rhctx] = offscreen();
+    rhctx.fillStyle = '#fff';
+    const reefPath = new Path2D();
+    for (const c of reefCells) reefPath.rect(c.x * CELL, c.y * CELL, CELL, CELL);
+    rhctx.fill(reefPath);
+    const [reefSoft, rsctx] = offscreen();
+    rsctx.filter = 'blur(6px)';
+    rsctx.drawImage(reefHard, 0, 0);
+    rsctx.filter = 'none';
+    dctx.globalCompositeOperation = 'destination-in';
+    dctx.drawImage(reefSoft, 0, 0);
+    dctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(dots, 0, 0);
   }
 
   const anyLand = land.some(v => v === 1);

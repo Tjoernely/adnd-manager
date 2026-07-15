@@ -263,6 +263,8 @@ export interface SketchCell {
   y:       number;   // 0–31
   biome:   BiomeType;
   relief?: ReliefType;
+  tileKey?: string;  // exact editor tile (e.g. 'reef', 'coast_flat')
+  variant?: string;  // sub-biome detail, e.g. 'reef' on a coastal cell (M2.5 bugfix)
 }
 
 export interface SketchOverlay {

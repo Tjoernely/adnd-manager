@@ -68,7 +68,7 @@ const TILE_PALETTE = [
   { id: 'ocean',    emoji: '🌊', category: 'Ocean',    tiles: [
     { key: 'ocean_deep',    label: 'Deep',    biome: 'ocean',   relief: undefined },
     { key: 'ocean_shallow', label: 'Shallow', biome: 'coastal', relief: undefined },
-    { key: 'reef',          label: 'Reef',    biome: 'coastal', relief: undefined },
+    { key: 'reef',          label: 'Reef',    biome: 'coastal', relief: undefined, variant: 'reef' },
   ]},
   { id: 'coastal',  emoji: '🏖', category: 'Coastal',  tiles: [
     { key: 'coast_flat', label: 'Coast', biome: 'coastal', relief: undefined },
@@ -247,8 +247,12 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   const [genStatus, setGenStatus]   = useState('');
   const [fillDialog, setFillDialog] = useState(null); // null | { emptyCount, mode, biome }
 
-  // Live overlay path — state so it renders in real-time during drawing
+  // Live overlay path — state so it renders in real-time during drawing.
+  // A ref mirrors it as the source of truth: pointerup must read the CURRENT
+  // path, not the render-time closure (fast strokes batch pointer events into
+  // one frame and the stale state silently dropped the stroke — M2.5 bug 1).
   const [liveOverlayPath, setLiveOverlayPath] = useState([]);
+  const livePathRef = useRef([]);
   const painting = useRef(false);
 
   const svgRef = useRef(null);
@@ -277,12 +281,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
     }
 
     if (tool === 'overlay') {
-      const coord = { x: cx, y: cy };
-      setLiveOverlayPath(prev => {
-        if (prev.length && prev[prev.length-1].x === cx && prev[prev.length-1].y === cy)
-          return prev;
-        return [...prev, coord];
-      });
+      const last = livePathRef.current[livePathRef.current.length - 1];
+      if (!last || last.x !== cx || last.y !== cy) {
+        livePathRef.current = [...livePathRef.current, { x: cx, y: cy }];
+        setLiveOverlayPath(livePathRef.current);
+      }
       return;
     }
 
@@ -293,7 +296,8 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
         getCellsInBrush(cx, cy, brushSize).forEach(([x, y]) => {
           const k = cellKey(x, y);
           const cell = { x, y, biome: activeTile.biome, tileKey: activeTile.key };
-          if (activeTile.relief) cell.relief = activeTile.relief;
+          if (activeTile.relief)  cell.relief  = activeTile.relief;
+          if (activeTile.variant) cell.variant = activeTile.variant;
           next[k] = cell;
         });
         return next;
@@ -304,6 +308,7 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
   function handlePointerDown(e) {
     e.preventDefault();
     painting.current = true;
+    livePathRef.current = [];
     setLiveOverlayPath([]);
     paintAt(e);
   }
@@ -312,10 +317,11 @@ export const TerrainSketchEditor = forwardRef(function TerrainSketchEditor({ ini
 
   function handlePointerUp() {
     painting.current = false;
-    if (tool === 'overlay' && liveOverlayPath.length >= 2) {
-      setOverlays(prev => [...prev, { type: overlay, points: liveOverlayPath }]);
-      setLiveOverlayPath([]);
-    } else if (tool === 'overlay') {
+    if (tool === 'overlay') {
+      const path = livePathRef.current; // ref, not state — see declaration
+      if (path.length >= 2)
+        setOverlays(prev => [...prev, { type: overlay, points: path }]);
+      livePathRef.current = [];
       setLiveOverlayPath([]);
     }
   }

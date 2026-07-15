@@ -148,6 +148,33 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M2.5 hotfixes (2026-07-15)** — two bugs from the M2.5 user test:
+- **BUG 1 (connectors unusable) — TWO real causes found & fixed:**
+  1. `.tse-root` had `max-height: 90vh` but no `height`, so it grew to its
+     ~1800px content height inside the 680px `overflow:hidden`
+     `.mm-sketch-shell` — the palette never got a scrollbar and the
+     Connectors/Dividers sections were CLIPPED, unreachable in production
+     (a wrapper-height bug, invisible in a taller test harness). Fix:
+     `height: 100%` on `.tse-root`. Verified against a production-identical
+     680px shell: palette scrolls (630→1756px), all 6 chips reachable.
+  2. Fast strokes were silently dropped: `handlePointerUp` read
+     `liveOverlayPath` from a stale render closure — pointer events batched
+     into one frame committed nothing. Fix: `livePathRef` mirrors the path as
+     source of truth; pointerup reads the ref. Verified: burst-dispatched
+     pointerdown/move/up now commits an overlay for every connector type.
+  - New untracked harness `dev-editor-test.html` mounts TerrainSketchEditor
+    standalone (vite dev) for editor interaction tests without auth.
+- **BUG 2 (reef collapsed into shallow water):** reef is now distinct data —
+  `SketchCell.variant: 'reef'` (biome stays `coastal`, marching squares
+  unchanged; `tileKey` also typed). The reef palette chip stamps
+  `variant:'reef'`; `paintAt` persists it. Renderer: cells with
+  `variant==='reef'` (legacy fallback: `tileKey==='reef'`, so OLD saved
+  sketches work with no migration) get scattered dark submerged-rock dots
+  (`#2a6a6a`, 2-4px, 8-12/cell) + a few foam specks (`#d8f0f0`, 1-2px), all
+  seeded (`mapSeed ^ 0x5eef`) and clipped through a 6px-blurred mask of the
+  reef-cell area (organic edge). Verified in the harness (reef patch in the
+  coastal band renders speckles; deterministic, 426 ms; 32/32 vitest).
+
 ---
 
 ## 1. Server Setup
