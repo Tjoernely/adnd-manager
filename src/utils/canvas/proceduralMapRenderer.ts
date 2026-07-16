@@ -14,7 +14,8 @@
  *   M1.5: border clamp, coastal-as-water, seamless swamp tile.
  *   M3 (pulled before M2): biome-to-biome blending + narrow lake shores.
  *   M2 (this pass): rivers, roads, canyons, chasms from spec.overlays.
- *   M4: relief stamps (pending).
+ *   M4: relief stamps — painterly sprites (/tiles/sprites/) stamped onto
+ *       relief cells, cluster-aware, back-to-front, seeded per cell.
  */
 
 import type { SketchSpec } from '../../rules-engine/mapTypes';
@@ -102,6 +103,21 @@ const RIVER_TYPES = new Set(Object.keys(RIVER_STYLE));
 // per-overlay jitter seed uses the ORIGINAL index and is unaffected.
 const RIVER_Z: Record<string, number> = { river_stream: 0, river: 1, river_major: 2 };
 const ROAD_Z:  Record<string, number> = { road_path: 0, road: 1, road_dirt: 1, road_cobble: 2 };
+
+// ── M4: relief stamps ────────────────────────────────────────────────────────
+// Sprite pick: volcanic+mountains → volcano; mountains → mountain_large in
+// the cluster interior, mountain_small at the cluster edge; hills → hill.
+// (volcano_dormant is reserved for later variant control.)
+const SPRITE_FILES = ['mountain_large', 'mountain_small', 'hill', 'volcano'] as const;
+
+/** Classify a cell's relief for stamping (legacy values + tileKey fallback). */
+function reliefKind(c: { relief?: unknown; tileKey?: unknown }): 'mountain' | 'hill' | null {
+  const r  = typeof c.relief  === 'string' ? c.relief  : '';
+  const tk = typeof c.tileKey === 'string' ? c.tileKey : '';
+  if (r === 'mountains' || r === 'mountainous' || tk.includes('mountain')) return 'mountain';
+  if (r === 'hills' || r === 'hilly' || tk.includes('hills')) return 'hill';
+  return null;
+}
 const ROAD_UNDER   = '#6a5238';
 const ROAD_CORE    = '#8a6a4a';
 const CANYON_DARK  = '#3a2a1a';
@@ -632,8 +648,15 @@ export async function renderProceduralMap(
   if (hasLake) tileKeys.add('inland_lake');
   for (const b of landBiomes) if (BIOME_PATTERN_TILE[b]) tileKeys.add(BIOME_PATTERN_TILE[b]);
 
+  // M4: does the sketch have relief cells at all? Load sprites only if so.
+  const hasRelief = cells.some(c => reliefKind(c as { relief?: unknown; tileKey?: unknown }) !== null);
+
   const tiles: Record<string, HTMLImageElement | null> = {};
-  await Promise.all([...tileKeys].map(async k => { tiles[k] = await loadImage(`/tiles/${k}.png`); }));
+  const sprites: Record<string, HTMLImageElement | null> = {};
+  await Promise.all([
+    ...[...tileKeys].map(async k => { tiles[k] = await loadImage(`/tiles/${k}.png`); }),
+    ...(hasRelief ? SPRITE_FILES.map(async k => { sprites[k] = await loadImage(`/tiles/sprites/${k}.png`); }) : []),
+  ]);
 
   const offscreen = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
     const c = document.createElement('canvas');
@@ -1045,6 +1068,83 @@ export async function renderProceduralMap(
     }
   }
   ctx.restore();
+
+  // ── M4: relief stamps — AFTER biome/blending/coast, BEFORE roads ─────────
+  // One stamp per relief cell, drawn north→south (back-to-front) so overlaps
+  // read correctly. Sprite pick: volcanic+mountains → volcano; mountains →
+  // mountain_large in the cluster interior (≥6 of 8 neighbours are mountain
+  // cells), mountain_small at the edge; hills → hill. Position jitter and
+  // size variation are seeded PER CELL (independent of iteration order), and
+  // all measurements are in cell units so the global 2048px scale holds.
+  if (hasRelief) {
+    const kindAt = new Array<'mountain' | 'hill' | null>(GRID * GRID).fill(null);
+    for (const c of cells) {
+      if (c.x < 0 || c.x >= GRID || c.y < 0 || c.y >= GRID) continue;
+      if (WATER_BIOMES.has(c.biome)) continue;
+      kindAt[c.y * GRID + c.x] = reliefKind(c as { relief?: unknown; tileKey?: unknown });
+    }
+    const isMountain = (x: number, y: number): boolean =>
+      x >= 0 && x < GRID && y >= 0 && y < GRID && kindAt[y * GRID + x] === 'mountain';
+
+    type Stamp = { img: HTMLImageElement; x: number; y: number; w: number; z: number };
+    const stamps: Stamp[] = [];
+
+    for (const c of cells) {
+      if (c.x < 0 || c.x >= GRID || c.y < 0 || c.y >= GRID) continue;
+      const kind = kindAt[c.y * GRID + c.x];
+      if (!kind) continue;
+
+      // Deterministic per-cell PRNG (same seed regardless of cell order)
+      const cellRng = mulberry32((seedFromMapId(mapId) ^ ((c.y * GRID + c.x) * 2654435761)) >>> 0);
+
+      let spriteKey: string;
+      let baseW: number; // stamp width in cells
+      if (kind === 'mountain') {
+        if (c.biome === 'volcanic') {
+          spriteKey = 'volcano';
+          baseW = 1.8 + cellRng() * 0.5;
+        } else {
+          let nbs = 0;
+          for (let dy = -1; dy <= 1; dy++)
+            for (let dx = -1; dx <= 1; dx++)
+              if ((dx || dy) && isMountain(c.x + dx, c.y + dy)) nbs++;
+          const interior = nbs >= 6;
+          spriteKey = interior ? 'mountain_large' : 'mountain_small';
+          baseW = interior ? 2.0 + cellRng() * 0.5 : 1.3 + cellRng() * 0.4;
+        }
+      } else {
+        // Hills: thin out the interior of large hill fields (seeded) — a
+        // full stamp per cell reads as a repetitive bubble grid. Field edges
+        // keep every stamp so the area stays well-defined.
+        let hillNbs = 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = c.x + dx, ny = c.y + dy;
+            if ((dx || dy) && nx >= 0 && nx < GRID && ny >= 0 && ny < GRID
+                && kindAt[ny * GRID + nx] === 'hill') hillNbs++;
+          }
+        if (hillNbs >= 7 && cellRng() < 0.4) continue;   // interior thinning
+        spriteKey = 'hill';
+        baseW = 0.9 + cellRng() * 0.6;
+      }
+
+      const img = sprites[spriteKey];
+      if (!img || img.naturalWidth === 0) continue;
+
+      const jitter = kind === 'hill' ? 0.9 : 0.5;        // break the grid feel
+      const w  = baseW * CELL;
+      const jx = (cellRng() - 0.5) * jitter * CELL;
+      const jy = (cellRng() - 0.5) * jitter * CELL;
+      const cx = (c.x + 0.5) * CELL + jx;
+      const cy = (c.y + 0.5) * CELL + jy;
+      // Anchor so the sprite's base sits on the cell (peak extends north)
+      stamps.push({ img, x: cx - w / 2, y: cy - w * 0.62, w, z: cy });
+    }
+
+    stamps.sort((a, b) => a.z - b.z || a.x - b.x);   // north→south, stable
+    for (const st of stamps) ctx.drawImage(st.img, st.x, st.y, st.w, st.w);
+    console.log(`[relief] ${stamps.length} stamps drawn`);
+  }
 
   // ── M2/M2.5: roads — drawn LAST, on top of all terrain (incl. the sand
   // band and rivers). The path is sampled every ~4px against the land mask

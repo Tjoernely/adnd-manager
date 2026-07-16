@@ -148,6 +148,28 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4 renderer SHIPPED (2026-07-15) — the original 7-step pipeline is now
+COMPLETE (M1→M4).** Relief stamps in `proceduralMapRenderer.ts`:
+- Cells classify via `reliefKind()` (legacy `mountainous`/`hilly` + tileKey
+  fallback — old sketches need no migration); water-biome cells never stamp.
+- Sprite pick: volcanic+mountains → `volcano`; mountains → `mountain_large`
+  in the cluster interior (≥6 of 8 neighbours are mountain cells),
+  `mountain_small` at the edge; hills → `hill`. `volcano_dormant` reserved
+  for later variant control.
+- One stamp per relief cell, drawn north→south (back-to-front) after
+  biome/blending/coast and BEFORE roads (roads stay on top). Size + position
+  jitter seeded PER CELL (`mapSeed ^ cellIndex·2654435761` — independent of
+  iteration order). All measurements in cell units → 2048px scale holds.
+- Hill fields: interior cells (≥7 hill neighbours) are seed-thinned 40% and
+  hills get wider size (0.9–1.5 cells) + jitter (±0.45 cell) ranges — a full
+  regular stamp grid read as bubble wrap on map 60's 234-cell hill fields.
+- Sprites load from `/tiles/sprites/` only when the sketch has relief cells.
+- Verified on map 60 (132 mountain cells along the east edge, 10
+  volcanic+mountains in the SE corner, 234 hills): ranges read with
+  large/small mix, volcano craters glow, hills organic after thinning,
+  roads/rivers draw over stamps; 307 stamps, 6.1 MB PNG in ~800 ms,
+  deterministic; logged as `[relief] N stamps drawn`. 32/32 vitest.
+
 **M4 sprites SHIPPED (2026-07-15)** — the 5 relief-stamp sprites for M4 are
 generated and deployed: `public/tiles/sprites/{mountain_large,mountain_small,
 hill,volcano,volcano_dormant}.png`, 512×512 transparent-background PNGs
