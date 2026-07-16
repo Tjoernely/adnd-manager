@@ -148,6 +148,37 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4.1c SHIPPED (2026-07-16) — renderer honours the editor's tile choice:**
+- **FIX 1 (root cause):** the editor has ALWAYS saved the concrete choice as
+  `cell.tileKey` (no editor change needed). The renderer's pattern groups now
+  key on it: `AREA_TILE_GROUPS` gives swamp_trees / jungle_flat /
+  jungle_hills / forest_edge their own blending groups; coastal cells painted
+  `ocean_shallow` keep that texture (pattern through a 12px-blurred mask over
+  the tint). Volcano size follows the user's pick: `volcanic_mountain_large`
+  → ~1.5 cells, `_small` → ~0.85; the legacy default (1.8–2.3) only applies
+  to cells WITHOUT a tileKey, and the mountain large/small cluster heuristic
+  likewise only decides when no variant exists. Full backwards compat.
+- **FIX 2:** `plains_hills` was tonally darker than `plains_flat` →
+  `scripts/match-plains-hills.ps1` scales RGB channels so tile means match
+  (gains B/G/R 1.13/1.05/1.01), committed as `public/tiles/plains_hills_v2.png`
+  (same deploy pattern as swamp_flat_v2). Renderer groups map plains hills →
+  v2; the editor chip shows v2 via a display-only `TILE_ICON` override (the
+  STORED tileKey stays `plains_hills` for data compat).
+- **FIX 3:** `forest::hills` renders programmatically — forest_flat pattern
+  + a deterministic, perfectly tileable hill-shade overlay
+  (`makeHillShadeCanvas`: diagonal sine-wave shadow field, integer cycle
+  counts → seamless; multiply @18%, map-seeded phase). The canopy stays
+  unbroken → reads as forested rolling hills; forest_hills.png is retired in
+  the renderer (editor chip keeps it as icon). The SAME shade overlay is the
+  fallback for hills on biomes without a hills tile (tundra, volcanic) —
+  replacing the previous plain flat fallback.
+- Verified on a purpose-built test sketch (swamp_trees group, both volcano
+  sizes side by side, forest-hills shade, tundra-hills fallback,
+  plains_hills_v2 patch, ocean_shallow) AND on map 60 (149 plains-hills cells
+  now tonally match the flat plains; 85 forest-hills cells show soft canopy
+  shading instead of the stripey tile; the 10 volcanic_mountain_large cells
+  render at the chosen ~1.5-cell size). 142 stamps, ~790 ms, 32/32 vitest.
+
 **M4.1b SHIPPED (2026-07-16) — hills as biome textures; sprite regen BLOCKED:**
 - **DEL 1 (shipped):** hill sprite-stamping is REMOVED. Land cells now form
   pattern GROUPS (`biome` / `biome::hills`); hills fill with the biome's

@@ -1032,11 +1032,15 @@ function CategorySection({ id, emoji, label, open, active, onToggle, children })
   );
 }
 
+// Display-only icon overrides: the STORED tileKey stays unchanged (data
+// compat) but the chip shows the updated art (M4.1c: colour-matched v2).
+const TILE_ICON = { plains_hills: 'plains_hills_v2' };
+
 function TileChip({ tileKey, label, active, onClick }) {
   return (
     <button className={`tse-tile-chip${active ? ' tse-tile-chip--active' : ''}`}
       onClick={onClick} title={label}>
-      <img src={`/tiles/${tileKey}.png`} alt={label} className="tse-tile-img" />
+      <img src={`/tiles/${TILE_ICON[tileKey] ?? tileKey}.png`} alt={label} className="tse-tile-img" />
       <span className="tse-tile-label">{label}</span>
     </button>
   );

@@ -113,14 +113,58 @@ const ROAD_Z:  Record<string, number> = { road_path: 0, road: 1, road_dirt: 1, r
 const SPRITE_FILES = ['mountain_large', 'mountain_small', 'volcano'] as const;
 
 // Biome → hills-variant pattern tile (mirrors the editor's getTileKey
-// mapping). Biomes without a hills tile fall back to their flat tile —
-// a KNOWN GAP; generate the missing tiles later if the difference is missed.
+// mapping). M4.1c: plains uses the colour-matched _v2 tile; forest hills
+// render programmatically (forest_flat + hill-shade overlay — the
+// forest_hills tile is retired in the renderer); biomes without a hills
+// tile (tundra, volcanic) get the same shade-overlay fallback.
 const HILL_TILE: Record<string, string> = {
-  plains: 'plains_hills',
-  forest: 'forest_hills',
+  plains: 'plains_hills_v2',
   desert: 'desert_hills',
   swamp:  'jungle_hills',
 };
+
+// M4.1c FIX 1: concrete editor tile choices that act as their own pattern
+// groups (cell.tileKey → group). plains_hills maps to the _v2 tile.
+const AREA_TILE_GROUPS: Record<string, string> = {
+  plains_flat: 'plains', forest_flat: 'forest', swamp_flat: 'swamp',
+  desert_flat: 'desert', tundra_flat: 'tundra', volcanic_flat: 'volcanic',
+  swamp_trees:  'tile:swamp_trees',
+  jungle_flat:  'tile:jungle_flat',
+  jungle_hills: 'tile:jungle_hills',
+  forest_edge:  'tile:forest_edge',
+  plains_hills: 'tile:plains_hills_v2',
+  desert_hills: 'tile:desert_hills',
+  forest_hills: 'forest::hills',      // retired tile → programmatic shade
+};
+
+/**
+ * M4.1c FIX 3: deterministic, perfectly tileable hill-shade tile — soft
+ * diagonal wave shadows (multiply, ~15-20% opacity applied by the caller)
+ * at the same wave scale as the plains_hills art (128px tile = 2 cells).
+ * Integer cycle counts across the tile guarantee seamless wrapping.
+ */
+function makeHillShadeCanvas(seed: number): HTMLCanvasElement {
+  const T = 128;
+  const c = document.createElement('canvas');
+  c.width = T; c.height = T;
+  const cctx = c.getContext('2d')!;
+  const img = cctx.createImageData(T, T);
+  const rng = mulberry32(seed);
+  const phase = rng() * Math.PI * 2;
+  const TAU = Math.PI * 2;
+  for (let y = 0; y < T; y++) {
+    for (let x = 0; x < T; x++) {
+      const s1 = Math.sin((TAU * (x * 1 + y * 2)) / T + phase);
+      const s2 = Math.sin((TAU * (x * 2 - y * 1)) / T + phase * 1.7);
+      const v = Math.max(0, s1) * 0.8 + Math.max(0, s2) * 0.2;
+      const i = (y * T + x) * 4;
+      img.data[i] = 0; img.data[i + 1] = 0; img.data[i + 2] = 0;
+      img.data[i + 3] = Math.round(Math.pow(v, 1.5) * 255);
+    }
+  }
+  cctx.putImageData(img, 0, 0);
+  return c;
+}
 
 /** Classify a cell's relief for stamping (legacy values + tileKey fallback). */
 function reliefKind(c: { relief?: unknown; tileKey?: unknown }): 'mountain' | 'hill' | null {
@@ -644,45 +688,64 @@ export async function renderProceduralMap(
   // form PATTERN GROUPS of `biome` or `biome::hills` — hill areas blend
   // against flat areas exactly like two biomes do.
   const hillCell = new Uint8Array(GRID * GRID);
+  const tileKeyAt = new Array<string | null>(GRID * GRID).fill(null);
   for (const c of cells) {
     if (c.x < 0 || c.x >= GRID || c.y < 0 || c.y >= GRID) continue;
     const k = c.y * GRID + c.x;
     biomeAt[k] = c.biome;
+    const tk = (c as { tileKey?: unknown }).tileKey;
+    if (typeof tk === 'string') tileKeyAt[k] = tk;
     if (!WATER_BIOMES.has(c.biome)) {
       land[k] = 1;
       if (reliefKind(c as { relief?: unknown; tileKey?: unknown }) === 'hill') hillCell[k] = 1;
     }
   }
+
+  // M4.1c FIX 1: the group key honours the editor's CONCRETE tile choice
+  // (cell.tileKey) when it is an area tile; cells without a tileKey (legacy
+  // or AI-generated sketches) fall back to the biome/relief mapping.
   const groupKeyAt = (k: number): string | null => {
     const b = biomeAt[k];
     if (!b || WATER_BIOMES.has(b)) return null;
-    return hillCell[k] ? `${b}::hills` : b;
+    const tk = tileKeyAt[k];
+    if (tk && AREA_TILE_GROUPS[tk]) return AREA_TILE_GROUPS[tk];
+    if (hillCell[k]) {
+      if (b === 'forest') return 'forest::hills';        // programmatic shade
+      const hillTile = HILL_TILE[b];
+      return hillTile ? `tile:${hillTile}` : `${b}::hills`; // shade fallback
+    }
+    return b;
   };
-  const groupTile = (group: string): { tile: string | undefined; fallback: string } => {
-    const [biome, mod] = group.split('::');
-    const flat = BIOME_PATTERN_TILE[biome];
-    return {
-      tile: mod === 'hills' ? (HILL_TILE[biome] ?? flat) : flat, // fallback: flat (known gap)
-      fallback: BIOME_FALLBACK[biome] ?? '#888',
-    };
+
+  const groupTile = (group: string): { tile: string | undefined; fallback: string; hillShade: boolean } => {
+    if (group.startsWith('tile:'))
+      return { tile: group.slice(5), fallback: '#8a9a5a', hillShade: false };
+    if (group.endsWith('::hills')) {
+      const biome = group.slice(0, -'::hills'.length);
+      return { tile: BIOME_PATTERN_TILE[biome], fallback: BIOME_FALLBACK[biome] ?? '#888', hillShade: true };
+    }
+    return { tile: BIOME_PATTERN_TILE[group], fallback: BIOME_FALLBACK[group] ?? '#888', hillShade: false };
   };
 
   // Load the pattern tiles we actually need (M4.1b: hills form their own
   // `biome::hills` pattern groups with the biome's _hills tile)
   const landGroups = new Set<string>();
-  let hasLake = false, hasCoastal = false;
+  let hasLake = false, hasCoastal = false, hasShallowTile = false;
   for (let k = 0; k < GRID * GRID; k++) {
     const b = biomeAt[k];
     if (!b) continue;
     if (b === 'lake') hasLake = true;
-    else if (b === 'coastal') hasCoastal = true;
-    else {
+    else if (b === 'coastal') {
+      hasCoastal = true;
+      if (tileKeyAt[k] === 'ocean_shallow') hasShallowTile = true; // M4.1c
+    } else {
       const g = groupKeyAt(k);
       if (g) landGroups.add(g);
     }
   }
   const tileKeys = new Set<string>(['ocean_deep']);
   if (hasLake) tileKeys.add('inland_lake');
+  if (hasShallowTile) tileKeys.add('ocean_shallow');
   for (const g of landGroups) {
     const { tile } = groupTile(g);
     if (tile) tileKeys.add(tile);
@@ -781,6 +844,32 @@ export async function renderProceduralMap(
     ctx.save();
     ctx.globalAlpha = COASTAL_TINT_ALPHA;
     ctx.drawImage(tint, 0, 0);
+    ctx.restore();
+  }
+
+  // ── M4.1c FIX 1: coastal cells painted with the ocean_shallow tile keep
+  // its texture — the pattern is drawn through a soft (12px-blurred) mask on
+  // top of the coastal tint, so the concrete editor choice stays visible.
+  if (hasShallowTile) {
+    const shallowRects = new Path2D();
+    for (let k = 0; k < GRID * GRID; k++)
+      if (biomeAt[k] === 'coastal' && tileKeyAt[k] === 'ocean_shallow')
+        shallowRects.rect((k % GRID) * CELL, Math.floor(k / GRID) * CELL, CELL, CELL);
+    const [hard, hctx] = offscreen();
+    hctx.fillStyle = '#fff';
+    hctx.fill(shallowRects);
+    const [soft, sctx] = offscreen();
+    sctx.filter = `blur(${COASTAL_BLUR_PX * S}px)`;
+    sctx.drawImage(hard, 0, 0);
+    sctx.filter = 'none';
+    const [pat, pctx] = offscreen();
+    pctx.fillStyle = patternOf(pctx, 'ocean_shallow', COASTAL_TINT);
+    pctx.fillRect(0, 0, OUT, OUT);
+    pctx.globalCompositeOperation = 'destination-in';
+    pctx.drawImage(soft, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.drawImage(pat, 0, 0);
     ctx.restore();
   }
 
@@ -966,6 +1055,9 @@ export async function renderProceduralMap(
   ctx.fillRect(0, 0, OUT, OUT);
   if (landGroups.size > 0) {
     const [layer, lctx] = offscreen();
+    // Shade tile for `::hills` groups (forest + biomes without a hills tile)
+    const needsShade = [...landGroups].some(g => groupTile(g).hillShade);
+    const shadeCanvas = needsShade ? makeHillShadeCanvas(seedFromMapId(mapId) ^ 0x4111) : null;
     for (const group of [...landGroups].sort()) {
       const rects = groupRectPath(group);
       const [hard, hctx] = offscreen();
@@ -979,9 +1071,22 @@ export async function renderProceduralMap(
       sctx.drawImage(hard, 0, 0);
       sctx.filter = 'none';
       const [pat, pctx] = offscreen();
-      const { tile, fallback } = groupTile(group);
+      const { tile, fallback, hillShade } = groupTile(group);
       pctx.fillStyle = tile ? patternOf(pctx, tile, fallback) : fallback;
       pctx.fillRect(0, 0, OUT, OUT);
+      if (hillShade && shadeCanvas) {
+        // M4.1c FIX 3: soft diagonal wave shadows over the unbroken canopy —
+        // reads as forested (or tundra etc.) rolling hills.
+        const shadePat = pctx.createPattern(shadeCanvas, 'repeat');
+        if (shadePat) {
+          pctx.globalCompositeOperation = 'multiply';
+          pctx.globalAlpha = 0.18;
+          pctx.fillStyle = shadePat;
+          pctx.fillRect(0, 0, OUT, OUT);
+          pctx.globalAlpha = 1;
+          pctx.globalCompositeOperation = 'source-over';
+        }
+      }
       pctx.globalCompositeOperation = 'destination-in';
       pctx.drawImage(soft, 0, 0);
       lctx.drawImage(pat, 0, 0);
@@ -1156,8 +1261,13 @@ export async function renderProceduralMap(
       let spriteKey: string;
       let baseW: number; // stamp width in cells
       if (c.biome === 'volcanic') {
+        // M4.1c FIX 1: the editor's concrete volcano choice controls size;
+        // the old default is used only for cells without a variant.
         spriteKey = 'volcano';
-        baseW = 1.8 + cellRng() * 0.5;
+        const tk = (c as { tileKey?: unknown }).tileKey;
+        if (tk === 'volcanic_mountain_large')      baseW = 1.4 + cellRng() * 0.2;   // ~1.5 cells
+        else if (tk === 'volcanic_mountain_small') baseW = 0.8 + cellRng() * 0.15;  // ~0.85 cells
+        else                                       baseW = 1.8 + cellRng() * 0.5;   // legacy default
       } else {
         let nbs = 0;
         for (let dy = -1; dy <= 1; dy++)
