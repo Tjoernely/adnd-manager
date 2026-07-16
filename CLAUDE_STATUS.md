@@ -148,6 +148,25 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4.1a hills polish SHIPPED (2026-07-16)** — three fixes from the full
+map 60 render:
+- **FIX 1 — alpha fringe:** gpt-image-1's transparent sprites carry a light
+  semi-transparent edge fringe (pre-blended against white) → halo on dark
+  tiles. One-time on-disk post-process (`scripts/fix-sprite-fringe.ps1`,
+  committed — rerun after any sprite regeneration): alpha<40 → 0; alpha
+  40–200 → un-premultiplied against white (c = (c−(1−a)·255)/a, clamped).
+  All 5 sprites processed; verified clean edges composited on forest_flat.
+- **FIX 2 — hills read as terrain, not confetti:** size 0.55–0.85 cells,
+  jitter ±0.2 cells, interior thinning 20%. IMPORTANT finding: at those
+  sizes one stamp per cell inherently leaves row gaps, so the field interior
+  also gets a seeded **quincunx corner stamp** per cell whose SE quad is all
+  hills — rows overlap vertically and the field reads as one rolling area
+  while the EDGE still lands exactly on the painted cells (corner stamps
+  require the full quad). Map 60: 489 stamps (was 345), ~715 ms.
+- **FIX 3 — variation:** per-stamp seeded ±6% brightness (`ctx.filter`) and
+  ~50% horizontal mirroring — applied to ALL stamp kinds (mountains/volcanoes
+  benefit equally; deterministic per cell).
+
 **M4 renderer SHIPPED (2026-07-15) — the original 7-step pipeline is now
 COMPLETE (M1→M4).** Relief stamps in `proceduralMapRenderer.ts`:
 - Cells classify via `reliefKind()` (legacy `mountainous`/`hilly` + tileKey

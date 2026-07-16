@@ -1086,7 +1086,10 @@ export async function renderProceduralMap(
     const isMountain = (x: number, y: number): boolean =>
       x >= 0 && x < GRID && y >= 0 && y < GRID && kindAt[y * GRID + x] === 'mountain';
 
-    type Stamp = { img: HTMLImageElement; x: number; y: number; w: number; z: number };
+    type Stamp = {
+      img: HTMLImageElement; x: number; y: number; w: number; z: number;
+      brightness: number; mirror: boolean;
+    };
     const stamps: Stamp[] = [];
 
     for (const c of cells) {
@@ -1113,36 +1116,74 @@ export async function renderProceduralMap(
           baseW = interior ? 2.0 + cellRng() * 0.5 : 1.3 + cellRng() * 0.4;
         }
       } else {
-        // Hills: thin out the interior of large hill fields (seeded) — a
-        // full stamp per cell reads as a repetitive bubble grid. Field edges
-        // keep every stamp so the area stays well-defined.
+        // Hills (M4.1a): small (0.55–0.85 cells), tightly packed domes whose
+        // field shape respects the painted cells. One dome per cell leaves
+        // visible row gaps at these sizes, so the field interior ALSO gets a
+        // quincunx stamp on each interior cell corner — rows then overlap
+        // vertically and read as ONE rolling area, not confetti.
+        const hillAt = (x: number, y: number): boolean =>
+          x >= 0 && x < GRID && y >= 0 && y < GRID && kindAt[y * GRID + x] === 'hill';
         let hillNbs = 0;
         for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = c.x + dx, ny = c.y + dy;
-            if ((dx || dy) && nx >= 0 && nx < GRID && ny >= 0 && ny < GRID
-                && kindAt[ny * GRID + nx] === 'hill') hillNbs++;
-          }
-        if (hillNbs >= 7 && cellRng() < 0.4) continue;   // interior thinning
-        spriteKey = 'hill';
-        baseW = 0.9 + cellRng() * 0.6;
+          for (let dx = -1; dx <= 1; dx++)
+            if ((dx || dy) && hillAt(c.x + dx, c.y + dy)) hillNbs++;
+
+        const img = sprites.hill;
+        if (!img || img.naturalWidth === 0) continue;
+
+        const positions: Array<{ px: number; py: number }> = [];
+        if (!(hillNbs >= 7 && cellRng() < 0.2))          // light interior thinning
+          positions.push({ px: c.x + 0.5, py: c.y + 0.5 });
+        // Interior corner stamp (only when the SE quad is all hills — keeps
+        // the field EDGE exactly on the painted cells)
+        if (hillAt(c.x + 1, c.y) && hillAt(c.x, c.y + 1) && hillAt(c.x + 1, c.y + 1)
+            && cellRng() >= 0.2)
+          positions.push({ px: c.x + 1.0, py: c.y + 1.0 });
+
+        for (const pos of positions) {
+          const w  = (0.55 + cellRng() * 0.3) * CELL;    // 0.55–0.85 cells
+          const jx = (cellRng() - 0.5) * 0.4 * CELL;     // ±0.2 cells
+          const jy = (cellRng() - 0.5) * 0.4 * CELL;
+          const hx = pos.px * CELL + jx;
+          const hy = pos.py * CELL + jy;
+          stamps.push({
+            img, x: hx - w / 2, y: hy - w * 0.55, w, z: hy,
+            brightness: 0.94 + cellRng() * 0.12,         // ±6% seeded
+            mirror: cellRng() < 0.5,                     // ~50% seeded flip
+          });
+        }
+        continue;
       }
 
       const img = sprites[spriteKey];
       if (!img || img.naturalWidth === 0) continue;
 
-      const jitter = kind === 'hill' ? 0.9 : 0.5;        // break the grid feel
       const w  = baseW * CELL;
-      const jx = (cellRng() - 0.5) * jitter * CELL;
-      const jy = (cellRng() - 0.5) * jitter * CELL;
+      const jx = (cellRng() - 0.5) * 0.5 * CELL;
+      const jy = (cellRng() - 0.5) * 0.5 * CELL;
       const cx = (c.x + 0.5) * CELL + jx;
       const cy = (c.y + 0.5) * CELL + jy;
+      // M4.1a FIX 3: seeded per-stamp variation — ±6% brightness and ~50%
+      // horizontal mirroring so identical sprites don't read as clones.
+      const brightness = 0.94 + cellRng() * 0.12;
+      const mirror = cellRng() < 0.5;
       // Anchor so the sprite's base sits on the cell (peak extends north)
-      stamps.push({ img, x: cx - w / 2, y: cy - w * 0.62, w, z: cy });
+      stamps.push({ img, x: cx - w / 2, y: cy - w * 0.62, w, z: cy, brightness, mirror });
     }
 
     stamps.sort((a, b) => a.z - b.z || a.x - b.x);   // north→south, stable
-    for (const st of stamps) ctx.drawImage(st.img, st.x, st.y, st.w, st.w);
+    for (const st of stamps) {
+      ctx.save();
+      ctx.filter = `brightness(${st.brightness})`;
+      if (st.mirror) {
+        ctx.translate(st.x + st.w, st.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(st.img, 0, 0, st.w, st.w);
+      } else {
+        ctx.drawImage(st.img, st.x, st.y, st.w, st.w);
+      }
+      ctx.restore();
+    }
     console.log(`[relief] ${stamps.length} stamps drawn`);
   }
 
