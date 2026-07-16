@@ -148,6 +148,29 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4.1b SHIPPED (2026-07-16) — hills as biome textures; sprite regen BLOCKED:**
+- **DEL 1 (shipped):** hill sprite-stamping is REMOVED. Land cells now form
+  pattern GROUPS (`biome` / `biome::hills`); hills fill with the biome's
+  `_hills` tile (plains→plains_hills, forest→forest_hills,
+  desert→desert_hills, swamp→jungle_hills — the editor's getTileKey mapping)
+  and participate in the M3 blending pass as first-class groups, so
+  flat↔hilly boundaries crossfade organically. Biomes WITHOUT a hills tile
+  (tundra, volcanic) fall back to their flat tile — KNOWN GAP, generate the
+  tiles later if missed. Mountains/volcanoes still sprite-stamp (unchanged;
+  sprites now load only when mountain cells exist). Verified on map 60:
+  forest hills read as forested rolling terrain in forest colours, blending
+  works, 142 stamps (was 489 — exactly the 132 mountain + 10 volcano cells),
+  ~855 ms. The `hill.png` sprite is retired but kept on disk.
+- **DEL 2 (BLOCKED — OpenAI billing):** regenerating mountain_large,
+  mountain_small + volcano with the sharpened no-halo prompt failed:
+  `billing_hard_limit_reached` on the OpenAI account. The generation script
+  now carries the sharpened prompt AND supports subsets
+  (`node scripts/generate-relief-sprites.mjs mountain_large volcano`), so
+  once the owner raises the OpenAI billing limit, rerun the script for the
+  3 sprites, then `scripts/fix-sprite-fringe.ps1`, downscale to 512, verify
+  on forest_flat, build + deploy. Current defringed M4.1a sprites remain in
+  place and look acceptable.
+
 **M4.1a hills polish SHIPPED (2026-07-16)** — three fixes from the full
 map 60 render:
 - **FIX 1 — alpha fringe:** gpt-image-1's transparent sprites carry a light

@@ -106,9 +106,21 @@ const ROAD_Z:  Record<string, number> = { road_path: 0, road: 1, road_dirt: 1, r
 
 // ── M4: relief stamps ────────────────────────────────────────────────────────
 // Sprite pick: volcanic+mountains → volcano; mountains → mountain_large in
-// the cluster interior, mountain_small at the cluster edge; hills → hill.
-// (volcano_dormant is reserved for later variant control.)
-const SPRITE_FILES = ['mountain_large', 'mountain_small', 'hill', 'volcano'] as const;
+// the cluster interior, mountain_small at the cluster edge.
+// M4.1b: hills are NOT stamped — they render as the biome's _hills tile
+// pattern (see HILL_TILE) and blend like any other biome group. The hill
+// sprite is retired; volcano_dormant is reserved for later variant control.
+const SPRITE_FILES = ['mountain_large', 'mountain_small', 'volcano'] as const;
+
+// Biome → hills-variant pattern tile (mirrors the editor's getTileKey
+// mapping). Biomes without a hills tile fall back to their flat tile —
+// a KNOWN GAP; generate the missing tiles later if the difference is missed.
+const HILL_TILE: Record<string, string> = {
+  plains: 'plains_hills',
+  forest: 'forest_hills',
+  desert: 'desert_hills',
+  swamp:  'jungle_hills',
+};
 
 /** Classify a cell's relief for stamping (legacy values + tileKey fallback). */
 function reliefKind(c: { relief?: unknown; tileKey?: unknown }): 'mountain' | 'hill' | null {
@@ -628,28 +640,56 @@ export async function renderProceduralMap(
   const cells = spec.cells ?? [];
   const land = new Uint8Array(GRID * GRID);
   const biomeAt = new Array<string | null>(GRID * GRID).fill(null);
+  // M4.1b: hills render as the biome's _hills tile pattern, so land cells
+  // form PATTERN GROUPS of `biome` or `biome::hills` — hill areas blend
+  // against flat areas exactly like two biomes do.
+  const hillCell = new Uint8Array(GRID * GRID);
   for (const c of cells) {
     if (c.x < 0 || c.x >= GRID || c.y < 0 || c.y >= GRID) continue;
-    biomeAt[c.y * GRID + c.x] = c.biome;
-    if (!WATER_BIOMES.has(c.biome)) land[c.y * GRID + c.x] = 1;
+    const k = c.y * GRID + c.x;
+    biomeAt[k] = c.biome;
+    if (!WATER_BIOMES.has(c.biome)) {
+      land[k] = 1;
+      if (reliefKind(c as { relief?: unknown; tileKey?: unknown }) === 'hill') hillCell[k] = 1;
+    }
   }
+  const groupKeyAt = (k: number): string | null => {
+    const b = biomeAt[k];
+    if (!b || WATER_BIOMES.has(b)) return null;
+    return hillCell[k] ? `${b}::hills` : b;
+  };
+  const groupTile = (group: string): { tile: string | undefined; fallback: string } => {
+    const [biome, mod] = group.split('::');
+    const flat = BIOME_PATTERN_TILE[biome];
+    return {
+      tile: mod === 'hills' ? (HILL_TILE[biome] ?? flat) : flat, // fallback: flat (known gap)
+      fallback: BIOME_FALLBACK[biome] ?? '#888',
+    };
+  };
 
-  // Load the pattern tiles we actually need
-  const landBiomes = new Set<string>();
+  // Load the pattern tiles we actually need (M4.1b: hills form their own
+  // `biome::hills` pattern groups with the biome's _hills tile)
+  const landGroups = new Set<string>();
   let hasLake = false, hasCoastal = false;
   for (let k = 0; k < GRID * GRID; k++) {
     const b = biomeAt[k];
     if (!b) continue;
     if (b === 'lake') hasLake = true;
     else if (b === 'coastal') hasCoastal = true;
-    else if (!WATER_BIOMES.has(b)) landBiomes.add(b);
+    else {
+      const g = groupKeyAt(k);
+      if (g) landGroups.add(g);
+    }
   }
   const tileKeys = new Set<string>(['ocean_deep']);
   if (hasLake) tileKeys.add('inland_lake');
-  for (const b of landBiomes) if (BIOME_PATTERN_TILE[b]) tileKeys.add(BIOME_PATTERN_TILE[b]);
+  for (const g of landGroups) {
+    const { tile } = groupTile(g);
+    if (tile) tileKeys.add(tile);
+  }
 
-  // M4: does the sketch have relief cells at all? Load sprites only if so.
-  const hasRelief = cells.some(c => reliefKind(c as { relief?: unknown; tileKey?: unknown }) !== null);
+  // M4.1b: sprites are only needed for MOUNTAIN cells (hills are tiles now)
+  const hasRelief = cells.some(c => reliefKind(c as { relief?: unknown; tileKey?: unknown }) === 'mountain');
 
   const tiles: Record<string, HTMLImageElement | null> = {};
   const sprites: Record<string, HTMLImageElement | null> = {};
@@ -683,6 +723,15 @@ export async function renderProceduralMap(
     for (let cy = 0; cy < GRID; cy++)
       for (let cx = 0; cx < GRID; cx++)
         if (biomeAt[cy * GRID + cx] === biome) path.rect(cx * CELL, cy * CELL, CELL, CELL);
+    return path;
+  };
+
+  // Same, but per land pattern GROUP (`biome` / `biome::hills`, M4.1b)
+  const groupRectPath = (group: string): Path2D => {
+    const path = new Path2D();
+    for (let k = 0; k < GRID * GRID; k++)
+      if (groupKeyAt(k) === group)
+        path.rect((k % GRID) * CELL, Math.floor(k / GRID) * CELL, CELL, CELL);
     return path;
   };
 
@@ -902,22 +951,23 @@ export async function renderProceduralMap(
   }
   ctx.restore();
 
-  // ── STEP 1b/3b + M3: land fill — biome interiors with soft blended borders,
-  // clipped to the smooth contour.
-  // M3 blending: per land biome, build a mask of its cells dilated ~10px and
-  // gaussian-blurred 7px, then draw its pattern through that mask. Composited
-  // source-over in a fixed order, adjacent biomes crossfade over ~15px instead
-  // of cell-staircase edges. Relief is NOT part of the mask — biome only.
+  // ── STEP 1b/3b + M3: land fill — pattern-group interiors with soft blended
+  // borders, clipped to the smooth contour.
+  // M3 blending: per land pattern group (`biome` or `biome::hills`, M4.1b),
+  // build a mask of its cells dilated ~10px and gaussian-blurred 7px, then
+  // draw its pattern through that mask. Composited source-over in a fixed
+  // order, adjacent groups crossfade over ~15px instead of cell-staircase
+  // edges — including the flat↔hilly boundary within the same biome.
   ctx.save();
   ctx.clip(landPath, 'evenodd');
   // Sand underlay: covers any sliver where the jittered contour bulges past
-  // the blocky cell rects (the blurred biome masks also fade out at the coast).
+  // the blocky cell rects (the blurred group masks also fade out at the coast).
   ctx.fillStyle = SAND;
   ctx.fillRect(0, 0, OUT, OUT);
-  if (landBiomes.size > 0) {
+  if (landGroups.size > 0) {
     const [layer, lctx] = offscreen();
-    for (const biome of [...landBiomes].sort()) {
-      const rects = biomeRectPath(biome);
+    for (const group of [...landGroups].sort()) {
+      const rects = groupRectPath(group);
       const [hard, hctx] = offscreen();
       hctx.fillStyle = '#fff';
       hctx.fill(rects);
@@ -929,7 +979,8 @@ export async function renderProceduralMap(
       sctx.drawImage(hard, 0, 0);
       sctx.filter = 'none';
       const [pat, pctx] = offscreen();
-      pctx.fillStyle = patternOf(pctx, BIOME_PATTERN_TILE[biome], BIOME_FALLBACK[biome] ?? '#888');
+      const { tile, fallback } = groupTile(group);
+      pctx.fillStyle = tile ? patternOf(pctx, tile, fallback) : fallback;
       pctx.fillRect(0, 0, OUT, OUT);
       pctx.globalCompositeOperation = 'destination-in';
       pctx.drawImage(soft, 0, 0);
@@ -1077,14 +1128,17 @@ export async function renderProceduralMap(
   // size variation are seeded PER CELL (independent of iteration order), and
   // all measurements are in cell units so the global 2048px scale holds.
   if (hasRelief) {
-    const kindAt = new Array<'mountain' | 'hill' | null>(GRID * GRID).fill(null);
+    // M4.1b: only MOUNTAIN cells stamp sprites — hills render as tile
+    // pattern groups in the M3 blending pass above.
+    const mountainAt = new Uint8Array(GRID * GRID);
     for (const c of cells) {
       if (c.x < 0 || c.x >= GRID || c.y < 0 || c.y >= GRID) continue;
       if (WATER_BIOMES.has(c.biome)) continue;
-      kindAt[c.y * GRID + c.x] = reliefKind(c as { relief?: unknown; tileKey?: unknown });
+      if (reliefKind(c as { relief?: unknown; tileKey?: unknown }) === 'mountain')
+        mountainAt[c.y * GRID + c.x] = 1;
     }
     const isMountain = (x: number, y: number): boolean =>
-      x >= 0 && x < GRID && y >= 0 && y < GRID && kindAt[y * GRID + x] === 'mountain';
+      x >= 0 && x < GRID && y >= 0 && y < GRID && mountainAt[y * GRID + x] === 1;
 
     type Stamp = {
       img: HTMLImageElement; x: number; y: number; w: number; z: number;
@@ -1094,65 +1148,24 @@ export async function renderProceduralMap(
 
     for (const c of cells) {
       if (c.x < 0 || c.x >= GRID || c.y < 0 || c.y >= GRID) continue;
-      const kind = kindAt[c.y * GRID + c.x];
-      if (!kind) continue;
+      if (!isMountain(c.x, c.y)) continue;
 
       // Deterministic per-cell PRNG (same seed regardless of cell order)
       const cellRng = mulberry32((seedFromMapId(mapId) ^ ((c.y * GRID + c.x) * 2654435761)) >>> 0);
 
       let spriteKey: string;
       let baseW: number; // stamp width in cells
-      if (kind === 'mountain') {
-        if (c.biome === 'volcanic') {
-          spriteKey = 'volcano';
-          baseW = 1.8 + cellRng() * 0.5;
-        } else {
-          let nbs = 0;
-          for (let dy = -1; dy <= 1; dy++)
-            for (let dx = -1; dx <= 1; dx++)
-              if ((dx || dy) && isMountain(c.x + dx, c.y + dy)) nbs++;
-          const interior = nbs >= 6;
-          spriteKey = interior ? 'mountain_large' : 'mountain_small';
-          baseW = interior ? 2.0 + cellRng() * 0.5 : 1.3 + cellRng() * 0.4;
-        }
+      if (c.biome === 'volcanic') {
+        spriteKey = 'volcano';
+        baseW = 1.8 + cellRng() * 0.5;
       } else {
-        // Hills (M4.1a): small (0.55–0.85 cells), tightly packed domes whose
-        // field shape respects the painted cells. One dome per cell leaves
-        // visible row gaps at these sizes, so the field interior ALSO gets a
-        // quincunx stamp on each interior cell corner — rows then overlap
-        // vertically and read as ONE rolling area, not confetti.
-        const hillAt = (x: number, y: number): boolean =>
-          x >= 0 && x < GRID && y >= 0 && y < GRID && kindAt[y * GRID + x] === 'hill';
-        let hillNbs = 0;
+        let nbs = 0;
         for (let dy = -1; dy <= 1; dy++)
           for (let dx = -1; dx <= 1; dx++)
-            if ((dx || dy) && hillAt(c.x + dx, c.y + dy)) hillNbs++;
-
-        const img = sprites.hill;
-        if (!img || img.naturalWidth === 0) continue;
-
-        const positions: Array<{ px: number; py: number }> = [];
-        if (!(hillNbs >= 7 && cellRng() < 0.2))          // light interior thinning
-          positions.push({ px: c.x + 0.5, py: c.y + 0.5 });
-        // Interior corner stamp (only when the SE quad is all hills — keeps
-        // the field EDGE exactly on the painted cells)
-        if (hillAt(c.x + 1, c.y) && hillAt(c.x, c.y + 1) && hillAt(c.x + 1, c.y + 1)
-            && cellRng() >= 0.2)
-          positions.push({ px: c.x + 1.0, py: c.y + 1.0 });
-
-        for (const pos of positions) {
-          const w  = (0.55 + cellRng() * 0.3) * CELL;    // 0.55–0.85 cells
-          const jx = (cellRng() - 0.5) * 0.4 * CELL;     // ±0.2 cells
-          const jy = (cellRng() - 0.5) * 0.4 * CELL;
-          const hx = pos.px * CELL + jx;
-          const hy = pos.py * CELL + jy;
-          stamps.push({
-            img, x: hx - w / 2, y: hy - w * 0.55, w, z: hy,
-            brightness: 0.94 + cellRng() * 0.12,         // ±6% seeded
-            mirror: cellRng() < 0.5,                     // ~50% seeded flip
-          });
-        }
-        continue;
+            if ((dx || dy) && isMountain(c.x + dx, c.y + dy)) nbs++;
+        const interior = nbs >= 6;
+        spriteKey = interior ? 'mountain_large' : 'mountain_small';
+        baseW = interior ? 2.0 + cellRng() * 0.5 : 1.3 + cellRng() * 0.4;
       }
 
       const img = sprites[spriteKey];

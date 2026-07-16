@@ -40,9 +40,11 @@ const STYLE =
   'Top-down high-angle view, about 60 degrees from above, like a map icon. ' +
   'Hand-painted style with soft painterly texture and flat, even lighting. ' +
   'NO ground plane, NO cast shadow outside the object itself, NO text, ' +
-  'NO border, NO background of any kind. Style must match soft yellow-green ' +
-  'hand-painted grassland tiles — NOT pixel art, NOT a 3D render, NOT ' +
-  'photorealistic. The object: ';
+  'NO border, NO background of any kind. Absolutely no outline, no glow, ' +
+  'no halo, no rim light, no light edge around the silhouette. The painted ' +
+  'pixels must end directly against full transparency. Style must match ' +
+  'soft yellow-green hand-painted grassland tiles — NOT pixel art, NOT a ' +
+  '3D render, NOT photorealistic. The object: ';
 
 const PROMPTS = {
   mountain_large:
@@ -69,7 +71,11 @@ const PROMPTS = {
 const outDir = path.join(root, 'public', 'tiles', 'sprites');
 fs.mkdirSync(outDir, { recursive: true });
 
-for (const [name, prompt] of Object.entries(PROMPTS)) {
+// Optional subset: node scripts/generate-relief-sprites.mjs mountain_large volcano
+const only = process.argv.slice(2);
+const entries = Object.entries(PROMPTS).filter(([n]) => only.length === 0 || only.includes(n));
+
+for (const [name, prompt] of entries) {
   process.stdout.write(`${name} ... `);
   try {
     const r = await fetch('https://api.openai.com/v1/images/generations', {
