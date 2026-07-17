@@ -371,11 +371,12 @@ function strokeOpenPoly(
   color: string,
   alpha = 1,
   dash: number[] | null = null,
+  cap: CanvasLineCap = 'round',
 ): void {
   if (pts.length < 2) return;
   ctx.save();
   ctx.lineJoin = 'round';
-  ctx.lineCap  = 'round';
+  ctx.lineCap  = cap;
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
   ctx.lineWidth   = width;
@@ -503,12 +504,68 @@ function drawWoodBridge(ctx: CanvasRenderingContext2D, pts: Pt[], withRailings =
   ctx.drawImage(layer, 0, 0);
 }
 
-/** road_cobble crossing: stone bridge — outlined grey deck + light midline. */
+/**
+ * road_cobble crossing: stone bridge (M4.2 FIX 4) — flat-ended outlined
+ * deck with stone joints and explicit abutment blocks, so it reads as a
+ * bridge instead of a grey pill. Drawn on an offscreen layer clipped to the
+ * outline band (abutment blocks are wider than the deck but fit the band).
+ */
 function drawStoneBridge(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
   if (pts.length < 2) return;
-  strokeOpenPoly(ctx, pts, 14 * S, COBBLE_UNDER);    // dark outline around…
-  strokeOpenPoly(ctx, pts, 10 * S, BRIDGE_STONE);    // …the grey deck
-  strokeOpenPoly(ctx, pts, 2 * S, BRIDGE_STONE_MID); // lighter midline
+  const size = ctx.canvas.width;
+  const layer = document.createElement('canvas');
+  layer.width = size; layer.height = size;
+  const bctx = layer.getContext('2d')!;
+
+  strokeOpenPoly(bctx, pts, 12 * S, COBBLE_UNDER, 1, null, 'butt');    // outline
+  strokeOpenPoly(bctx, pts, 8 * S, BRIDGE_STONE, 1, null, 'butt');     // deck (≈ road width)
+  strokeOpenPoly(bctx, pts, 2 * S, BRIDGE_STONE_MID, 1, null, 'butt'); // light midline
+
+  // Stone joints: thin dark transverse lines every ~6px along the deck
+  const joints = resamplePath(pts, 6 * S);
+  const jns = openNormals(joints);
+  bctx.save();
+  bctx.strokeStyle = '#6a6a64';
+  bctx.lineWidth   = 1 * S;
+  bctx.lineCap     = 'butt';
+  bctx.beginPath();
+  for (let i = 0; i < joints.length; i++) {
+    const p = joints[i], n = jns[i];
+    bctx.moveTo(p.x - n.x * 4 * S, p.y - n.y * 4 * S);
+    bctx.lineTo(p.x + n.x * 4 * S, p.y + n.y * 4 * S);
+  }
+  bctx.stroke();
+  bctx.restore();
+
+  // Abutment blocks: darker transverse block (12×4px) at each end, centred
+  // 2px inside the deck so the butt-capped clip mask doesn't halve them
+  const ns = openNormals(pts);
+  bctx.save();
+  bctx.strokeStyle = '#4a4a44';
+  bctx.lineWidth   = 4 * S;
+  bctx.lineCap     = 'butt';
+  for (const [i, j] of [[0, 1], [pts.length - 1, pts.length - 2]] as const) {
+    const p = pts[i], q = pts[j], n = ns[i];
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const cx = p.x + (dx / len) * 2 * S;   // 2px inward along the path
+    const cy = p.y + (dy / len) * 2 * S;
+    bctx.beginPath();
+    bctx.moveTo(cx - n.x * 6 * S, cy - n.y * 6 * S);
+    bctx.lineTo(cx + n.x * 6 * S, cy + n.y * 6 * S);
+    bctx.stroke();
+  }
+  bctx.restore();
+
+  // Clip everything to the outline band
+  const mask = document.createElement('canvas');
+  mask.width = size; mask.height = size;
+  const mctx = mask.getContext('2d')!;
+  strokeOpenPoly(mctx, pts, 12 * S, '#fff', 1, null, 'butt');
+  bctx.globalCompositeOperation = 'destination-in';
+  bctx.drawImage(mask, 0, 0);
+
+  ctx.drawImage(layer, 0, 0);
 }
 
 /** road_path crossing: ford — stepping stones, no path line over the water. */
@@ -1187,22 +1244,32 @@ export async function renderProceduralMap(
     const [riverMask, rmctx] = offscreen();
     rmctx.fillStyle = '#fff';
     rmctx.fill(landPath, 'evenodd');
+    // M4.2 FIX 1: dilation per CONTOUR TYPE (reuses the band classification).
+    // Ocean/coastal shores: +14px (through the full beach, fade in shallows).
+    // Lake shores: +6px — the lake band is only ±4px, so the global 14px
+    // visibly overshot the river core into the lake water.
     rmctx.strokeStyle = '#fff';
-    rmctx.lineWidth = 28 * S;               // ±14px → 14px outward dilation
     rmctx.lineJoin = 'round';
-    rmctx.stroke(landPath);
+    for (const c of contours) {
+      const path = new Path2D();
+      addPolyToPath(path, c.pts);
+      rmctx.lineWidth = (c.style === COAST_STYLE.lake ? 12 : 28) * S; // ±6 / ±14
+      rmctx.stroke(path);
+    }
     const [riverMaskSoft, rmsctx] = offscreen();
     rmsctx.filter = `blur(${6 * S}px)`;
     rmsctx.drawImage(riverMask, 0, 0);
     rmsctx.filter = 'none';
 
     const [riverLayer, rlctx] = offscreen();
-    for (const o of rivers) {
-      const st = RIVER_STYLE[o.type] ?? RIVER_STYLE.river;
-      strokeOpenPoly(rlctx, o.pts, st.under, RIVER_UNDER, 0.9);
-      strokeOpenPoly(rlctx, o.pts, st.core, RIVER_CORE);
-      strokeOpenPoly(rlctx, o.pts, st.light, RIVER_LIGHT, 0.6);
-    }
+    // M4.2 FIX 2: draw LAYER-BY-LAYER across ALL rivers (each pass in
+    // stream→major order) instead of river-by-river — a later river's dark
+    // underlay no longer paints over an earlier river's light core, so
+    // confluences merge seamlessly (identical core colours blend invisibly).
+    const riverStyleOf = (o: { type: string }) => RIVER_STYLE[o.type] ?? RIVER_STYLE.river;
+    for (const o of rivers) strokeOpenPoly(rlctx, o.pts, riverStyleOf(o).under, RIVER_UNDER, 0.9);
+    for (const o of rivers) strokeOpenPoly(rlctx, o.pts, riverStyleOf(o).core, RIVER_CORE);
+    for (const o of rivers) strokeOpenPoly(rlctx, o.pts, riverStyleOf(o).light, RIVER_LIGHT, 0.6);
     rlctx.globalCompositeOperation = 'destination-in';
     rlctx.drawImage(riverMaskSoft, 0, 0);
     rlctx.globalCompositeOperation = 'source-over';
@@ -1390,12 +1457,23 @@ export async function renderProceduralMap(
       const startPct = Math.round((run.i0 / (samples.length - 1)) * 100);
       const endPct   = Math.round((run.i1 / (samples.length - 1)) * 100);
       console.log('[bridge]', o.type, 'run at', `${startPct}%`, '-', `${endPct}%`, 'length px:', runLength);
-      // Minimum run length: shoreline grazes produce tiny water runs whose
-      // degenerate bridge fragments (planks/railings without a meaningful
-      // deck) read as dark marks at the water's edge. Render NOTHING — the
-      // road simply stops at the shore.
+      // Minimum run length (M4.2 FIX 3: interior vs terminal).
+      // - TERMINAL short runs (at the path's end / a shoreline stub): render
+      //   nothing — the road stops at the water's edge (M2.5 rule).
+      // - INTERIOR short runs (road continues on BOTH sides — oblique river
+      //   crossings measure 4-11px): draw the ROAD unbroken across, no
+      //   bridge furniture — reads as a culvert. Previously these left
+      //   visible holes in the road.
       if (runLength < 12 * S) {
-        console.log('[bridge]', o.type, `run ${runLength}px < ${12 * S}px — skipped (no bridge/ford)`);
+        const interior = run.i0 > 0 && run.i1 < samples.length - 1;
+        if (interior) {
+          console.log('[bridge]', o.type, `run ${runLength}px < ${12 * S}px — interior, road drawn through (culvert)`);
+          const from = Math.max(0, run.i0 - 1);
+          const to   = Math.min(samples.length - 1, run.i1 + 1);
+          drawRoadLand(ctx, samples.slice(from, to + 1), kind);
+        } else {
+          console.log('[bridge]', o.type, `run ${runLength}px < ${12 * S}px — terminal, skipped (no bridge/ford)`);
+        }
         continue;
       }
       const sub = samples.slice(run.i0, run.i1 + 1);

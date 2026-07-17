@@ -148,6 +148,33 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4.2 SHIPPED (2026-07-17) — four connector fixes from lake-area zoom
+inspection (map 60, verified with the harness `?crop` param at 1:1):**
+- **FIX 1 — river overshoot into lakes:** the river clip-mask dilation is now
+  per CONTOUR TYPE (reusing the band classification): ocean/coastal shores
+  keep land+14px (through the full beach), lake shores get land+6px — the
+  lake band is only ±4px, so the global 14px visibly pushed the light river
+  core into the lake water. Verified: both mouths on map 60's lake now fade
+  right at the shore.
+- **FIX 2 — confluences merge:** rivers draw LAYER-BY-LAYER across ALL
+  rivers (all underlays stream→major, then all cores, then all highlights)
+  instead of river-by-river — a later river's dark underlay no longer paints
+  over an earlier one's light core. Verified on the m26 test variant:
+  stream/river/major joins now blend seamlessly.
+- **FIX 3 — holes in roads:** short water runs (<12px at 1024-scale) are now
+  split INTERIOR vs TERMINAL. Interior (road continues both sides — oblique
+  river crossings measuring 4-11px): the ROAD draws unbroken across with no
+  bridge furniture (reads as a culvert). Terminal (path end/shoreline stub):
+  still skipped (M2.5 rule preserved). Verified: map 60's two 16px interior
+  runs draw through; the road W of the lake is continuous.
+- **FIX 4 — stone bridge readability:** flat butt ends + explicit darker
+  abutment blocks (12×4px transverse, inset 2px so the clip doesn't halve
+  them), thin stone-joint lines (`#6a6a64`, 1px, every ~6px) along the deck,
+  deck narrowed 10→8px (near the road's 6px underlay). Still composited on
+  an offscreen layer, now clipped to the 12px outline band (abutments are
+  wider than the deck but fit the band). Verified in the test sketch: reads
+  as a segmented stone bridge, distinct from the wooden one.
+
 **M4.1d SHIPPED (2026-07-16) — two tone/visibility fixes:**
 - **FIX 1 — swamp_flat toned toward swamp_trees:** new GENERIC
   `scripts/match-tile-tone.ps1` (source/target/percent params — reusable for
