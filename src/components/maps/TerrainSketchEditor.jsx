@@ -1033,8 +1033,9 @@ function CategorySection({ id, emoji, label, open, active, onToggle, children })
 }
 
 // Display-only icon overrides: the STORED tileKey stays unchanged (data
-// compat) but the chip shows the updated art (M4.1c: colour-matched v2).
-const TILE_ICON = { plains_hills: 'plains_hills_v2' };
+// compat) but the chip shows the updated art (M4.1c: colour-matched v2;
+// M4.1d: swamp_flat toned toward swamp_trees).
+const TILE_ICON = { plains_hills: 'plains_hills_v2', swamp_flat: 'swamp_flat_v3' };
 
 function TileChip({ tileKey, label, active, onClick }) {
   return (

@@ -148,6 +148,27 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4.1d SHIPPED (2026-07-16) — two tone/visibility fixes:**
+- **FIX 1 — swamp_flat toned toward swamp_trees:** new GENERIC
+  `scripts/match-tile-tone.ps1` (source/target/percent params — reusable for
+  future tile tone work) scaled `swamp_flat_v2` 75% toward `swamp_trees`'
+  per-channel mean (gains B/G/R 0.99/0.74/0.70 — trees are much darker).
+  Shipped as `public/tiles/swamp_flat_v3.png`; `BIOME_PATTERN_TILE.swamp` →
+  v3 and the editor chip shows v3 via `TILE_ICON` (stored tileKeys
+  unchanged). Verified side-by-side WITH blending in the test sketch: open
+  swamp and tree swamp now read as the same dark biome family, flat still a
+  touch lighter — 75% held, no adjustment needed.
+- **FIX 2 — hill relief actually visible:** `makeHillShadeCanvas` (18%
+  shadow-only, ~0.9-cell wavelength — drowned in the canopy texture) is
+  replaced by `makeHillReliefCanvases`: a 256px tile with primary diagonal
+  wave (1,1) → wavelength ≈181px ≈ **2.8 cells**, small (2,-1) secondary
+  breaking regularity; BOTH a shadow field (multiply @30%, shadow side) and
+  an antiphase light field (screen @15%, lit side). Integer cycle counts →
+  seamless wrap; map-seeded phase → deterministic. Applies to forest hills
+  AND the tundra/volcanic fallback. Verified on map 60 at 100% zoom (1:1
+  crop from the 2048 render — harness gained a `?crop=x,y` param): ridges
+  clearly readable through the unbroken canopy without hunting.
+
 **M4.1c SHIPPED (2026-07-16) — renderer honours the editor's tile choice:**
 - **FIX 1 (root cause):** the editor has ALWAYS saved the concrete choice as
   `cell.tileKey` (no editor change needed). The renderer's pattern groups now

@@ -43,7 +43,9 @@ const WATER_BIOMES = new Set(['ocean', 'lake', 'coastal']);
 const BIOME_PATTERN_TILE: Record<string, string> = {
   plains:   'plains_flat',
   forest:   'forest_flat',
-  swamp:    'swamp_flat_v2',
+  // v3 (M4.1d): v2 toned 75% toward swamp_trees' mean so open swamp and
+  // tree swamp read as the same biome family.
+  swamp:    'swamp_flat_v3',
   desert:   'desert_flat',
   tundra:   'tundra_flat',
   volcanic: 'volcanic_flat',
@@ -138,32 +140,44 @@ const AREA_TILE_GROUPS: Record<string, string> = {
 };
 
 /**
- * M4.1c FIX 3: deterministic, perfectly tileable hill-shade tile — soft
- * diagonal wave shadows (multiply, ~15-20% opacity applied by the caller)
- * at the same wave scale as the plains_hills art (128px tile = 2 cells).
- * Integer cycle counts across the tile guarantee seamless wrapping.
+ * M4.1d FIX 2: deterministic, perfectly tileable hill-RELIEF tiles — real
+ * relief modelling with BOTH a shadow field (multiply pass, shadow side of
+ * each wave) and an antiphase light field (screen pass, lit side), so an
+ * unbroken canopy gets readable ridges. 256px tile with integer cycle
+ * counts → seamless wrap; wavelength ≈ 181px ≈ 2.8 cells at 2048 output.
+ * Phase is map-seeded → deterministic per map.
  */
-function makeHillShadeCanvas(seed: number): HTMLCanvasElement {
-  const T = 128;
-  const c = document.createElement('canvas');
-  c.width = T; c.height = T;
-  const cctx = c.getContext('2d')!;
-  const img = cctx.createImageData(T, T);
+function makeHillReliefCanvases(seed: number): { shadow: HTMLCanvasElement; light: HTMLCanvasElement } {
+  const T = 256;
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = T; c.height = T;
+    return c;
+  };
+  const shadow = mk(), light = mk();
+  const sctx = shadow.getContext('2d')!;
+  const lctx = light.getContext('2d')!;
+  const sImg = sctx.createImageData(T, T);
+  const lImg = lctx.createImageData(T, T);
   const rng = mulberry32(seed);
   const phase = rng() * Math.PI * 2;
   const TAU = Math.PI * 2;
   for (let y = 0; y < T; y++) {
     for (let x = 0; x < T; x++) {
-      const s1 = Math.sin((TAU * (x * 1 + y * 2)) / T + phase);
-      const s2 = Math.sin((TAU * (x * 2 - y * 1)) / T + phase * 1.7);
-      const v = Math.max(0, s1) * 0.8 + Math.max(0, s2) * 0.2;
+      // Primary diagonal wave (1,1): wavelength 256/√2 ≈ 181px ≈ 2.8 cells;
+      // small secondary component (2,-1) breaks up the regularity.
+      const s = Math.sin((TAU * (x + y)) / T + phase) * 0.85
+              + Math.sin((TAU * (x * 2 - y)) / T + phase * 1.7) * 0.15;
       const i = (y * T + x) * 4;
-      img.data[i] = 0; img.data[i + 1] = 0; img.data[i + 2] = 0;
-      img.data[i + 3] = Math.round(Math.pow(v, 1.5) * 255);
+      const sh = Math.round(Math.pow(Math.max(0, -s), 1.4) * 255); // shadow side
+      const li = Math.round(Math.pow(Math.max(0, s), 1.4) * 255);  // lit side
+      sImg.data[i] = 0;   sImg.data[i + 1] = 0;   sImg.data[i + 2] = 0;   sImg.data[i + 3] = sh;
+      lImg.data[i] = 255; lImg.data[i + 1] = 255; lImg.data[i + 2] = 255; lImg.data[i + 3] = li;
     }
   }
-  cctx.putImageData(img, 0, 0);
-  return c;
+  sctx.putImageData(sImg, 0, 0);
+  lctx.putImageData(lImg, 0, 0);
+  return { shadow, light };
 }
 
 /** Classify a cell's relief for stamping (legacy values + tileKey fallback). */
@@ -1055,9 +1069,9 @@ export async function renderProceduralMap(
   ctx.fillRect(0, 0, OUT, OUT);
   if (landGroups.size > 0) {
     const [layer, lctx] = offscreen();
-    // Shade tile for `::hills` groups (forest + biomes without a hills tile)
+    // Relief tiles for `::hills` groups (forest + biomes without a hills tile)
     const needsShade = [...landGroups].some(g => groupTile(g).hillShade);
-    const shadeCanvas = needsShade ? makeHillShadeCanvas(seedFromMapId(mapId) ^ 0x4111) : null;
+    const relief = needsShade ? makeHillReliefCanvases((seedFromMapId(mapId) ^ 0x4111) >>> 0) : null;
     for (const group of [...landGroups].sort()) {
       const rects = groupRectPath(group);
       const [hard, hctx] = offscreen();
@@ -1074,14 +1088,20 @@ export async function renderProceduralMap(
       const { tile, fallback, hillShade } = groupTile(group);
       pctx.fillStyle = tile ? patternOf(pctx, tile, fallback) : fallback;
       pctx.fillRect(0, 0, OUT, OUT);
-      if (hillShade && shadeCanvas) {
-        // M4.1c FIX 3: soft diagonal wave shadows over the unbroken canopy —
-        // reads as forested (or tundra etc.) rolling hills.
-        const shadePat = pctx.createPattern(shadeCanvas, 'repeat');
-        if (shadePat) {
+      if (hillShade && relief) {
+        // M4.1d FIX 2: real relief modelling over the unbroken canopy —
+        // multiply on the shadow side of each wave + screen on the lit side
+        // (antiphase) gives readable ridges at map scale.
+        const shadowPat = pctx.createPattern(relief.shadow, 'repeat');
+        const lightPat  = pctx.createPattern(relief.light, 'repeat');
+        if (shadowPat && lightPat) {
           pctx.globalCompositeOperation = 'multiply';
-          pctx.globalAlpha = 0.18;
-          pctx.fillStyle = shadePat;
+          pctx.globalAlpha = 0.30;
+          pctx.fillStyle = shadowPat;
+          pctx.fillRect(0, 0, OUT, OUT);
+          pctx.globalCompositeOperation = 'screen';
+          pctx.globalAlpha = 0.15;
+          pctx.fillStyle = lightPat;
           pctx.fillRect(0, 0, OUT, OUT);
           pctx.globalAlpha = 1;
           pctx.globalCompositeOperation = 'source-over';
