@@ -148,6 +148,24 @@ bridges & fords:
   outlined stone bridge, and rivers invisible in all water.
 - **M4 (relief stamps) is the only remaining milestone.**
 
+**M4.2b SHIPPED (2026-07-17) — road junctions merge (same root cause as the
+M4.2 river-confluence fix, applied to roads):** the road phase now PLANS all
+roads first (segments incl. culvert pass-throughs + crossings), then renders
+per TYPE CLASS with layered passes — all underlays of a class
+(path→dirt→cobble), then all cores/dash layers — via the new
+`drawRoadLandLayer(…, 'under' | 'core')`. Same-type junctions (e.g. the
+cobble/cobble T-junction the user zoomed) merge seamlessly; MIXED-type
+junctions keep today's z-order because classes still stack path→dirt→cobble
+(deliberately per-class passes rather than the two global passes — global
+would let a dirt core draw over a cobble underlay edge). Bridge/ford
+rendering unchanged (per-run, after its class). Culvert segments now join
+the layered passes too. Verified at 1:1 on map 60's CURRENT sketch
+(re-fetched — the user has redrawn it: 7 rivers incl. major/stream
+confluences NE + 2 cobble roads): the cobble T-junction is seamless, the NE
+confluences still merge, wooden/stone bridges + fords render correctly.
+Harness gained cobble/cobble-T, dirt/dirt-T and mixed path→dirt junction
+overlays. 32/32 vitest.
+
 **M4.2 SHIPPED (2026-07-17) — four connector fixes from lake-area zoom
 inspection (map 60, verified with the harness `?crop` param at 1:1):**
 - **FIX 1 — river overshoot into lakes:** the river clip-mask dilation is now

@@ -594,17 +594,28 @@ function drawFord(ctx: CanvasRenderingContext2D, pts: Pt[], rng: () => number): 
   ctx.restore();
 }
 
-/** Land-portion road rendering per road kind ('road' legacy = dirt). */
-function drawRoadLand(ctx: CanvasRenderingContext2D, pts: Pt[], kind: string): void {
+/**
+ * Land-portion road rendering, ONE layer at a time (M4.2b): the road phase
+ * draws all underlays of a type class, then all cores — junctions between
+ * same-type roads merge seamlessly (a joining road's dark underlay can no
+ * longer paint over the through road's light core).
+ */
+function drawRoadLandLayer(
+  ctx: CanvasRenderingContext2D,
+  pts: Pt[],
+  kind: string,
+  layer: 'under' | 'core',
+): void {
   if (pts.length < 2) return;
   if (kind === 'road_path') {
-    strokeOpenPoly(ctx, pts, 2 * S, PATH_COLOR, 1, [6 * S, 5 * S]);
+    if (layer === 'core')                              // path has no underlay
+      strokeOpenPoly(ctx, pts, 2 * S, PATH_COLOR, 1, [6 * S, 5 * S]);
   } else if (kind === 'road_cobble') {
-    strokeOpenPoly(ctx, pts, 6 * S, COBBLE_UNDER);
-    strokeOpenPoly(ctx, pts, 4 * S, COBBLE_CORE);      // solid — paved road
+    if (layer === 'under') strokeOpenPoly(ctx, pts, 6 * S, COBBLE_UNDER);
+    else                   strokeOpenPoly(ctx, pts, 4 * S, COBBLE_CORE); // solid — paved
   } else { // road_dirt (+ legacy 'road')
-    strokeOpenPoly(ctx, pts, 5 * S, ROAD_UNDER, 0.5);
-    strokeOpenPoly(ctx, pts, 3 * S, ROAD_CORE, 1, [10 * S, 6 * S]);
+    if (layer === 'under') strokeOpenPoly(ctx, pts, 5 * S, ROAD_UNDER, 0.5);
+    else                   strokeOpenPoly(ctx, pts, 3 * S, ROAD_CORE, 1, [10 * S, 6 * S]);
   }
 }
 
@@ -1428,6 +1439,19 @@ export async function renderProceduralMap(
   const roads = prepared
     .filter(o => ROAD_KINDS.has(o.type))
     .sort((a, b) => (ROAD_Z[a.type] ?? 1) - (ROAD_Z[b.type] ?? 1));
+
+  // M4.2b: PLAN each road first (segments to draw + crossings), then render
+  // per TYPE CLASS with layered passes — all underlays of a class, then all
+  // cores — so junctions between SAME-type roads merge seamlessly (a joining
+  // road's dark underlay no longer paints over the through road's light
+  // core). Between classes the full stack still draws in path→dirt→cobble
+  // order, so mixed-type junctions keep today's z-order (cobble on top).
+  type RoadPlan = {
+    idx: number; type: string; kind: string;
+    segments: Pt[][];                                  // land runs + culverts
+    crossings: { sub: Pt[]; runLength: number }[];     // bridge/ford runs
+  };
+  const plans: RoadPlan[] = [];
   for (const o of roads) {
     const kind = o.type === 'road' ? 'road_dirt' : o.type; // legacy compat
 
@@ -1445,14 +1469,13 @@ export async function renderProceduralMap(
       else runs.push({ water, i0: i, i1: i });
     }
 
+    const segments: Pt[][] = [];
+    const crossings: { sub: Pt[]; runLength: number }[] = [];
     for (const run of runs) {
-      if (run.water) continue;
-      drawRoadLand(ctx, samples.slice(run.i0, run.i1 + 1), kind);
-    }
-
-    const crng = mulberry32((baseSeed + o.idx * 7919 + 101) >>> 0);
-    for (const run of runs) {
-      if (!run.water) continue;
+      if (!run.water) {
+        segments.push(samples.slice(run.i0, run.i1 + 1));
+        continue;
+      }
       const runLength = (run.i1 - run.i0) * ROAD_STEP;
       const startPct = Math.round((run.i0 / (samples.length - 1)) * 100);
       const endPct   = Math.round((run.i1 / (samples.length - 1)) * 100);
@@ -1462,15 +1485,14 @@ export async function renderProceduralMap(
       //   nothing — the road stops at the water's edge (M2.5 rule).
       // - INTERIOR short runs (road continues on BOTH sides — oblique river
       //   crossings measure 4-11px): draw the ROAD unbroken across, no
-      //   bridge furniture — reads as a culvert. Previously these left
-      //   visible holes in the road.
+      //   bridge furniture — reads as a culvert.
       if (runLength < 12 * S) {
         const interior = run.i0 > 0 && run.i1 < samples.length - 1;
         if (interior) {
           console.log('[bridge]', o.type, `run ${runLength}px < ${12 * S}px — interior, road drawn through (culvert)`);
           const from = Math.max(0, run.i0 - 1);
           const to   = Math.min(samples.length - 1, run.i1 + 1);
-          drawRoadLand(ctx, samples.slice(from, to + 1), kind);
+          segments.push(samples.slice(from, to + 1));   // layered like land runs
         } else {
           console.log('[bridge]', o.type, `run ${runLength}px < ${12 * S}px — terminal, skipped (no bridge/ford)`);
         }
@@ -1483,13 +1505,31 @@ export async function renderProceduralMap(
           Math.round(Math.min(...xs)), Math.round(Math.min(...ys)), '→',
           Math.round(Math.max(...xs)), Math.round(Math.max(...ys)));
       }
-      if (kind === 'road_path') {
-        drawFord(ctx, sub, crng);                       // no abutment, no line
-      } else if (kind === 'road_cobble') {
-        drawStoneBridge(ctx, extendRun(sub, 5 * S));    // 5px abutment
-      } else {
-        // Short crossings (< 24px at 1024) skip the railings for readability
-        drawWoodBridge(ctx, extendRun(sub, 4 * S), runLength >= 24 * S);
+      crossings.push({ sub, runLength });
+    }
+    plans.push({ idx: o.idx, type: o.type, kind, segments, crossings });
+  }
+
+  for (const cls of ['road_path', 'road_dirt', 'road_cobble']) {
+    const clsPlans = plans.filter(p => p.kind === cls);
+    if (clsPlans.length === 0) continue;
+    // pass 1: all underlays of this class; pass 2: all cores/dash layers
+    for (const p of clsPlans)
+      for (const seg of p.segments) drawRoadLandLayer(ctx, seg, cls, 'under');
+    for (const p of clsPlans)
+      for (const seg of p.segments) drawRoadLandLayer(ctx, seg, cls, 'core');
+    // Bridges/fords: unchanged per-run rendering, after the class's roads
+    for (const p of clsPlans) {
+      const crng = mulberry32((baseSeed + p.idx * 7919 + 101) >>> 0);
+      for (const c of p.crossings) {
+        if (cls === 'road_path') {
+          drawFord(ctx, c.sub, crng);                    // no abutment, no line
+        } else if (cls === 'road_cobble') {
+          drawStoneBridge(ctx, extendRun(c.sub, 5 * S)); // 5px abutment
+        } else {
+          // Short crossings (< 24px at 1024) skip the railings
+          drawWoodBridge(ctx, extendRun(c.sub, 4 * S), c.runLength >= 24 * S);
+        }
       }
     }
   }
